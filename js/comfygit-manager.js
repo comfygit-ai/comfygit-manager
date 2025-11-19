@@ -9,28 +9,21 @@ app.registerExtension({
     name: "Comfy.ComfyGitManager",
 
     async setup() {
-        // Modern button (ComfyUI 1.2.49+)
-        try {
-            const { ComfyButtonGroup } = await import("../../scripts/ui/components/buttonGroup.js");
-            const { ComfyButton } = await import("../../scripts/ui/components/button.js");
+        // Add Manager button to the top menu bar
+        const managerButton = document.createElement("button");
+        managerButton.className = "comfyui-button comfyui-menu-mobile-collapse primary";
+        managerButton.textContent = "Manager";
+        managerButton.title = "ComfyGit Manager";
 
-            const managerButton = new ComfyButton({
-                icon: "puzzle",
-                action: () => {
-                    // Execute the built-in command to open new Manager UI
-                    app.extensionManager?.command?.execute('Comfy.OpenManagerDialog');
-                },
-                tooltip: "ComfyGit Manager",
-                content: "Manager",
-                classList: "comfyui-button comfyui-menu-mobile-collapse primary"
-            });
+        managerButton.onclick = () => {
+            // Execute the built-in command to open Manager dialog
+            app.extensionManager.command.execute('Comfy.OpenManagerDialog');
+        };
 
-            const cmGroup = new ComfyButtonGroup(managerButton.element);
-            app.menu?.settingsGroup.element.before(cmGroup.element);
-
+        // Insert before settings button in the menu bar
+        if (app.menu?.settingsGroup?.element) {
+            app.menu.settingsGroup.element.before(managerButton);
             console.log("[ComfyGit] Manager button added to toolbar");
-        } catch(e) {
-            console.warn("[ComfyGit] Modern menu not available:", e);
         }
     }
 });

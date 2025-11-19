@@ -4,12 +4,10 @@ Provides /v2/ endpoints that the built-in Manager UI expects.
 """
 
 import asyncio
-import os
 import sys
 import uuid
 from pathlib import Path
 from datetime import datetime
-from typing import Any
 
 from aiohttp import web
 from server import PromptServer
@@ -18,8 +16,14 @@ from server import PromptServer
 routes = PromptServer.instance.routes
 
 # ============================================================================
-# Feature Flag Injection
+# Feature Flag & CLI Argument Injection
 # ============================================================================
+
+# Inject --enable-manager into sys.argv so the frontend enables the Manager UI
+# The frontend checks systemStats.system.argv for this flag
+if '--enable-manager' not in sys.argv:
+    sys.argv.append('--enable-manager')
+    print("[ComfyGit] Injected --enable-manager into sys.argv")
 
 # Inject extension.manager.supports_v4 into ComfyUI's feature flags
 # This tells the frontend to use the new Manager UI
@@ -124,7 +128,7 @@ def get_installed_packs() -> dict[str, dict]:
         for identifier, node_info in existing_nodes.items():
             packs[identifier] = {
                 "cnr_id": identifier,
-                "aux_id": node_info.url or "",
+                "aux_id": node_info.repository or "",
                 "ver": node_info.version or "unknown",
                 "enabled": not identifier.endswith(".disabled"),
                 "name": node_info.name
@@ -207,10 +211,16 @@ async def get_history(request):
 @routes.get("/v2/manager/reboot")
 async def reboot(request):
     """Reboot ComfyUI server."""
-    # Signal ComfyUI to restart
     print("[ComfyGit] Reboot requested")
-    # This will cause ComfyUI to exit, and the launcher should restart it
-    sys.exit(0)
+
+    # Schedule exit after response is sent
+    async def delayed_exit():
+        await asyncio.sleep(0.5)
+        import os
+        os._exit(0)  # Hard exit to avoid exception in async context
+
+    asyncio.create_task(delayed_exit())
+    return web.json_response({"status": "restarting"})
 
 
 @routes.get("/v2/manager/is_legacy_manager_ui")
@@ -283,7 +293,8 @@ async def process_install(env, params: dict) -> dict:
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(
             None,
-            lambda: env.node_manager.add_node(pack_id, force=False, no_test=False)
+            # no_test=True skips resolution test (needed when comfygit-core is editable install)
+            lambda: env.node_manager.add_node(pack_id, force=False, no_test=True)
         )
 
         return {
