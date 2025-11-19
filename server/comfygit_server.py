@@ -208,16 +208,19 @@ async def get_history(request):
     return web.json_response({"history": task_history})
 
 
+# Exit code that signals cg run to restart with sync
+RESTART_EXIT_CODE = 42
+
+
 @routes.get("/v2/manager/reboot")
 async def reboot(request):
-    """Reboot ComfyUI server."""
-    print("[ComfyGit] Reboot requested")
+    """Reboot ComfyUI server with exit code 42 to trigger restart loop."""
+    import os
+    print(f"[ComfyGit] Reboot requested - exiting with code {RESTART_EXIT_CODE}")
 
-    # Schedule exit after response is sent
     async def delayed_exit():
-        await asyncio.sleep(0.5)
-        import os
-        os._exit(0)  # Hard exit to avoid exception in async context
+        await asyncio.sleep(0.3)
+        os._exit(RESTART_EXIT_CODE)
 
     asyncio.create_task(delayed_exit())
     return web.json_response({"status": "restarting"})
@@ -286,21 +289,42 @@ async def process_task(task: dict) -> dict:
 async def process_install(env, params: dict) -> dict:
     """Install a custom node."""
     pack_id = params.get("id")
-    version = params.get("selected_version", "latest")
+    version = params.get("selected_version") or params.get("version")
+
+    # Check if already installed (use same source as get_installed_packs)
+    existing_nodes = env.pyproject.nodes.get_existing()
+    is_installed = pack_id in existing_nodes
 
     try:
-        # Run in thread pool to not block event loop
         loop = asyncio.get_event_loop()
+
+        # If installed and requesting latest, use update_node
+        if is_installed and (not version or version == "latest"):
+            await loop.run_in_executor(
+                None,
+                lambda: env.node_manager.update_node(pack_id, no_test=True)
+            )
+            return {
+                "status": "success",
+                "completed": True,
+                "messages": [f"Successfully updated {pack_id} to latest"]
+            }
+
+        # Build identifier with version if specified
+        if version and version != "latest":
+            identifier = f"{pack_id}@{version}"
+        else:
+            identifier = pack_id
+
         await loop.run_in_executor(
             None,
-            # no_test=True skips resolution test (needed when comfygit-core is editable install)
-            lambda: env.node_manager.add_node(pack_id, force=False, no_test=True)
+            lambda: env.node_manager.add_node(identifier, force=is_installed, no_test=True)
         )
 
         return {
             "status": "success",
             "completed": True,
-            "messages": [f"Successfully installed {pack_id}"]
+            "messages": [f"Successfully installed {identifier}"]
         }
     except Exception as e:
         return {
