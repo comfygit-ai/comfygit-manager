@@ -290,6 +290,39 @@ async def import_fail_info_bulk(request):
     return web.json_response({})
 
 
+@routes.get("/v2/debug/comfyui_info")
+async def debug_comfyui_info(request):
+    """Return all accessible ComfyUI data for debugging."""
+    info = {}
+
+    # PromptServer attributes
+    info["prompt_server_attrs"] = [a for a in dir(PromptServer.instance) if not a.startswith('_')]
+
+    # sys.argv
+    info["sys_argv"] = sys.argv
+
+    # Feature flags
+    try:
+        from comfy_api import feature_flags
+        info["feature_flags"] = dict(feature_flags.SERVER_FEATURE_FLAGS)
+    except Exception as e:
+        info["feature_flags"] = f"error: {e}"
+
+    # Environment info
+    env = get_environment_from_cwd()
+    if env:
+        info["environment"] = {
+            "name": env.name,
+            "path": str(env.path),
+            "custom_nodes_path": str(env.custom_nodes_path)
+        }
+
+    # Routes registered
+    info["routes"] = [str(r) for r in routes]
+
+    return web.json_response(info)
+
+
 # ============================================================================
 # Task Processing
 # ============================================================================
