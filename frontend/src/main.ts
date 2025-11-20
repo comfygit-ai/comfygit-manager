@@ -3,7 +3,7 @@ import { createApp, h, ref, watch } from 'vue'
 import ComfyGitPanel from '@/components/ComfyGitPanel.vue'
 import CommitPopover from '@/components/CommitPopover.vue'
 import type { ComfyGitStatus } from '@/types/comfygit'
-import { getInitialTheme, applyTheme, getAvailableThemes, getCurrentTheme, type ThemeName } from '@/themes'
+import { getInitialTheme, applyTheme } from '@/themes'
 
 // Load component CSS
 const cssLink = document.createElement('link')
@@ -155,33 +155,6 @@ function updateCommitIndicator() {
   }
 }
 
-// Theme switching function
-function cycleTheme() {
-  const themes = getAvailableThemes()
-  const currentIndex = themes.findIndex(t => t.id === getCurrentTheme())
-  const nextIndex = (currentIndex + 1) % themes.length
-  const nextTheme = themes[nextIndex].id as ThemeName
-  applyTheme(nextTheme)
-
-  // Show notification
-  const notification = document.createElement('div')
-  notification.className = 'comfygit-theme-notification'
-  notification.innerHTML = `
-    <strong>Theme:</strong> ${themes[nextIndex].name}
-    <div class="theme-desc">${themes[nextIndex].description}</div>
-  `
-  document.body.appendChild(notification)
-  setTimeout(() => notification.remove(), 2000)
-}
-
-// Add keyboard shortcut for theme switching (Ctrl+Shift+T)
-document.addEventListener('keydown', (e) => {
-  if (e.ctrlKey && e.shiftKey && e.key === 'T') {
-    e.preventDefault()
-    cycleTheme()
-  }
-})
-
 // Inject styles
 const styles = document.createElement('style')
 styles.textContent = `
@@ -261,38 +234,6 @@ styles.textContent = `
     to {
       opacity: 1;
       transform: translateY(0);
-    }
-  }
-
-  .comfygit-theme-notification {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.9);
-    color: white;
-    padding: 12px 20px;
-    border-radius: 8px;
-    font-size: 13px;
-    z-index: 10002;
-    animation: notificationSlide 0.3s ease;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  }
-
-  .comfygit-theme-notification .theme-desc {
-    font-size: 11px;
-    opacity: 0.7;
-    margin-top: 4px;
-  }
-
-  @keyframes notificationSlide {
-    from {
-      opacity: 0;
-      transform: translateX(-50%) translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
     }
   }
 `

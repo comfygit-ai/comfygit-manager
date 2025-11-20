@@ -1,62 +1,30 @@
 /**
  * ComfyGit Panel Theme System
  *
- * Available themes:
- * - default: Orange accent, standard dark UI
- * - phosphor: CRT terminal aesthetic with green phosphor glow
- * - swiss: Editorial/magazine typography with elegant minimalism
- * - soft: Organic gradients and glass morphism
- * - brutal: Neo-brutalist with chunky borders and primary colors
+ * Theme: Phosphor Terminal
+ * Aesthetic: CRT terminal with green phosphor glow
+ * Design System: See .claude/context/shared/designs/DESIGN_SYSTEM.md
  */
 
-export type ThemeName = 'default' | 'phosphor' | 'swiss' | 'soft' | 'brutal'
+export type ThemeName = 'phosphor'
 
 // Theme CSS imports (will be bundled)
 import './base.css'
-import defaultCss from './default.css?inline'
 import phosphorCss from './phosphor.css?inline'
-import swissCss from './swiss.css?inline'
-import softCss from './soft.css?inline'
-import brutalCss from './brutal.css?inline'
 
-const themeStyles: Record<ThemeName, string> = {
-  default: defaultCss,
-  phosphor: phosphorCss,
-  swiss: swissCss,
-  soft: softCss,
-  brutal: brutalCss
-}
-
-let currentTheme: ThemeName = 'default'
 let themeStyleElement: HTMLStyleElement | null = null
 
 /**
- * Get the current theme from URL params or localStorage
+ * Get the initial theme (always phosphor)
  */
 export function getInitialTheme(): ThemeName {
-  // Check URL param first
-  const urlParams = new URLSearchParams(window.location.search)
-  const urlTheme = urlParams.get('comfygit-theme') as ThemeName
-  if (urlTheme && urlTheme in themeStyles) {
-    return urlTheme
-  }
-
-  // Check localStorage
-  const savedTheme = localStorage.getItem('comfygit-theme') as ThemeName
-  if (savedTheme && savedTheme in themeStyles) {
-    return savedTheme
-  }
-
-  return 'default'
+  return 'phosphor'
 }
 
 /**
- * Apply a theme by injecting its CSS
+ * Apply the phosphor theme by injecting its CSS
  */
-export function applyTheme(theme: ThemeName): void {
-  currentTheme = theme
-  localStorage.setItem('comfygit-theme', theme)
-
+export function applyTheme(theme: ThemeName = 'phosphor'): void {
   // Remove existing theme styles
   if (themeStyleElement) {
     themeStyleElement.remove()
@@ -65,56 +33,21 @@ export function applyTheme(theme: ThemeName): void {
   // Create new style element
   themeStyleElement = document.createElement('style')
   themeStyleElement.id = 'comfygit-theme-styles'
-  themeStyleElement.setAttribute('data-theme', theme)
+  themeStyleElement.setAttribute('data-theme', 'phosphor')
 
-  // Set theme-specific CSS
-  themeStyleElement.textContent = themeStyles[theme]
+  // Set phosphor theme CSS
+  themeStyleElement.textContent = phosphorCss
   document.head.appendChild(themeStyleElement)
 
   // Set data attribute on body for theme-specific selectors
-  document.body.setAttribute('data-comfygit-theme', theme)
+  document.body.setAttribute('data-comfygit-theme', 'phosphor')
 
-  console.log(`[ComfyGit] Applied theme: ${theme}`)
+  console.log('[ComfyGit] Applied theme: phosphor')
 }
 
 /**
- * Get list of available themes with metadata
+ * Get the current theme (always phosphor)
  */
-export function getAvailableThemes(): Array<{ id: ThemeName; name: string; description: string }> {
-  return [
-    {
-      id: 'default',
-      name: 'Default',
-      description: 'Standard dark UI with orange accent'
-    },
-    {
-      id: 'phosphor',
-      name: 'Phosphor Terminal',
-      description: 'CRT monitor aesthetic with green phosphor glow'
-    },
-    {
-      id: 'swiss',
-      name: 'Swiss Editorial',
-      description: 'Clean typography with editorial elegance'
-    },
-    {
-      id: 'soft',
-      name: 'Soft Machine',
-      description: 'Organic gradients and glass morphism'
-    },
-    {
-      id: 'brutal',
-      name: 'Neo-Brutal',
-      description: 'Bold chunky borders with primary colors'
-    }
-  ]
-}
-
 export function getCurrentTheme(): ThemeName {
-  return currentTheme
-}
-
-// Register theme CSS (called from theme files)
-export function registerTheme(name: ThemeName, css: string): void {
-  themeStyles[name] = css
+  return 'phosphor'
 }
