@@ -15,12 +15,16 @@
   --cg-font-body: 'IBM Plex Mono', ui-monospace, monospace;
   --cg-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
-  --cg-font-size-xs: 9px;
-  --cg-font-size-sm: 11px;
-  --cg-font-size-base: 13px;
-  --cg-font-size-lg: 14px;
-  --cg-font-size-xl: 16px;
-  --cg-font-size-2xl: 18px;
+  /* Increased ~1.5x for readability through scan lines */
+  --cg-font-size-xs: 12px;
+  --cg-font-size-sm: 14px;
+  --cg-font-size-base: 17px;
+  --cg-font-size-lg: 20px;
+  --cg-font-size-xl: 24px;
+  --cg-font-size-2xl: 28px;
+
+  /* Panel width - 1.3x wider */
+  --cg-panel-width: 754px;
 
   --cg-letter-spacing-normal: 0.02em;
   --cg-letter-spacing-wide: 0.08em;
@@ -83,7 +87,7 @@
   overflow: hidden;
 }
 
-/* CRT scan lines overlay */
+/* CRT scan lines overlay - subtle for readability */
 [data-comfygit-theme="phosphor"] .comfygit-panel::before {
   content: '';
   position: absolute;
@@ -94,9 +98,9 @@
   background: repeating-linear-gradient(
     0deg,
     transparent,
-    transparent 1px,
-    rgba(0, 0, 0, 0.3) 1px,
-    rgba(0, 0, 0, 0.3) 2px
+    transparent 2px,
+    rgba(0, 0, 0, 0.15) 2px,
+    rgba(0, 0, 0, 0.15) 3px
   );
   pointer-events: none;
   z-index: 100;
@@ -197,6 +201,29 @@
   margin-bottom: var(--cg-space-4);
 }
 
+[data-comfygit-theme="phosphor"] .section-title {
+  color: var(--cg-color-accent);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+  text-shadow: 0 0 8px var(--cg-color-accent);
+  margin-bottom: var(--cg-space-2);
+}
+
+[data-comfygit-theme="phosphor"] .section-title::before {
+  content: '> ';
+  opacity: 0.7;
+}
+
+/* Slightly smaller text in status grid for density */
+[data-comfygit-theme="phosphor"] .status-item {
+  font-size: var(--cg-font-size-sm);
+}
+
+[data-comfygit-theme="phosphor"] .count {
+  font-size: var(--cg-font-size-base);
+}
+
 [data-comfygit-theme="phosphor"] .status-grid {
   background: var(--cg-color-bg-tertiary);
   border: 1px solid var(--cg-color-border-subtle);
@@ -275,9 +302,41 @@
   color: var(--cg-color-error);
 }
 
+/* === Branch Section === */
+[data-comfygit-theme="phosphor"] .branch-item {
+  font-size: var(--cg-font-size-base);
+}
+
+[data-comfygit-theme="phosphor"] .branch-name {
+  font-size: var(--cg-font-size-base);
+}
+
+[data-comfygit-theme="phosphor"] .switch-btn,
+[data-comfygit-theme="phosphor"] .current-label {
+  font-size: var(--cg-font-size-sm) !important;
+  padding: 6px 12px !important;
+}
+
+[data-comfygit-theme="phosphor"] .switch-btn {
+  background: transparent;
+  border: 1px solid var(--cg-color-border);
+  color: var(--cg-color-text-primary);
+}
+
+[data-comfygit-theme="phosphor"] .switch-btn:hover {
+  border-color: var(--cg-color-accent);
+  color: var(--cg-color-accent);
+  box-shadow: var(--cg-shadow-sm);
+}
+
+[data-comfygit-theme="phosphor"] .current-label {
+  color: var(--cg-color-text-muted);
+  border: 1px solid var(--cg-color-border-subtle);
+}
+
 /* === History Section === */
 [data-comfygit-theme="phosphor"] .history-section {
-  font-size: var(--cg-font-size-sm);
+  font-size: var(--cg-font-size-base);
 }
 
 [data-comfygit-theme="phosphor"] .history-title {
@@ -303,6 +362,7 @@
 [data-comfygit-theme="phosphor"] .commit-hash {
   color: var(--cg-color-accent);
   font-weight: var(--cg-font-weight-bold);
+  font-size: var(--cg-font-size-sm);
 }
 
 [data-comfygit-theme="phosphor"] .commit-hash::before {
@@ -311,10 +371,12 @@
 
 [data-comfygit-theme="phosphor"] .commit-message {
   color: var(--cg-color-text-primary);
+  font-size: var(--cg-font-size-base);
 }
 
 [data-comfygit-theme="phosphor"] .commit-date {
   color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-sm);
 }
 
 /* === Footer === */

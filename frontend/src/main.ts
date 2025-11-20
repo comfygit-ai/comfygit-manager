@@ -199,7 +199,7 @@ styles.textContent = `
   }
 
   .comfygit-panel-container {
-    width: 580px;
+    width: var(--cg-panel-width, 580px);
     max-width: 90vw;
     max-height: 80vh;
     display: flex;

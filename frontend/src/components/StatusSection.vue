@@ -1,5 +1,6 @@
 <template>
   <div class="status-section">
+    <h3 class="section-title">Status</h3>
     <div class="status-grid">
       <!-- Workflow column -->
       <div class="status-column">
@@ -80,6 +81,15 @@ const hasGitChanges = computed(() => {
 <style scoped>
 .status-section {
   margin-bottom: 16px;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--descrip-text, #999);
+  margin: 0 0 8px 0;
+  letter-spacing: 0.5px;
 }
 
 .status-grid {

@@ -1,6 +1,6 @@
 import { app as R } from "../../scripts/app.js";
 import { defineComponent as M, computed as A, createElementBlock as c, openBlock as r, createElementVNode as t, createCommentVNode as b, toDisplayString as i, ref as w, nextTick as xt, withDirectives as et, withKeys as Y, vModelText as at, Fragment as S, renderList as T, normalizeClass as G, withModifiers as U, onMounted as rt, createTextVNode as ct, createBlock as ot, createVNode as F, createApp as st, h as nt } from "vue";
-const wt = { class: "status-section" }, kt = { class: "status-grid" }, Ct = { class: "status-column" }, zt = {
+const wt = { class: "status-section" }, kt = { class: "status-grid" }, zt = { class: "status-column" }, Ct = {
   key: 0,
   class: "status-item"
 }, $t = { class: "count new" }, _t = {
@@ -33,15 +33,16 @@ const wt = { class: "status-section" }, kt = { class: "status-grid" }, Ct = { cl
     status: {}
   },
   setup(o) {
-    const d = o, s = A(() => {
-      const e = d.status.git_changes;
+    const g = o, s = A(() => {
+      const e = g.status.git_changes;
       return e.nodes_added.length > 0 || e.nodes_removed.length > 0 || e.workflow_changes || e.has_other_changes;
     });
     return (e, a) => (r(), c("div", wt, [
+      a[18] || (a[18] = t("h3", { class: "section-title" }, "Status", -1)),
       t("div", kt, [
-        t("div", Ct, [
+        t("div", zt, [
           a[8] || (a[8] = t("h4", { class: "column-title" }, "Workflows", -1)),
-          o.status.workflows.new.length ? (r(), c("div", zt, [
+          o.status.workflows.new.length ? (r(), c("div", Ct, [
             a[0] || (a[0] = t("span", { class: "icon" }, "●", -1)),
             t("span", $t, i(o.status.workflows.new.length), 1),
             a[1] || (a[1] = t("span", { class: "label" }, "new", -1))
@@ -95,12 +96,12 @@ const wt = { class: "status-section" }, kt = { class: "status-grid" }, Ct = { cl
       ])]))
     ]));
   }
-}), N = (o, d) => {
+}), N = (o, g) => {
   const s = o.__vccOpts || o;
-  for (const [e, a] of d)
+  for (const [e, a] of g)
     s[e] = a;
   return s;
-}, Vt = /* @__PURE__ */ N(Ht, [["__scopeId", "data-v-30ea4f72"]]), Yt = { class: "branch-section" }, jt = { class: "section-header" }, Rt = { class: "branch-card" }, Ft = {
+}, Vt = /* @__PURE__ */ N(Ht, [["__scopeId", "data-v-459dabfd"]]), Yt = { class: "branch-section" }, jt = { class: "section-header" }, Rt = { class: "branch-card" }, Ft = {
   key: 0,
   class: "create-branch-row"
 }, Jt = ["disabled"], Kt = {
@@ -119,9 +120,9 @@ const wt = { class: "status-section" }, kt = { class: "status-grid" }, Ct = { cl
     current: {}
   },
   emits: ["switch", "create"],
-  setup(o, { emit: d }) {
-    const s = d, e = w(!1), a = w(""), y = w(null);
-    function C() {
+  setup(o, { emit: g }) {
+    const s = g, e = w(!1), a = w(""), y = w(null);
+    function z() {
       a.value.trim() && (s("create", a.value.trim()), p());
     }
     function p() {
@@ -129,7 +130,7 @@ const wt = { class: "status-section" }, kt = { class: "status-grid" }, Ct = { cl
     }
     return xt(() => {
       e.value && y.value && y.value.focus();
-    }), (g, x) => (r(), c("div", Yt, [
+    }), (d, x) => (r(), c("div", Yt, [
       t("div", jt, [
         x[3] || (x[3] = t("h4", { class: "section-title" }, "Branches", -1)),
         t("button", {
@@ -161,7 +162,7 @@ const wt = { class: "status-section" }, kt = { class: "status-grid" }, Ct = { cl
             class: "branch-input",
             placeholder: "Branch name...",
             onKeyup: [
-              Y(C, ["enter"]),
+              Y(z, ["enter"]),
               Y(p, ["escape"])
             ]
           }, null, 544), [
@@ -169,7 +170,7 @@ const wt = { class: "status-section" }, kt = { class: "status-grid" }, Ct = { cl
           ]),
           t("button", {
             class: "action-btn create",
-            onClick: C,
+            onClick: z,
             disabled: !a.value.trim()
           }, " Create ", 8, Jt),
           t("button", {
@@ -187,7 +188,7 @@ const wt = { class: "status-section" }, kt = { class: "status-grid" }, Ct = { cl
             v.is_current ? (r(), c("span", Zt, "current")) : (r(), c("button", {
               key: 0,
               class: "switch-btn",
-              onClick: (l) => g.$emit("switch", v.name)
+              onClick: (l) => d.$emit("switch", v.name)
             }, " Switch ", 8, Qt))
           ], 2))), 128))
         ]))
@@ -207,7 +208,7 @@ const wt = { class: "status-section" }, kt = { class: "status-grid" }, Ct = { cl
   },
   emits: ["select", "checkout"],
   setup(o) {
-    return (d, s) => (r(), c("div", eo, [
+    return (g, s) => (r(), c("div", eo, [
       s[2] || (s[2] = t("div", { class: "section-header" }, [
         t("h4", { class: "section-title" }, "History")
       ], -1)),
@@ -218,7 +219,7 @@ const wt = { class: "status-section" }, kt = { class: "status-grid" }, Ct = { cl
             return r(), c("div", {
               key: e.hash,
               class: "commit-item",
-              onClick: (y) => d.$emit("select", e)
+              onClick: (y) => g.$emit("select", e)
             }, [
               t("span", no, i(e.short_hash || ((a = e.hash) == null ? void 0 : a.slice(0, 7))), 1),
               t("span", io, i(e.message), 1),
@@ -230,7 +231,7 @@ const wt = { class: "status-section" }, kt = { class: "status-grid" }, Ct = { cl
               }, [
                 t("button", {
                   class: "action-btn",
-                  onClick: (y) => d.$emit("checkout", e),
+                  onClick: (y) => g.$emit("checkout", e),
                   title: "Checkout this commit"
                 }, [...s[1] || (s[1] = [
                   t("svg", {
@@ -251,7 +252,7 @@ const wt = { class: "status-section" }, kt = { class: "status-grid" }, Ct = { cl
   }
 }), fo = /* @__PURE__ */ N(mo, [["__scopeId", "data-v-3bb44122"]]);
 function X() {
-  const o = w(!1), d = w(null);
+  const o = w(!1), g = w(null);
   async function s(u, h) {
     var f;
     if (!((f = window.app) != null && f.api))
@@ -276,7 +277,7 @@ function X() {
   async function y(u = 10, h = 0) {
     return s(`/v2/comfygit/log?limit=${u}&offset=${h}`);
   }
-  async function C(u) {
+  async function z(u) {
     return s("/v2/comfygit/export", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -286,7 +287,7 @@ function X() {
   async function p() {
     return s("/v2/comfygit/branches");
   }
-  async function g(u) {
+  async function d(u) {
     return s(`/v2/comfygit/commit/${u}`);
   }
   async function x(u, h = !1) {
@@ -312,14 +313,14 @@ function X() {
   }
   return {
     isLoading: o,
-    error: d,
+    error: g,
     getStatus: e,
     commit: a,
     getHistory: y,
-    exportEnv: C,
+    exportEnv: z,
     // Phase 2
     getBranches: p,
-    getCommitDetail: g,
+    getCommitDetail: d,
     checkout: x,
     createBranch: v,
     switchBranch: l
@@ -331,10 +332,10 @@ const po = { class: "modal-content" }, uo = { class: "modal-header" }, ho = { cl
 }, yo = { class: "modal-body" }, xo = { class: "commit-message" }, wo = { class: "commit-date" }, ko = {
   key: 0,
   class: "loading"
-}, Co = {
+}, zo = {
   key: 1,
   class: "changes-section"
-}, zo = { class: "stats-row" }, $o = { class: "stat" }, _o = { class: "stat insertions" }, So = { class: "stat deletions" }, Lo = {
+}, Co = { class: "stats-row" }, $o = { class: "stat" }, _o = { class: "stat insertions" }, So = { class: "stat deletions" }, Lo = {
   key: 0,
   class: "change-group"
 }, Bo = {
@@ -353,26 +354,26 @@ const po = { class: "modal-content" }, uo = { class: "modal-header" }, ho = { cl
   },
   emits: ["close", "checkout", "createBranch"],
   setup(o) {
-    const d = o, { getCommitDetail: s } = X(), e = w(null), a = w(!0), y = A(() => {
+    const g = o, { getCommitDetail: s } = X(), e = w(null), a = w(!0), y = A(() => {
       if (!e.value) return !1;
       const p = e.value.changes.workflows;
       return p.added.length > 0 || p.modified.length > 0 || p.deleted.length > 0;
-    }), C = A(() => {
+    }), z = A(() => {
       if (!e.value) return !1;
       const p = e.value.changes.nodes;
       return p.added.length > 0 || p.removed.length > 0;
     });
     return rt(async () => {
       try {
-        e.value = await s(d.commit.hash);
+        e.value = await s(g.commit.hash);
       } finally {
         a.value = !1;
       }
-    }), (p, g) => {
+    }), (p, d) => {
       var x, v, l, u, h, $;
       return r(), c("div", {
         class: "modal-overlay",
-        onClick: g[3] || (g[3] = U((f) => p.$emit("close"), ["self"]))
+        onClick: d[3] || (d[3] = U((f) => p.$emit("close"), ["self"]))
       }, [
         t("div", po, [
           t("div", uo, [
@@ -387,8 +388,8 @@ const po = { class: "modal-content" }, uo = { class: "modal-header" }, ho = { cl
             ]),
             t("button", {
               class: "close-btn",
-              onClick: g[0] || (g[0] = (f) => p.$emit("close"))
-            }, [...g[4] || (g[4] = [
+              onClick: d[0] || (d[0] = (f) => p.$emit("close"))
+            }, [...d[4] || (d[4] = [
               t("svg", {
                 width: "14",
                 height: "14",
@@ -402,43 +403,43 @@ const po = { class: "modal-content" }, uo = { class: "modal-header" }, ho = { cl
           t("div", yo, [
             t("div", xo, i(((h = e.value) == null ? void 0 : h.message) || o.commit.message), 1),
             t("div", wo, i((($ = e.value) == null ? void 0 : $.date_relative) || o.commit.date_relative || o.commit.relative_date), 1),
-            a.value ? (r(), c("div", ko, "Loading details...")) : e.value ? (r(), c("div", Co, [
-              t("div", zo, [
+            a.value ? (r(), c("div", ko, "Loading details...")) : e.value ? (r(), c("div", zo, [
+              t("div", Co, [
                 t("span", $o, i(e.value.stats.files_changed) + " files", 1),
                 t("span", _o, "+" + i(e.value.stats.insertions), 1),
                 t("span", So, "-" + i(e.value.stats.deletions), 1)
               ]),
               y.value ? (r(), c("div", Lo, [
-                g[8] || (g[8] = t("h4", { class: "change-title" }, "Workflows", -1)),
+                d[8] || (d[8] = t("h4", { class: "change-title" }, "Workflows", -1)),
                 (r(!0), c(S, null, T(e.value.changes.workflows.added, (f) => (r(), c("div", {
                   key: "add-" + f,
                   class: "change-item added"
                 }, [
-                  g[5] || (g[5] = t("span", { class: "change-icon" }, "+", -1)),
+                  d[5] || (d[5] = t("span", { class: "change-icon" }, "+", -1)),
                   t("span", null, i(f), 1)
                 ]))), 128)),
                 (r(!0), c(S, null, T(e.value.changes.workflows.modified, (f) => (r(), c("div", {
                   key: "mod-" + f,
                   class: "change-item modified"
                 }, [
-                  g[6] || (g[6] = t("span", { class: "change-icon" }, "~", -1)),
+                  d[6] || (d[6] = t("span", { class: "change-icon" }, "~", -1)),
                   t("span", null, i(f), 1)
                 ]))), 128)),
                 (r(!0), c(S, null, T(e.value.changes.workflows.deleted, (f) => (r(), c("div", {
                   key: "del-" + f,
                   class: "change-item deleted"
                 }, [
-                  g[7] || (g[7] = t("span", { class: "change-icon" }, "-", -1)),
+                  d[7] || (d[7] = t("span", { class: "change-icon" }, "-", -1)),
                   t("span", null, i(f), 1)
                 ]))), 128))
               ])) : b("", !0),
-              C.value ? (r(), c("div", Bo, [
-                g[11] || (g[11] = t("h4", { class: "change-title" }, "Nodes", -1)),
+              z.value ? (r(), c("div", Bo, [
+                d[11] || (d[11] = t("h4", { class: "change-title" }, "Nodes", -1)),
                 (r(!0), c(S, null, T(e.value.changes.nodes.added, (f) => (r(), c("div", {
                   key: "add-" + f.name,
                   class: "change-item added"
                 }, [
-                  g[9] || (g[9] = t("span", { class: "change-icon" }, "+", -1)),
+                  d[9] || (d[9] = t("span", { class: "change-icon" }, "+", -1)),
                   t("span", null, i(f.name), 1),
                   f.version ? (r(), c("span", Eo, "(" + i(f.version) + ")", 1)) : b("", !0)
                 ]))), 128)),
@@ -446,14 +447,14 @@ const po = { class: "modal-content" }, uo = { class: "modal-header" }, ho = { cl
                   key: "rem-" + f.name,
                   class: "change-item deleted"
                 }, [
-                  g[10] || (g[10] = t("span", { class: "change-icon" }, "-", -1)),
+                  d[10] || (d[10] = t("span", { class: "change-icon" }, "-", -1)),
                   t("span", null, i(f.name), 1)
                 ]))), 128))
               ])) : b("", !0),
               e.value.changes.models.resolved > 0 ? (r(), c("div", To, [
-                g[13] || (g[13] = t("h4", { class: "change-title" }, "Models", -1)),
+                d[13] || (d[13] = t("h4", { class: "change-title" }, "Models", -1)),
                 t("div", Io, [
-                  g[12] || (g[12] = t("span", { class: "change-icon" }, "●", -1)),
+                  d[12] || (d[12] = t("span", { class: "change-icon" }, "●", -1)),
                   t("span", null, i(e.value.changes.models.resolved) + " model(s) resolved", 1)
                 ])
               ])) : b("", !0)
@@ -462,11 +463,11 @@ const po = { class: "modal-content" }, uo = { class: "modal-header" }, ho = { cl
           t("div", Mo, [
             t("button", {
               class: "action-btn secondary",
-              onClick: g[1] || (g[1] = (f) => p.$emit("createBranch", o.commit))
+              onClick: d[1] || (d[1] = (f) => p.$emit("createBranch", o.commit))
             }, " Create Branch "),
             t("button", {
               class: "action-btn primary",
-              onClick: g[2] || (g[2] = (f) => p.$emit("checkout", o.commit))
+              onClick: d[2] || (d[2] = (f) => p.$emit("checkout", o.commit))
             }, " Checkout ")
           ])
         ])
@@ -494,9 +495,9 @@ const po = { class: "modal-content" }, uo = { class: "modal-header" }, ho = { cl
   },
   emits: ["confirm", "cancel", "secondary"],
   setup(o) {
-    return (d, s) => (r(), c("div", {
+    return (g, s) => (r(), c("div", {
       class: "dialog-overlay",
-      onClick: s[3] || (s[3] = U((e) => d.$emit("cancel"), ["self"]))
+      onClick: s[3] || (s[3] = U((e) => g.$emit("cancel"), ["self"]))
     }, [
       t("div", Ao, [
         t("div", Do, [
@@ -518,22 +519,22 @@ const po = { class: "modal-content" }, uo = { class: "modal-header" }, ho = { cl
         t("div", Yo, [
           t("button", {
             class: "dialog-btn cancel",
-            onClick: s[0] || (s[0] = (e) => d.$emit("cancel"))
+            onClick: s[0] || (s[0] = (e) => g.$emit("cancel"))
           }, i(o.cancelLabel), 1),
           o.secondaryAction ? (r(), c("button", {
             key: 0,
             class: "dialog-btn secondary",
-            onClick: s[1] || (s[1] = (e) => d.$emit("secondary"))
+            onClick: s[1] || (s[1] = (e) => g.$emit("secondary"))
           }, i(o.secondaryLabel), 1)) : b("", !0),
           t("button", {
             class: G(["dialog-btn primary", { destructive: o.destructive }]),
-            onClick: s[2] || (s[2] = (e) => d.$emit("confirm"))
+            onClick: s[2] || (s[2] = (e) => g.$emit("confirm"))
           }, i(o.confirmLabel), 3)
         ])
       ])
     ]));
   }
-}), Ro = /* @__PURE__ */ N(jo, [["__scopeId", "data-v-d24c6c0b"]]), Fo = "[data-comfygit-theme=default] .comfygit-panel{font-family:var(--cg-font-body)}[data-comfygit-theme=default] .panel-title{color:var(--cg-color-accent)}", Jo = '@import"https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap";[data-comfygit-theme=phosphor]{--cg-font-display: "IBM Plex Mono", ui-monospace, monospace;--cg-font-body: "IBM Plex Mono", ui-monospace, monospace;--cg-font-mono: "IBM Plex Mono", ui-monospace, monospace;--cg-font-size-xs: 9px;--cg-font-size-sm: 11px;--cg-font-size-base: 13px;--cg-font-size-lg: 14px;--cg-font-size-xl: 16px;--cg-font-size-2xl: 18px;--cg-letter-spacing-normal: .02em;--cg-letter-spacing-wide: .08em;--cg-color-bg-primary: #0a0a0a;--cg-color-bg-secondary: #050505;--cg-color-bg-tertiary: #000000;--cg-color-bg-hover: #0f1f0f;--cg-color-bg-overlay: rgba(0, 0, 0, .85);--cg-color-text-primary: #00ff41;--cg-color-text-secondary: #00cc33;--cg-color-text-muted: #008f11;--cg-color-text-inverse: #000000;--cg-color-border: #00ff41;--cg-color-border-subtle: #003b00;--cg-color-border-strong: #00ff41;--cg-color-accent: #00ff41;--cg-color-accent-hover: #39ff14;--cg-color-accent-muted: rgba(0, 255, 65, .15);--cg-color-success: #00ff41;--cg-color-success-muted: rgba(0, 255, 65, .2);--cg-color-warning: #ffff00;--cg-color-warning-muted: rgba(255, 255, 0, .15);--cg-color-error: #ff0040;--cg-color-error-muted: rgba(255, 0, 64, .15);--cg-color-info: #00ffff;--cg-color-info-muted: rgba(0, 255, 255, .15);--cg-radius-none: 0;--cg-radius-sm: 0;--cg-radius-md: 0;--cg-radius-lg: 0;--cg-radius-xl: 0;--cg-radius-2xl: 0;--cg-radius-full: 0;--cg-shadow-sm: 0 0 4px rgba(0, 255, 65, .3);--cg-shadow-md: 0 0 8px rgba(0, 255, 65, .4);--cg-shadow-lg: 0 0 16px rgba(0, 255, 65, .5);--cg-shadow-xl: 0 0 32px rgba(0, 255, 65, .6);--cg-btn-gradient-start: #00ff41;--cg-btn-gradient-end: #00cc33;--cg-btn-shadow-inset: none}[data-comfygit-theme=phosphor] .comfygit-panel{position:relative;overflow:hidden}[data-comfygit-theme=phosphor] .comfygit-panel:before{content:"";position:absolute;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(0deg,transparent,transparent 1px,rgba(0,0,0,.3) 1px,rgba(0,0,0,.3) 2px);pointer-events:none;z-index:100}[data-comfygit-theme=phosphor] .comfygit-panel:after{content:"";position:absolute;top:0;left:0;right:0;bottom:0;background:#00ff4105;pointer-events:none;animation:phosphor-flicker 4s infinite;z-index:99}@keyframes phosphor-flicker{0%,to{opacity:1}50%{opacity:.98}52%{opacity:1}54%{opacity:.96}56%{opacity:1}}[data-comfygit-theme=phosphor] .comfygit-panel{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg),inset 0 0 100px #00ff4108;font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .panel-header{background:var(--cg-color-bg-tertiary);border-bottom:1px solid var(--cg-color-border);padding:var(--cg-space-3) var(--cg-space-4)}[data-comfygit-theme=phosphor] .panel-title{color:var(--cg-color-accent);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-sm);text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .panel-title:before{content:"> ";opacity:.7}[data-comfygit-theme=phosphor] .env-name,[data-comfygit-theme=phosphor] .branch-name{color:var(--cg-color-text-secondary);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .branch-name:before{content:"@";margin-right:2px}[data-comfygit-theme=phosphor] .status-dot{width:6px;height:12px;border-radius:0;animation:cursor-blink 1s step-end infinite}[data-comfygit-theme=phosphor] .status-dot.success{background:var(--cg-color-success)}[data-comfygit-theme=phosphor] .status-dot.warning{background:var(--cg-color-warning)}[data-comfygit-theme=phosphor] .status-dot.error{background:var(--cg-color-error)}@keyframes cursor-blink{50%{opacity:0}}[data-comfygit-theme=phosphor] .icon-btn{color:var(--cg-color-text-primary);border:1px solid transparent}[data-comfygit-theme=phosphor] .icon-btn:hover{background:var(--cg-color-bg-hover);border-color:var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .status-section{margin-bottom:var(--cg-space-4)}[data-comfygit-theme=phosphor] .status-grid{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .column-title{color:var(--cg-color-text-muted);font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wider)}[data-comfygit-theme=phosphor] .column-title:before{content:"/* "}[data-comfygit-theme=phosphor] .column-title:after{content:" */"}[data-comfygit-theme=phosphor] .status-item{font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .status-item .icon{display:none}[data-comfygit-theme=phosphor] .status-item:before{content:"├─ ";color:var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .synced-item:before{content:"└─ "}[data-comfygit-theme=phosphor] .count{font-weight:var(--cg-font-weight-bold)}[data-comfygit-theme=phosphor] .count.new{color:var(--cg-color-success);text-shadow:0 0 4px var(--cg-color-success)}[data-comfygit-theme=phosphor] .count.modified{color:var(--cg-color-warning);text-shadow:0 0 4px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .count.deleted{color:var(--cg-color-error);text-shadow:0 0 4px var(--cg-color-error)}[data-comfygit-theme=phosphor] .count.synced{color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .warning-box{background:transparent;border:1px solid var(--cg-color-warning);color:var(--cg-color-warning);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .warning-box:before{content:"[!] ";font-weight:700}[data-comfygit-theme=phosphor] .warning-box.error{border-color:var(--cg-color-error);color:var(--cg-color-error)}[data-comfygit-theme=phosphor] .history-section{font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .history-title{color:var(--cg-color-text-muted);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .commit-item{background:transparent;border:none;border-left:2px solid var(--cg-color-border-subtle);padding-left:var(--cg-space-3);margin-left:var(--cg-space-2)}[data-comfygit-theme=phosphor] .commit-item:hover{border-left-color:var(--cg-color-accent);background:var(--cg-color-bg-hover)}[data-comfygit-theme=phosphor] .commit-hash{color:var(--cg-color-accent);font-weight:var(--cg-font-weight-bold)}[data-comfygit-theme=phosphor] .commit-hash:before{content:"#"}[data-comfygit-theme=phosphor] .commit-message{color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .commit-date{color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .panel-footer{border-top:1px solid var(--cg-color-border);background:var(--cg-color-bg-tertiary)}[data-comfygit-theme=phosphor] .export-btn{background:transparent;color:var(--cg-color-text-primary);border:1px solid var(--cg-color-border);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .export-btn:hover:not(:disabled){background:var(--cg-color-bg-hover);border-color:var(--cg-color-accent);color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .commit-popover{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg)}[data-comfygit-theme=phosphor] .commit-input{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle);color:var(--cg-color-text-primary);font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .commit-input:focus{border-color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm);outline:none}[data-comfygit-theme=phosphor] .commit-input::placeholder{color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .comfygit-panel-btn{background:var(--cg-color-accent)!important;color:var(--cg-color-bg-primary)!important;border:none!important;text-transform:uppercase;letter-spacing:.1em;font-family:var(--cg-font-mono);font-size:11px;box-shadow:0 0 8px var(--cg-color-accent)!important}[data-comfygit-theme=phosphor] .comfygit-panel-btn:hover{box-shadow:0 0 16px var(--cg-color-accent)!important}[data-comfygit-theme=phosphor] .comfygit-commit-btn{background:var(--cg-color-bg-tertiary)!important;color:var(--cg-color-text-primary)!important;border:1px solid var(--cg-color-border-subtle)!important;font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .comfygit-commit-btn:hover{border-color:var(--cg-color-accent)!important;box-shadow:0 0 8px #00ff414d!important}[data-comfygit-theme=phosphor] .commit-indicator{background:var(--cg-color-warning);box-shadow:0 0 6px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar{width:8px}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar-track{background:var(--cg-color-bg-tertiary)}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar-thumb{background:var(--cg-color-border-subtle);border:1px solid var(--cg-color-bg-tertiary)}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar-thumb:hover{background:var(--cg-color-accent)}[data-comfygit-theme=phosphor] ::selection{background:var(--cg-color-accent);color:var(--cg-color-bg-primary)}', Ko = '@import"https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap";[data-comfygit-theme=swiss]{--cg-font-display: "Playfair Display", Georgia, serif;--cg-font-body: "DM Sans", system-ui, sans-serif;--cg-font-mono: "JetBrains Mono", ui-monospace, monospace;--cg-font-size-xs: 10px;--cg-font-size-sm: 12px;--cg-font-size-base: 14px;--cg-font-size-lg: 18px;--cg-font-size-xl: 24px;--cg-font-size-2xl: 32px;--cg-font-weight-normal: 400;--cg-font-weight-medium: 500;--cg-font-weight-semibold: 600;--cg-font-weight-bold: 700;--cg-line-height-tight: 1.1;--cg-line-height-normal: 1.6;--cg-line-height-relaxed: 1.8;--cg-letter-spacing-tight: -.03em;--cg-letter-spacing-normal: 0;--cg-letter-spacing-wide: .15em;--cg-color-bg-primary: #fafafa;--cg-color-bg-secondary: #ffffff;--cg-color-bg-tertiary: #f0f0f0;--cg-color-bg-hover: #e8e8e8;--cg-color-bg-overlay: rgba(0, 0, 0, .6);--cg-color-text-primary: #0a0a0a;--cg-color-text-secondary: #404040;--cg-color-text-muted: #808080;--cg-color-text-inverse: #ffffff;--cg-color-border: #0a0a0a;--cg-color-border-subtle: #e0e0e0;--cg-color-border-strong: #0a0a0a;--cg-color-accent: #dc2626;--cg-color-accent-hover: #b91c1c;--cg-color-accent-muted: rgba(220, 38, 38, .1);--cg-color-success: #16a34a;--cg-color-success-muted: rgba(22, 163, 74, .1);--cg-color-warning: #d97706;--cg-color-warning-muted: rgba(217, 119, 6, .08);--cg-color-error: #dc2626;--cg-color-error-muted: rgba(220, 38, 38, .08);--cg-color-info: #0a0a0a;--cg-color-info-muted: rgba(10, 10, 10, .05);--cg-space-1: 4px;--cg-space-2: 8px;--cg-space-3: 16px;--cg-space-4: 24px;--cg-space-5: 32px;--cg-space-6: 40px;--cg-space-8: 56px;--cg-space-10: 72px;--cg-radius-none: 0;--cg-radius-sm: 0;--cg-radius-md: 2px;--cg-radius-lg: 2px;--cg-radius-xl: 2px;--cg-radius-2xl: 2px;--cg-radius-full: 2px;--cg-shadow-sm: none;--cg-shadow-md: 0 1px 0 rgba(0, 0, 0, .05);--cg-shadow-lg: 0 4px 24px rgba(0, 0, 0, .08);--cg-shadow-xl: 0 8px 48px rgba(0, 0, 0, .12);--cg-btn-gradient-start: #0a0a0a;--cg-btn-gradient-end: #0a0a0a;--cg-btn-shadow-inset: none}[data-comfygit-theme=swiss] .comfygit-panel{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-xl);font-family:var(--cg-font-body)}[data-comfygit-theme=swiss] .panel-header{background:var(--cg-color-bg-secondary);border-bottom:2px solid var(--cg-color-border);padding:var(--cg-space-4) var(--cg-space-5)}[data-comfygit-theme=swiss] .header-left{flex-direction:column;align-items:flex-start;gap:var(--cg-space-1)}[data-comfygit-theme=swiss] .panel-title{font-family:var(--cg-font-display);font-size:var(--cg-font-size-xl);font-weight:700;color:var(--cg-color-text-primary);letter-spacing:var(--cg-letter-spacing-tight);line-height:var(--cg-line-height-tight)}[data-comfygit-theme=swiss] .header-info{font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);color:var(--cg-color-text-muted)}[data-comfygit-theme=swiss] .env-name{font-weight:var(--cg-font-weight-semibold);color:var(--cg-color-text-secondary)}[data-comfygit-theme=swiss] .branch-name{color:var(--cg-color-text-muted)}[data-comfygit-theme=swiss] .status-dot{width:6px;height:6px;border-radius:0}[data-comfygit-theme=swiss] .status-dot.success{background:var(--cg-color-success)}[data-comfygit-theme=swiss] .status-dot.warning{background:var(--cg-color-warning)}[data-comfygit-theme=swiss] .status-dot.error{background:var(--cg-color-accent)}[data-comfygit-theme=swiss] .icon-btn{color:var(--cg-color-text-primary);border-radius:0;transition:all var(--cg-transition-fast)}[data-comfygit-theme=swiss] .icon-btn:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=swiss] .panel-content{padding:var(--cg-space-5)}[data-comfygit-theme=swiss] .status-section{margin-bottom:var(--cg-space-5)}[data-comfygit-theme=swiss] .status-grid{background:var(--cg-color-bg-secondary);border:1px solid var(--cg-color-border-subtle);border-radius:0}[data-comfygit-theme=swiss] .status-column{padding:var(--cg-space-4)}[data-comfygit-theme=swiss] .status-column:first-child{border-right:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=swiss] .column-title{font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);color:var(--cg-color-text-muted);margin-bottom:var(--cg-space-3);padding-bottom:var(--cg-space-2);border-bottom:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=swiss] .status-item{font-size:var(--cg-font-size-sm);padding:var(--cg-space-1) 0}[data-comfygit-theme=swiss] .status-item .icon{display:none}[data-comfygit-theme=swiss] .count{font-family:var(--cg-font-display);font-size:var(--cg-font-size-lg);font-weight:700;min-width:24px}[data-comfygit-theme=swiss] .count.new{color:var(--cg-color-success)}[data-comfygit-theme=swiss] .count.modified{color:var(--cg-color-warning)}[data-comfygit-theme=swiss] .count.deleted{color:var(--cg-color-accent)}[data-comfygit-theme=swiss] .count.synced{color:var(--cg-color-text-muted)}[data-comfygit-theme=swiss] .label{color:var(--cg-color-text-secondary);font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide)}[data-comfygit-theme=swiss] .synced-item{border-top:1px solid var(--cg-color-border-subtle);margin-top:var(--cg-space-2);padding-top:var(--cg-space-2)}[data-comfygit-theme=swiss] .status-item.ok .label{color:var(--cg-color-success)}[data-comfygit-theme=swiss] .warning-box{background:var(--cg-color-warning-muted);border:none;border-left:3px solid var(--cg-color-warning);color:var(--cg-color-text-primary);font-size:var(--cg-font-size-sm);padding:var(--cg-space-3)}[data-comfygit-theme=swiss] .warning-box.error{background:var(--cg-color-error-muted);border-left-color:var(--cg-color-accent)}[data-comfygit-theme=swiss] .warning-icon{display:none}[data-comfygit-theme=swiss] .history-section{border-top:2px solid var(--cg-color-border);padding-top:var(--cg-space-4);margin-top:var(--cg-space-4)}[data-comfygit-theme=swiss] .history-title{font-family:var(--cg-font-display);font-size:var(--cg-font-size-lg);font-weight:600;color:var(--cg-color-text-primary);margin-bottom:var(--cg-space-3)}[data-comfygit-theme=swiss] .commit-item{background:transparent;border:none;border-bottom:1px solid var(--cg-color-border-subtle);padding:var(--cg-space-3) 0;display:grid;grid-template-columns:60px 1fr auto;gap:var(--cg-space-3);align-items:baseline}[data-comfygit-theme=swiss] .commit-item:last-child{border-bottom:none}[data-comfygit-theme=swiss] .commit-item:hover{background:var(--cg-color-bg-hover);margin:0 calc(-1 * var(--cg-space-3));padding-left:var(--cg-space-3);padding-right:var(--cg-space-3)}[data-comfygit-theme=swiss] .commit-hash{font-family:var(--cg-font-mono);font-size:var(--cg-font-size-xs);color:var(--cg-color-accent);font-weight:500}[data-comfygit-theme=swiss] .commit-message{font-size:var(--cg-font-size-sm);color:var(--cg-color-text-primary);font-weight:var(--cg-font-weight-medium)}[data-comfygit-theme=swiss] .commit-date{font-size:var(--cg-font-size-xs);color:var(--cg-color-text-muted);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide)}[data-comfygit-theme=swiss] .panel-footer{border-top:2px solid var(--cg-color-border);background:var(--cg-color-bg-secondary);padding:var(--cg-space-4) var(--cg-space-5)}[data-comfygit-theme=swiss] .export-btn{background:var(--cg-color-text-primary);color:var(--cg-color-text-inverse);border:none;text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs);font-weight:var(--cg-font-weight-semibold);padding:var(--cg-space-3) var(--cg-space-4);transition:all var(--cg-transition-fast)}[data-comfygit-theme=swiss] .export-btn:hover:not(:disabled){background:var(--cg-color-accent);transform:translateY(-1px)}[data-comfygit-theme=swiss] .commit-popover{background:var(--cg-color-bg-secondary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg)}[data-comfygit-theme=swiss] .commit-input{background:var(--cg-color-bg-primary);border:1px solid var(--cg-color-border-subtle);color:var(--cg-color-text-primary);font-family:var(--cg-font-body);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=swiss] .commit-input:focus{border-color:var(--cg-color-border);outline:none}[data-comfygit-theme=swiss] .comfygit-panel-btn{background:var(--cg-color-text-primary)!important;color:var(--cg-color-text-inverse)!important;border:none!important;border-radius:0!important;text-transform:uppercase;letter-spacing:.1em;font-family:var(--cg-font-body);font-size:10px;font-weight:600;box-shadow:none!important}[data-comfygit-theme=swiss] .comfygit-panel-btn:hover{background:var(--cg-color-accent)!important}[data-comfygit-theme=swiss] .comfygit-commit-btn{background:var(--cg-color-bg-secondary)!important;color:var(--cg-color-text-primary)!important;border:1px solid var(--cg-color-border)!important;border-radius:0!important;font-family:var(--cg-font-body);font-size:10px;text-transform:uppercase;letter-spacing:.1em}[data-comfygit-theme=swiss] .comfygit-commit-btn:hover{background:var(--cg-color-bg-hover)!important}[data-comfygit-theme=swiss] .commit-indicator{background:var(--cg-color-accent);width:6px;height:6px;border-radius:0}[data-comfygit-theme=swiss] .panel-content::-webkit-scrollbar{width:4px}[data-comfygit-theme=swiss] .panel-content::-webkit-scrollbar-track{background:transparent}[data-comfygit-theme=swiss] .panel-content::-webkit-scrollbar-thumb{background:var(--cg-color-border-subtle)}[data-comfygit-theme=swiss] .panel-content::-webkit-scrollbar-thumb:hover{background:var(--cg-color-text-muted)}[data-comfygit-theme=swiss] ::selection{background:var(--cg-color-accent);color:var(--cg-color-text-inverse)}', Wo = '@import"https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Nunito:wght@400;500;600;700&display=swap";[data-comfygit-theme=soft]{--cg-font-display: "Outfit", system-ui, sans-serif;--cg-font-body: "Nunito", system-ui, sans-serif;--cg-font-mono: "SF Mono", ui-monospace, monospace;--cg-font-size-xs: 11px;--cg-font-size-sm: 13px;--cg-font-size-base: 15px;--cg-font-size-lg: 18px;--cg-font-size-xl: 22px;--cg-font-size-2xl: 28px;--cg-font-weight-normal: 400;--cg-font-weight-medium: 500;--cg-font-weight-semibold: 600;--cg-font-weight-bold: 700;--cg-line-height-tight: 1.3;--cg-line-height-normal: 1.6;--cg-line-height-relaxed: 1.8;--cg-letter-spacing-tight: -.01em;--cg-letter-spacing-normal: .01em;--cg-letter-spacing-wide: .04em;--cg-color-bg-primary: rgba(30, 27, 38, .95);--cg-color-bg-secondary: rgba(40, 36, 50, .8);--cg-color-bg-tertiary: rgba(50, 45, 62, .6);--cg-color-bg-hover: rgba(80, 70, 100, .4);--cg-color-bg-overlay: rgba(20, 18, 28, .75);--cg-color-text-primary: #f0eef5;--cg-color-text-secondary: #c4bfd4;--cg-color-text-muted: #8a8299;--cg-color-text-inverse: #1e1b26;--cg-color-border: rgba(255, 255, 255, .08);--cg-color-border-subtle: rgba(255, 255, 255, .04);--cg-color-border-strong: rgba(255, 255, 255, .15);--cg-color-accent: #a78bfa;--cg-color-accent-hover: #c4b5fd;--cg-color-accent-muted: rgba(167, 139, 250, .2);--cg-color-success: #86efac;--cg-color-success-muted: rgba(134, 239, 172, .15);--cg-color-warning: #fcd34d;--cg-color-warning-muted: rgba(252, 211, 77, .12);--cg-color-error: #fca5a5;--cg-color-error-muted: rgba(252, 165, 165, .12);--cg-color-info: #93c5fd;--cg-color-info-muted: rgba(147, 197, 253, .15);--cg-space-1: 4px;--cg-space-2: 8px;--cg-space-3: 14px;--cg-space-4: 20px;--cg-space-5: 28px;--cg-space-6: 36px;--cg-space-8: 48px;--cg-radius-none: 0;--cg-radius-sm: 6px;--cg-radius-md: 10px;--cg-radius-lg: 16px;--cg-radius-xl: 24px;--cg-radius-2xl: 32px;--cg-radius-full: 9999px;--cg-shadow-sm: 0 2px 8px rgba(0, 0, 0, .15);--cg-shadow-md: 0 4px 16px rgba(0, 0, 0, .2), 0 0 40px rgba(167, 139, 250, .05);--cg-shadow-lg: 0 8px 32px rgba(0, 0, 0, .25), 0 0 60px rgba(167, 139, 250, .08);--cg-shadow-xl: 0 16px 48px rgba(0, 0, 0, .3), 0 0 80px rgba(167, 139, 250, .1);--cg-blur-sm: 8px;--cg-blur-md: 16px;--cg-blur-lg: 24px;--cg-btn-gradient-start: #a78bfa;--cg-btn-gradient-end: #8b5cf6;--cg-btn-shadow-inset: inset 0 1px 0 rgba(255, 255, 255, .25)}[data-comfygit-theme=soft] .comfygit-panel{background:linear-gradient(135deg,#3c325066,#1e1b26f2),var(--cg-color-bg-primary);backdrop-filter:blur(var(--cg-blur-lg));-webkit-backdrop-filter:blur(var(--cg-blur-lg));border:1px solid var(--cg-color-border-strong);border-radius:var(--cg-radius-xl);box-shadow:var(--cg-shadow-xl);font-family:var(--cg-font-body);overflow:hidden}[data-comfygit-theme=soft] .comfygit-panel:before{content:"";position:absolute;top:-50%;right:-50%;width:100%;height:100%;background:radial-gradient(circle at center,rgba(167,139,250,.15) 0%,transparent 50%);pointer-events:none;animation:soft-glow 8s ease-in-out infinite alternate}@keyframes soft-glow{0%{transform:translate(0) scale(1);opacity:.5}to{transform:translate(-10%,10%) scale(1.2);opacity:.8}}[data-comfygit-theme=soft] .panel-header{background:#ffffff08;border-bottom:1px solid var(--cg-color-border);padding:var(--cg-space-4) var(--cg-space-5);position:relative}[data-comfygit-theme=soft] .panel-title{font-family:var(--cg-font-display);font-size:var(--cg-font-size-lg);font-weight:600;color:var(--cg-color-text-primary);background:linear-gradient(90deg,var(--cg-color-text-primary),var(--cg-color-accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}[data-comfygit-theme=soft] .header-info{font-size:var(--cg-font-size-xs)}[data-comfygit-theme=soft] .env-name{color:var(--cg-color-text-secondary);font-weight:var(--cg-font-weight-medium)}[data-comfygit-theme=soft] .branch-name{color:var(--cg-color-text-muted)}[data-comfygit-theme=soft] .status-dot{width:10px;height:10px;border-radius:var(--cg-radius-full);box-shadow:0 0 8px currentColor}[data-comfygit-theme=soft] .status-dot.success{background:var(--cg-color-success);box-shadow:0 0 12px var(--cg-color-success)}[data-comfygit-theme=soft] .status-dot.warning{background:var(--cg-color-warning);box-shadow:0 0 12px var(--cg-color-warning)}[data-comfygit-theme=soft] .status-dot.error{background:var(--cg-color-error);box-shadow:0 0 12px var(--cg-color-error)}[data-comfygit-theme=soft] .icon-btn{color:var(--cg-color-text-secondary);border-radius:var(--cg-radius-md);transition:all var(--cg-transition-normal)}[data-comfygit-theme=soft] .icon-btn:hover{background:var(--cg-color-bg-hover);color:var(--cg-color-text-primary);transform:scale(1.05)}[data-comfygit-theme=soft] .panel-content{padding:var(--cg-space-5);position:relative}[data-comfygit-theme=soft] .status-section{margin-bottom:var(--cg-space-5)}[data-comfygit-theme=soft] .status-grid{background:#ffffff08;-webkit-backdrop-filter:blur(var(--cg-blur-sm));backdrop-filter:blur(var(--cg-blur-sm));border:1px solid var(--cg-color-border);border-radius:var(--cg-radius-lg);overflow:hidden}[data-comfygit-theme=soft] .status-column{padding:var(--cg-space-4)}[data-comfygit-theme=soft] .status-column:first-child{border-right:1px solid var(--cg-color-border)}[data-comfygit-theme=soft] .column-title{font-family:var(--cg-font-display);font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);color:var(--cg-color-text-muted);margin-bottom:var(--cg-space-3)}[data-comfygit-theme=soft] .status-item{font-size:var(--cg-font-size-sm);padding:var(--cg-space-1) 0}[data-comfygit-theme=soft] .status-item .icon{font-size:6px;opacity:.6}[data-comfygit-theme=soft] .count{font-weight:var(--cg-font-weight-bold)}[data-comfygit-theme=soft] .count.new{color:var(--cg-color-success)}[data-comfygit-theme=soft] .count.modified{color:var(--cg-color-warning)}[data-comfygit-theme=soft] .count.deleted{color:var(--cg-color-error)}[data-comfygit-theme=soft] .count.synced{color:var(--cg-color-text-muted)}[data-comfygit-theme=soft] .synced-item{border-top:1px solid var(--cg-color-border);margin-top:var(--cg-space-2);padding-top:var(--cg-space-2)}[data-comfygit-theme=soft] .status-item.ok,[data-comfygit-theme=soft] .status-item.ok .label{color:var(--cg-color-success)}[data-comfygit-theme=soft] .warning-box{background:var(--cg-color-warning-muted);border:1px solid rgba(252,211,77,.3);border-radius:var(--cg-radius-md);color:var(--cg-color-warning);font-size:var(--cg-font-size-sm);padding:var(--cg-space-3)}[data-comfygit-theme=soft] .warning-box.error{background:var(--cg-color-error-muted);border-color:#fca5a54d;color:var(--cg-color-error)}[data-comfygit-theme=soft] .history-section{margin-top:var(--cg-space-4)}[data-comfygit-theme=soft] .history-title{font-family:var(--cg-font-display);font-size:var(--cg-font-size-sm);font-weight:var(--cg-font-weight-semibold);color:var(--cg-color-text-secondary);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);margin-bottom:var(--cg-space-3)}[data-comfygit-theme=soft] .commit-item{background:#ffffff05;border:1px solid var(--cg-color-border-subtle);border-radius:var(--cg-radius-md);padding:var(--cg-space-3);margin-bottom:var(--cg-space-2);transition:all var(--cg-transition-normal)}[data-comfygit-theme=soft] .commit-item:hover{background:var(--cg-color-bg-hover);border-color:var(--cg-color-border);transform:translateY(-2px);box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=soft] .commit-hash{font-family:var(--cg-font-mono);font-size:var(--cg-font-size-xs);color:var(--cg-color-accent);font-weight:500}[data-comfygit-theme=soft] .commit-message{font-size:var(--cg-font-size-sm);color:var(--cg-color-text-primary)}[data-comfygit-theme=soft] .commit-date{font-size:var(--cg-font-size-xs);color:var(--cg-color-text-muted)}[data-comfygit-theme=soft] .panel-footer{border-top:1px solid var(--cg-color-border);background:#ffffff05;padding:var(--cg-space-4) var(--cg-space-5)}[data-comfygit-theme=soft] .export-btn{background:linear-gradient(135deg,var(--cg-btn-gradient-start),var(--cg-btn-gradient-end));color:var(--cg-color-text-inverse);border:none;border-radius:var(--cg-radius-md);font-size:var(--cg-font-size-xs);font-weight:var(--cg-font-weight-semibold);padding:var(--cg-space-3) var(--cg-space-4);transition:all var(--cg-transition-normal);box-shadow:0 4px 12px #a78bfa4d}[data-comfygit-theme=soft] .export-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 6px 20px #a78bfa66}[data-comfygit-theme=soft] .commit-popover{background:#1e1b26f2;-webkit-backdrop-filter:blur(var(--cg-blur-lg));backdrop-filter:blur(var(--cg-blur-lg));border:1px solid var(--cg-color-border-strong);border-radius:var(--cg-radius-lg);box-shadow:var(--cg-shadow-lg)}[data-comfygit-theme=soft] .commit-input{background:#ffffff0d;border:1px solid var(--cg-color-border);border-radius:var(--cg-radius-md);color:var(--cg-color-text-primary);font-family:var(--cg-font-body)}[data-comfygit-theme=soft] .commit-input:focus{border-color:var(--cg-color-accent);box-shadow:0 0 0 3px var(--cg-color-accent-muted);outline:none}[data-comfygit-theme=soft] .comfygit-panel-btn{background:linear-gradient(135deg,var(--cg-btn-gradient-start),var(--cg-btn-gradient-end))!important;color:var(--cg-color-text-inverse)!important;border:none!important;border-radius:8px 0 0 8px!important;font-family:var(--cg-font-display);font-size:11px;font-weight:600;box-shadow:0 4px 12px #a78bfa4d!important}[data-comfygit-theme=soft] .comfygit-panel-btn:hover{box-shadow:0 6px 20px #a78bfa80!important;transform:translateY(-1px)}[data-comfygit-theme=soft] .comfygit-commit-btn{background:#ffffff0d!important;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:var(--cg-color-text-primary)!important;border:1px solid var(--cg-color-border)!important;border-radius:0 8px 8px 0!important;font-family:var(--cg-font-display)}[data-comfygit-theme=soft] .comfygit-commit-btn:hover{background:#ffffff1a!important;border-color:var(--cg-color-accent)!important}[data-comfygit-theme=soft] .commit-indicator{background:var(--cg-color-warning);box-shadow:0 0 8px var(--cg-color-warning)}[data-comfygit-theme=soft] .panel-content::-webkit-scrollbar{width:6px}[data-comfygit-theme=soft] .panel-content::-webkit-scrollbar-track{background:transparent}[data-comfygit-theme=soft] .panel-content::-webkit-scrollbar-thumb{background:var(--cg-color-border-strong);border-radius:var(--cg-radius-full)}[data-comfygit-theme=soft] .panel-content::-webkit-scrollbar-thumb:hover{background:var(--cg-color-accent)}[data-comfygit-theme=soft] ::selection{background:var(--cg-color-accent);color:var(--cg-color-text-inverse)}', Xo = '@import"https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Archivo+Black&family=Work+Sans:wght@400;500;600;700;800&display=swap";[data-comfygit-theme=brutal]{--cg-font-display: "Archivo Black", Impact, sans-serif;--cg-font-body: "Work Sans", system-ui, sans-serif;--cg-font-mono: "Space Mono", ui-monospace, monospace;--cg-font-size-xs: 10px;--cg-font-size-sm: 12px;--cg-font-size-base: 14px;--cg-font-size-lg: 16px;--cg-font-size-xl: 20px;--cg-font-size-2xl: 28px;--cg-font-weight-normal: 500;--cg-font-weight-medium: 600;--cg-font-weight-semibold: 700;--cg-font-weight-bold: 800;--cg-line-height-tight: 1.1;--cg-line-height-normal: 1.4;--cg-line-height-relaxed: 1.6;--cg-letter-spacing-tight: -.02em;--cg-letter-spacing-normal: 0;--cg-letter-spacing-wide: .05em;--cg-color-bg-primary: #fffdf7;--cg-color-bg-secondary: #ffffff;--cg-color-bg-tertiary: #f5f3ed;--cg-color-bg-hover: #fef3c7;--cg-color-bg-overlay: rgba(0, 0, 0, .7);--cg-color-text-primary: #0f0f0f;--cg-color-text-secondary: #1f1f1f;--cg-color-text-muted: #525252;--cg-color-text-inverse: #ffffff;--cg-color-border: #0f0f0f;--cg-color-border-subtle: #0f0f0f;--cg-color-border-strong: #0f0f0f;--cg-color-accent: #facc15;--cg-color-accent-hover: #fde047;--cg-color-accent-muted: rgba(250, 204, 21, .3);--cg-color-success: #22c55e;--cg-color-success-muted: rgba(34, 197, 94, .2);--cg-color-warning: #f97316;--cg-color-warning-muted: rgba(249, 115, 22, .15);--cg-color-error: #ef4444;--cg-color-error-muted: rgba(239, 68, 68, .15);--cg-color-info: #3b82f6;--cg-color-info-muted: rgba(59, 130, 246, .15);--cg-space-1: 6px;--cg-space-2: 10px;--cg-space-3: 14px;--cg-space-4: 20px;--cg-space-5: 28px;--cg-space-6: 36px;--cg-radius-none: 0;--cg-radius-sm: 0;--cg-radius-md: 0;--cg-radius-lg: 0;--cg-radius-xl: 0;--cg-radius-2xl: 0;--cg-radius-full: 0;--cg-shadow-sm: 3px 3px 0 var(--cg-color-border);--cg-shadow-md: 4px 4px 0 var(--cg-color-border);--cg-shadow-lg: 6px 6px 0 var(--cg-color-border);--cg-shadow-xl: 8px 8px 0 var(--cg-color-border);--cg-btn-gradient-start: #facc15;--cg-btn-gradient-end: #facc15;--cg-btn-shadow-inset: none}[data-comfygit-theme=brutal] .comfygit-panel{background:var(--cg-color-bg-primary);border:4px solid var(--cg-color-border);box-shadow:var(--cg-shadow-xl);font-family:var(--cg-font-body)}[data-comfygit-theme=brutal] .comfygit-panel:before,[data-comfygit-theme=brutal] .comfygit-panel:after{content:"";position:absolute;width:12px;height:12px;background:var(--cg-color-accent);border:2px solid var(--cg-color-border)}[data-comfygit-theme=brutal] .comfygit-panel:before{top:-4px;left:-4px}[data-comfygit-theme=brutal] .comfygit-panel:after{bottom:-4px;right:-4px}[data-comfygit-theme=brutal] .panel-header{background:var(--cg-color-accent);border-bottom:4px solid var(--cg-color-border);padding:var(--cg-space-3) var(--cg-space-4)}[data-comfygit-theme=brutal] .panel-title{font-family:var(--cg-font-display);font-size:var(--cg-font-size-xl);color:var(--cg-color-text-primary);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-tight)}[data-comfygit-theme=brutal] .header-info{font-size:var(--cg-font-size-xs);font-weight:var(--cg-font-weight-semibold)}[data-comfygit-theme=brutal] .env-name{color:var(--cg-color-text-primary);text-transform:uppercase}[data-comfygit-theme=brutal] .branch-name{color:var(--cg-color-text-secondary);font-family:var(--cg-font-mono)}[data-comfygit-theme=brutal] .status-dot{width:10px;height:10px;border-radius:0;border:2px solid var(--cg-color-border)}[data-comfygit-theme=brutal] .status-dot.success{background:var(--cg-color-success)}[data-comfygit-theme=brutal] .status-dot.warning{background:var(--cg-color-warning)}[data-comfygit-theme=brutal] .status-dot.error{background:var(--cg-color-error)}[data-comfygit-theme=brutal] .icon-btn{color:var(--cg-color-text-primary);border:2px solid transparent;background:var(--cg-color-bg-secondary);transition:all .1s ease}[data-comfygit-theme=brutal] .icon-btn:hover{background:var(--cg-color-bg-secondary);border-color:var(--cg-color-border);box-shadow:2px 2px 0 var(--cg-color-border);transform:translate(-2px,-2px)}[data-comfygit-theme=brutal] .panel-content{padding:var(--cg-space-4);background:var(--cg-color-bg-primary)}[data-comfygit-theme=brutal] .status-section{margin-bottom:var(--cg-space-4)}[data-comfygit-theme=brutal] .status-grid{background:var(--cg-color-bg-secondary);border:3px solid var(--cg-color-border);box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=brutal] .status-column{padding:var(--cg-space-3)}[data-comfygit-theme=brutal] .status-column:first-child{border-right:3px solid var(--cg-color-border)}[data-comfygit-theme=brutal] .column-title{font-family:var(--cg-font-display);font-size:var(--cg-font-size-xs);text-transform:uppercase;color:var(--cg-color-text-primary);margin-bottom:var(--cg-space-3);padding-bottom:var(--cg-space-2);border-bottom:2px solid var(--cg-color-border)}[data-comfygit-theme=brutal] .status-item{font-size:var(--cg-font-size-sm);font-weight:var(--cg-font-weight-medium);padding:var(--cg-space-1) 0}[data-comfygit-theme=brutal] .status-item .icon{width:8px;height:8px;border:1px solid currentColor;background:currentColor;font-size:0;display:inline-block}[data-comfygit-theme=brutal] .count{font-family:var(--cg-font-mono);font-weight:var(--cg-font-weight-bold);font-size:var(--cg-font-size-lg);min-width:28px}[data-comfygit-theme=brutal] .count.new{color:var(--cg-color-success)}[data-comfygit-theme=brutal] .count.modified{color:var(--cg-color-warning)}[data-comfygit-theme=brutal] .count.deleted{color:var(--cg-color-error)}[data-comfygit-theme=brutal] .count.synced{color:var(--cg-color-text-muted)}[data-comfygit-theme=brutal] .label{text-transform:uppercase;font-size:var(--cg-font-size-xs);font-weight:var(--cg-font-weight-semibold);letter-spacing:var(--cg-letter-spacing-wide)}[data-comfygit-theme=brutal] .synced-item{border-top:2px dashed var(--cg-color-border);margin-top:var(--cg-space-2);padding-top:var(--cg-space-2)}[data-comfygit-theme=brutal] .status-item.ok .label{color:var(--cg-color-success)}[data-comfygit-theme=brutal] .warning-box{background:var(--cg-color-warning);border:3px solid var(--cg-color-border);box-shadow:var(--cg-shadow-sm);color:var(--cg-color-text-primary);font-size:var(--cg-font-size-sm);font-weight:var(--cg-font-weight-semibold);padding:var(--cg-space-3);text-transform:uppercase}[data-comfygit-theme=brutal] .warning-box.error{background:var(--cg-color-error);color:var(--cg-color-text-inverse)}[data-comfygit-theme=brutal] .warning-icon{font-weight:700}[data-comfygit-theme=brutal] .history-section{margin-top:var(--cg-space-4);border-top:3px solid var(--cg-color-border);padding-top:var(--cg-space-4)}[data-comfygit-theme=brutal] .history-title{font-family:var(--cg-font-display);font-size:var(--cg-font-size-base);text-transform:uppercase;color:var(--cg-color-text-primary);margin-bottom:var(--cg-space-3)}[data-comfygit-theme=brutal] .commit-item{background:var(--cg-color-bg-secondary);border:2px solid var(--cg-color-border);padding:var(--cg-space-3);margin-bottom:var(--cg-space-2);transition:all .1s ease}[data-comfygit-theme=brutal] .commit-item:hover{background:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm);transform:translate(-2px,-2px)}[data-comfygit-theme=brutal] .commit-hash{font-family:var(--cg-font-mono);font-size:var(--cg-font-size-xs);font-weight:var(--cg-font-weight-bold);color:var(--cg-color-info);text-transform:uppercase}[data-comfygit-theme=brutal] .commit-message{font-size:var(--cg-font-size-sm);font-weight:var(--cg-font-weight-medium);color:var(--cg-color-text-primary)}[data-comfygit-theme=brutal] .commit-date{font-size:var(--cg-font-size-xs);font-family:var(--cg-font-mono);color:var(--cg-color-text-muted);text-transform:uppercase}[data-comfygit-theme=brutal] .panel-footer{border-top:4px solid var(--cg-color-border);background:var(--cg-color-bg-tertiary);padding:var(--cg-space-3) var(--cg-space-4)}[data-comfygit-theme=brutal] .export-btn{background:var(--cg-color-bg-secondary);color:var(--cg-color-text-primary);border:3px solid var(--cg-color-border);box-shadow:var(--cg-shadow-sm);text-transform:uppercase;font-weight:var(--cg-font-weight-bold);font-size:var(--cg-font-size-xs);padding:var(--cg-space-3) var(--cg-space-4);transition:all .1s ease}[data-comfygit-theme=brutal] .export-btn:hover:not(:disabled){background:var(--cg-color-accent);transform:translate(-3px,-3px);box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=brutal] .export-btn:active:not(:disabled){transform:translate(0);box-shadow:none}[data-comfygit-theme=brutal] .commit-popover{background:var(--cg-color-bg-primary);border:4px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg)}[data-comfygit-theme=brutal] .commit-input{background:var(--cg-color-bg-secondary);border:3px solid var(--cg-color-border);color:var(--cg-color-text-primary);font-family:var(--cg-font-body);font-weight:var(--cg-font-weight-medium)}[data-comfygit-theme=brutal] .commit-input:focus{background:var(--cg-color-accent-muted);outline:none}[data-comfygit-theme=brutal] .comfygit-panel-btn{background:var(--cg-color-accent)!important;color:var(--cg-color-text-primary)!important;border:3px solid var(--cg-color-border)!important;border-radius:0!important;text-transform:uppercase;font-family:var(--cg-font-display);font-size:10px;box-shadow:3px 3px 0 var(--cg-color-border)!important;transition:all .1s ease!important}[data-comfygit-theme=brutal] .comfygit-panel-btn:hover{transform:translate(-2px,-2px)!important;box-shadow:5px 5px 0 var(--cg-color-border)!important}[data-comfygit-theme=brutal] .comfygit-panel-btn:active{transform:translate(0)!important;box-shadow:none!important}[data-comfygit-theme=brutal] .comfygit-commit-btn{background:var(--cg-color-bg-secondary)!important;color:var(--cg-color-text-primary)!important;border:3px solid var(--cg-color-border)!important;border-left:none!important;border-radius:0!important;font-family:var(--cg-font-body);font-weight:700;text-transform:uppercase;font-size:10px}[data-comfygit-theme=brutal] .comfygit-commit-btn:hover{background:var(--cg-color-bg-hover)!important}[data-comfygit-theme=brutal] .commit-indicator{background:var(--cg-color-error);border:2px solid var(--cg-color-border);border-radius:0}[data-comfygit-theme=brutal] .panel-content::-webkit-scrollbar{width:12px}[data-comfygit-theme=brutal] .panel-content::-webkit-scrollbar-track{background:var(--cg-color-bg-tertiary);border-left:2px solid var(--cg-color-border)}[data-comfygit-theme=brutal] .panel-content::-webkit-scrollbar-thumb{background:var(--cg-color-accent);border:2px solid var(--cg-color-border)}[data-comfygit-theme=brutal] .panel-content::-webkit-scrollbar-thumb:hover{background:var(--cg-color-accent-hover)}[data-comfygit-theme=brutal] ::selection{background:var(--cg-color-accent);color:var(--cg-color-text-primary)}[data-comfygit-theme=brutal] .loading{background:repeating-conic-gradient(var(--cg-color-bg-tertiary) 0% 25%,var(--cg-color-bg-secondary) 0% 50%) 50% / 16px 16px;color:var(--cg-color-text-primary);font-family:var(--cg-font-mono);text-transform:uppercase}', K = {
+}), Ro = /* @__PURE__ */ N(jo, [["__scopeId", "data-v-d24c6c0b"]]), Fo = "[data-comfygit-theme=default] .comfygit-panel{font-family:var(--cg-font-body)}[data-comfygit-theme=default] .panel-title{color:var(--cg-color-accent)}", Jo = '@import"https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap";[data-comfygit-theme=phosphor]{--cg-font-display: "IBM Plex Mono", ui-monospace, monospace;--cg-font-body: "IBM Plex Mono", ui-monospace, monospace;--cg-font-mono: "IBM Plex Mono", ui-monospace, monospace;--cg-font-size-xs: 12px;--cg-font-size-sm: 14px;--cg-font-size-base: 17px;--cg-font-size-lg: 20px;--cg-font-size-xl: 24px;--cg-font-size-2xl: 28px;--cg-panel-width: 754px;--cg-letter-spacing-normal: .02em;--cg-letter-spacing-wide: .08em;--cg-color-bg-primary: #0a0a0a;--cg-color-bg-secondary: #050505;--cg-color-bg-tertiary: #000000;--cg-color-bg-hover: #0f1f0f;--cg-color-bg-overlay: rgba(0, 0, 0, .85);--cg-color-text-primary: #00ff41;--cg-color-text-secondary: #00cc33;--cg-color-text-muted: #008f11;--cg-color-text-inverse: #000000;--cg-color-border: #00ff41;--cg-color-border-subtle: #003b00;--cg-color-border-strong: #00ff41;--cg-color-accent: #00ff41;--cg-color-accent-hover: #39ff14;--cg-color-accent-muted: rgba(0, 255, 65, .15);--cg-color-success: #00ff41;--cg-color-success-muted: rgba(0, 255, 65, .2);--cg-color-warning: #ffff00;--cg-color-warning-muted: rgba(255, 255, 0, .15);--cg-color-error: #ff0040;--cg-color-error-muted: rgba(255, 0, 64, .15);--cg-color-info: #00ffff;--cg-color-info-muted: rgba(0, 255, 255, .15);--cg-radius-none: 0;--cg-radius-sm: 0;--cg-radius-md: 0;--cg-radius-lg: 0;--cg-radius-xl: 0;--cg-radius-2xl: 0;--cg-radius-full: 0;--cg-shadow-sm: 0 0 4px rgba(0, 255, 65, .3);--cg-shadow-md: 0 0 8px rgba(0, 255, 65, .4);--cg-shadow-lg: 0 0 16px rgba(0, 255, 65, .5);--cg-shadow-xl: 0 0 32px rgba(0, 255, 65, .6);--cg-btn-gradient-start: #00ff41;--cg-btn-gradient-end: #00cc33;--cg-btn-shadow-inset: none}[data-comfygit-theme=phosphor] .comfygit-panel{position:relative;overflow:hidden}[data-comfygit-theme=phosphor] .comfygit-panel:before{content:"";position:absolute;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.15) 2px,rgba(0,0,0,.15) 3px);pointer-events:none;z-index:100}[data-comfygit-theme=phosphor] .comfygit-panel:after{content:"";position:absolute;top:0;left:0;right:0;bottom:0;background:#00ff4105;pointer-events:none;animation:phosphor-flicker 4s infinite;z-index:99}@keyframes phosphor-flicker{0%,to{opacity:1}50%{opacity:.98}52%{opacity:1}54%{opacity:.96}56%{opacity:1}}[data-comfygit-theme=phosphor] .comfygit-panel{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg),inset 0 0 100px #00ff4108;font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .panel-header{background:var(--cg-color-bg-tertiary);border-bottom:1px solid var(--cg-color-border);padding:var(--cg-space-3) var(--cg-space-4)}[data-comfygit-theme=phosphor] .panel-title{color:var(--cg-color-accent);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-sm);text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .panel-title:before{content:"> ";opacity:.7}[data-comfygit-theme=phosphor] .env-name,[data-comfygit-theme=phosphor] .branch-name{color:var(--cg-color-text-secondary);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .branch-name:before{content:"@";margin-right:2px}[data-comfygit-theme=phosphor] .status-dot{width:6px;height:12px;border-radius:0;animation:cursor-blink 1s step-end infinite}[data-comfygit-theme=phosphor] .status-dot.success{background:var(--cg-color-success)}[data-comfygit-theme=phosphor] .status-dot.warning{background:var(--cg-color-warning)}[data-comfygit-theme=phosphor] .status-dot.error{background:var(--cg-color-error)}@keyframes cursor-blink{50%{opacity:0}}[data-comfygit-theme=phosphor] .icon-btn{color:var(--cg-color-text-primary);border:1px solid transparent}[data-comfygit-theme=phosphor] .icon-btn:hover{background:var(--cg-color-bg-hover);border-color:var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .status-section{margin-bottom:var(--cg-space-4)}[data-comfygit-theme=phosphor] .section-title{color:var(--cg-color-accent);font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);text-shadow:0 0 8px var(--cg-color-accent);margin-bottom:var(--cg-space-2)}[data-comfygit-theme=phosphor] .section-title:before{content:"> ";opacity:.7}[data-comfygit-theme=phosphor] .count{font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .status-grid{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .column-title{color:var(--cg-color-text-muted);font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wider)}[data-comfygit-theme=phosphor] .column-title:before{content:"/* "}[data-comfygit-theme=phosphor] .column-title:after{content:" */"}[data-comfygit-theme=phosphor] .status-item{font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .status-item .icon{display:none}[data-comfygit-theme=phosphor] .status-item:before{content:"├─ ";color:var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .synced-item:before{content:"└─ "}[data-comfygit-theme=phosphor] .count{font-weight:var(--cg-font-weight-bold)}[data-comfygit-theme=phosphor] .count.new{color:var(--cg-color-success);text-shadow:0 0 4px var(--cg-color-success)}[data-comfygit-theme=phosphor] .count.modified{color:var(--cg-color-warning);text-shadow:0 0 4px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .count.deleted{color:var(--cg-color-error);text-shadow:0 0 4px var(--cg-color-error)}[data-comfygit-theme=phosphor] .count.synced{color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .warning-box{background:transparent;border:1px solid var(--cg-color-warning);color:var(--cg-color-warning);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .warning-box:before{content:"[!] ";font-weight:700}[data-comfygit-theme=phosphor] .warning-box.error{border-color:var(--cg-color-error);color:var(--cg-color-error)}[data-comfygit-theme=phosphor] .branch-item,[data-comfygit-theme=phosphor] .branch-name{font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .switch-btn,[data-comfygit-theme=phosphor] .current-label{font-size:var(--cg-font-size-sm)!important;padding:6px 12px!important}[data-comfygit-theme=phosphor] .switch-btn{background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .switch-btn:hover{border-color:var(--cg-color-accent);color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .current-label{color:var(--cg-color-text-muted);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .history-section{font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .history-title{color:var(--cg-color-text-muted);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .commit-item{background:transparent;border:none;border-left:2px solid var(--cg-color-border-subtle);padding-left:var(--cg-space-3);margin-left:var(--cg-space-2)}[data-comfygit-theme=phosphor] .commit-item:hover{border-left-color:var(--cg-color-accent);background:var(--cg-color-bg-hover)}[data-comfygit-theme=phosphor] .commit-hash{color:var(--cg-color-accent);font-weight:var(--cg-font-weight-bold);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .commit-hash:before{content:"#"}[data-comfygit-theme=phosphor] .commit-message{color:var(--cg-color-text-primary);font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .commit-date{color:var(--cg-color-text-muted);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .panel-footer{border-top:1px solid var(--cg-color-border);background:var(--cg-color-bg-tertiary)}[data-comfygit-theme=phosphor] .export-btn{background:transparent;color:var(--cg-color-text-primary);border:1px solid var(--cg-color-border);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .export-btn:hover:not(:disabled){background:var(--cg-color-bg-hover);border-color:var(--cg-color-accent);color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .commit-popover{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg)}[data-comfygit-theme=phosphor] .commit-input{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle);color:var(--cg-color-text-primary);font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .commit-input:focus{border-color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm);outline:none}[data-comfygit-theme=phosphor] .commit-input::placeholder{color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .comfygit-panel-btn{background:var(--cg-color-accent)!important;color:var(--cg-color-bg-primary)!important;border:none!important;text-transform:uppercase;letter-spacing:.1em;font-family:var(--cg-font-mono);font-size:11px;box-shadow:0 0 8px var(--cg-color-accent)!important}[data-comfygit-theme=phosphor] .comfygit-panel-btn:hover{box-shadow:0 0 16px var(--cg-color-accent)!important}[data-comfygit-theme=phosphor] .comfygit-commit-btn{background:var(--cg-color-bg-tertiary)!important;color:var(--cg-color-text-primary)!important;border:1px solid var(--cg-color-border-subtle)!important;font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .comfygit-commit-btn:hover{border-color:var(--cg-color-accent)!important;box-shadow:0 0 8px #00ff414d!important}[data-comfygit-theme=phosphor] .commit-indicator{background:var(--cg-color-warning);box-shadow:0 0 6px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar{width:8px}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar-track{background:var(--cg-color-bg-tertiary)}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar-thumb{background:var(--cg-color-border-subtle);border:1px solid var(--cg-color-bg-tertiary)}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar-thumb:hover{background:var(--cg-color-accent)}[data-comfygit-theme=phosphor] ::selection{background:var(--cg-color-accent);color:var(--cg-color-bg-primary)}', Ko = '@import"https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap";[data-comfygit-theme=swiss]{--cg-font-display: "Playfair Display", Georgia, serif;--cg-font-body: "DM Sans", system-ui, sans-serif;--cg-font-mono: "JetBrains Mono", ui-monospace, monospace;--cg-font-size-xs: 10px;--cg-font-size-sm: 12px;--cg-font-size-base: 14px;--cg-font-size-lg: 18px;--cg-font-size-xl: 24px;--cg-font-size-2xl: 32px;--cg-font-weight-normal: 400;--cg-font-weight-medium: 500;--cg-font-weight-semibold: 600;--cg-font-weight-bold: 700;--cg-line-height-tight: 1.1;--cg-line-height-normal: 1.6;--cg-line-height-relaxed: 1.8;--cg-letter-spacing-tight: -.03em;--cg-letter-spacing-normal: 0;--cg-letter-spacing-wide: .15em;--cg-color-bg-primary: #fafafa;--cg-color-bg-secondary: #ffffff;--cg-color-bg-tertiary: #f0f0f0;--cg-color-bg-hover: #e8e8e8;--cg-color-bg-overlay: rgba(0, 0, 0, .6);--cg-color-text-primary: #0a0a0a;--cg-color-text-secondary: #404040;--cg-color-text-muted: #808080;--cg-color-text-inverse: #ffffff;--cg-color-border: #0a0a0a;--cg-color-border-subtle: #e0e0e0;--cg-color-border-strong: #0a0a0a;--cg-color-accent: #dc2626;--cg-color-accent-hover: #b91c1c;--cg-color-accent-muted: rgba(220, 38, 38, .1);--cg-color-success: #16a34a;--cg-color-success-muted: rgba(22, 163, 74, .1);--cg-color-warning: #d97706;--cg-color-warning-muted: rgba(217, 119, 6, .08);--cg-color-error: #dc2626;--cg-color-error-muted: rgba(220, 38, 38, .08);--cg-color-info: #0a0a0a;--cg-color-info-muted: rgba(10, 10, 10, .05);--cg-space-1: 4px;--cg-space-2: 8px;--cg-space-3: 16px;--cg-space-4: 24px;--cg-space-5: 32px;--cg-space-6: 40px;--cg-space-8: 56px;--cg-space-10: 72px;--cg-radius-none: 0;--cg-radius-sm: 0;--cg-radius-md: 2px;--cg-radius-lg: 2px;--cg-radius-xl: 2px;--cg-radius-2xl: 2px;--cg-radius-full: 2px;--cg-shadow-sm: none;--cg-shadow-md: 0 1px 0 rgba(0, 0, 0, .05);--cg-shadow-lg: 0 4px 24px rgba(0, 0, 0, .08);--cg-shadow-xl: 0 8px 48px rgba(0, 0, 0, .12);--cg-btn-gradient-start: #0a0a0a;--cg-btn-gradient-end: #0a0a0a;--cg-btn-shadow-inset: none}[data-comfygit-theme=swiss] .comfygit-panel{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-xl);font-family:var(--cg-font-body)}[data-comfygit-theme=swiss] .panel-header{background:var(--cg-color-bg-secondary);border-bottom:2px solid var(--cg-color-border);padding:var(--cg-space-4) var(--cg-space-5)}[data-comfygit-theme=swiss] .header-left{flex-direction:column;align-items:flex-start;gap:var(--cg-space-1)}[data-comfygit-theme=swiss] .panel-title{font-family:var(--cg-font-display);font-size:var(--cg-font-size-xl);font-weight:700;color:var(--cg-color-text-primary);letter-spacing:var(--cg-letter-spacing-tight);line-height:var(--cg-line-height-tight)}[data-comfygit-theme=swiss] .header-info{font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);color:var(--cg-color-text-muted)}[data-comfygit-theme=swiss] .env-name{font-weight:var(--cg-font-weight-semibold);color:var(--cg-color-text-secondary)}[data-comfygit-theme=swiss] .branch-name{color:var(--cg-color-text-muted)}[data-comfygit-theme=swiss] .status-dot{width:6px;height:6px;border-radius:0}[data-comfygit-theme=swiss] .status-dot.success{background:var(--cg-color-success)}[data-comfygit-theme=swiss] .status-dot.warning{background:var(--cg-color-warning)}[data-comfygit-theme=swiss] .status-dot.error{background:var(--cg-color-accent)}[data-comfygit-theme=swiss] .icon-btn{color:var(--cg-color-text-primary);border-radius:0;transition:all var(--cg-transition-fast)}[data-comfygit-theme=swiss] .icon-btn:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=swiss] .panel-content{padding:var(--cg-space-5)}[data-comfygit-theme=swiss] .status-section{margin-bottom:var(--cg-space-5)}[data-comfygit-theme=swiss] .status-grid{background:var(--cg-color-bg-secondary);border:1px solid var(--cg-color-border-subtle);border-radius:0}[data-comfygit-theme=swiss] .status-column{padding:var(--cg-space-4)}[data-comfygit-theme=swiss] .status-column:first-child{border-right:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=swiss] .column-title{font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);color:var(--cg-color-text-muted);margin-bottom:var(--cg-space-3);padding-bottom:var(--cg-space-2);border-bottom:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=swiss] .status-item{font-size:var(--cg-font-size-sm);padding:var(--cg-space-1) 0}[data-comfygit-theme=swiss] .status-item .icon{display:none}[data-comfygit-theme=swiss] .count{font-family:var(--cg-font-display);font-size:var(--cg-font-size-lg);font-weight:700;min-width:24px}[data-comfygit-theme=swiss] .count.new{color:var(--cg-color-success)}[data-comfygit-theme=swiss] .count.modified{color:var(--cg-color-warning)}[data-comfygit-theme=swiss] .count.deleted{color:var(--cg-color-accent)}[data-comfygit-theme=swiss] .count.synced{color:var(--cg-color-text-muted)}[data-comfygit-theme=swiss] .label{color:var(--cg-color-text-secondary);font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide)}[data-comfygit-theme=swiss] .synced-item{border-top:1px solid var(--cg-color-border-subtle);margin-top:var(--cg-space-2);padding-top:var(--cg-space-2)}[data-comfygit-theme=swiss] .status-item.ok .label{color:var(--cg-color-success)}[data-comfygit-theme=swiss] .warning-box{background:var(--cg-color-warning-muted);border:none;border-left:3px solid var(--cg-color-warning);color:var(--cg-color-text-primary);font-size:var(--cg-font-size-sm);padding:var(--cg-space-3)}[data-comfygit-theme=swiss] .warning-box.error{background:var(--cg-color-error-muted);border-left-color:var(--cg-color-accent)}[data-comfygit-theme=swiss] .warning-icon{display:none}[data-comfygit-theme=swiss] .history-section{border-top:2px solid var(--cg-color-border);padding-top:var(--cg-space-4);margin-top:var(--cg-space-4)}[data-comfygit-theme=swiss] .history-title{font-family:var(--cg-font-display);font-size:var(--cg-font-size-lg);font-weight:600;color:var(--cg-color-text-primary);margin-bottom:var(--cg-space-3)}[data-comfygit-theme=swiss] .commit-item{background:transparent;border:none;border-bottom:1px solid var(--cg-color-border-subtle);padding:var(--cg-space-3) 0;display:grid;grid-template-columns:60px 1fr auto;gap:var(--cg-space-3);align-items:baseline}[data-comfygit-theme=swiss] .commit-item:last-child{border-bottom:none}[data-comfygit-theme=swiss] .commit-item:hover{background:var(--cg-color-bg-hover);margin:0 calc(-1 * var(--cg-space-3));padding-left:var(--cg-space-3);padding-right:var(--cg-space-3)}[data-comfygit-theme=swiss] .commit-hash{font-family:var(--cg-font-mono);font-size:var(--cg-font-size-xs);color:var(--cg-color-accent);font-weight:500}[data-comfygit-theme=swiss] .commit-message{font-size:var(--cg-font-size-sm);color:var(--cg-color-text-primary);font-weight:var(--cg-font-weight-medium)}[data-comfygit-theme=swiss] .commit-date{font-size:var(--cg-font-size-xs);color:var(--cg-color-text-muted);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide)}[data-comfygit-theme=swiss] .panel-footer{border-top:2px solid var(--cg-color-border);background:var(--cg-color-bg-secondary);padding:var(--cg-space-4) var(--cg-space-5)}[data-comfygit-theme=swiss] .export-btn{background:var(--cg-color-text-primary);color:var(--cg-color-text-inverse);border:none;text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs);font-weight:var(--cg-font-weight-semibold);padding:var(--cg-space-3) var(--cg-space-4);transition:all var(--cg-transition-fast)}[data-comfygit-theme=swiss] .export-btn:hover:not(:disabled){background:var(--cg-color-accent);transform:translateY(-1px)}[data-comfygit-theme=swiss] .commit-popover{background:var(--cg-color-bg-secondary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg)}[data-comfygit-theme=swiss] .commit-input{background:var(--cg-color-bg-primary);border:1px solid var(--cg-color-border-subtle);color:var(--cg-color-text-primary);font-family:var(--cg-font-body);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=swiss] .commit-input:focus{border-color:var(--cg-color-border);outline:none}[data-comfygit-theme=swiss] .comfygit-panel-btn{background:var(--cg-color-text-primary)!important;color:var(--cg-color-text-inverse)!important;border:none!important;border-radius:0!important;text-transform:uppercase;letter-spacing:.1em;font-family:var(--cg-font-body);font-size:10px;font-weight:600;box-shadow:none!important}[data-comfygit-theme=swiss] .comfygit-panel-btn:hover{background:var(--cg-color-accent)!important}[data-comfygit-theme=swiss] .comfygit-commit-btn{background:var(--cg-color-bg-secondary)!important;color:var(--cg-color-text-primary)!important;border:1px solid var(--cg-color-border)!important;border-radius:0!important;font-family:var(--cg-font-body);font-size:10px;text-transform:uppercase;letter-spacing:.1em}[data-comfygit-theme=swiss] .comfygit-commit-btn:hover{background:var(--cg-color-bg-hover)!important}[data-comfygit-theme=swiss] .commit-indicator{background:var(--cg-color-accent);width:6px;height:6px;border-radius:0}[data-comfygit-theme=swiss] .panel-content::-webkit-scrollbar{width:4px}[data-comfygit-theme=swiss] .panel-content::-webkit-scrollbar-track{background:transparent}[data-comfygit-theme=swiss] .panel-content::-webkit-scrollbar-thumb{background:var(--cg-color-border-subtle)}[data-comfygit-theme=swiss] .panel-content::-webkit-scrollbar-thumb:hover{background:var(--cg-color-text-muted)}[data-comfygit-theme=swiss] ::selection{background:var(--cg-color-accent);color:var(--cg-color-text-inverse)}', Wo = '@import"https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Nunito:wght@400;500;600;700&display=swap";[data-comfygit-theme=soft]{--cg-font-display: "Outfit", system-ui, sans-serif;--cg-font-body: "Nunito", system-ui, sans-serif;--cg-font-mono: "SF Mono", ui-monospace, monospace;--cg-font-size-xs: 11px;--cg-font-size-sm: 13px;--cg-font-size-base: 15px;--cg-font-size-lg: 18px;--cg-font-size-xl: 22px;--cg-font-size-2xl: 28px;--cg-font-weight-normal: 400;--cg-font-weight-medium: 500;--cg-font-weight-semibold: 600;--cg-font-weight-bold: 700;--cg-line-height-tight: 1.3;--cg-line-height-normal: 1.6;--cg-line-height-relaxed: 1.8;--cg-letter-spacing-tight: -.01em;--cg-letter-spacing-normal: .01em;--cg-letter-spacing-wide: .04em;--cg-color-bg-primary: rgba(30, 27, 38, .95);--cg-color-bg-secondary: rgba(40, 36, 50, .8);--cg-color-bg-tertiary: rgba(50, 45, 62, .6);--cg-color-bg-hover: rgba(80, 70, 100, .4);--cg-color-bg-overlay: rgba(20, 18, 28, .75);--cg-color-text-primary: #f0eef5;--cg-color-text-secondary: #c4bfd4;--cg-color-text-muted: #8a8299;--cg-color-text-inverse: #1e1b26;--cg-color-border: rgba(255, 255, 255, .08);--cg-color-border-subtle: rgba(255, 255, 255, .04);--cg-color-border-strong: rgba(255, 255, 255, .15);--cg-color-accent: #a78bfa;--cg-color-accent-hover: #c4b5fd;--cg-color-accent-muted: rgba(167, 139, 250, .2);--cg-color-success: #86efac;--cg-color-success-muted: rgba(134, 239, 172, .15);--cg-color-warning: #fcd34d;--cg-color-warning-muted: rgba(252, 211, 77, .12);--cg-color-error: #fca5a5;--cg-color-error-muted: rgba(252, 165, 165, .12);--cg-color-info: #93c5fd;--cg-color-info-muted: rgba(147, 197, 253, .15);--cg-space-1: 4px;--cg-space-2: 8px;--cg-space-3: 14px;--cg-space-4: 20px;--cg-space-5: 28px;--cg-space-6: 36px;--cg-space-8: 48px;--cg-radius-none: 0;--cg-radius-sm: 6px;--cg-radius-md: 10px;--cg-radius-lg: 16px;--cg-radius-xl: 24px;--cg-radius-2xl: 32px;--cg-radius-full: 9999px;--cg-shadow-sm: 0 2px 8px rgba(0, 0, 0, .15);--cg-shadow-md: 0 4px 16px rgba(0, 0, 0, .2), 0 0 40px rgba(167, 139, 250, .05);--cg-shadow-lg: 0 8px 32px rgba(0, 0, 0, .25), 0 0 60px rgba(167, 139, 250, .08);--cg-shadow-xl: 0 16px 48px rgba(0, 0, 0, .3), 0 0 80px rgba(167, 139, 250, .1);--cg-blur-sm: 8px;--cg-blur-md: 16px;--cg-blur-lg: 24px;--cg-btn-gradient-start: #a78bfa;--cg-btn-gradient-end: #8b5cf6;--cg-btn-shadow-inset: inset 0 1px 0 rgba(255, 255, 255, .25)}[data-comfygit-theme=soft] .comfygit-panel{background:linear-gradient(135deg,#3c325066,#1e1b26f2),var(--cg-color-bg-primary);backdrop-filter:blur(var(--cg-blur-lg));-webkit-backdrop-filter:blur(var(--cg-blur-lg));border:1px solid var(--cg-color-border-strong);border-radius:var(--cg-radius-xl);box-shadow:var(--cg-shadow-xl);font-family:var(--cg-font-body);overflow:hidden}[data-comfygit-theme=soft] .comfygit-panel:before{content:"";position:absolute;top:-50%;right:-50%;width:100%;height:100%;background:radial-gradient(circle at center,rgba(167,139,250,.15) 0%,transparent 50%);pointer-events:none;animation:soft-glow 8s ease-in-out infinite alternate}@keyframes soft-glow{0%{transform:translate(0) scale(1);opacity:.5}to{transform:translate(-10%,10%) scale(1.2);opacity:.8}}[data-comfygit-theme=soft] .panel-header{background:#ffffff08;border-bottom:1px solid var(--cg-color-border);padding:var(--cg-space-4) var(--cg-space-5);position:relative}[data-comfygit-theme=soft] .panel-title{font-family:var(--cg-font-display);font-size:var(--cg-font-size-lg);font-weight:600;color:var(--cg-color-text-primary);background:linear-gradient(90deg,var(--cg-color-text-primary),var(--cg-color-accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}[data-comfygit-theme=soft] .header-info{font-size:var(--cg-font-size-xs)}[data-comfygit-theme=soft] .env-name{color:var(--cg-color-text-secondary);font-weight:var(--cg-font-weight-medium)}[data-comfygit-theme=soft] .branch-name{color:var(--cg-color-text-muted)}[data-comfygit-theme=soft] .status-dot{width:10px;height:10px;border-radius:var(--cg-radius-full);box-shadow:0 0 8px currentColor}[data-comfygit-theme=soft] .status-dot.success{background:var(--cg-color-success);box-shadow:0 0 12px var(--cg-color-success)}[data-comfygit-theme=soft] .status-dot.warning{background:var(--cg-color-warning);box-shadow:0 0 12px var(--cg-color-warning)}[data-comfygit-theme=soft] .status-dot.error{background:var(--cg-color-error);box-shadow:0 0 12px var(--cg-color-error)}[data-comfygit-theme=soft] .icon-btn{color:var(--cg-color-text-secondary);border-radius:var(--cg-radius-md);transition:all var(--cg-transition-normal)}[data-comfygit-theme=soft] .icon-btn:hover{background:var(--cg-color-bg-hover);color:var(--cg-color-text-primary);transform:scale(1.05)}[data-comfygit-theme=soft] .panel-content{padding:var(--cg-space-5);position:relative}[data-comfygit-theme=soft] .status-section{margin-bottom:var(--cg-space-5)}[data-comfygit-theme=soft] .status-grid{background:#ffffff08;-webkit-backdrop-filter:blur(var(--cg-blur-sm));backdrop-filter:blur(var(--cg-blur-sm));border:1px solid var(--cg-color-border);border-radius:var(--cg-radius-lg);overflow:hidden}[data-comfygit-theme=soft] .status-column{padding:var(--cg-space-4)}[data-comfygit-theme=soft] .status-column:first-child{border-right:1px solid var(--cg-color-border)}[data-comfygit-theme=soft] .column-title{font-family:var(--cg-font-display);font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);color:var(--cg-color-text-muted);margin-bottom:var(--cg-space-3)}[data-comfygit-theme=soft] .status-item{font-size:var(--cg-font-size-sm);padding:var(--cg-space-1) 0}[data-comfygit-theme=soft] .status-item .icon{font-size:6px;opacity:.6}[data-comfygit-theme=soft] .count{font-weight:var(--cg-font-weight-bold)}[data-comfygit-theme=soft] .count.new{color:var(--cg-color-success)}[data-comfygit-theme=soft] .count.modified{color:var(--cg-color-warning)}[data-comfygit-theme=soft] .count.deleted{color:var(--cg-color-error)}[data-comfygit-theme=soft] .count.synced{color:var(--cg-color-text-muted)}[data-comfygit-theme=soft] .synced-item{border-top:1px solid var(--cg-color-border);margin-top:var(--cg-space-2);padding-top:var(--cg-space-2)}[data-comfygit-theme=soft] .status-item.ok,[data-comfygit-theme=soft] .status-item.ok .label{color:var(--cg-color-success)}[data-comfygit-theme=soft] .warning-box{background:var(--cg-color-warning-muted);border:1px solid rgba(252,211,77,.3);border-radius:var(--cg-radius-md);color:var(--cg-color-warning);font-size:var(--cg-font-size-sm);padding:var(--cg-space-3)}[data-comfygit-theme=soft] .warning-box.error{background:var(--cg-color-error-muted);border-color:#fca5a54d;color:var(--cg-color-error)}[data-comfygit-theme=soft] .history-section{margin-top:var(--cg-space-4)}[data-comfygit-theme=soft] .history-title{font-family:var(--cg-font-display);font-size:var(--cg-font-size-sm);font-weight:var(--cg-font-weight-semibold);color:var(--cg-color-text-secondary);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);margin-bottom:var(--cg-space-3)}[data-comfygit-theme=soft] .commit-item{background:#ffffff05;border:1px solid var(--cg-color-border-subtle);border-radius:var(--cg-radius-md);padding:var(--cg-space-3);margin-bottom:var(--cg-space-2);transition:all var(--cg-transition-normal)}[data-comfygit-theme=soft] .commit-item:hover{background:var(--cg-color-bg-hover);border-color:var(--cg-color-border);transform:translateY(-2px);box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=soft] .commit-hash{font-family:var(--cg-font-mono);font-size:var(--cg-font-size-xs);color:var(--cg-color-accent);font-weight:500}[data-comfygit-theme=soft] .commit-message{font-size:var(--cg-font-size-sm);color:var(--cg-color-text-primary)}[data-comfygit-theme=soft] .commit-date{font-size:var(--cg-font-size-xs);color:var(--cg-color-text-muted)}[data-comfygit-theme=soft] .panel-footer{border-top:1px solid var(--cg-color-border);background:#ffffff05;padding:var(--cg-space-4) var(--cg-space-5)}[data-comfygit-theme=soft] .export-btn{background:linear-gradient(135deg,var(--cg-btn-gradient-start),var(--cg-btn-gradient-end));color:var(--cg-color-text-inverse);border:none;border-radius:var(--cg-radius-md);font-size:var(--cg-font-size-xs);font-weight:var(--cg-font-weight-semibold);padding:var(--cg-space-3) var(--cg-space-4);transition:all var(--cg-transition-normal);box-shadow:0 4px 12px #a78bfa4d}[data-comfygit-theme=soft] .export-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 6px 20px #a78bfa66}[data-comfygit-theme=soft] .commit-popover{background:#1e1b26f2;-webkit-backdrop-filter:blur(var(--cg-blur-lg));backdrop-filter:blur(var(--cg-blur-lg));border:1px solid var(--cg-color-border-strong);border-radius:var(--cg-radius-lg);box-shadow:var(--cg-shadow-lg)}[data-comfygit-theme=soft] .commit-input{background:#ffffff0d;border:1px solid var(--cg-color-border);border-radius:var(--cg-radius-md);color:var(--cg-color-text-primary);font-family:var(--cg-font-body)}[data-comfygit-theme=soft] .commit-input:focus{border-color:var(--cg-color-accent);box-shadow:0 0 0 3px var(--cg-color-accent-muted);outline:none}[data-comfygit-theme=soft] .comfygit-panel-btn{background:linear-gradient(135deg,var(--cg-btn-gradient-start),var(--cg-btn-gradient-end))!important;color:var(--cg-color-text-inverse)!important;border:none!important;border-radius:8px 0 0 8px!important;font-family:var(--cg-font-display);font-size:11px;font-weight:600;box-shadow:0 4px 12px #a78bfa4d!important}[data-comfygit-theme=soft] .comfygit-panel-btn:hover{box-shadow:0 6px 20px #a78bfa80!important;transform:translateY(-1px)}[data-comfygit-theme=soft] .comfygit-commit-btn{background:#ffffff0d!important;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:var(--cg-color-text-primary)!important;border:1px solid var(--cg-color-border)!important;border-radius:0 8px 8px 0!important;font-family:var(--cg-font-display)}[data-comfygit-theme=soft] .comfygit-commit-btn:hover{background:#ffffff1a!important;border-color:var(--cg-color-accent)!important}[data-comfygit-theme=soft] .commit-indicator{background:var(--cg-color-warning);box-shadow:0 0 8px var(--cg-color-warning)}[data-comfygit-theme=soft] .panel-content::-webkit-scrollbar{width:6px}[data-comfygit-theme=soft] .panel-content::-webkit-scrollbar-track{background:transparent}[data-comfygit-theme=soft] .panel-content::-webkit-scrollbar-thumb{background:var(--cg-color-border-strong);border-radius:var(--cg-radius-full)}[data-comfygit-theme=soft] .panel-content::-webkit-scrollbar-thumb:hover{background:var(--cg-color-accent)}[data-comfygit-theme=soft] ::selection{background:var(--cg-color-accent);color:var(--cg-color-text-inverse)}', Xo = '@import"https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Archivo+Black&family=Work+Sans:wght@400;500;600;700;800&display=swap";[data-comfygit-theme=brutal]{--cg-font-display: "Archivo Black", Impact, sans-serif;--cg-font-body: "Work Sans", system-ui, sans-serif;--cg-font-mono: "Space Mono", ui-monospace, monospace;--cg-font-size-xs: 10px;--cg-font-size-sm: 12px;--cg-font-size-base: 14px;--cg-font-size-lg: 16px;--cg-font-size-xl: 20px;--cg-font-size-2xl: 28px;--cg-font-weight-normal: 500;--cg-font-weight-medium: 600;--cg-font-weight-semibold: 700;--cg-font-weight-bold: 800;--cg-line-height-tight: 1.1;--cg-line-height-normal: 1.4;--cg-line-height-relaxed: 1.6;--cg-letter-spacing-tight: -.02em;--cg-letter-spacing-normal: 0;--cg-letter-spacing-wide: .05em;--cg-color-bg-primary: #fffdf7;--cg-color-bg-secondary: #ffffff;--cg-color-bg-tertiary: #f5f3ed;--cg-color-bg-hover: #fef3c7;--cg-color-bg-overlay: rgba(0, 0, 0, .7);--cg-color-text-primary: #0f0f0f;--cg-color-text-secondary: #1f1f1f;--cg-color-text-muted: #525252;--cg-color-text-inverse: #ffffff;--cg-color-border: #0f0f0f;--cg-color-border-subtle: #0f0f0f;--cg-color-border-strong: #0f0f0f;--cg-color-accent: #facc15;--cg-color-accent-hover: #fde047;--cg-color-accent-muted: rgba(250, 204, 21, .3);--cg-color-success: #22c55e;--cg-color-success-muted: rgba(34, 197, 94, .2);--cg-color-warning: #f97316;--cg-color-warning-muted: rgba(249, 115, 22, .15);--cg-color-error: #ef4444;--cg-color-error-muted: rgba(239, 68, 68, .15);--cg-color-info: #3b82f6;--cg-color-info-muted: rgba(59, 130, 246, .15);--cg-space-1: 6px;--cg-space-2: 10px;--cg-space-3: 14px;--cg-space-4: 20px;--cg-space-5: 28px;--cg-space-6: 36px;--cg-radius-none: 0;--cg-radius-sm: 0;--cg-radius-md: 0;--cg-radius-lg: 0;--cg-radius-xl: 0;--cg-radius-2xl: 0;--cg-radius-full: 0;--cg-shadow-sm: 3px 3px 0 var(--cg-color-border);--cg-shadow-md: 4px 4px 0 var(--cg-color-border);--cg-shadow-lg: 6px 6px 0 var(--cg-color-border);--cg-shadow-xl: 8px 8px 0 var(--cg-color-border);--cg-btn-gradient-start: #facc15;--cg-btn-gradient-end: #facc15;--cg-btn-shadow-inset: none}[data-comfygit-theme=brutal] .comfygit-panel{background:var(--cg-color-bg-primary);border:4px solid var(--cg-color-border);box-shadow:var(--cg-shadow-xl);font-family:var(--cg-font-body)}[data-comfygit-theme=brutal] .comfygit-panel:before,[data-comfygit-theme=brutal] .comfygit-panel:after{content:"";position:absolute;width:12px;height:12px;background:var(--cg-color-accent);border:2px solid var(--cg-color-border)}[data-comfygit-theme=brutal] .comfygit-panel:before{top:-4px;left:-4px}[data-comfygit-theme=brutal] .comfygit-panel:after{bottom:-4px;right:-4px}[data-comfygit-theme=brutal] .panel-header{background:var(--cg-color-accent);border-bottom:4px solid var(--cg-color-border);padding:var(--cg-space-3) var(--cg-space-4)}[data-comfygit-theme=brutal] .panel-title{font-family:var(--cg-font-display);font-size:var(--cg-font-size-xl);color:var(--cg-color-text-primary);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-tight)}[data-comfygit-theme=brutal] .header-info{font-size:var(--cg-font-size-xs);font-weight:var(--cg-font-weight-semibold)}[data-comfygit-theme=brutal] .env-name{color:var(--cg-color-text-primary);text-transform:uppercase}[data-comfygit-theme=brutal] .branch-name{color:var(--cg-color-text-secondary);font-family:var(--cg-font-mono)}[data-comfygit-theme=brutal] .status-dot{width:10px;height:10px;border-radius:0;border:2px solid var(--cg-color-border)}[data-comfygit-theme=brutal] .status-dot.success{background:var(--cg-color-success)}[data-comfygit-theme=brutal] .status-dot.warning{background:var(--cg-color-warning)}[data-comfygit-theme=brutal] .status-dot.error{background:var(--cg-color-error)}[data-comfygit-theme=brutal] .icon-btn{color:var(--cg-color-text-primary);border:2px solid transparent;background:var(--cg-color-bg-secondary);transition:all .1s ease}[data-comfygit-theme=brutal] .icon-btn:hover{background:var(--cg-color-bg-secondary);border-color:var(--cg-color-border);box-shadow:2px 2px 0 var(--cg-color-border);transform:translate(-2px,-2px)}[data-comfygit-theme=brutal] .panel-content{padding:var(--cg-space-4);background:var(--cg-color-bg-primary)}[data-comfygit-theme=brutal] .status-section{margin-bottom:var(--cg-space-4)}[data-comfygit-theme=brutal] .status-grid{background:var(--cg-color-bg-secondary);border:3px solid var(--cg-color-border);box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=brutal] .status-column{padding:var(--cg-space-3)}[data-comfygit-theme=brutal] .status-column:first-child{border-right:3px solid var(--cg-color-border)}[data-comfygit-theme=brutal] .column-title{font-family:var(--cg-font-display);font-size:var(--cg-font-size-xs);text-transform:uppercase;color:var(--cg-color-text-primary);margin-bottom:var(--cg-space-3);padding-bottom:var(--cg-space-2);border-bottom:2px solid var(--cg-color-border)}[data-comfygit-theme=brutal] .status-item{font-size:var(--cg-font-size-sm);font-weight:var(--cg-font-weight-medium);padding:var(--cg-space-1) 0}[data-comfygit-theme=brutal] .status-item .icon{width:8px;height:8px;border:1px solid currentColor;background:currentColor;font-size:0;display:inline-block}[data-comfygit-theme=brutal] .count{font-family:var(--cg-font-mono);font-weight:var(--cg-font-weight-bold);font-size:var(--cg-font-size-lg);min-width:28px}[data-comfygit-theme=brutal] .count.new{color:var(--cg-color-success)}[data-comfygit-theme=brutal] .count.modified{color:var(--cg-color-warning)}[data-comfygit-theme=brutal] .count.deleted{color:var(--cg-color-error)}[data-comfygit-theme=brutal] .count.synced{color:var(--cg-color-text-muted)}[data-comfygit-theme=brutal] .label{text-transform:uppercase;font-size:var(--cg-font-size-xs);font-weight:var(--cg-font-weight-semibold);letter-spacing:var(--cg-letter-spacing-wide)}[data-comfygit-theme=brutal] .synced-item{border-top:2px dashed var(--cg-color-border);margin-top:var(--cg-space-2);padding-top:var(--cg-space-2)}[data-comfygit-theme=brutal] .status-item.ok .label{color:var(--cg-color-success)}[data-comfygit-theme=brutal] .warning-box{background:var(--cg-color-warning);border:3px solid var(--cg-color-border);box-shadow:var(--cg-shadow-sm);color:var(--cg-color-text-primary);font-size:var(--cg-font-size-sm);font-weight:var(--cg-font-weight-semibold);padding:var(--cg-space-3);text-transform:uppercase}[data-comfygit-theme=brutal] .warning-box.error{background:var(--cg-color-error);color:var(--cg-color-text-inverse)}[data-comfygit-theme=brutal] .warning-icon{font-weight:700}[data-comfygit-theme=brutal] .history-section{margin-top:var(--cg-space-4);border-top:3px solid var(--cg-color-border);padding-top:var(--cg-space-4)}[data-comfygit-theme=brutal] .history-title{font-family:var(--cg-font-display);font-size:var(--cg-font-size-base);text-transform:uppercase;color:var(--cg-color-text-primary);margin-bottom:var(--cg-space-3)}[data-comfygit-theme=brutal] .commit-item{background:var(--cg-color-bg-secondary);border:2px solid var(--cg-color-border);padding:var(--cg-space-3);margin-bottom:var(--cg-space-2);transition:all .1s ease}[data-comfygit-theme=brutal] .commit-item:hover{background:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm);transform:translate(-2px,-2px)}[data-comfygit-theme=brutal] .commit-hash{font-family:var(--cg-font-mono);font-size:var(--cg-font-size-xs);font-weight:var(--cg-font-weight-bold);color:var(--cg-color-info);text-transform:uppercase}[data-comfygit-theme=brutal] .commit-message{font-size:var(--cg-font-size-sm);font-weight:var(--cg-font-weight-medium);color:var(--cg-color-text-primary)}[data-comfygit-theme=brutal] .commit-date{font-size:var(--cg-font-size-xs);font-family:var(--cg-font-mono);color:var(--cg-color-text-muted);text-transform:uppercase}[data-comfygit-theme=brutal] .panel-footer{border-top:4px solid var(--cg-color-border);background:var(--cg-color-bg-tertiary);padding:var(--cg-space-3) var(--cg-space-4)}[data-comfygit-theme=brutal] .export-btn{background:var(--cg-color-bg-secondary);color:var(--cg-color-text-primary);border:3px solid var(--cg-color-border);box-shadow:var(--cg-shadow-sm);text-transform:uppercase;font-weight:var(--cg-font-weight-bold);font-size:var(--cg-font-size-xs);padding:var(--cg-space-3) var(--cg-space-4);transition:all .1s ease}[data-comfygit-theme=brutal] .export-btn:hover:not(:disabled){background:var(--cg-color-accent);transform:translate(-3px,-3px);box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=brutal] .export-btn:active:not(:disabled){transform:translate(0);box-shadow:none}[data-comfygit-theme=brutal] .commit-popover{background:var(--cg-color-bg-primary);border:4px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg)}[data-comfygit-theme=brutal] .commit-input{background:var(--cg-color-bg-secondary);border:3px solid var(--cg-color-border);color:var(--cg-color-text-primary);font-family:var(--cg-font-body);font-weight:var(--cg-font-weight-medium)}[data-comfygit-theme=brutal] .commit-input:focus{background:var(--cg-color-accent-muted);outline:none}[data-comfygit-theme=brutal] .comfygit-panel-btn{background:var(--cg-color-accent)!important;color:var(--cg-color-text-primary)!important;border:3px solid var(--cg-color-border)!important;border-radius:0!important;text-transform:uppercase;font-family:var(--cg-font-display);font-size:10px;box-shadow:3px 3px 0 var(--cg-color-border)!important;transition:all .1s ease!important}[data-comfygit-theme=brutal] .comfygit-panel-btn:hover{transform:translate(-2px,-2px)!important;box-shadow:5px 5px 0 var(--cg-color-border)!important}[data-comfygit-theme=brutal] .comfygit-panel-btn:active{transform:translate(0)!important;box-shadow:none!important}[data-comfygit-theme=brutal] .comfygit-commit-btn{background:var(--cg-color-bg-secondary)!important;color:var(--cg-color-text-primary)!important;border:3px solid var(--cg-color-border)!important;border-left:none!important;border-radius:0!important;font-family:var(--cg-font-body);font-weight:700;text-transform:uppercase;font-size:10px}[data-comfygit-theme=brutal] .comfygit-commit-btn:hover{background:var(--cg-color-bg-hover)!important}[data-comfygit-theme=brutal] .commit-indicator{background:var(--cg-color-error);border:2px solid var(--cg-color-border);border-radius:0}[data-comfygit-theme=brutal] .panel-content::-webkit-scrollbar{width:12px}[data-comfygit-theme=brutal] .panel-content::-webkit-scrollbar-track{background:var(--cg-color-bg-tertiary);border-left:2px solid var(--cg-color-border)}[data-comfygit-theme=brutal] .panel-content::-webkit-scrollbar-thumb{background:var(--cg-color-accent);border:2px solid var(--cg-color-border)}[data-comfygit-theme=brutal] .panel-content::-webkit-scrollbar-thumb:hover{background:var(--cg-color-accent-hover)}[data-comfygit-theme=brutal] ::selection{background:var(--cg-color-accent);color:var(--cg-color-text-primary)}[data-comfygit-theme=brutal] .loading{background:repeating-conic-gradient(var(--cg-color-bg-tertiary) 0% 25%,var(--cg-color-bg-secondary) 0% 50%) 50% / 16px 16px;color:var(--cg-color-text-primary);font-family:var(--cg-font-mono);text-transform:uppercase}', K = {
   default: Fo,
   phosphor: Jo,
   swiss: Ko,
@@ -542,9 +543,9 @@ const po = { class: "modal-content" }, uo = { class: "modal-header" }, ho = { cl
 };
 let it = "default", I = null;
 function qo() {
-  const d = new URLSearchParams(window.location.search).get("comfygit-theme");
-  if (d && d in K)
-    return d;
+  const g = new URLSearchParams(window.location.search).get("comfygit-theme");
+  if (g && g in K)
+    return g;
   const s = localStorage.getItem("comfygit-theme");
   return s && s in K ? s : "default";
 }
@@ -580,7 +581,7 @@ function lt() {
     }
   ];
 }
-function dt() {
+function gt() {
   return it;
 }
 const Qo = { class: "comfygit-panel" }, Zo = { class: "panel-header" }, te = { class: "header-left" }, oe = {
@@ -595,20 +596,20 @@ const Qo = { class: "comfygit-panel" }, Zo = { class: "panel-header" }, te = { c
 }, le = {
   key: 1,
   class: "loading"
-}, de = { class: "panel-footer" }, ge = ["disabled"], me = /* @__PURE__ */ M({
+}, ge = { class: "panel-footer" }, de = ["disabled"], me = /* @__PURE__ */ M({
   __name: "ComfyGitPanel",
   emits: ["close", "statusUpdate"],
-  setup(o, { emit: d }) {
+  setup(o, { emit: g }) {
     function s() {
-      const m = lt(), B = (m.findIndex((yt) => yt.id === dt()) + 1) % m.length, vt = m[B].id;
+      const m = lt(), B = (m.findIndex((yt) => yt.id === gt()) + 1) % m.length, vt = m[B].id;
       q(vt);
     }
-    const e = d, {
+    const e = g, {
       getStatus: a,
       getHistory: y,
-      exportEnv: C,
+      exportEnv: z,
       getBranches: p,
-      checkout: g,
+      checkout: d,
       createBranch: x,
       switchBranch: v
     } = X(), l = w(null), u = w([]), h = w([]), $ = w(!1), f = w(null), L = w(null), k = w(null), H = A(() => {
@@ -636,7 +637,7 @@ const Qo = { class: "comfygit-panel" }, Zo = { class: "panel-header" }, te = { c
     }
     async function Z(m) {
       L.value = null;
-      const n = await g(m.hash);
+      const n = await d(m.hash);
       n.status === "warning" && n.reason === "uncommitted_changes" ? k.value = {
         title: "Uncommitted Changes",
         message: "You have uncommitted changes that will be lost.",
@@ -646,7 +647,7 @@ const Qo = { class: "comfygit-panel" }, Zo = { class: "panel-header" }, te = { c
         cancelLabel: "Cancel",
         destructive: !0,
         onConfirm: async () => {
-          k.value = null, await g(m.hash, !0);
+          k.value = null, await d(m.hash, !0);
         }
       } : n.status === "success" || alert(n.message || "Checkout failed");
     }
@@ -683,7 +684,7 @@ const Qo = { class: "comfygit-panel" }, Zo = { class: "panel-header" }, te = { c
     }
     async function bt() {
       try {
-        const m = await C();
+        const m = await z();
         m.status === "success" ? alert(`Export successful!
 
 Saved to: ${m.path}
@@ -767,7 +768,7 @@ Models without sources: ${m.models_without_sources}`) : alert(`Export failed: ${
           }, null, 8, ["commits"])
         ], 64)) : (r(), c("div", le, " Loading status... "))
       ]),
-      t("div", de, [
+      t("div", ge, [
         t("button", {
           class: "export-btn",
           onClick: bt,
@@ -783,7 +784,7 @@ Models without sources: ${m.models_without_sources}`) : alert(`Export failed: ${
             t("path", { d: "M14 14H2v-2h12v2z" })
           ], -1),
           ct(" Export ", -1)
-        ])], 8, ge)
+        ])], 8, de)
       ]),
       L.value ? (r(), ot(Po, {
         key: 0,
@@ -830,25 +831,25 @@ Models without sources: ${m.models_without_sources}`) : alert(`Export failed: ${
 }, ke = {
   key: 1,
   class: "no-changes"
-}, Ce = {
+}, ze = {
   key: 2,
   class: "loading"
-}, ze = { class: "message-section" }, $e = ["placeholder", "disabled", "onKeydown"], _e = { class: "popover-footer" }, Se = ["disabled"], Le = /* @__PURE__ */ M({
+}, Ce = { class: "message-section" }, $e = ["placeholder", "disabled", "onKeydown"], _e = { class: "popover-footer" }, Se = ["disabled"], Le = /* @__PURE__ */ M({
   __name: "CommitPopover",
   props: {
     status: {}
   },
   emits: ["close", "committed"],
-  setup(o, { emit: d }) {
-    const s = o, e = d, { commit: a } = X(), y = w(""), C = w(!1), p = w(null), g = A(() => {
+  setup(o, { emit: g }) {
+    const s = o, e = g, { commit: a } = X(), y = w(""), z = w(!1), p = w(null), d = A(() => {
       if (!s.status) return !1;
       const v = s.status.workflows;
       return v.new.length > 0 || v.modified.length > 0 || v.deleted.length > 0 || s.status.has_changes;
     });
     async function x() {
       var v, l, u;
-      if (!(!g.value || !y.value.trim() || C.value)) {
-        C.value = !0, p.value = null;
+      if (!(!d.value || !y.value.trim() || z.value)) {
+        z.value = !0, p.value = null;
         try {
           const h = await a(y.value.trim());
           h.status === "success" ? (p.value = {
@@ -858,7 +859,7 @@ Models without sources: ${m.models_without_sources}`) : alert(`Export failed: ${
         } catch (h) {
           p.value = { type: "error", message: h instanceof Error ? h.message : "Commit failed" };
         } finally {
-          C.value = !1;
+          z.value = !1;
         }
       }
     }
@@ -867,7 +868,7 @@ Models without sources: ${m.models_without_sources}`) : alert(`Export failed: ${
         t("h3", { class: "popover-title" }, "Commit Changes")
       ], -1)),
       t("div", ue, [
-        o.status && g.value ? (r(), c("div", he, [
+        o.status && d.value ? (r(), c("div", he, [
           o.status.workflows.new.length ? (r(), c("div", be, [
             l[2] || (l[2] = t("span", { class: "change-icon new" }, "+", -1)),
             t("span", null, i(o.status.workflows.new.length) + " new workflow(s)", 1)
@@ -888,13 +889,13 @@ Models without sources: ${m.models_without_sources}`) : alert(`Export failed: ${
             l[6] || (l[6] = t("span", { class: "change-icon deleted" }, "-", -1)),
             t("span", null, i(o.status.git_changes.nodes_removed.length) + " node(s) removed", 1)
           ])) : b("", !0)
-        ])) : o.status ? (r(), c("div", ke, " No changes to commit ")) : (r(), c("div", Ce, " Loading... ")),
-        t("div", ze, [
+        ])) : o.status ? (r(), c("div", ke, " No changes to commit ")) : (r(), c("div", ze, " Loading... ")),
+        t("div", Ce, [
           et(t("textarea", {
             "onUpdate:modelValue": l[0] || (l[0] = (u) => y.value = u),
             class: "commit-input",
-            placeholder: g.value ? "Describe your changes..." : "No changes",
-            disabled: !g.value || C.value,
+            placeholder: d.value ? "Describe your changes..." : "No changes",
+            disabled: !d.value || z.value,
             rows: "3",
             onKeydown: [
               Y(U(x, ["ctrl"]), ["enter"]),
@@ -916,9 +917,9 @@ Models without sources: ${m.models_without_sources}`) : alert(`Export failed: ${
         }, "Cancel"),
         t("button", {
           class: "commit-btn",
-          disabled: !g.value || !y.value.trim() || C.value,
+          disabled: !d.value || !y.value.trim() || z.value,
           onClick: x
-        }, i(C.value ? "Committing..." : "Commit"), 9, Se)
+        }, i(z.value ? "Committing..." : "Commit"), 9, Se)
       ])
     ]));
   }
@@ -928,14 +929,14 @@ Q.href = new URL("./comfygit-panel.css", import.meta.url).href;
 document.head.appendChild(Q);
 const Ee = qo();
 q(Ee);
-let _ = null, z = null, O = null;
+let _ = null, C = null, O = null;
 const P = w(null);
 async function W() {
   var o;
   if (!((o = window.app) != null && o.api)) return null;
   try {
-    const d = await window.app.api.fetchApi("/v2/comfygit/status");
-    d.ok && (P.value = await d.json());
+    const g = await window.app.api.fetchApi("/v2/comfygit/status");
+    g.ok && (P.value = await g.json());
   } catch {
   }
 }
@@ -950,10 +951,10 @@ function Ie() {
   o.className = "comfygit-panel-container", _.appendChild(o), _.addEventListener("click", (e) => {
     e.target === _ && J();
   });
-  const d = (e) => {
-    e.key === "Escape" && (J(), document.removeEventListener("keydown", d));
+  const g = (e) => {
+    e.key === "Escape" && (J(), document.removeEventListener("keydown", g));
   };
-  document.addEventListener("keydown", d), st({
+  document.addEventListener("keydown", g), st({
     render: () => nt(fe, {
       onClose: J,
       onStatusUpdate: (e) => {
@@ -966,11 +967,11 @@ function J() {
   _ && (_.remove(), _ = null);
 }
 function Me(o) {
-  D(), z = document.createElement("div"), z.className = "comfygit-commit-popover-container";
-  const d = o.getBoundingClientRect();
-  z.style.position = "fixed", z.style.top = `${d.bottom + 8}px`, z.style.right = `${window.innerWidth - d.right}px`, z.style.zIndex = "10001";
+  D(), C = document.createElement("div"), C.className = "comfygit-commit-popover-container";
+  const g = o.getBoundingClientRect();
+  C.style.position = "fixed", C.style.top = `${g.bottom + 8}px`, C.style.right = `${window.innerWidth - g.right}px`, C.style.zIndex = "10001";
   const s = (a) => {
-    z && !z.contains(a.target) && a.target !== o && (D(), document.removeEventListener("mousedown", s));
+    C && !C.contains(a.target) && a.target !== o && (D(), document.removeEventListener("mousedown", s));
   };
   setTimeout(() => document.addEventListener("mousedown", s), 0);
   const e = (a) => {
@@ -984,10 +985,10 @@ function Me(o) {
         D(), W().then(j);
       }
     })
-  }), O.mount(z), document.body.appendChild(z);
+  }), O.mount(C), document.body.appendChild(C);
 }
 function D() {
-  O && (O.unmount(), O = null), z && (z.remove(), z = null);
+  O && (O.unmount(), O = null), C && (C.remove(), C = null);
 }
 let E = null;
 function j() {
@@ -996,7 +997,7 @@ function j() {
   o && (o.style.display = Te() ? "block" : "none");
 }
 function Ne() {
-  const o = lt(), s = (o.findIndex((y) => y.id === dt()) + 1) % o.length, e = o[s].id;
+  const o = lt(), s = (o.findIndex((y) => y.id === gt()) + 1) % o.length, e = o[s].id;
   q(e);
   const a = document.createElement("div");
   a.className = "comfygit-theme-notification", a.innerHTML = `
@@ -1007,8 +1008,8 @@ function Ne() {
 document.addEventListener("keydown", (o) => {
   o.ctrlKey && o.shiftKey && o.key === "T" && (o.preventDefault(), Ne());
 });
-const gt = document.createElement("style");
-gt.textContent = `
+const dt = document.createElement("style");
+dt.textContent = `
   .comfygit-panel-overlay {
     position: fixed;
     top: 0;
@@ -1023,7 +1024,7 @@ gt.textContent = `
   }
 
   .comfygit-panel-container {
-    width: 580px;
+    width: var(--cg-panel-width, 580px);
     max-width: 90vw;
     max-height: 80vh;
     display: flex;
@@ -1119,15 +1120,15 @@ gt.textContent = `
     }
   }
 `;
-document.head.appendChild(gt);
+document.head.appendChild(dt);
 R.registerExtension({
   name: "Comfy.ComfyGitPanel",
   async setup() {
     var s, e;
     const o = document.createElement("div");
     o.className = "comfygit-btn-group";
-    const d = document.createElement("button");
-    d.className = "comfyui-button comfyui-menu-mobile-collapse comfygit-panel-btn", d.textContent = "ComfyGit", d.title = "ComfyGit Control Panel", d.onclick = Ie, E = document.createElement("button"), E.className = "comfyui-button comfyui-menu-mobile-collapse comfygit-commit-btn", E.innerHTML = 'Commit <span class="commit-indicator"></span>', E.title = "Quick Commit", E.onclick = () => Me(E), o.appendChild(d), o.appendChild(E), (e = (s = R.menu) == null ? void 0 : s.settingsGroup) != null && e.element && (R.menu.settingsGroup.element.before(o), console.log("[ComfyGit] Control Panel buttons added to toolbar")), await W(), j(), setInterval(async () => {
+    const g = document.createElement("button");
+    g.className = "comfyui-button comfyui-menu-mobile-collapse comfygit-panel-btn", g.textContent = "ComfyGit", g.title = "ComfyGit Control Panel", g.onclick = Ie, E = document.createElement("button"), E.className = "comfyui-button comfyui-menu-mobile-collapse comfygit-commit-btn", E.innerHTML = 'Commit <span class="commit-indicator"></span>', E.title = "Quick Commit", E.onclick = () => Me(E), o.appendChild(g), o.appendChild(E), (e = (s = R.menu) == null ? void 0 : s.settingsGroup) != null && e.element && (R.menu.settingsGroup.element.before(o), console.log("[ComfyGit] Control Panel buttons added to toolbar")), await W(), j(), setInterval(async () => {
       await W(), j();
     }, 3e4);
   }
