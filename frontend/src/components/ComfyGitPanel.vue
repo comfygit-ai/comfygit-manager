@@ -16,6 +16,11 @@
             <path d="M13.65 2.35a8 8 0 1 0 1.4 9.65h-2.25a5.75 5.75 0 1 1-1-6.45L9.5 8H16V1.5l-2.35 2.35z"/>
           </svg>
         </button>
+        <button class="icon-btn" @click="cycleTheme" title="Switch theme (Ctrl+Shift+T)">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 1a7 7 0 0 0 0 14A7 7 0 0 0 8 1zm0 12.5V2.5a5.5 5.5 0 0 1 0 11z"/>
+          </svg>
+        </button>
         <button class="icon-btn" @click="emit('close')" title="Close">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
             <path d="M4.28 3.22a.75.75 0 0 0-1.06 1.06L6.94 8l-3.72 3.72a.75.75 0 1 0 1.06 1.06L8 9.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L9.06 8l3.72-3.72a.75.75 0 0 0-1.06-1.06L8 6.94 4.28 3.22z"/>
@@ -93,7 +98,17 @@ import HistorySection from './HistorySection.vue'
 import CommitDetailModal from './CommitDetailModal.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
+import { applyTheme, getAvailableThemes, getCurrentTheme, type ThemeName } from '@/themes'
 import type { ComfyGitStatus, CommitInfo, BranchInfo } from '@/types/comfygit'
+
+// Theme cycling function
+function cycleTheme() {
+  const themes = getAvailableThemes()
+  const currentIndex = themes.findIndex(t => t.id === getCurrentTheme())
+  const nextIndex = (currentIndex + 1) % themes.length
+  const nextTheme = themes[nextIndex].id as ThemeName
+  applyTheme(nextTheme)
+}
 
 const emit = defineEmits<{
   close: []

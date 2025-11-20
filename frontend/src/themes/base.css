@@ -1,0 +1,118 @@
+/* ComfyGit Panel Theme System - Base Variables */
+
+:root {
+  /* ============================================
+     THEME VARIABLE DEFINITIONS
+     Override these in theme files
+     ============================================ */
+
+  /* === Typography === */
+  --cg-font-display: system-ui, sans-serif;
+  --cg-font-body: system-ui, sans-serif;
+  --cg-font-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
+
+  --cg-font-size-xs: 10px;
+  --cg-font-size-sm: 12px;
+  --cg-font-size-base: 14px;
+  --cg-font-size-lg: 16px;
+  --cg-font-size-xl: 20px;
+  --cg-font-size-2xl: 24px;
+
+  --cg-font-weight-normal: 400;
+  --cg-font-weight-medium: 500;
+  --cg-font-weight-semibold: 600;
+  --cg-font-weight-bold: 700;
+
+  --cg-line-height-tight: 1.2;
+  --cg-line-height-normal: 1.5;
+  --cg-line-height-relaxed: 1.75;
+
+  --cg-letter-spacing-tight: -0.02em;
+  --cg-letter-spacing-normal: 0;
+  --cg-letter-spacing-wide: 0.05em;
+  --cg-letter-spacing-wider: 0.1em;
+
+  /* === Colors - Core === */
+  --cg-color-bg-primary: #353535;
+  --cg-color-bg-secondary: #2a2a2a;
+  --cg-color-bg-tertiary: #222222;
+  --cg-color-bg-hover: #404040;
+  --cg-color-bg-overlay: rgba(0, 0, 0, 0.5);
+
+  --cg-color-text-primary: #dddddd;
+  --cg-color-text-secondary: #999999;
+  --cg-color-text-muted: #666666;
+  --cg-color-text-inverse: #111111;
+
+  --cg-color-border: #4a4a4a;
+  --cg-color-border-subtle: #3a3a3a;
+  --cg-color-border-strong: #5a5a5a;
+
+  /* === Colors - Accent === */
+  --cg-color-accent: #f97316;
+  --cg-color-accent-hover: #ea580c;
+  --cg-color-accent-muted: rgba(249, 115, 22, 0.2);
+
+  /* === Colors - Semantic === */
+  --cg-color-success: #22c55e;
+  --cg-color-success-muted: rgba(34, 197, 94, 0.15);
+  --cg-color-warning: #fbbf24;
+  --cg-color-warning-muted: rgba(251, 191, 36, 0.15);
+  --cg-color-error: #ef4444;
+  --cg-color-error-muted: rgba(239, 68, 68, 0.15);
+  --cg-color-info: #3b82f6;
+  --cg-color-info-muted: rgba(59, 130, 246, 0.15);
+
+  /* === Spacing === */
+  --cg-space-1: 4px;
+  --cg-space-2: 8px;
+  --cg-space-3: 12px;
+  --cg-space-4: 16px;
+  --cg-space-5: 20px;
+  --cg-space-6: 24px;
+  --cg-space-8: 32px;
+  --cg-space-10: 40px;
+  --cg-space-12: 48px;
+
+  /* === Border Radius === */
+  --cg-radius-none: 0;
+  --cg-radius-sm: 2px;
+  --cg-radius-md: 4px;
+  --cg-radius-lg: 8px;
+  --cg-radius-xl: 12px;
+  --cg-radius-2xl: 16px;
+  --cg-radius-full: 9999px;
+
+  /* === Shadows === */
+  --cg-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --cg-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --cg-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --cg-shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.5);
+
+  /* === Effects === */
+  --cg-blur-sm: 4px;
+  --cg-blur-md: 8px;
+  --cg-blur-lg: 16px;
+
+  /* === Transitions === */
+  --cg-transition-fast: 100ms ease;
+  --cg-transition-normal: 200ms ease;
+  --cg-transition-slow: 300ms ease;
+
+  /* === Z-Index === */
+  --cg-z-dropdown: 100;
+  --cg-z-modal: 1000;
+  --cg-z-popover: 1001;
+  --cg-z-tooltip: 1002;
+
+  /* === Panel Specific === */
+  --cg-panel-width: 580px;
+  --cg-panel-height: 70vh;
+  --cg-panel-max-width: 90vw;
+  --cg-panel-max-height: 85vh;
+
+  /* === Button Specific === */
+  --cg-btn-gradient-start: #fb923c;
+  --cg-btn-gradient-end: #ea580c;
+  --cg-btn-shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+}

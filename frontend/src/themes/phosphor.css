@@ -1,0 +1,421 @@
+/* ============================================
+   PHOSPHOR TERMINAL THEME
+
+   Aesthetic: Raw CRT monitor, hacker terminal
+   Character: Unapologetic, technical, authentic
+   Memorable: Green phosphor glow on black void
+   ============================================ */
+
+/* Import custom font */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+
+[data-comfygit-theme="phosphor"] {
+  /* === Typography - Monospace Everything === */
+  --cg-font-display: 'IBM Plex Mono', ui-monospace, monospace;
+  --cg-font-body: 'IBM Plex Mono', ui-monospace, monospace;
+  --cg-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --cg-font-size-xs: 9px;
+  --cg-font-size-sm: 11px;
+  --cg-font-size-base: 13px;
+  --cg-font-size-lg: 14px;
+  --cg-font-size-xl: 16px;
+  --cg-font-size-2xl: 18px;
+
+  --cg-letter-spacing-normal: 0.02em;
+  --cg-letter-spacing-wide: 0.08em;
+
+  /* === Colors - Phosphor Green on Void === */
+  --cg-color-bg-primary: #0a0a0a;
+  --cg-color-bg-secondary: #050505;
+  --cg-color-bg-tertiary: #000000;
+  --cg-color-bg-hover: #0f1f0f;
+  --cg-color-bg-overlay: rgba(0, 0, 0, 0.85);
+
+  --cg-color-text-primary: #00ff41;
+  --cg-color-text-secondary: #00cc33;
+  --cg-color-text-muted: #008f11;
+  --cg-color-text-inverse: #000000;
+
+  --cg-color-border: #00ff41;
+  --cg-color-border-subtle: #003b00;
+  --cg-color-border-strong: #00ff41;
+
+  /* === Colors - Accent is the glow === */
+  --cg-color-accent: #00ff41;
+  --cg-color-accent-hover: #39ff14;
+  --cg-color-accent-muted: rgba(0, 255, 65, 0.15);
+
+  /* === Colors - Semantic (all green variants) === */
+  --cg-color-success: #00ff41;
+  --cg-color-success-muted: rgba(0, 255, 65, 0.2);
+  --cg-color-warning: #ffff00;
+  --cg-color-warning-muted: rgba(255, 255, 0, 0.15);
+  --cg-color-error: #ff0040;
+  --cg-color-error-muted: rgba(255, 0, 64, 0.15);
+  --cg-color-info: #00ffff;
+  --cg-color-info-muted: rgba(0, 255, 255, 0.15);
+
+  /* === Borders - Sharp, No Radius === */
+  --cg-radius-none: 0;
+  --cg-radius-sm: 0;
+  --cg-radius-md: 0;
+  --cg-radius-lg: 0;
+  --cg-radius-xl: 0;
+  --cg-radius-2xl: 0;
+  --cg-radius-full: 0;
+
+  /* === Shadows - Phosphor Glow === */
+  --cg-shadow-sm: 0 0 4px rgba(0, 255, 65, 0.3);
+  --cg-shadow-md: 0 0 8px rgba(0, 255, 65, 0.4);
+  --cg-shadow-lg: 0 0 16px rgba(0, 255, 65, 0.5);
+  --cg-shadow-xl: 0 0 32px rgba(0, 255, 65, 0.6);
+
+  /* === Button === */
+  --cg-btn-gradient-start: #00ff41;
+  --cg-btn-gradient-end: #00cc33;
+  --cg-btn-shadow-inset: none;
+}
+
+/* === Global Phosphor Effects === */
+[data-comfygit-theme="phosphor"] .comfygit-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+/* CRT scan lines overlay */
+[data-comfygit-theme="phosphor"] .comfygit-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 1px,
+    rgba(0, 0, 0, 0.3) 1px,
+    rgba(0, 0, 0, 0.3) 2px
+  );
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* Subtle screen flicker */
+[data-comfygit-theme="phosphor"] .comfygit-panel::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 255, 65, 0.02);
+  pointer-events: none;
+  animation: phosphor-flicker 4s infinite;
+  z-index: 99;
+}
+
+@keyframes phosphor-flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.98; }
+  52% { opacity: 1; }
+  54% { opacity: 0.96; }
+  56% { opacity: 1; }
+}
+
+/* === Panel Container === */
+[data-comfygit-theme="phosphor"] .comfygit-panel {
+  background: var(--cg-color-bg-primary);
+  border: 2px solid var(--cg-color-border);
+  box-shadow:
+    var(--cg-shadow-lg),
+    inset 0 0 100px rgba(0, 255, 65, 0.03);
+  font-family: var(--cg-font-mono);
+}
+
+/* === Header === */
+[data-comfygit-theme="phosphor"] .panel-header {
+  background: var(--cg-color-bg-tertiary);
+  border-bottom: 1px solid var(--cg-color-border);
+  padding: var(--cg-space-3) var(--cg-space-4);
+}
+
+[data-comfygit-theme="phosphor"] .panel-title {
+  color: var(--cg-color-accent);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+  font-size: var(--cg-font-size-sm);
+  text-shadow: 0 0 8px var(--cg-color-accent);
+}
+
+[data-comfygit-theme="phosphor"] .panel-title::before {
+  content: '> ';
+  opacity: 0.7;
+}
+
+[data-comfygit-theme="phosphor"] .env-name,
+[data-comfygit-theme="phosphor"] .branch-name {
+  color: var(--cg-color-text-secondary);
+  font-size: var(--cg-font-size-xs);
+}
+
+[data-comfygit-theme="phosphor"] .branch-name::before {
+  content: '@';
+  margin-right: 2px;
+}
+
+/* === Status Dot - Blinking Cursor Style === */
+[data-comfygit-theme="phosphor"] .status-dot {
+  width: 6px;
+  height: 12px;
+  border-radius: 0;
+  animation: cursor-blink 1s step-end infinite;
+}
+
+[data-comfygit-theme="phosphor"] .status-dot.success { background: var(--cg-color-success); }
+[data-comfygit-theme="phosphor"] .status-dot.warning { background: var(--cg-color-warning); }
+[data-comfygit-theme="phosphor"] .status-dot.error { background: var(--cg-color-error); }
+
+@keyframes cursor-blink {
+  50% { opacity: 0; }
+}
+
+/* === Buttons === */
+[data-comfygit-theme="phosphor"] .icon-btn {
+  color: var(--cg-color-text-primary);
+  border: 1px solid transparent;
+}
+
+[data-comfygit-theme="phosphor"] .icon-btn:hover {
+  background: var(--cg-color-bg-hover);
+  border-color: var(--cg-color-border-subtle);
+}
+
+/* === Status Section === */
+[data-comfygit-theme="phosphor"] .status-section {
+  margin-bottom: var(--cg-space-4);
+}
+
+[data-comfygit-theme="phosphor"] .status-grid {
+  background: var(--cg-color-bg-tertiary);
+  border: 1px solid var(--cg-color-border-subtle);
+}
+
+[data-comfygit-theme="phosphor"] .column-title {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wider);
+}
+
+[data-comfygit-theme="phosphor"] .column-title::before {
+  content: '/* ';
+}
+
+[data-comfygit-theme="phosphor"] .column-title::after {
+  content: ' */';
+}
+
+[data-comfygit-theme="phosphor"] .status-item {
+  font-size: var(--cg-font-size-sm);
+}
+
+[data-comfygit-theme="phosphor"] .status-item .icon {
+  display: none;
+}
+
+[data-comfygit-theme="phosphor"] .status-item::before {
+  content: '├─ ';
+  color: var(--cg-color-border-subtle);
+}
+
+[data-comfygit-theme="phosphor"] .synced-item::before {
+  content: '└─ ';
+}
+
+[data-comfygit-theme="phosphor"] .count {
+  font-weight: var(--cg-font-weight-bold);
+}
+
+[data-comfygit-theme="phosphor"] .count.new {
+  color: var(--cg-color-success);
+  text-shadow: 0 0 4px var(--cg-color-success);
+}
+
+[data-comfygit-theme="phosphor"] .count.modified {
+  color: var(--cg-color-warning);
+  text-shadow: 0 0 4px var(--cg-color-warning);
+}
+
+[data-comfygit-theme="phosphor"] .count.deleted {
+  color: var(--cg-color-error);
+  text-shadow: 0 0 4px var(--cg-color-error);
+}
+
+[data-comfygit-theme="phosphor"] .count.synced {
+  color: var(--cg-color-text-muted);
+}
+
+/* === Warning Boxes === */
+[data-comfygit-theme="phosphor"] .warning-box {
+  background: transparent;
+  border: 1px solid var(--cg-color-warning);
+  color: var(--cg-color-warning);
+  font-size: var(--cg-font-size-sm);
+}
+
+[data-comfygit-theme="phosphor"] .warning-box::before {
+  content: '[!] ';
+  font-weight: bold;
+}
+
+[data-comfygit-theme="phosphor"] .warning-box.error {
+  border-color: var(--cg-color-error);
+  color: var(--cg-color-error);
+}
+
+/* === History Section === */
+[data-comfygit-theme="phosphor"] .history-section {
+  font-size: var(--cg-font-size-sm);
+}
+
+[data-comfygit-theme="phosphor"] .history-title {
+  color: var(--cg-color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+  font-size: var(--cg-font-size-xs);
+}
+
+[data-comfygit-theme="phosphor"] .commit-item {
+  background: transparent;
+  border: none;
+  border-left: 2px solid var(--cg-color-border-subtle);
+  padding-left: var(--cg-space-3);
+  margin-left: var(--cg-space-2);
+}
+
+[data-comfygit-theme="phosphor"] .commit-item:hover {
+  border-left-color: var(--cg-color-accent);
+  background: var(--cg-color-bg-hover);
+}
+
+[data-comfygit-theme="phosphor"] .commit-hash {
+  color: var(--cg-color-accent);
+  font-weight: var(--cg-font-weight-bold);
+}
+
+[data-comfygit-theme="phosphor"] .commit-hash::before {
+  content: '#';
+}
+
+[data-comfygit-theme="phosphor"] .commit-message {
+  color: var(--cg-color-text-primary);
+}
+
+[data-comfygit-theme="phosphor"] .commit-date {
+  color: var(--cg-color-text-muted);
+}
+
+/* === Footer === */
+[data-comfygit-theme="phosphor"] .panel-footer {
+  border-top: 1px solid var(--cg-color-border);
+  background: var(--cg-color-bg-tertiary);
+}
+
+[data-comfygit-theme="phosphor"] .export-btn {
+  background: transparent;
+  color: var(--cg-color-text-primary);
+  border: 1px solid var(--cg-color-border);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+  font-size: var(--cg-font-size-xs);
+}
+
+[data-comfygit-theme="phosphor"] .export-btn:hover:not(:disabled) {
+  background: var(--cg-color-bg-hover);
+  border-color: var(--cg-color-accent);
+  color: var(--cg-color-accent);
+  box-shadow: var(--cg-shadow-sm);
+}
+
+/* === Commit Popover === */
+[data-comfygit-theme="phosphor"] .commit-popover {
+  background: var(--cg-color-bg-primary);
+  border: 2px solid var(--cg-color-border);
+  box-shadow: var(--cg-shadow-lg);
+}
+
+[data-comfygit-theme="phosphor"] .commit-input {
+  background: var(--cg-color-bg-tertiary);
+  border: 1px solid var(--cg-color-border-subtle);
+  color: var(--cg-color-text-primary);
+  font-family: var(--cg-font-mono);
+}
+
+[data-comfygit-theme="phosphor"] .commit-input:focus {
+  border-color: var(--cg-color-accent);
+  box-shadow: var(--cg-shadow-sm);
+  outline: none;
+}
+
+[data-comfygit-theme="phosphor"] .commit-input::placeholder {
+  color: var(--cg-color-text-muted);
+}
+
+/* === Toolbar Buttons === */
+[data-comfygit-theme="phosphor"] .comfygit-panel-btn {
+  background: var(--cg-color-accent) !important;
+  color: var(--cg-color-bg-primary) !important;
+  border: none !important;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-family: var(--cg-font-mono);
+  font-size: 11px;
+  box-shadow: 0 0 8px var(--cg-color-accent) !important;
+}
+
+[data-comfygit-theme="phosphor"] .comfygit-panel-btn:hover {
+  box-shadow: 0 0 16px var(--cg-color-accent) !important;
+}
+
+[data-comfygit-theme="phosphor"] .comfygit-commit-btn {
+  background: var(--cg-color-bg-tertiary) !important;
+  color: var(--cg-color-text-primary) !important;
+  border: 1px solid var(--cg-color-border-subtle) !important;
+  font-family: var(--cg-font-mono);
+}
+
+[data-comfygit-theme="phosphor"] .comfygit-commit-btn:hover {
+  border-color: var(--cg-color-accent) !important;
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.3) !important;
+}
+
+[data-comfygit-theme="phosphor"] .commit-indicator {
+  background: var(--cg-color-warning);
+  box-shadow: 0 0 6px var(--cg-color-warning);
+}
+
+/* === Scrollbar === */
+[data-comfygit-theme="phosphor"] .panel-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+[data-comfygit-theme="phosphor"] .panel-content::-webkit-scrollbar-track {
+  background: var(--cg-color-bg-tertiary);
+}
+
+[data-comfygit-theme="phosphor"] .panel-content::-webkit-scrollbar-thumb {
+  background: var(--cg-color-border-subtle);
+  border: 1px solid var(--cg-color-bg-tertiary);
+}
+
+[data-comfygit-theme="phosphor"] .panel-content::-webkit-scrollbar-thumb:hover {
+  background: var(--cg-color-accent);
+}
+
+/* === Selection === */
+[data-comfygit-theme="phosphor"] ::selection {
+  background: var(--cg-color-accent);
+  color: var(--cg-color-bg-primary);
+}

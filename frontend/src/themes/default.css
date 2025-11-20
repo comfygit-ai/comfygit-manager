@@ -1,0 +1,21 @@
+/* ============================================
+   DEFAULT THEME
+
+   Aesthetic: Standard dark UI with orange accent
+   Character: Functional, familiar, professional
+   The baseline from which other themes diverge
+   ============================================ */
+
+[data-comfygit-theme="default"] {
+  /* Default theme uses base.css values */
+  /* No overrides needed - this serves as the baseline */
+}
+
+/* Minimal overrides to ensure consistency */
+[data-comfygit-theme="default"] .comfygit-panel {
+  font-family: var(--cg-font-body);
+}
+
+[data-comfygit-theme="default"] .panel-title {
+  color: var(--cg-color-accent);
+}
