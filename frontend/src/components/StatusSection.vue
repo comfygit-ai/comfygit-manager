@@ -40,10 +40,10 @@
           <span class="count deleted">{{ status.git_changes.nodes_removed.length }}</span>
           <span class="label">node removed</span>
         </div>
-        <div v-if="status.git_changes.workflow_changes" class="status-item">
+        <div v-if="hasOtherWorkflowChanges" class="status-item">
           <span class="icon">●</span>
           <span class="count modified">●</span>
-          <span class="label">workflows changed</span>
+          <span class="label">other changes</span>
         </div>
         <div v-if="!hasGitChanges" class="status-item ok">
           <span class="icon">✓</span>
@@ -75,6 +75,17 @@ const props = defineProps<{
 const hasGitChanges = computed(() => {
   const gc = props.status.git_changes
   return gc.nodes_added.length > 0 || gc.nodes_removed.length > 0 || gc.workflow_changes || gc.has_other_changes
+})
+
+const hasOtherWorkflowChanges = computed(() => {
+  const gc = props.status.git_changes
+  const wf = props.status.workflows
+  // Only show "other changes" if there are workflow changes that aren't already shown
+  // as new/modified/deleted in the Workflows column
+  return (gc.workflow_changes || gc.has_other_changes) &&
+         wf.new.length === 0 &&
+         wf.modified.length === 0 &&
+         wf.deleted.length === 0
 })
 </script>
 

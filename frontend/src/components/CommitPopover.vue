@@ -194,20 +194,22 @@ async function handleCommit() {
 
 .commit-input {
   width: 100%;
-  padding: 8px 10px;
-  background: var(--comfy-input-bg, #222);
-  border: 1px solid var(--border-color, #4a4a4a);
+  padding: 10px 12px;
+  background: var(--cg-color-bg-tertiary, var(--comfy-input-bg, #222));
+  border: 1px solid var(--cg-color-border, var(--border-color, #4a4a4a));
   border-radius: 4px;
-  color: var(--input-text, #ddd);
-  font-size: 12px;
+  color: var(--cg-color-text-primary, var(--input-text, #ddd));
+  font-size: 13px;
   font-family: inherit;
   resize: vertical;
   box-sizing: border-box;
+  line-height: 1.4;
 }
 
 .commit-input:focus {
   outline: none;
-  border-color: #f97316;
+  border-color: var(--cg-color-accent, #f97316);
+  box-shadow: 0 0 0 2px var(--cg-color-accent-muted, rgba(249, 115, 22, 0.2));
 }
 
 .commit-input:disabled {
@@ -242,36 +244,41 @@ async function handleCommit() {
 }
 
 .cancel-btn {
-  padding: 6px 12px;
+  padding: 8px 16px;
   border-radius: 4px;
   font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
   background: transparent;
-  color: var(--input-text, #ddd);
-  border: 1px solid var(--border-color, #4a4a4a);
+  color: var(--cg-color-text-secondary, var(--input-text, #ddd));
+  border: 1px solid var(--cg-color-border, var(--border-color, #4a4a4a));
+  transition: all 0.15s ease;
 }
 
 .cancel-btn:hover {
-  background: var(--comfy-input-bg, #222);
+  background: var(--cg-color-bg-hover, var(--comfy-input-bg, #222));
+  border-color: var(--cg-color-border-strong, var(--border-color, #5a5a5a));
 }
 
 .commit-btn {
-  padding: 6px 12px;
+  padding: 8px 16px;
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   border: none;
-  background: #f97316;
-  color: white;
+  background: var(--cg-color-accent, #f97316);
+  color: var(--cg-color-text-inverse, white);
+  transition: all 0.15s ease;
 }
 
 .commit-btn:hover:not(:disabled) {
-  background: #ea580c;
+  background: var(--cg-color-accent-hover, #ea580c);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px var(--cg-color-accent-muted, rgba(249, 115, 22, 0.3));
 }
 
 .commit-btn:disabled {
-  background: #78350f;
   opacity: 0.5;
   cursor: not-allowed;
 }

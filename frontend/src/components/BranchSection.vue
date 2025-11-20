@@ -140,42 +140,48 @@ nextTick(() => {
 
 .create-branch-row {
   display: flex;
-  gap: 6px;
-  padding-bottom: 8px;
-  margin-bottom: 8px;
+  gap: 8px;
+  padding-bottom: 12px;
+  margin-bottom: 10px;
   border-bottom: 1px solid var(--border-color, #3a3a3a);
 }
 
 .branch-input {
   flex: 1;
-  padding: 4px 8px;
+  padding: 8px 12px;
   background: var(--comfy-menu-bg, #353535);
   border: 1px solid var(--border-color, #4a4a4a);
   border-radius: 4px;
   color: var(--input-text, #ddd);
-  font-size: 11px;
+  font-size: 13px;
+  font-family: inherit;
 }
 
 .branch-input:focus {
   outline: none;
-  border-color: #f97316;
+  border-color: var(--cg-color-accent, #f97316);
+  box-shadow: 0 0 0 2px var(--cg-color-accent-muted, rgba(249, 115, 22, 0.2));
 }
 
 .action-btn {
-  padding: 4px 8px;
+  padding: 8px 16px;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
   border: none;
+  transition: all 0.15s ease;
 }
 
 .action-btn.create {
-  background: #f97316;
-  color: white;
+  background: var(--cg-color-accent, #f97316);
+  color: var(--cg-color-text-inverse, white);
 }
 
 .action-btn.create:hover:not(:disabled) {
-  background: #ea580c;
+  background: var(--cg-color-accent-hover, #ea580c);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px var(--cg-color-accent-muted, rgba(249, 115, 22, 0.3));
 }
 
 .action-btn.create:disabled {
@@ -185,12 +191,13 @@ nextTick(() => {
 
 .action-btn.cancel {
   background: transparent;
-  color: var(--descrip-text, #999);
-  border: 1px solid var(--border-color, #4a4a4a);
+  color: var(--cg-color-text-secondary, var(--descrip-text, #999));
+  border: 1px solid var(--cg-color-border, var(--border-color, #4a4a4a));
 }
 
 .action-btn.cancel:hover {
-  background: var(--border-color, #4a4a4a);
+  background: var(--cg-color-bg-hover, var(--border-color, #4a4a4a));
+  border-color: var(--cg-color-border-strong, var(--border-color, #5a5a5a));
 }
 
 .empty {
