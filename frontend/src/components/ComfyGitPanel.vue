@@ -1,14 +1,14 @@
 <template>
-  <div class="comfygit-panel">
+  <div class="comfygit-panel" data-comfygit-theme="phosphor">
+    <!-- Header -->
     <div class="panel-header">
       <div class="header-left">
         <h2 class="panel-title">ComfyGit</h2>
         <div v-if="status" class="header-info">
-          <span class="env-name">{{ status.environment }}</span>
-          <span class="branch-name">({{ status.branch || 'detached' }})</span>
+          <span class="env-name">{{ currentEnvironment?.name || status.environment }}</span>
+          <span class="branch-name">{{ status.branch || 'detached' }}</span>
           <span :class="['status-dot', statusColor]" :title="statusTooltip"></span>
         </div>
-        <div v-else class="header-info loading-text">Loading...</div>
       </div>
       <div class="header-actions">
         <button class="icon-btn" :class="{ spinning: isLoading }" @click="refresh" title="Refresh">
@@ -24,40 +24,228 @@
       </div>
     </div>
 
-    <div class="panel-content">
-      <div v-if="error" class="error-message">
-        {{ error }}
-      </div>
-      <div v-else-if="!status" class="loading">
-        Loading status...
-      </div>
-      <template v-else>
-        <StatusSection :status="status" />
-        <BranchSection
-          :branches="branches"
-          :current="status.branch"
-          @switch="handleBranchSwitch"
-          @create="handleBranchCreate"
-        />
-        <HistorySection
-          :commits="commits"
-          @select="handleCommitSelect"
-          @checkout="handleCheckout"
-        />
-      </template>
-    </div>
-
-    <div class="panel-footer">
-      <button class="export-btn" @click="handleExport" :disabled="!status">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M8 12L3 7h3V1h4v6h3L8 12z"/>
-          <path d="M14 14H2v-2h12v2z"/>
-        </svg>
-        Export
+    <!-- Environment Switcher -->
+    <div class="env-switcher">
+      <div class="env-switcher-label">/* CURRENT ENVIRONMENT */</div>
+      <button class="env-switcher-btn" @click="showEnvironmentSelector = true">
+        <span>{{ currentEnvironment?.name || status?.environment || 'Loading...' }}</span>
+        <span class="switch-indicator">SWITCH ▸</span>
       </button>
     </div>
 
-    <!-- Commit Detail Modal -->
+    <!-- Main Content Area -->
+    <div class="panel-main">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <!-- THIS ENV Section -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-title">THIS ENV</div>
+          <button
+            :class="['sidebar-item', { active: currentView === 'status' && currentSection === 'this-env' }]"
+            @click="selectView('status', 'this-env')"
+          >
+            STATUS
+          </button>
+          <button
+            :class="['sidebar-item', { active: currentView === 'workflows' }]"
+            @click="selectView('workflows', 'this-env')"
+          >
+            WORKFLOWS
+          </button>
+          <button
+            :class="['sidebar-item', { active: currentView === 'models-env' }]"
+            @click="selectView('models-env', 'this-env')"
+          >
+            MODELS
+          </button>
+          <button
+            :class="['sidebar-item', { active: currentView === 'branches' }]"
+            @click="selectView('branches', 'this-env')"
+          >
+            BRANCHES
+          </button>
+          <button
+            :class="['sidebar-item', { active: currentView === 'history' }]"
+            @click="selectView('history', 'this-env')"
+          >
+            HISTORY
+          </button>
+          <button
+            :class="['sidebar-item', { active: currentView === 'nodes' }]"
+            @click="selectView('nodes', 'this-env')"
+          >
+            NODES
+          </button>
+          <button
+            :class="['sidebar-item', { active: currentView === 'debug-env' }]"
+            @click="selectView('debug-env', 'this-env')"
+          >
+            DEBUG
+          </button>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <!-- ALL ENVS Section -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-title">ALL ENVS</div>
+          <button
+            :class="['sidebar-item', { active: currentView === 'environments' }]"
+            @click="selectView('environments', 'all-envs')"
+          >
+            ENVIRONMENTS
+          </button>
+          <button
+            :class="['sidebar-item', { active: currentView === 'model-index' }]"
+            @click="selectView('model-index', 'all-envs')"
+          >
+            MODEL INDEX
+          </button>
+          <button
+            :class="['sidebar-item', { active: currentView === 'settings' }]"
+            @click="selectView('settings', 'all-envs')"
+          >
+            SETTINGS
+          </button>
+          <button
+            :class="['sidebar-item', { active: currentView === 'debug-workspace' }]"
+            @click="selectView('debug-workspace', 'all-envs')"
+          >
+            DEBUG
+          </button>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <!-- SHARING Section -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-title">SHARING</div>
+          <button
+            :class="['sidebar-item', { active: currentView === 'export' }]"
+            @click="selectView('export', 'sharing')"
+          >
+            EXPORT
+          </button>
+          <button
+            :class="['sidebar-item', { active: currentView === 'import' }]"
+            @click="selectView('import', 'sharing')"
+          >
+            IMPORT
+          </button>
+          <button
+            :class="['sidebar-item', { active: currentView === 'remotes' }]"
+            @click="selectView('remotes', 'sharing')"
+          >
+            REMOTES
+          </button>
+        </div>
+      </div>
+
+      <!-- Content Area -->
+      <div class="content-area">
+        <div v-if="error" class="error-message">
+          {{ error }}
+        </div>
+        <div v-else-if="!status && currentView === 'status'" class="loading">
+          Loading status...
+        </div>
+        <template v-else>
+          <!-- Status View -->
+          <StatusSection v-if="currentView === 'status'" :status="status!" />
+
+          <!-- Workflows View -->
+          <div v-else-if="currentView === 'workflows'" class="view-placeholder">
+            <h3 class="view-title">WORKFLOWS</h3>
+            <p>Workflow management UI coming soon...</p>
+          </div>
+
+          <!-- Models (Environment) View -->
+          <div v-else-if="currentView === 'models-env'" class="view-placeholder">
+            <h3 class="view-title">MODELS (THIS ENVIRONMENT)</h3>
+            <p>Environment-scoped model view coming soon...</p>
+          </div>
+
+          <!-- Branches View -->
+          <BranchSection
+            v-else-if="currentView === 'branches'"
+            :branches="branches"
+            :current="status?.branch || null"
+            @switch="handleBranchSwitch"
+            @create="handleBranchCreate"
+          />
+
+          <!-- History View -->
+          <HistorySection
+            v-else-if="currentView === 'history'"
+            :commits="commits"
+            @select="handleCommitSelect"
+            @checkout="handleCheckout"
+          />
+
+          <!-- Nodes View -->
+          <div v-else-if="currentView === 'nodes'" class="view-placeholder">
+            <h3 class="view-title">NODES (GIT-TRACKED)</h3>
+            <p>Git-tracked nodes view coming soon...</p>
+          </div>
+
+          <!-- Debug (Environment) View -->
+          <div v-else-if="currentView === 'debug-env'" class="view-placeholder">
+            <h3 class="view-title">DEBUG (ENVIRONMENT LOGS)</h3>
+            <p>Environment logs view coming soon...</p>
+          </div>
+
+          <!-- Environments View -->
+          <div v-else-if="currentView === 'environments'" class="view-placeholder">
+            <h3 class="view-title">ENVIRONMENTS</h3>
+            <p>Environment management UI coming soon...</p>
+          </div>
+
+          <!-- Model Index View -->
+          <div v-else-if="currentView === 'model-index'" class="view-placeholder">
+            <h3 class="view-title">MODEL INDEX (WORKSPACE)</h3>
+            <p>Workspace-wide model index coming soon...</p>
+          </div>
+
+          <!-- Settings View -->
+          <div v-else-if="currentView === 'settings'" class="view-placeholder">
+            <h3 class="view-title">SETTINGS</h3>
+            <p>Settings UI coming soon...</p>
+          </div>
+
+          <!-- Debug (Workspace) View -->
+          <div v-else-if="currentView === 'debug-workspace'" class="view-placeholder">
+            <h3 class="view-title">DEBUG (WORKSPACE LOGS)</h3>
+            <p>Workspace logs view coming soon...</p>
+          </div>
+
+          <!-- Export View -->
+          <div v-else-if="currentView === 'export'" class="view-placeholder">
+            <h3 class="view-title">EXPORT</h3>
+            <button class="export-btn" @click="handleExport">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 12L3 7h3V1h4v6h3L8 12z"/>
+                <path d="M14 14H2v-2h12v2z"/>
+              </svg>
+              EXPORT ENVIRONMENT
+            </button>
+          </div>
+
+          <!-- Import View -->
+          <div v-else-if="currentView === 'import'" class="view-placeholder">
+            <h3 class="view-title">IMPORT</h3>
+            <p>Import UI coming soon...</p>
+          </div>
+
+          <!-- Remotes View -->
+          <div v-else-if="currentView === 'remotes'" class="view-placeholder">
+            <h3 class="view-title">REMOTES</h3>
+            <p>Git remotes UI coming soon...</p>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Modals -->
     <CommitDetailModal
       v-if="selectedCommit"
       :commit="selectedCommit"
@@ -66,7 +254,6 @@
       @createBranch="handleBranchFromCommit"
     />
 
-    <!-- Confirm Dialog -->
     <ConfirmDialog
       v-if="confirmDialog"
       :title="confirmDialog.title"
@@ -82,6 +269,49 @@
       @cancel="confirmDialog = null"
       @secondary="confirmDialog.onSecondary"
     />
+
+    <!-- Environment Selector Modal -->
+    <div v-if="showEnvironmentSelector" class="dialog-overlay" @click.self="showEnvironmentSelector = false">
+      <div class="dialog-content env-selector-dialog">
+        <div class="dialog-header">
+          <h3 class="dialog-title">SWITCH ENVIRONMENT</h3>
+          <button class="icon-btn" @click="showEnvironmentSelector = false">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M4.28 3.22a.75.75 0 0 0-1.06 1.06L6.94 8l-3.72 3.72a.75.75 0 1 0 1.06 1.06L8 9.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L9.06 8l3.72-3.72a.75.75 0 0 0-1.06-1.06L8 6.94 4.28 3.22z"/>
+            </svg>
+          </button>
+        </div>
+        <div class="dialog-body">
+          <p class="dialog-message">Select environment to switch to:</p>
+          <div class="env-list">
+            <div
+              v-for="env in environments"
+              :key="env.name"
+              :class="['env-item', { current: env.is_current }]"
+            >
+              <div class="env-info">
+                <div class="env-name-row">
+                  <span class="env-indicator">{{ env.is_current ? '●' : '○' }}</span>
+                  <span class="env-name">{{ env.name }}</span>
+                  <span v-if="env.current_branch" class="env-branch">({{ env.current_branch }})</span>
+                  <span v-if="env.is_current" class="current-label">CURRENT</span>
+                </div>
+                <div class="env-stats">
+                  {{ env.workflow_count }} workflows • {{ env.node_count }} nodes
+                </div>
+              </div>
+              <button
+                v-if="!env.is_current"
+                class="switch-btn"
+                @click="handleEnvironmentSwitch(env.name)"
+              >
+                SWITCH
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Toast Notifications -->
     <div class="toast-container">
@@ -107,7 +337,7 @@ import HistorySection from './HistorySection.vue'
 import CommitDetailModal from './CommitDetailModal.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
-import type { ComfyGitStatus, CommitInfo, BranchInfo } from '@/types/comfygit'
+import type { ComfyGitStatus, CommitInfo, BranchInfo, EnvironmentInfo } from '@/types/comfygit'
 
 const emit = defineEmits<{
   close: []
@@ -121,15 +351,33 @@ const {
   getBranches,
   checkout,
   createBranch,
-  switchBranch
+  switchBranch,
+  getEnvironments
 } = useComfyGitService()
+
+type ViewName = 'status' | 'workflows' | 'models-env' | 'branches' | 'history' | 'nodes' | 'debug-env' |
+                'environments' | 'model-index' | 'settings' | 'debug-workspace' |
+                'export' | 'import' | 'remotes'
+
+type SectionName = 'this-env' | 'all-envs' | 'sharing'
 
 const status = ref<ComfyGitStatus | null>(null)
 const commits = ref<CommitInfo[]>([])
 const branches = ref<BranchInfo[]>([])
+const environments = ref<EnvironmentInfo[]>([])
+const currentEnvironment = computed(() => environments.value.find(e => e.is_current))
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 const selectedCommit = ref<CommitInfo | null>(null)
+const showEnvironmentSelector = ref(false)
+
+const currentView = ref<ViewName>('status')
+const currentSection = ref<SectionName>('this-env')
+
+function selectView(view: ViewName, section: SectionName) {
+  currentView.value = view
+  currentSection.value = section
+}
 
 interface ConfirmDialogConfig {
   title: string
@@ -203,14 +451,16 @@ async function refresh() {
   error.value = null
 
   try {
-    const [statusRes, historyRes, branchesRes] = await Promise.all([
+    const [statusRes, historyRes, branchesRes, envsRes] = await Promise.all([
       getStatus(),
       getHistory(),
-      getBranches()
+      getBranches(),
+      getEnvironments()
     ])
     status.value = statusRes
     commits.value = historyRes.commits
     branches.value = branchesRes.branches
+    environments.value = envsRes
     emit('statusUpdate', statusRes)
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load status'
@@ -236,7 +486,6 @@ async function handleCheckout(commit: CommitInfo) {
     status.value.has_changes
   )
 
-  // Always confirm checkout since it restarts ComfyUI
   confirmDialog.value = {
     title: hasChanges ? 'Checkout with Uncommitted Changes' : 'Checkout Commit',
     message: hasChanges
@@ -271,7 +520,6 @@ async function handleBranchSwitch(branchName: string) {
     status.value.has_changes
   )
 
-  // Always confirm branch switch since it restarts ComfyUI
   confirmDialog.value = {
     title: hasChanges ? 'Switch Branch with Uncommitted Changes' : 'Switch Branch',
     message: hasChanges
@@ -292,9 +540,6 @@ async function handleBranchSwitch(branchName: string) {
 
       if (result.status === 'success') {
         showToast('Restarting ComfyUI...', 'success')
-      } else if (result.status === 'warning' && result.reason === 'uncommitted_changes') {
-        // This shouldn't happen since we pass force flag, but handle it
-        showToast('Switch cancelled due to uncommitted changes', 'warning')
       } else {
         showToast(result.message || 'Branch switch failed', 'error')
       }
@@ -330,6 +575,12 @@ async function handleBranchFromCommit(commit: CommitInfo) {
       showToast(result.message || 'Failed to create branch', 'error')
     }
   }
+}
+
+async function handleEnvironmentSwitch(envName: string) {
+  showEnvironmentSelector.value = false
+  showToast(`Environment switching not yet implemented`, 'warning')
+  // TODO: Implement orchestrator daemon flow
 }
 
 function getChangeDetails(): string[] {
@@ -370,21 +621,24 @@ onMounted(refresh)
   display: flex;
   flex-direction: column;
   height: 70vh;
-  background: var(--comfy-menu-bg, #353535);
-  color: var(--input-text, #ddd);
-  border: 1px solid var(--border-color, #4a4a4a);
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  width: var(--cg-panel-width, 754px);
+  max-width: 90vw;
+  background: var(--cg-color-bg-primary);
+  color: var(--cg-color-text-primary);
+  border: 2px solid var(--cg-color-border);
   overflow: hidden;
+  font-family: var(--cg-font-mono);
 }
 
+/* Header */
 .panel-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-color, #4a4a4a);
+  padding: var(--cg-space-3) var(--cg-space-4);
+  border-bottom: 1px solid var(--cg-color-border);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--comfy-input-bg, #2a2a2a);
+  background: var(--cg-color-bg-tertiary);
+  flex-shrink: 0;
 }
 
 .header-left {
@@ -394,42 +648,45 @@ onMounted(refresh)
 }
 
 .panel-title {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--cg-font-size-sm);
+  font-weight: var(--cg-font-weight-semibold);
   margin: 0;
-  color: #f97316;
+  color: var(--cg-color-accent);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+  text-shadow: 0 0 8px var(--cg-color-accent);
 }
 
 .header-info {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--cg-font-size-xs);
 }
 
 .env-name {
-  color: var(--input-text, #ddd);
-  font-weight: 500;
+  color: var(--cg-color-text-secondary);
 }
 
 .branch-name {
-  color: var(--descrip-text, #999);
-}
-
-.loading-text {
-  color: var(--descrip-text, #999);
+  color: var(--cg-color-text-muted);
 }
 
 .status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  width: 6px;
+  height: 12px;
+  border-radius: 0;
+  animation: cursor-blink 1s step-end infinite;
 }
 
-.status-dot.success { background: #22c55e; }
-.status-dot.warning { background: #fbbf24; }
-.status-dot.error { background: #ef4444; }
-.status-dot.neutral { background: #6b7280; }
+.status-dot.success { background: var(--cg-color-success); }
+.status-dot.warning { background: var(--cg-color-warning); }
+.status-dot.error { background: var(--cg-color-error); }
+.status-dot.neutral { background: var(--cg-color-text-muted); }
+
+@keyframes cursor-blink {
+  50% { opacity: 0; }
+}
 
 .header-actions {
   display: flex;
@@ -438,18 +695,18 @@ onMounted(refresh)
 
 .icon-btn {
   background: transparent;
-  border: none;
-  color: var(--input-text, #ddd);
+  border: 1px solid transparent;
+  color: var(--cg-color-text-primary);
   cursor: pointer;
   padding: 6px;
-  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .icon-btn:hover {
-  background: var(--border-color, #4a4a4a);
+  background: var(--cg-color-bg-hover);
+  border-color: var(--cg-color-border-subtle);
 }
 
 .icon-btn.spinning svg {
@@ -461,53 +718,307 @@ onMounted(refresh)
   to { transform: rotate(360deg); }
 }
 
-.panel-content {
+/* Environment Switcher */
+.env-switcher {
+  padding: var(--cg-space-3) var(--cg-space-4);
+  border-bottom: 1px solid var(--cg-color-border);
+  background: var(--cg-color-bg-secondary);
+  flex-shrink: 0;
+}
+
+.env-switcher-label {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+  margin-bottom: 6px;
+}
+
+.env-switcher-btn {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--cg-color-border-subtle);
+  color: var(--cg-color-text-primary);
+  padding: 8px 12px;
+  cursor: pointer;
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-sm);
+}
+
+.env-switcher-btn:hover {
+  border-color: var(--cg-color-accent);
+  background: var(--cg-color-bg-hover);
+}
+
+.switch-indicator {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+}
+
+/* Main Content Area */
+.panel-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 180px;
+  background: var(--cg-color-bg-tertiary);
+  border-right: 1px solid var(--cg-color-border);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.sidebar-section {
+  padding: var(--cg-space-3) 0;
+}
+
+.sidebar-section-title {
+  padding: 0 var(--cg-space-3);
+  margin-bottom: var(--cg-space-2);
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+}
+
+.sidebar-item {
+  width: 100%;
+  padding: 8px var(--cg-space-3);
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  color: var(--cg-color-text-secondary);
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-normal);
+}
+
+.sidebar-item:hover {
+  background: var(--cg-color-bg-hover);
+  color: var(--cg-color-accent);
+}
+
+.sidebar-item.active {
+  border-left-color: var(--cg-color-accent);
+  color: var(--cg-color-accent);
+  background: var(--cg-color-bg-hover);
+}
+
+.sidebar-divider {
+  height: 1px;
+  background: var(--cg-color-border-subtle);
+  margin: var(--cg-space-2) var(--cg-space-3);
+}
+
+/* Content Area */
+.content-area {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: var(--cg-space-4);
 }
 
 .loading {
   text-align: center;
-  padding: 20px;
-  color: var(--descrip-text, #999);
+  padding: var(--cg-space-6);
+  color: var(--cg-color-text-muted);
 }
 
 .error-message {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid #ef4444;
-  border-radius: 4px;
-  padding: 12px;
-  color: #fca5a5;
-  font-size: 13px;
+  background: transparent;
+  border: 1px solid var(--cg-color-error);
+  padding: var(--cg-space-3);
+  color: var(--cg-color-error);
+  font-size: var(--cg-font-size-sm);
 }
 
-.panel-footer {
-  padding: 12px 16px;
-  border-top: 1px solid var(--border-color, #4a4a4a);
+.view-placeholder {
+  padding: var(--cg-space-4);
+}
+
+.view-title {
+  color: var(--cg-color-accent);
+  font-size: var(--cg-font-size-lg);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+  text-shadow: 0 0 8px var(--cg-color-accent);
+  margin: 0 0 var(--cg-space-4) 0;
+}
+
+.view-title::before {
+  content: '> ';
+  opacity: 0.7;
+}
+
+.view-placeholder p {
+  color: var(--cg-color-text-secondary);
+  font-size: var(--cg-font-size-base);
 }
 
 .export-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
+  gap: 8px;
+  padding: 10px 16px;
+  background: transparent;
+  color: var(--cg-color-text-primary);
+  border: 1px solid var(--cg-color-border);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+  font-size: var(--cg-font-size-xs);
+  font-family: var(--cg-font-mono);
   cursor: pointer;
-  background: var(--comfy-input-bg, #222);
-  color: var(--input-text, #ddd);
-  border: 1px solid var(--border-color, #4a4a4a);
 }
 
-.export-btn:hover:not(:disabled) {
-  background: var(--border-color, #4a4a4a);
+.export-btn:hover {
+  background: var(--cg-color-bg-hover);
+  border-color: var(--cg-color-accent);
+  color: var(--cg-color-accent);
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.3);
 }
 
-.export-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+/* Environment Selector Dialog */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--cg-color-bg-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10003;
+}
+
+.dialog-content {
+  background: var(--cg-color-bg-primary);
+  border: 2px solid var(--cg-color-border);
+  box-shadow: 0 0 16px rgba(0, 255, 65, 0.5);
+  max-width: 600px;
+  width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.env-selector-dialog {
+  width: 600px;
+}
+
+.dialog-header {
+  padding: var(--cg-space-4);
+  border-bottom: 1px solid var(--cg-color-border);
+  background: var(--cg-color-bg-tertiary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dialog-title {
+  color: var(--cg-color-accent);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+  font-size: var(--cg-font-size-sm);
+  text-shadow: 0 0 8px var(--cg-color-accent);
+  margin: 0;
+}
+
+.dialog-body {
+  padding: var(--cg-space-4);
+  overflow-y: auto;
+}
+
+.dialog-message {
+  color: var(--cg-color-text-primary);
+  font-size: var(--cg-font-size-base);
+  margin: 0 0 var(--cg-space-4) 0;
+}
+
+.env-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-3);
+}
+
+.env-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--cg-space-3);
+  border: 1px solid var(--cg-color-border-subtle);
+  background: var(--cg-color-bg-tertiary);
+}
+
+.env-item.current {
+  border-color: var(--cg-color-accent);
+}
+
+.env-info {
+  flex: 1;
+}
+
+.env-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.env-indicator {
+  color: var(--cg-color-accent);
+}
+
+.env-name {
+  color: var(--cg-color-text-primary);
+  font-size: var(--cg-font-size-base);
+  font-weight: var(--cg-font-weight-semibold);
+}
+
+.env-branch {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-sm);
+}
+
+.current-label {
+  margin-left: auto;
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--cg-color-border-subtle);
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+}
+
+.env-stats {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-sm);
+}
+
+.switch-btn {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--cg-color-border);
+  color: var(--cg-color-text-primary);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+  cursor: pointer;
+}
+
+.switch-btn:hover {
+  border-color: var(--cg-color-accent);
+  color: var(--cg-color-accent);
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.3);
 }
 
 /* Toast Notifications */
@@ -527,59 +1038,25 @@ onMounted(refresh)
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  background: var(--cg-color-bg-primary, var(--comfy-menu-bg, #353535));
-  border: 1px solid var(--cg-color-border, var(--border-color, #4a4a4a));
-  border-radius: var(--cg-radius-md, 4px);
-  box-shadow: var(--cg-shadow-md, 0 4px 12px rgba(0, 0, 0, 0.3));
-  font-size: 12px;
-  color: var(--cg-color-text-primary, var(--input-text, #ddd));
+  background: var(--cg-color-bg-primary);
+  border: 1px solid var(--cg-color-border);
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.4);
+  font-size: var(--cg-font-size-xs);
+  color: var(--cg-color-text-primary);
   pointer-events: auto;
   min-width: 180px;
   max-width: 300px;
+  font-family: var(--cg-font-mono);
 }
 
-.toast.info {
-  border-left: 3px solid var(--cg-color-info, #3b82f6);
-}
-
-.toast.success {
-  border-left: 3px solid var(--cg-color-success, #22c55e);
-}
-
-.toast.warning {
-  border-left: 3px solid var(--cg-color-warning, #fbbf24);
-}
-
-.toast.error {
-  border-left: 3px solid var(--cg-color-error, #ef4444);
-}
+.toast.info { border-left: 3px solid var(--cg-color-info); }
+.toast.success { border-left: 3px solid var(--cg-color-success); }
+.toast.warning { border-left: 3px solid var(--cg-color-warning); }
+.toast.error { border-left: 3px solid var(--cg-color-error); }
 
 .toast-icon {
   font-size: 10px;
   font-weight: bold;
-  width: 14px;
-  height: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.toast.info .toast-icon {
-  color: var(--cg-color-info, #3b82f6);
-}
-
-.toast.success .toast-icon {
-  color: var(--cg-color-success, #22c55e);
-}
-
-.toast.warning .toast-icon {
-  color: var(--cg-color-warning, #fbbf24);
-}
-
-.toast.error .toast-icon {
-  color: var(--cg-color-error, #ef4444);
 }
 
 .toast-message {
@@ -604,5 +1081,27 @@ onMounted(refresh)
 
 .toast-move {
   transition: transform 0.3s ease;
+}
+
+/* Scrollbar */
+.sidebar::-webkit-scrollbar,
+.content-area::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sidebar::-webkit-scrollbar-track,
+.content-area::-webkit-scrollbar-track {
+  background: var(--cg-color-bg-tertiary);
+}
+
+.sidebar::-webkit-scrollbar-thumb,
+.content-area::-webkit-scrollbar-thumb {
+  background: var(--cg-color-border-subtle);
+  border: 1px solid var(--cg-color-bg-tertiary);
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover,
+.content-area::-webkit-scrollbar-thumb:hover {
+  background: var(--cg-color-accent);
 }
 </style>

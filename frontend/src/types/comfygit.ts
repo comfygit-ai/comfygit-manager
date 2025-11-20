@@ -126,3 +126,114 @@ export interface SwitchBranchResult {
   message?: string
   reason?: 'uncommitted_changes' | 'restart_required'
 }
+
+// Environment Management Types
+export interface EnvironmentInfo {
+  name: string
+  is_current: boolean
+  path: string
+  created_at: string
+  last_used?: string
+  workflow_count: number
+  node_count: number
+  model_count: number
+  current_branch: string | null
+  last_commit?: string
+  last_commit_date?: string
+}
+
+export interface SwitchEnvironmentProgress {
+  state: 'waiting_for_old_server' | 'starting_new_server' | 'waiting_for_health' | 'healthy' | 'failed' | 'complete'
+  target_env: string
+  old_pid?: number
+  new_pid?: number
+  progress: number
+  message: string
+  started_at: string
+  updated_at: string
+}
+
+export interface CreateEnvironmentResult {
+  status: 'success' | 'error'
+  message?: string
+  name?: string
+  path?: string
+}
+
+// Workflow Management Types
+export interface WorkflowInfo {
+  name: string
+  status: 'broken' | 'new' | 'modified' | 'synced'
+  missing_nodes: string[]
+  missing_models: string[]
+  path: string
+}
+
+export interface ModelUsageInfo {
+  filename: string
+  sha256: string
+  type: string
+  size: number
+  used_in_workflows: string[]
+  importance: 'required' | 'flexible' | 'optional'
+  line_number?: number
+  node_type?: string
+}
+
+export interface WorkflowDetails {
+  name: string
+  path: string
+  status: 'broken' | 'new' | 'modified' | 'synced'
+  models: ModelUsageInfo[]
+  nodes: Array<{ name: string; version?: string; status: 'installed' | 'missing' }>
+}
+
+export interface WorkflowResolutionPlan {
+  workflow: string
+  nodes: {
+    auto_installable: Array<{ name: string; version?: string; source: string; description?: string }>
+    manual: Array<{ name: string; reason: string }>
+  }
+  models: {
+    auto_downloadable: Array<{ filename: string; url: string; size: number; type: string }>
+    manual: Array<{ filename: string; reason: string; suggested_url?: string }>
+  }
+  estimated_time: number
+  estimated_size: number
+}
+
+// Model Management Types
+export interface ModelInfo {
+  filename: string
+  sha256: string
+  type: string
+  size: number
+  source_url?: string
+  used_in_environments?: Array<{ env_name: string; workflow_count: number }>
+  used_in_workflows?: string[]
+}
+
+export interface DownloadModelRequest {
+  source: 'civitai' | 'huggingface' | 'custom'
+  url: string
+  model_type: string
+  api_key?: string
+}
+
+// Settings Types
+export interface ConfigSettings {
+  workspace_path: string
+  models_path: string
+  civitai_api_key?: string
+  huggingface_token?: string
+  auto_sync_models: boolean
+  confirm_destructive: boolean
+}
+
+// Debug/Logs Types
+export interface LogEntry {
+  timestamp: string
+  level: 'ERROR' | 'WARNING' | 'INFO' | 'DEBUG'
+  message: string
+  context?: string
+}
