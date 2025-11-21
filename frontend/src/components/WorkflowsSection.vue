@@ -1,154 +1,188 @@
 <template>
-  <div class="workflows-section">
-    <div class="section-header">
-      <h3 class="view-title">WORKFLOWS</h3>
-      <button
-        v-if="brokenWorkflows.length > 0"
-        class="resolve-all-btn"
-        @click="handleResolveAll"
-      >
-        RESOLVE ALL ISSUES
-      </button>
-    </div>
-
-    <!-- Search bar -->
-    <div class="search-bar">
-      <input
-        v-model="searchQuery"
-        type="text"
-        placeholder="🔍 Search workflows..."
-        class="search-input"
-      />
-    </div>
-
-    <!-- Loading state -->
-    <div v-if="loading" class="loading">Loading workflows...</div>
-
-    <!-- Error state -->
-    <div v-else-if="error" class="error-message">{{ error }}</div>
-
-    <!-- Content -->
-    <div v-else class="workflows-content">
-      <!-- Broken workflows (priority) -->
-      <section v-if="filteredBroken.length" class="workflow-group">
-        <h4 class="group-title">BROKEN ({{ filteredBroken.length }})</h4>
-        <div
-          v-for="wf in filteredBroken"
-          :key="wf.name"
-          class="workflow-item broken"
-        >
-          <div class="workflow-info">
-            <div class="workflow-name">⚠ {{ wf.name }}</div>
-            <div class="workflow-status">
-              Missing: {{ wf.missing_nodes }} nodes, {{ wf.missing_models }} models
-            </div>
-          </div>
-          <div class="workflow-actions">
-            <button class="action-btn" @click="handleResolve(wf.name)">
-              Resolve ▸
-            </button>
-            <button class="action-btn secondary" @click="handleDetails(wf.name)">
-              Details ▸
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <!-- New workflows -->
-      <section v-if="filteredNew.length" class="workflow-group">
-        <h4 class="group-title">NEW ({{ filteredNew.length }})</h4>
-        <div
-          v-for="wf in filteredNew"
-          :key="wf.name"
-          class="workflow-item new"
-        >
-          <div class="workflow-info">
-            <div class="workflow-name">● {{ wf.name }}</div>
-            <div class="workflow-status">✓ Ready</div>
-          </div>
-          <div class="workflow-actions">
-            <button class="action-btn secondary" @click="handleDetails(wf.name)">
-              Details
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <!-- Modified workflows -->
-      <section v-if="filteredModified.length" class="workflow-group">
-        <h4 class="group-title">MODIFIED ({{ filteredModified.length }})</h4>
-        <div
-          v-for="wf in filteredModified"
-          :key="wf.name"
-          class="workflow-item modified"
-        >
-          <div class="workflow-info">
-            <div class="workflow-name">⚡ {{ wf.name }}</div>
-            <div class="workflow-status">✓ Ready</div>
-          </div>
-          <div class="workflow-actions">
-            <button class="action-btn secondary" @click="handleDetails(wf.name)">
-              Details
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <!-- Synced workflows (collapsible) -->
-      <section v-if="filteredSynced.length" class="workflow-group">
-        <h4 class="group-title clickable" @click="syncedExpanded = !syncedExpanded">
-          SYNCED ({{ filteredSynced.length }}) {{ syncedExpanded ? '▼' : '▸' }}
-        </h4>
-        <template v-if="syncedExpanded">
-          <div
-            v-for="wf in filteredSynced.slice(0, showAllSynced ? undefined : 5)"
-            :key="wf.name"
-            class="workflow-item synced"
+  <PanelLayout>
+    <template #header>
+      <PanelHeader title="WORKFLOWS">
+        <template #actions>
+          <ActionButton
+            v-if="brokenWorkflows.length > 0"
+            variant="primary"
+            size="sm"
+            @click="handleResolveAll"
           >
-            <div class="workflow-info">
-              <div class="workflow-name">{{ wf.name }}</div>
-              <div class="workflow-status">✓ Ready</div>
-            </div>
-            <div class="workflow-actions">
-              <button class="action-btn secondary" @click="handleDetails(wf.name)">
+            Resolve All Issues
+          </ActionButton>
+        </template>
+      </PanelHeader>
+    </template>
+
+    <template #search>
+      <SearchBar
+        v-model="searchQuery"
+        placeholder="🔍 Search workflows..."
+      />
+    </template>
+
+    <template #content>
+      <template v-if="loading">
+        <LoadingState message="Loading workflows..." />
+      </template>
+      <template v-else-if="error">
+        <ErrorState :message="error" :retry="true" @retry="loadWorkflows" />
+      </template>
+      <template v-else>
+        <!-- Broken workflows (priority) -->
+        <SectionGroup
+          v-if="filteredBroken.length"
+          title="BROKEN"
+          :count="filteredBroken.length"
+        >
+          <ItemCard
+            v-for="wf in filteredBroken"
+            :key="wf.name"
+            status="broken"
+          >
+            <template #icon>⚠</template>
+            <template #title>{{ wf.name }}</template>
+            <template #subtitle>
+              Missing: {{ wf.missing_nodes }} nodes, {{ wf.missing_models }} models
+            </template>
+            <template #actions>
+              <ActionButton
+                variant="primary"
+                size="sm"
+                @click="handleResolve(wf.name)"
+              >
+                Resolve ▸
+              </ActionButton>
+              <ActionButton
+                variant="secondary"
+                size="sm"
+                @click="handleDetails(wf.name)"
+              >
+                Details ▸
+              </ActionButton>
+            </template>
+          </ItemCard>
+        </SectionGroup>
+
+        <!-- New workflows -->
+        <SectionGroup
+          v-if="filteredNew.length"
+          title="NEW"
+          :count="filteredNew.length"
+        >
+          <ItemCard
+            v-for="wf in filteredNew"
+            :key="wf.name"
+            status="new"
+          >
+            <template #icon>●</template>
+            <template #title>{{ wf.name }}</template>
+            <template #subtitle>✓ Ready</template>
+            <template #actions>
+              <ActionButton
+                variant="secondary"
+                size="sm"
+                @click="handleDetails(wf.name)"
+              >
                 Details
-              </button>
-            </div>
-          </div>
-          <button
+              </ActionButton>
+            </template>
+          </ItemCard>
+        </SectionGroup>
+
+        <!-- Modified workflows -->
+        <SectionGroup
+          v-if="filteredModified.length"
+          title="MODIFIED"
+          :count="filteredModified.length"
+        >
+          <ItemCard
+            v-for="wf in filteredModified"
+            :key="wf.name"
+            status="modified"
+          >
+            <template #icon>⚡</template>
+            <template #title>{{ wf.name }}</template>
+            <template #subtitle>✓ Ready</template>
+            <template #actions>
+              <ActionButton
+                variant="secondary"
+                size="sm"
+                @click="handleDetails(wf.name)"
+              >
+                Details
+              </ActionButton>
+            </template>
+          </ItemCard>
+        </SectionGroup>
+
+        <!-- Synced workflows (collapsible) -->
+        <SectionGroup
+          v-if="filteredSynced.length"
+          title="SYNCED"
+          :count="filteredSynced.length"
+          :collapsible="true"
+          :initially-expanded="syncedExpanded"
+          @toggle="syncedExpanded = $event"
+        >
+          <ItemCard
+            v-for="wf in displayedSynced"
+            :key="wf.name"
+            status="synced"
+          >
+            <template #icon>✓</template>
+            <template #title>{{ wf.name }}</template>
+            <template #subtitle>✓ Ready</template>
+            <template #actions>
+              <ActionButton
+                variant="secondary"
+                size="sm"
+                @click="handleDetails(wf.name)"
+              >
+                Details
+              </ActionButton>
+            </template>
+          </ItemCard>
+
+          <!-- Show more button for synced workflows -->
+          <ActionButton
             v-if="!showAllSynced && filteredSynced.length > 5"
-            class="show-more-btn"
+            variant="ghost"
+            size="sm"
             @click="showAllSynced = true"
+            style="width: 100%; margin-top: var(--cg-space-2);"
           >
             View all {{ filteredSynced.length }} →
-          </button>
-        </template>
-      </section>
+          </ActionButton>
+        </SectionGroup>
 
-      <!-- Empty state -->
-      <div v-if="!filteredWorkflows.length" class="empty-state">
-        <p v-if="searchQuery">No workflows match "{{ searchQuery }}"</p>
-        <p v-else>No workflows found in this environment.</p>
-      </div>
-    </div>
+        <!-- Empty state -->
+        <EmptyState
+          v-if="!filteredWorkflows.length"
+          icon="📭"
+          :message="searchQuery ? `No workflows match '${searchQuery}'` : 'No workflows found in this environment.'"
+        />
+      </template>
+    </template>
+  </PanelLayout>
 
-    <!-- Workflow Details Modal -->
-    <WorkflowDetailsModal
-      v-if="showDetailsModal && selectedWorkflow"
-      :workflow-name="selectedWorkflow"
-      @close="showDetailsModal = false"
-      @resolve="handleResolve(selectedWorkflow)"
-    />
+  <!-- Workflow Details Modal -->
+  <WorkflowDetailsModal
+    v-if="showDetailsModal && selectedWorkflow"
+    :workflow-name="selectedWorkflow"
+    @close="showDetailsModal = false"
+    @resolve="handleResolve(selectedWorkflow)"
+  />
 
-    <!-- Workflow Resolve Modal -->
-    <WorkflowResolveModal
-      v-if="showResolveModal && selectedWorkflow"
-      :workflow-name="selectedWorkflow"
-      @close="showResolveModal = false"
-      @install="handleInstall"
-      @refresh="emit('refresh')"
-    />
-  </div>
+  <!-- Workflow Resolve Modal -->
+  <WorkflowResolveModal
+    v-if="showResolveModal && selectedWorkflow"
+    :workflow-name="selectedWorkflow"
+    @close="showResolveModal = false"
+    @install="handleInstall"
+    @refresh="emit('refresh')"
+  />
 </template>
 
 <script setup lang="ts">
@@ -157,6 +191,15 @@ import { useComfyGitService } from '@/composables/useComfyGitService'
 import WorkflowDetailsModal from './WorkflowDetailsModal.vue'
 import WorkflowResolveModal from './WorkflowResolveModal.vue'
 import type { WorkflowInfo } from '@/types/comfygit'
+import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
+import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
+import SearchBar from '@/components/base/molecules/SearchBar.vue'
+import SectionGroup from '@/components/base/molecules/SectionGroup.vue'
+import ItemCard from '@/components/base/molecules/ItemCard.vue'
+import ActionButton from '@/components/base/atoms/ActionButton.vue'
+import EmptyState from '@/components/base/molecules/EmptyState.vue'
+import LoadingState from '@/components/base/organisms/LoadingState.vue'
+import ErrorState from '@/components/base/organisms/ErrorState.vue'
 
 const emit = defineEmits<{
   refresh: []
@@ -222,6 +265,11 @@ const filteredSynced = computed(() =>
   )
 )
 
+// Display limited synced workflows unless "show all" is clicked
+const displayedSynced = computed(() =>
+  showAllSynced.value ? filteredSynced.value : filteredSynced.value.slice(0, 5)
+)
+
 async function loadWorkflows() {
   loading.value = true
   error.value = null
@@ -257,216 +305,5 @@ onMounted(loadWorkflows)
 </script>
 
 <style scoped>
-.workflows-section {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--cg-space-4);
-}
-
-.view-title {
-  color: var(--cg-color-accent);
-  font-size: var(--cg-font-size-lg);
-  text-transform: uppercase;
-  letter-spacing: var(--cg-letter-spacing-wide);
-  margin: 0;
-}
-
-.resolve-all-btn {
-  padding: 8px 14px;
-  background: transparent;
-  color: var(--cg-color-accent);
-  border: 1px solid var(--cg-color-accent);
-  font-family: var(--cg-font-mono);
-  font-size: var(--cg-font-size-xs);
-  text-transform: uppercase;
-  letter-spacing: var(--cg-letter-spacing-wide);
-  cursor: pointer;
-}
-
-.resolve-all-btn:hover {
-  background: var(--cg-color-bg-hover);
-  box-shadow: 0 0 8px rgba(0, 255, 65, 0.3);
-}
-
-.search-bar {
-  margin-bottom: var(--cg-space-4);
-}
-
-.search-input {
-  width: 100%;
-  padding: 8px 12px;
-  background: var(--cg-color-bg-tertiary);
-  border: 1px solid var(--cg-color-border-subtle);
-  color: var(--cg-color-text-primary);
-  font-family: var(--cg-font-mono);
-  font-size: var(--cg-font-size-sm);
-}
-
-.search-input:focus {
-  outline: none;
-  border-color: var(--cg-color-accent);
-  box-shadow: 0 0 8px rgba(0, 255, 65, 0.2);
-}
-
-.workflows-content {
-  flex: 1;
-  overflow-y: auto;
-}
-
-.loading,
-.error-message,
-.empty-state {
-  text-align: center;
-  padding: var(--cg-space-6);
-  color: var(--cg-color-text-muted);
-}
-
-.error-message {
-  color: var(--cg-color-error);
-  border: 1px solid var(--cg-color-error);
-  background: transparent;
-}
-
-.workflow-group {
-  margin-bottom: var(--cg-space-4);
-}
-
-.group-title {
-  color: var(--cg-color-text-muted);
-  font-size: var(--cg-font-size-sm);
-  text-transform: uppercase;
-  letter-spacing: var(--cg-letter-spacing-wide);
-  margin: 0 0 var(--cg-space-2) 0;
-  font-weight: var(--cg-font-weight-normal);
-}
-
-.group-title.clickable {
-  cursor: pointer;
-  user-select: none;
-}
-
-.group-title.clickable:hover {
-  color: var(--cg-color-accent);
-}
-
-.workflow-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--cg-space-3);
-  border: 1px solid var(--cg-color-border-subtle);
-  background: var(--cg-color-bg-tertiary);
-  margin-bottom: var(--cg-space-2);
-}
-
-.workflow-item.broken {
-  border-left: 3px solid var(--cg-color-error);
-}
-
-.workflow-item.new {
-  border-left: 3px solid var(--cg-color-info);
-}
-
-.workflow-item.modified {
-  border-left: 3px solid var(--cg-color-warning);
-}
-
-.workflow-item.synced {
-  border-left: 3px solid var(--cg-color-success);
-}
-
-.workflow-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.workflow-name {
-  color: var(--cg-color-text-primary);
-  font-size: var(--cg-font-size-base);
-  margin-bottom: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.workflow-status {
-  color: var(--cg-color-text-muted);
-  font-size: var(--cg-font-size-xs);
-}
-
-.workflow-actions {
-  display: flex;
-  gap: 8px;
-  margin-left: var(--cg-space-3);
-}
-
-.action-btn {
-  padding: 6px 12px;
-  background: transparent;
-  color: var(--cg-color-accent);
-  border: 1px solid var(--cg-color-accent);
-  font-family: var(--cg-font-mono);
-  font-size: var(--cg-font-size-xs);
-  text-transform: uppercase;
-  letter-spacing: var(--cg-letter-spacing-wide);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.action-btn:hover {
-  background: var(--cg-color-bg-hover);
-  box-shadow: 0 0 8px rgba(0, 255, 65, 0.3);
-}
-
-.action-btn.secondary {
-  color: var(--cg-color-text-secondary);
-  border-color: var(--cg-color-border);
-}
-
-.action-btn.secondary:hover {
-  color: var(--cg-color-text-primary);
-  border-color: var(--cg-color-text-primary);
-}
-
-.show-more-btn {
-  width: 100%;
-  padding: 8px;
-  background: transparent;
-  color: var(--cg-color-text-muted);
-  border: 1px solid var(--cg-color-border-subtle);
-  font-family: var(--cg-font-mono);
-  font-size: var(--cg-font-size-xs);
-  cursor: pointer;
-  margin-top: var(--cg-space-2);
-}
-
-.show-more-btn:hover {
-  color: var(--cg-color-text-primary);
-  border-color: var(--cg-color-border);
-}
-
-/* Scrollbar */
-.workflows-content::-webkit-scrollbar {
-  width: 8px;
-}
-
-.workflows-content::-webkit-scrollbar-track {
-  background: var(--cg-color-bg-tertiary);
-}
-
-.workflows-content::-webkit-scrollbar-thumb {
-  background: var(--cg-color-border-subtle);
-  border: 1px solid var(--cg-color-bg-tertiary);
-}
-
-.workflows-content::-webkit-scrollbar-thumb:hover {
-  background: var(--cg-color-accent);
-}
+/* Minimal to no custom CSS! Everything is in atomic components */
 </style>
