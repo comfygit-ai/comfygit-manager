@@ -211,13 +211,32 @@
 }
 
 /* Branch items */
-[data-comfygit-theme="comfy"] .branch-item {
+[data-comfygit-theme="comfy"] .branch-item,
+[data-comfygit-theme="comfy"] .branch-list-item {
   border-radius: var(--cg-radius-md);
   transition: all var(--cg-transition-fast);
 }
 
-[data-comfygit-theme="comfy"] .branch-item:hover {
+[data-comfygit-theme="comfy"] .branch-item:hover,
+[data-comfygit-theme="comfy"] .branch-list-item:hover {
   background: var(--cg-color-bg-hover);
+}
+
+/* Branch list container */
+[data-comfygit-theme="comfy"] .branch-list {
+  border-radius: var(--cg-radius-md);
+  overflow: hidden;
+}
+
+/* Branch create form */
+[data-comfygit-theme="comfy"] .branch-create-form {
+  border-radius: var(--cg-radius-md);
+  box-shadow: var(--cg-shadow-sm);
+}
+
+/* Text input component */
+[data-comfygit-theme="comfy"] .text-input {
+  border-radius: var(--cg-radius-md);
 }
 
 /* Input fields */
