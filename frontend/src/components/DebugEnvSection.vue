@@ -16,47 +16,55 @@
         <ErrorState :message="error" :retry="true" @retry="loadLogs" />
       </template>
       <template v-else>
-        <!-- Filter Controls -->
-        <LogFilter
-          v-model="levelFilter"
-          :line-limit="lineLimit"
-          @update:line-limit="handleLineLimitChange"
-          @refresh="loadLogs"
-        />
-
-        <!-- Summary Bar -->
-        <SummaryBar v-if="logs.length" variant="compact">
-          Total: {{ logs.length }} logs •
-          <span v-if="levelCounts.ERROR" style="color: var(--cg-color-error)">{{ levelCounts.ERROR }} errors</span>
-          <span v-if="levelCounts.WARNING" style="color: var(--cg-color-warning)">
-            {{ levelCounts.ERROR ? ' • ' : '' }}{{ levelCounts.WARNING }} warnings
-          </span>
-          <span v-if="levelCounts.INFO" style="color: var(--cg-color-info)">
-            {{ (levelCounts.ERROR || levelCounts.WARNING) ? ' • ' : '' }}{{ levelCounts.INFO }} info
-          </span>
-          <span v-if="levelCounts.DEBUG" style="color: var(--cg-color-text-muted)">
-            {{ (levelCounts.ERROR || levelCounts.WARNING || levelCounts.INFO) ? ' • ' : '' }}{{ levelCounts.DEBUG }} debug
-          </span>
+        <!-- Summary bar -->
+        <SummaryBar v-if="logs.length > 0" variant="compact">
+          Total: {{ logs.length }} entries •
+          {{ errorCount }} errors •
+          {{ warningCount }} warnings •
+          {{ infoCount }} info •
+          {{ debugCount }} debug
         </SummaryBar>
 
-        <!-- Log Entries -->
-        <div v-if="filteredLogs.length" class="logs-container">
-          <LogEntry
-            v-for="(log, index) in filteredLogs"
+        <!-- Filter bar -->
+        <LogFilterBar
+          :active-levels="activeLevels"
+          @toggle="toggleLevel"
+          @clear="clearFilters"
+        />
+
+        <!-- Log entries -->
+        <LogList v-if="filteredLogs.length > 0">
+          <LogItem
+            v-for="(log, index) in displayedLogs"
             :key="`${log.timestamp}-${index}`"
-            :timestamp="log.timestamp"
             :level="log.level"
+            :timestamp="formatTimestamp(log.timestamp)"
             :message="log.message"
-            :context="log.context"
-            timestamp-variant="time-only"
+            :context="formatContext(log.context)"
           />
+        </LogList>
+
+        <!-- Load more button -->
+        <div v-if="canLoadMore" class="load-more">
+          <ActionButton
+            variant="secondary"
+            @click="loadMoreLogs"
+          >
+            Load More ({{ filteredLogs.length - displayLimit }} remaining)
+          </ActionButton>
         </div>
 
-        <!-- Empty State -->
+        <!-- Empty state -->
         <EmptyState
-          v-else
-          icon="📋"
-          :message="levelFilter === 'all' ? 'No logs available' : `No ${levelFilter.toLowerCase()} logs found`"
+          v-if="logs.length > 0 && filteredLogs.length === 0"
+          icon="🔍"
+          message="No logs match the current filters"
+        />
+
+        <EmptyState
+          v-if="logs.length === 0"
+          icon="📝"
+          message="No environment logs available"
         />
       </template>
     </template>
@@ -70,24 +78,24 @@
   >
     <template #content>
       <p>
-        These are real-time logs from the current environment showing operations, warnings, and errors.
+        Environment logs show operations, warnings, and errors for the current environment.
+        These logs are specific to <strong>{{ environmentName }}</strong> and help debug
+        workflow execution, model loading, and node installation issues.
       </p>
       <p style="margin-top: var(--cg-space-2)">
-        <strong>ERROR:</strong> Critical issues requiring attention<br>
-        <strong>WARNING:</strong> Potential problems or important notices<br>
+        <strong>Log Levels:</strong><br>
+        <strong>ERROR:</strong> Critical failures requiring attention<br>
+        <strong>WARNING:</strong> Potential issues or important notices<br>
         <strong>INFO:</strong> General operational information<br>
-        <strong>DEBUG:</strong> Detailed diagnostic information
+        <strong>DEBUG:</strong> Detailed debugging information
       </p>
-      <p style="margin-top: var(--cg-space-2); color: var(--cg-color-text-muted); font-size: var(--cg-font-size-xs)">
-        Logs are automatically refreshed when switching environments or performing operations.
+      <p style="margin-top: var(--cg-space-2)">
+        Use the filter bar to show/hide specific log levels.
       </p>
     </template>
     <template #actions>
-      <ActionButton variant="secondary" @click="clearLocalLogs">
-        Clear Display
-      </ActionButton>
-      <ActionButton variant="primary" @click="loadLogs">
-        Refresh Logs
+      <ActionButton variant="primary" @click="showPopover = false">
+        Got it
       </ActionButton>
     </template>
   </InfoPopover>
@@ -99,8 +107,9 @@ import { useComfyGitService } from '@/composables/useComfyGitService'
 import type { LogEntry as LogEntryType } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
-import LogFilter from '@/components/base/molecules/LogFilter.vue'
-import LogEntry from '@/components/base/molecules/LogEntry.vue'
+import LogFilterBar from '@/components/base/molecules/LogFilterBar.vue'
+import LogItem from '@/components/base/molecules/LogItem.vue'
+import LogList from '@/components/base/molecules/LogList.vue'
 import SummaryBar from '@/components/base/molecules/SummaryBar.vue'
 import EmptyState from '@/components/base/molecules/EmptyState.vue'
 import LoadingState from '@/components/base/organisms/LoadingState.vue'
@@ -108,50 +117,103 @@ import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
 
-const { getEnvironmentLogs } = useComfyGitService()
+const { getEnvironmentLogs, getStatus } = useComfyGitService()
 
 const logs = ref<LogEntryType[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const showPopover = ref(false)
-const levelFilter = ref<string>('all')
-const lineLimit = ref<number>(100)
+const activeLevels = ref<string[]>(['ERROR', 'WARNING', 'INFO', 'DEBUG'])
+const displayLimit = ref(50)
+const environmentName = ref('production')
 
-// Computed: Filter logs by level
+// Computed: Filter logs by active levels
 const filteredLogs = computed(() => {
-  if (levelFilter.value === 'all') {
-    return logs.value
-  }
-  return logs.value.filter(log => log.level.toUpperCase() === levelFilter.value)
+  return logs.value.filter(log => activeLevels.value.includes(log.level.toUpperCase()))
 })
 
-// Computed: Count logs by level
-const levelCounts = computed(() => {
-  const counts: Record<string, number> = {
-    ERROR: 0,
-    WARNING: 0,
-    INFO: 0,
-    DEBUG: 0
-  }
+// Computed: Displayed logs (with limit)
+const displayedLogs = computed(() => {
+  return filteredLogs.value.slice(0, displayLimit.value)
+})
 
-  logs.value.forEach(log => {
-    const level = log.level.toUpperCase()
-    if (counts[level] !== undefined) {
-      counts[level]++
-    }
+// Computed: Can load more?
+const canLoadMore = computed(() => {
+  return filteredLogs.value.length > displayLimit.value
+})
+
+// Computed: Count by level
+const errorCount = computed(() =>
+  logs.value.filter(log => log.level.toUpperCase() === 'ERROR').length
+)
+
+const warningCount = computed(() =>
+  logs.value.filter(log => log.level.toUpperCase() === 'WARNING').length
+)
+
+const infoCount = computed(() =>
+  logs.value.filter(log => log.level.toUpperCase() === 'INFO').length
+)
+
+const debugCount = computed(() =>
+  logs.value.filter(log => log.level.toUpperCase() === 'DEBUG').length
+)
+
+function toggleLevel(level: string) {
+  const index = activeLevels.value.indexOf(level)
+  if (index > -1) {
+    activeLevels.value.splice(index, 1)
+  } else {
+    activeLevels.value.push(level)
+  }
+}
+
+function clearFilters() {
+  activeLevels.value = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
+}
+
+function loadMoreLogs() {
+  displayLimit.value += 50
+}
+
+function formatTimestamp(timestamp: string): string {
+  const date = new Date(timestamp)
+  return date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
   })
+}
 
-  return counts
-})
+function formatContext(context?: Record<string, any>): string | undefined {
+  if (!context) return undefined
+  // Convert context object to a short string representation
+  const entries = Object.entries(context)
+  if (entries.length === 0) return undefined
+  // Show first key-value pair or just the first key if value is complex
+  const [key, value] = entries[0]
+  if (typeof value === 'string' || typeof value === 'number') {
+    return `${key}: ${value}`
+  }
+  return key
+}
 
 async function loadLogs() {
   loading.value = true
   error.value = null
   try {
-    const level = levelFilter.value === 'all' ? undefined : levelFilter.value
-    logs.value = await getEnvironmentLogs(level, lineLimit.value)
+    logs.value = await getEnvironmentLogs(undefined, 200)
     // Sort logs by timestamp (newest first)
     logs.value.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+
+    // Get environment name
+    try {
+      const status = await getStatus()
+      environmentName.value = status.environment || 'production'
+    } catch {
+      // Ignore error, keep default
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load environment logs'
   } finally {
@@ -159,23 +221,13 @@ async function loadLogs() {
   }
 }
 
-function handleLineLimitChange(newLimit: number) {
-  lineLimit.value = newLimit
-  loadLogs()
-}
-
-function clearLocalLogs() {
-  logs.value = []
-  showPopover.value = false
-}
-
 onMounted(loadLogs)
 </script>
 
 <style scoped>
-.logs-container {
+.load-more {
   display: flex;
-  flex-direction: column;
-  gap: 0; /* LogEntry components have their own margin-bottom */
+  justify-content: center;
+  margin-top: var(--cg-space-3);
 }
 </style>
