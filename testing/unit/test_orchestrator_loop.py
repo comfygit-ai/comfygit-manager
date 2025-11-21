@@ -415,14 +415,25 @@ class TestOrchestratorLoop:
     def test_environment_switch_updates_current_env(self, mock_workspace, metadata_dir, mocker):
         """Should update current_env_name after successful switch request."""
         from server.orchestrator import Orchestrator
+        import json
 
-        # Write switch request
-        switch_file = metadata_dir / ".switch_request.json"
-        switch_file.write_text('{"target_env": "env2", "timestamp": 1234567890}')
+        # Mock process for env1 that exits with code 43 to trigger runtime switch
+        mock_proc1 = Mock()
+        mock_proc1.poll.return_value = None
 
-        mock_proc = Mock()
-        mock_proc.wait.side_effect = [43, 0]  # Switch, then exit
-        mock_proc.poll.return_value = None  # Process running
+        # Create switch request when proc1 exits
+        def mock_wait1():
+            switch_file = metadata_dir / ".switch_request.json"
+            with open(switch_file, 'w') as f:
+                json.dump({"target_env": "env2", "source_env": "env1"}, f)
+            return 43  # EXIT_SWITCH_ENV
+
+        mock_proc1.wait = mock_wait1
+
+        # Mock process for env2 that exits cleanly
+        mock_proc2 = Mock()
+        mock_proc2.poll.return_value = None
+        mock_proc2.wait.return_value = 0  # Clean exit
 
         mock_env1 = Mock()
         mock_env1.name = "env1"
@@ -437,7 +448,7 @@ class TestOrchestratorLoop:
         mock_env2.uv_manager.python_executable = mock_workspace / "bin" / "python"
 
         mocker.patch.object(Orchestrator, "_sync_environment")
-        mocker.patch.object(Orchestrator, "_start_comfyui", return_value=mock_proc)
+        mocker.patch.object(Orchestrator, "_start_comfyui", side_effect=[mock_proc1, mock_proc2])
         mocker.patch.object(Orchestrator, "_wait_for_health", return_value=True)  # Health check succeeds
         mocker.patch.object(Orchestrator, "_update_switch_status")
         mocker.patch.object(Orchestrator, "_cleanup_switch_status")

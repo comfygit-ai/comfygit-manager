@@ -140,14 +140,16 @@ class TestFilePolling:
     def test_wait_with_polling_returns_exit_code(self, metadata_dir):
         """Should return process exit code when process exits."""
         from server.orchestrator import Orchestrator
+        import subprocess
 
-        # Mock a process that exits immediately
+        # Mock a process that exits after one timeout
         mock_proc = Mock()
-        mock_proc.poll.side_effect = [None, 0]  # First check running, then exited
+        mock_proc.wait.side_effect = [subprocess.TimeoutExpired('cmd', 0.5), 0]
 
         orch = Mock(spec=Orchestrator)
         orch.metadata_dir = metadata_dir
         orch._shutdown_requested = False
+        orch._check_command_file.return_value = None
 
         result = Orchestrator._wait_with_polling(orch, mock_proc)
 
@@ -171,14 +173,15 @@ class TestFilePolling:
     def test_wait_with_polling_calls_check_command_file(self, metadata_dir):
         """Should check for commands while waiting."""
         from server.orchestrator import Orchestrator
+        import subprocess
 
         mock_proc = Mock()
-        mock_proc.poll.side_effect = [None, 0]  # Run once, then exit
+        mock_proc.wait.side_effect = [subprocess.TimeoutExpired('cmd', 0.5), 0]
 
         orch = Mock(spec=Orchestrator)
         orch.metadata_dir = metadata_dir
         orch._shutdown_requested = False
-        orch._check_command_file = Mock()
+        orch._check_command_file = Mock(return_value=None)
 
         Orchestrator._wait_with_polling(orch, mock_proc)
 
@@ -232,20 +235,22 @@ class TestFilePolling:
         assert orch._shutdown_requested is True
 
     def test_handle_shutdown_command_kills_current_process(self, metadata_dir):
-        """Should terminate current ComfyUI process on shutdown."""
+        """Should call _kill_supervised_process on shutdown."""
         from server.orchestrator import Orchestrator
-
-        mock_proc = Mock()
-        mock_proc.poll.return_value = None
+        from unittest.mock import patch
 
         orch = Mock(spec=Orchestrator)
         orch.metadata_dir = metadata_dir
-        orch.current_process = mock_proc
         orch._shutdown_requested = False
+        orch._kill_supervised_process = Mock()
 
         Orchestrator._handle_shutdown_command(orch)
 
-        mock_proc.terminate.assert_called_once()
+        # Should have set shutdown flag
+        assert orch._shutdown_requested is True
+
+        # Should have called _kill_supervised_process
+        orch._kill_supervised_process.assert_called_once()
 
 
 @pytest.mark.unit

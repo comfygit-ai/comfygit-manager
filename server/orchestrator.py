@@ -609,8 +609,9 @@ class Orchestrator:
 
         print(f"[Orchestrator] Starting supervision of {self.current_env_name}")
 
-        # Track if this is the first start (for status reporting)
+        # Track if this is the first start (for status reporting) and source env for rollback
         first_start = switch_request is not None
+        source_env = switch_request.get("source_env") if switch_request else None
 
         try:
             while True:
@@ -628,7 +629,7 @@ class Orchestrator:
                         progress=30,
                         message=f"Syncing {self.current_env_name}...",
                         target_env=self.current_env_name,
-                        source_env=switch_request.get("source_env") if switch_request else None
+                        source_env=source_env
                     )
 
                 # Sync environment (install nodes, models, etc.)
@@ -642,7 +643,7 @@ class Orchestrator:
                         progress=60,
                         message=f"Starting {self.current_env_name}...",
                         target_env=self.current_env_name,
-                        source_env=switch_request.get("source_env") if switch_request else None
+                        source_env=source_env
                     )
 
                 # Start ComfyUI
@@ -656,7 +657,7 @@ class Orchestrator:
                         progress=80,
                         message=f"Waiting for {self.current_env_name} to be healthy...",
                         target_env=self.current_env_name,
-                        source_env=switch_request.get("source_env") if switch_request else None
+                        source_env=source_env
                     )
 
                     if self._wait_for_health(proc, timeout=90):
@@ -667,21 +668,61 @@ class Orchestrator:
                             progress=100,
                             message=f"Successfully switched to {self.current_env_name}",
                             target_env=self.current_env_name,
-                            source_env=switch_request.get("source_env") if switch_request else None
+                            source_env=source_env
                         )
                         # Clean up status and lock after delay
                         import time
                         time.sleep(5)
                         cleanup_switch_status(self.metadata_dir)
                         release_switch_lock(self.metadata_dir)
+                        source_env = None  # Clear source after successful switch
                     else:
+                        # Health check failed - rollback if we have a source env
                         print(f"[Orchestrator] Health check failed for {self.current_env_name}")
-                        release_switch_lock(self.metadata_dir)
+                        proc.kill()  # Kill the failed process
+
+                        if source_env:
+                            print(f"[Orchestrator] Rolling back to {source_env}...")
+                            write_switch_status(
+                                self.metadata_dir,
+                                state="rolling_back",
+                                progress=90,
+                                message=f"Health check failed, rolling back to {source_env}...",
+                                target_env=self.current_env_name,
+                                source_env=source_env
+                            )
+                            self.current_env_name = source_env
+                            first_start = False  # Don't health check the rollback env
+                            source_env = None  # Clear source after rollback
+                            # Loop will retry with old environment
+                            continue
+                        else:
+                            # No source to rollback to, just continue
+                            write_switch_status(
+                                self.metadata_dir,
+                                state="failed",
+                                progress=100,
+                                message=f"Health check failed for {self.current_env_name}",
+                                error="No source environment to rollback to"
+                            )
+                            release_switch_lock(self.metadata_dir)
 
                     first_start = False  # Only check health on first start
 
-                # Wait for exit
-                exit_code = proc.wait()
+                # Wait for exit (with command polling)
+                exit_code = self._wait_with_polling(proc)
+
+                # Handle shutdown request
+                if exit_code is None:
+                    # Shutdown requested via command
+                    print("[Orchestrator] Shutdown requested, exiting")
+                    break
+
+                # Handle restart request from command
+                if self._restart_requested:
+                    print("[Orchestrator] Restart requested via command, resyncing...")
+                    self._restart_requested = False  # Clear flag
+                    continue  # Loop continues with same environment
 
                 # Handle exit codes
                 if exit_code == self.EXIT_RESTART:
@@ -690,10 +731,14 @@ class Orchestrator:
 
                 elif exit_code == self.EXIT_SWITCH_ENV:
                     print("[Orchestrator] Environment switch requested (exit 43)...")
+                    old_env = self.current_env_name
                     success = self._handle_switch_request()
 
                     if success:
                         print(f"[Orchestrator] Switched to {self.current_env_name}")
+                        # Set first_start flag so main loop does health check and status updates
+                        first_start = True
+                        source_env = old_env  # Track source for rollback
                     else:
                         print(f"[Orchestrator] Switch failed, staying on {self.current_env_name}")
 
@@ -791,138 +836,32 @@ class Orchestrator:
 
     def _switch_environment(self, target_env_name: str) -> bool:
         """
-        Switch to different environment with rollback capability.
+        Switch to different environment.
+
+        Just updates current_env_name. Main loop handles starting the new env.
 
         Args:
             target_env_name: Name of environment to switch to
 
         Returns:
-            True if switch succeeded, False if rolled back
+            True if target environment exists, False otherwise
         """
         old_env_name = self.current_env_name
 
-        self._update_switch_status(
-            "preparing",
-            progress=10,
-            message=f"Preparing to switch from {old_env_name} to {target_env_name}...",
-            target_env=target_env_name,
-            source_env=old_env_name
-        )
-
         try:
-            # Load target environment
-            target_env = self.workspace.get_environment(target_env_name, auto_sync=False)
+            # Validate target environment exists
+            self.workspace.get_environment(target_env_name, auto_sync=False)
 
-            # Sync target environment
-            self._update_switch_status(
-                "syncing",
-                progress=30,
-                message=f"Syncing {target_env_name}...",
-                target_env=target_env_name,
-                source_env=old_env_name
-            )
+            # Update current environment name
+            self.current_env_name = target_env_name
+            print(f"[Orchestrator] Switching from {old_env_name} to {target_env_name}")
 
-            target_env.sync()
-
-            # Start new environment
-            self._update_switch_status(
-                "starting",
-                progress=60,
-                message=f"Starting {target_env_name}...",
-                target_env=target_env_name,
-                source_env=old_env_name
-            )
-
-            proc = self._start_comfyui(target_env)
-
-            # Wait for health check
-            self._update_switch_status(
-                "validating",
-                progress=80,
-                message="Waiting for new environment to be healthy...",
-                target_env=target_env_name,
-                source_env=old_env_name
-            )
-
-            if self._wait_for_health(proc, timeout=90):
-                # SUCCESS!
-                self.current_env_name = target_env_name
-
-                self._update_switch_status(
-                    "complete",
-                    progress=100,
-                    message=f"Successfully switched to {target_env_name}",
-                    target_env=target_env_name,
-                    source_env=old_env_name
-                )
-
-                # Clean up switch status after delay
-                time.sleep(5)
-                self._cleanup_switch_status()
-
-                return True
-            else:
-                # Health check failed
-                print(f"[Orchestrator] {target_env_name} failed health check")
-                proc.kill()
-                raise RuntimeError("Health check failed")
+            return True
 
         except Exception as e:
-            # ROLLBACK
             print(f"[Orchestrator] Switch failed: {e}")
-            print(f"[Orchestrator] Rolling back to {old_env_name}...")
-
-            self._update_switch_status(
-                "rolling_back",
-                progress=90,
-                message=f"Switch failed, restoring {old_env_name}...",
-                target_env=target_env_name,
-                source_env=old_env_name
-            )
-
-            try:
-                # Reload old environment
-                old_env = self.workspace.get_environment(old_env_name, auto_sync=False)
-                old_env.sync()
-
-                rollback_proc = self._start_comfyui(old_env)
-
-                if self._wait_for_health(rollback_proc, timeout=60):
-                    print(f"[Orchestrator] Rollback successful")
-
-                    self._update_switch_status(
-                        "rolled_back",
-                        progress=100,
-                        message=f"Switch failed, restored {old_env_name}",
-                        error="New environment failed to start",
-                        target_env=target_env_name,
-                        source_env=old_env_name
-                    )
-
-                    time.sleep(10)
-                    self._cleanup_switch_status()
-
-                    return False  # Switch failed, but rollback worked
-                else:
-                    # CRITICAL: Rollback also failed
-                    rollback_proc.kill()
-                    raise RuntimeError("Rollback failed")
-
-            except Exception as rollback_error:
-                print(f"[Orchestrator] CRITICAL: Rollback failed: {rollback_error}")
-
-                self._update_switch_status(
-                    "critical_failure",
-                    progress=100,
-                    message="CRITICAL: Rollback failed",
-                    error=str(rollback_error),
-                    recovery_command=self._get_recovery_command(old_env_name),
-                    target_env=target_env_name,
-                    source_env=old_env_name
-                )
-
-                # Don't clean up status - user needs to see it
-                raise
+            print(f"[Orchestrator] Staying on {old_env_name}")
+            return False
 
     def _wait_for_health(self, proc: subprocess.Popen, timeout: int) -> bool:
         """
@@ -1047,12 +986,8 @@ class Orchestrator:
                 print("[Orchestrator] Shutdown requested during wait")
                 return None
 
-            # Check if process exited (non-blocking)
-            exit_code = proc.poll()
-            if exit_code is not None:
-                return exit_code
-
-            # Check for commands
+            # Check for commands BEFORE checking process state
+            # This ensures commands are processed even if process is zombie
             cmd = self._check_command_file()
             if cmd:
                 command = cmd.get("command")
@@ -1065,8 +1000,14 @@ class Orchestrator:
                 else:
                     print(f"[Orchestrator] Unknown command: {command}")
 
-            # Brief sleep (500ms = good balance of responsiveness vs overhead)
-            time.sleep(0.5)
+            # Use wait with timeout to properly reap zombies
+            try:
+                exit_code = proc.wait(timeout=0.5)
+                # Process exited
+                return exit_code
+            except subprocess.TimeoutExpired:
+                # Process still running, continue polling
+                continue
 
     def _handle_restart_command(self):
         """Handle restart command from control server."""
@@ -1090,11 +1031,7 @@ class Orchestrator:
         """Handle shutdown command from control server."""
         print("[Orchestrator] Shutdown command received")
         self._shutdown_requested = True
-
-        # Kill current ComfyUI (don't wait - we're shutting down)
-        if self.current_process and self.current_process.poll() is None:
-            print("[Orchestrator] Terminating ComfyUI for shutdown...")
-            self.current_process.terminate()
+        self._kill_supervised_process()
 
     def _handle_abort_switch_command(self, cmd: dict):
         """
@@ -1330,14 +1267,32 @@ class Orchestrator:
     def _handle_sigterm(self, signum, frame):
         """Handle SIGTERM gracefully."""
         print("[Orchestrator] Received SIGTERM, shutting down...")
+        self._kill_supervised_process()
         self._cleanup()
         sys.exit(0)
 
     def _handle_sigint(self, signum, frame):
         """Handle SIGINT (Ctrl+C) gracefully."""
         print("[Orchestrator] Received SIGINT, shutting down...")
+        self._kill_supervised_process()
         self._cleanup()
         sys.exit(0)
+
+    def _kill_supervised_process(self):
+        """Kill supervised ComfyUI process if running."""
+        if not self.current_process or self.current_process.poll() is not None:
+            return  # No process or already dead
+
+        print(f"[Orchestrator] Terminating supervised process (PID {self.current_process.pid})...")
+        self.current_process.terminate()
+
+        try:
+            self.current_process.wait(timeout=3)
+            print("[Orchestrator] Process terminated gracefully")
+        except subprocess.TimeoutExpired:
+            print("[Orchestrator] Timeout, force killing...")
+            self.current_process.kill()
+            self.current_process.wait()  # Reap zombie
 
 
 # ============================================================================
