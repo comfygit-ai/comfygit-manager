@@ -20,7 +20,10 @@ import type {
   ConfigSettings,
   LogEntry,
   NodeInfo,
-  NodesResult
+  NodesResult,
+  RemotesResult,
+  RemoteOperationResult,
+  RemoteSyncStatus
 } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
 
@@ -408,6 +411,76 @@ export function useComfyGitService() {
     })
   }
 
+  // Git Remotes Management
+  async function getRemotes(): Promise<RemotesResult> {
+    if (USE_MOCK) return mockApi.getRemotes()
+
+    try {
+      return fetchApi<RemotesResult>('/v2/comfygit/remotes')
+    } catch {
+      // Return empty list if API not available
+      return { remotes: [] }
+    }
+  }
+
+  async function addRemote(name: string, url: string): Promise<RemoteOperationResult> {
+    if (USE_MOCK) {
+      await mockApi.addRemote(name, url)
+      return { status: 'success', remote_name: name }
+    }
+
+    return fetchApi<RemoteOperationResult>('/v2/comfygit/remotes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, url })
+    })
+  }
+
+  async function removeRemote(name: string): Promise<RemoteOperationResult> {
+    if (USE_MOCK) {
+      await mockApi.removeRemote(name)
+      return { status: 'success', remote_name: name }
+    }
+
+    return fetchApi<RemoteOperationResult>(`/v2/comfygit/remotes/${encodeURIComponent(name)}`, {
+      method: 'DELETE'
+    })
+  }
+
+  async function updateRemoteUrl(name: string, url: string, pushUrl?: string): Promise<RemoteOperationResult> {
+    if (USE_MOCK) {
+      await mockApi.updateRemoteUrl(name, url, pushUrl)
+      return { status: 'success', remote_name: name }
+    }
+
+    return fetchApi<RemoteOperationResult>(`/v2/comfygit/remotes/${encodeURIComponent(name)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, push_url: pushUrl })
+    })
+  }
+
+  async function fetchRemote(name: string): Promise<RemoteOperationResult> {
+    if (USE_MOCK) {
+      await mockApi.fetchRemote(name)
+      return { status: 'success', remote_name: name }
+    }
+
+    return fetchApi<RemoteOperationResult>(`/v2/comfygit/remotes/${encodeURIComponent(name)}/fetch`, {
+      method: 'POST'
+    })
+  }
+
+  async function getRemoteSyncStatus(remote: string): Promise<RemoteSyncStatus | null> {
+    if (USE_MOCK) return mockApi.getRemoteSyncStatus(remote)
+
+    try {
+      return fetchApi<RemoteSyncStatus>(`/v2/comfygit/remotes/${encodeURIComponent(remote)}/status`)
+    } catch {
+      return null
+    }
+  }
+
   return {
     isLoading,
     error,
@@ -449,6 +522,13 @@ export function useComfyGitService() {
     getNodes,
     installNode,
     updateNode,
-    uninstallNode
+    uninstallNode,
+    // Git Remotes
+    getRemotes,
+    addRemote,
+    removeRemote,
+    updateRemoteUrl,
+    fetchRemote,
+    getRemoteSyncStatus
   }
 }

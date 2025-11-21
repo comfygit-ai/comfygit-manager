@@ -234,10 +234,7 @@
           </div>
 
           <!-- Remotes View -->
-          <div v-else-if="currentView === 'remotes'" class="view-placeholder">
-            <h3 class="view-title">REMOTES</h3>
-            <p>Git remotes UI coming soon...</p>
-          </div>
+          <RemotesSection v-else-if="currentView === 'remotes'" />
         </template>
       </div>
     </div>
@@ -335,6 +332,7 @@ import WorkflowsSection from './WorkflowsSection.vue'
 import ModelsEnvSection from './ModelsEnvSection.vue'
 import ModelIndexSection from './ModelIndexSection.vue'
 import NodesSection from './NodesSection.vue'
+import RemotesSection from './RemotesSection.vue'
 import WorkspaceSettingsSection from './WorkspaceSettingsSection.vue'
 import WorkspaceDebugSection from './WorkspaceDebugSection.vue'
 import CommitDetailModal from './CommitDetailModal.vue'

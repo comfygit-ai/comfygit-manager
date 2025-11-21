@@ -451,3 +451,23 @@
   border-radius: var(--cg-radius-md);
   overflow: hidden;
 }
+
+/* Remotes components */
+[data-comfygit-theme="comfy"] .remote-form {
+  border-radius: var(--cg-radius-md);
+  box-shadow: var(--cg-shadow-sm);
+}
+
+[data-comfygit-theme="comfy"] .remote-url-display {
+  background: var(--cg-color-bg-secondary);
+  padding: var(--cg-space-1) var(--cg-space-2);
+  border-radius: var(--cg-radius-sm);
+}
+
+[data-comfygit-theme="comfy"] .default-badge {
+  border-radius: var(--cg-radius-sm);
+}
+
+[data-comfygit-theme="comfy"] .copy-btn {
+  border-radius: var(--cg-radius-sm);
+}

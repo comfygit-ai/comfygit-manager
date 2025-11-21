@@ -880,6 +880,62 @@ export const mockApi = {
       ],
       current: 'main'
     }
+  },
+
+  // Git Remotes Management
+  getRemotes: async (): Promise<any> => {
+    await delay(300)
+    return {
+      remotes: [
+        {
+          name: 'origin',
+          fetch_url: 'https://github.com/comfyhub/comfygit-demo.git',
+          push_url: 'https://github.com/comfyhub/comfygit-demo.git',
+          is_default: true
+        },
+        {
+          name: 'upstream',
+          fetch_url: 'https://github.com/comfyhub/comfygit.git',
+          push_url: 'https://github.com/comfyhub/comfygit.git',
+          is_default: false
+        }
+      ],
+      current_branch_tracking: {
+        remote: 'origin',
+        branch: 'main'
+      }
+    }
+  },
+
+  addRemote: async (name: string, url: string): Promise<void> => {
+    await delay(400)
+    console.log(`[MOCK] Adding remote: ${name} -> ${url}`)
+  },
+
+  removeRemote: async (name: string): Promise<void> => {
+    await delay(350)
+    console.log(`[MOCK] Removing remote: ${name}`)
+  },
+
+  updateRemoteUrl: async (name: string, url: string, pushUrl?: string): Promise<void> => {
+    await delay(400)
+    console.log(`[MOCK] Updating remote ${name}: ${url}${pushUrl ? ` (push: ${pushUrl})` : ''}`)
+  },
+
+  fetchRemote: async (name: string): Promise<void> => {
+    await delay(1500)
+    console.log(`[MOCK] Fetching from remote: ${name}`)
+  },
+
+  getRemoteSyncStatus: async (remote: string): Promise<any> => {
+    await delay(300)
+    return {
+      remote,
+      branch: 'main',
+      ahead: 2,
+      behind: 1,
+      last_fetch: new Date(Date.now() - 3600000).toISOString()
+    }
   }
 }
 

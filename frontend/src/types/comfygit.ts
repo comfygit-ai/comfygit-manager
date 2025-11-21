@@ -257,3 +257,33 @@ export interface LogEntry {
   message: string
   context?: string
 }
+
+// Git Remotes Types
+export interface RemoteInfo {
+  name: string
+  fetch_url: string
+  push_url: string
+  is_default?: boolean
+}
+
+export interface RemotesResult {
+  remotes: RemoteInfo[]
+  current_branch_tracking?: {
+    remote: string
+    branch: string
+  }
+}
+
+export interface RemoteOperationResult {
+  status: 'success' | 'error'
+  message?: string
+  remote_name?: string
+}
+
+export interface RemoteSyncStatus {
+  remote: string
+  branch: string
+  ahead: number
+  behind: number
+  last_fetch?: string
+}
