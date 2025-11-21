@@ -246,6 +246,12 @@
   box-shadow: var(--cg-shadow-sm);
 }
 
+/* Environment create form */
+[data-comfygit-theme="comfy"] .create-form {
+  border-radius: var(--cg-radius-md);
+  box-shadow: var(--cg-shadow-sm);
+}
+
 /* Text input component */
 [data-comfygit-theme="comfy"] .text-input {
   border-radius: var(--cg-radius-md);

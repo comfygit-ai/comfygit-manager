@@ -198,10 +198,13 @@
           <DebugEnvSection v-else-if="currentView === 'debug-env'" />
 
           <!-- Environments View -->
-          <div v-else-if="currentView === 'environments'" class="view-placeholder">
-            <h3 class="view-title">ENVIRONMENTS</h3>
-            <p>Environment management UI coming soon...</p>
-          </div>
+          <EnvironmentsSection
+            v-else-if="currentView === 'environments'"
+            @switch="handleEnvironmentSwitch"
+            @create="handleEnvironmentCreate"
+            @delete="handleEnvironmentDelete"
+            @view-details="handleEnvironmentViewDetails"
+          />
 
           <!-- Model Index View -->
           <ModelIndexSection v-else-if="currentView === 'model-index'" />
@@ -333,6 +336,7 @@ import RemotesSection from './RemotesSection.vue'
 import WorkspaceSettingsSection from './WorkspaceSettingsSection.vue'
 import WorkspaceDebugSection from './WorkspaceDebugSection.vue'
 import DebugEnvSection from './DebugEnvSection.vue'
+import EnvironmentsSection from './EnvironmentsSection.vue'
 import CommitDetailModal from './CommitDetailModal.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
@@ -594,6 +598,29 @@ async function handleEnvironmentSwitch(envName: string) {
   showEnvironmentSelector.value = false
   showToast(`Environment switching not yet implemented`, 'warning')
   // TODO: Implement orchestrator daemon flow
+}
+
+async function handleEnvironmentCreate(envName: string) {
+  const toastId = showToast(`Creating environment "${envName}"...`, 'info', 0)
+  // TODO: Implement environment creation API call
+  removeToast(toastId)
+  showToast(`Environment creation not yet implemented`, 'warning')
+  // After implementation, call: await refresh()
+}
+
+async function handleEnvironmentDelete(envName: string) {
+  const toastId = showToast(`Deleting environment "${envName}"...`, 'info', 0)
+  // TODO: Implement environment deletion API call
+  removeToast(toastId)
+  showToast(`Environment deletion not yet implemented`, 'warning')
+  // After implementation, call: await refresh()
+}
+
+function handleEnvironmentViewDetails(envName: string) {
+  // Navigate to models-env view to show details of this environment
+  showToast(`Viewing details for "${envName}"`, 'info')
+  // For now, just switch to the models-env view
+  selectView('models-env', 'this-env')
 }
 
 function getChangeDetails(): string[] {
