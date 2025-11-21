@@ -495,13 +495,147 @@ class Orchestrator:
             # Clean up request file
             switch_file.unlink()
 
-            # Update current environment
-            self.current_env_name = target_env_name
-            return True
+            # Perform switch with rollback
+            return self._switch_environment(target_env_name)
 
         except Exception as e:
             print(f"[Orchestrator] ERROR reading switch request: {e}")
             return False
+
+    def _switch_environment(self, target_env_name: str) -> bool:
+        """
+        Switch to different environment with rollback capability.
+
+        Args:
+            target_env_name: Name of environment to switch to
+
+        Returns:
+            True if switch succeeded, False if rolled back
+        """
+        old_env_name = self.current_env_name
+
+        self._update_switch_status(
+            "preparing",
+            progress=10,
+            message=f"Preparing to switch from {old_env_name} to {target_env_name}...",
+            target_env=target_env_name,
+            source_env=old_env_name
+        )
+
+        try:
+            # Load target environment
+            target_env = self.workspace.get_environment(target_env_name, auto_sync=False)
+
+            # Sync target environment
+            self._update_switch_status(
+                "syncing",
+                progress=30,
+                message=f"Syncing {target_env_name}...",
+                target_env=target_env_name,
+                source_env=old_env_name
+            )
+
+            target_env.sync()
+
+            # Start new environment
+            self._update_switch_status(
+                "starting",
+                progress=60,
+                message=f"Starting {target_env_name}...",
+                target_env=target_env_name,
+                source_env=old_env_name
+            )
+
+            proc = self._start_comfyui(target_env)
+
+            # Wait for health check
+            self._update_switch_status(
+                "validating",
+                progress=80,
+                message="Waiting for new environment to be healthy...",
+                target_env=target_env_name,
+                source_env=old_env_name
+            )
+
+            if self._wait_for_health(proc, timeout=90):
+                # SUCCESS!
+                self.current_env_name = target_env_name
+
+                self._update_switch_status(
+                    "complete",
+                    progress=100,
+                    message=f"Successfully switched to {target_env_name}",
+                    target_env=target_env_name,
+                    source_env=old_env_name
+                )
+
+                # Clean up switch status after delay
+                time.sleep(5)
+                self._cleanup_switch_status()
+
+                return True
+            else:
+                # Health check failed
+                print(f"[Orchestrator] {target_env_name} failed health check")
+                proc.kill()
+                raise RuntimeError("Health check failed")
+
+        except Exception as e:
+            # ROLLBACK
+            print(f"[Orchestrator] Switch failed: {e}")
+            print(f"[Orchestrator] Rolling back to {old_env_name}...")
+
+            self._update_switch_status(
+                "rolling_back",
+                progress=90,
+                message=f"Switch failed, restoring {old_env_name}...",
+                target_env=target_env_name,
+                source_env=old_env_name
+            )
+
+            try:
+                # Reload old environment
+                old_env = self.workspace.get_environment(old_env_name, auto_sync=False)
+                old_env.sync()
+
+                rollback_proc = self._start_comfyui(old_env)
+
+                if self._wait_for_health(rollback_proc, timeout=60):
+                    print(f"[Orchestrator] Rollback successful")
+
+                    self._update_switch_status(
+                        "rolled_back",
+                        progress=100,
+                        message=f"Switch failed, restored {old_env_name}",
+                        error="New environment failed to start",
+                        target_env=target_env_name,
+                        source_env=old_env_name
+                    )
+
+                    time.sleep(10)
+                    self._cleanup_switch_status()
+
+                    return False  # Switch failed, but rollback worked
+                else:
+                    # CRITICAL: Rollback also failed
+                    rollback_proc.kill()
+                    raise RuntimeError("Rollback failed")
+
+            except Exception as rollback_error:
+                print(f"[Orchestrator] CRITICAL: Rollback failed: {rollback_error}")
+
+                self._update_switch_status(
+                    "critical_failure",
+                    progress=100,
+                    message="CRITICAL: Rollback failed",
+                    error=str(rollback_error),
+                    recovery_command=self._get_recovery_command(old_env_name),
+                    target_env=target_env_name,
+                    source_env=old_env_name
+                )
+
+                # Don't clean up status - user needs to see it
+                raise
 
     def _wait_for_health(self, proc: subprocess.Popen, timeout: int) -> bool:
         """
@@ -554,6 +688,34 @@ class Orchestrator:
                 return True
         except (socket.timeout, ConnectionRefusedError, OSError):
             return False
+
+    def _update_switch_status(self, state: str, progress: int = 0,
+                             message: str = "", **kwargs) -> None:
+        """Write switch status for browser to poll."""
+        status = {
+            "state": state,
+            "progress": progress,
+            "message": message,
+            "updated_at": time.time(),
+            **kwargs
+        }
+
+        status_file = self.metadata_dir / ".switch_status.json"
+        with open(status_file, 'w') as f:
+            json.dump(status, f, indent=2)
+
+    def _cleanup_switch_status(self) -> None:
+        """Remove switch status file."""
+        cleanup_switch_status(self.metadata_dir)
+
+    def _get_recovery_command(self, env_name: str) -> str:
+        """Generate manual recovery command."""
+        env = self.workspace.get_environment(env_name, auto_sync=False)
+        python_exe = env.uv_manager.python_executable
+        main_py = env.comfyui_path / "main.py"
+        args = ' '.join(self.comfyui_args)
+
+        return f"cd {env.comfyui_path} && {python_exe} {main_py} {args}"
 
     def _cleanup(self):
         """Clean up orchestrator state."""
