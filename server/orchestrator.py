@@ -137,11 +137,12 @@ def should_spawn_orchestrator_for_switch() -> bool:
 # File Communication (IPC)
 # ============================================================================
 
-def write_switch_request(metadata_dir: Path, target_env: str) -> None:
+def write_switch_request(metadata_dir: Path, target_env: str, source_env: str = None) -> None:
     """Write switch request for orchestrator."""
     switch_file = metadata_dir / ".switch_request.json"
     data = {
         "target_env": target_env,
+        "source_env": source_env,
         "timestamp": time.time()
     }
     with open(switch_file, 'w') as f:
@@ -381,7 +382,32 @@ class Orchestrator:
 
         Continuously runs ComfyUI, handling restarts and environment switches.
         """
+        # Check for pending switch request on startup
+        switch_request = read_switch_request(self.metadata_dir)
+        if switch_request:
+            target_env = switch_request.get("target_env")
+            if target_env and target_env != self.current_env_name:
+                print(f"[Orchestrator] Found pending switch request to {target_env}")
+                old_env = self.current_env_name
+                self.current_env_name = target_env
+                # Write initial status
+                write_switch_status(
+                    self.metadata_dir,
+                    state="preparing",
+                    progress=10,
+                    message=f"Preparing to switch from {old_env} to {target_env}...",
+                    target_env=target_env,
+                    source_env=old_env
+                )
+                # Clean up the request file since we're handling it
+                switch_file = self.metadata_dir / ".switch_request.json"
+                if switch_file.exists():
+                    switch_file.unlink()
+
         print(f"[Orchestrator] Starting supervision of {self.current_env_name}")
+
+        # Track if this is the first start (for status reporting)
+        first_start = switch_request is not None
 
         try:
             while True:
@@ -391,11 +417,65 @@ class Orchestrator:
                     auto_sync=False
                 )
 
+                # Update status if this is from a switch
+                if first_start:
+                    write_switch_status(
+                        self.metadata_dir,
+                        state="syncing",
+                        progress=30,
+                        message=f"Syncing {self.current_env_name}...",
+                        target_env=self.current_env_name,
+                        source_env=switch_request.get("source_env") if switch_request else None
+                    )
+
                 # Sync environment (install nodes, models, etc.)
                 self._sync_environment(env)
 
+                # Update status if this is from a switch
+                if first_start:
+                    write_switch_status(
+                        self.metadata_dir,
+                        state="starting",
+                        progress=60,
+                        message=f"Starting {self.current_env_name}...",
+                        target_env=self.current_env_name,
+                        source_env=switch_request.get("source_env") if switch_request else None
+                    )
+
                 # Start ComfyUI
                 proc = self._start_comfyui(env)
+
+                # If this is first start from a switch, validate health
+                if first_start:
+                    write_switch_status(
+                        self.metadata_dir,
+                        state="validating",
+                        progress=80,
+                        message=f"Waiting for {self.current_env_name} to be healthy...",
+                        target_env=self.current_env_name,
+                        source_env=switch_request.get("source_env") if switch_request else None
+                    )
+
+                    if self._wait_for_health(proc, timeout=90):
+                        print(f"[Orchestrator] {self.current_env_name} is healthy")
+                        write_switch_status(
+                            self.metadata_dir,
+                            state="complete",
+                            progress=100,
+                            message=f"Successfully switched to {self.current_env_name}",
+                            target_env=self.current_env_name,
+                            source_env=switch_request.get("source_env") if switch_request else None
+                        )
+                        # Clean up status and lock after delay
+                        import time
+                        time.sleep(5)
+                        cleanup_switch_status(self.metadata_dir)
+                        release_switch_lock(self.metadata_dir)
+                    else:
+                        print(f"[Orchestrator] Health check failed for {self.current_env_name}")
+                        release_switch_lock(self.metadata_dir)
+
+                    first_start = False  # Only check health on first start
 
                 # Wait for exit
                 exit_code = proc.wait()
@@ -743,7 +823,7 @@ def main():
     parser = argparse.ArgumentParser(description="ComfyGit Environment Orchestrator")
     parser.add_argument("--workspace", required=True, help="Workspace root path")
     parser.add_argument("--environment", required=True, help="Initial environment name")
-    parser.add_argument("--args", nargs="*", default=[], help="ComfyUI arguments")
+    parser.add_argument("--args", nargs=argparse.REMAINDER, default=[], help="ComfyUI arguments")
 
     args = parser.parse_args()
 

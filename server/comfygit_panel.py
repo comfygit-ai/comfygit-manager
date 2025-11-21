@@ -4,6 +4,7 @@ Provides /v2/comfygit/ endpoints for git operations, status, and environment man
 """
 
 import asyncio
+import json
 import re
 import subprocess
 import sys
@@ -15,6 +16,10 @@ from server import PromptServer
 
 from comfygit_server import get_environment_from_cwd, _workspace
 from comfygit_core.core.environment import Environment
+from comfygit_core.models.exceptions import CDEnvironmentNotFoundError
+
+# Import orchestrator using direct import (server dir is in sys.path from __init__.py)
+import orchestrator
 
 routes = PromptServer.instance.routes
 
@@ -30,15 +35,15 @@ def spawn_orchestrator(env: Environment, target_env: str) -> None:
     """
     # Use bundled orchestrator venv
     custom_node_root = Path(__file__).parent.parent
-    orchestrator_venv = custom_node_root / "server" / ".orchestrator_venv"
-    orchestrator_python = orchestrator_venv / "bin" / "python"
+    orchestrator_python = orchestrator.get_orchestrator_python(custom_node_root)
     orchestrator_script = custom_node_root / "server" / "orchestrator.py"
 
     if not orchestrator_python.exists():
         raise RuntimeError("Orchestrator venv not found - run setup")
 
-    # Capture current ComfyUI args
-    comfyui_args = sys.argv[1:] if len(sys.argv) > 1 else []
+    # Capture current ComfyUI args, but filter out --enable-manager
+    # (that's injected by our custom node, not a real CLI arg)
+    comfyui_args = [arg for arg in sys.argv[1:] if arg != '--enable-manager']
 
     # Build command
     cmd = [
@@ -50,16 +55,17 @@ def spawn_orchestrator(env: Environment, target_env: str) -> None:
     ] + comfyui_args
 
     # Spawn detached orchestrator
+    log_file = env.workspace.path / ".metadata" / "orchestrator.log"
     subprocess.Popen(
         cmd,
         start_new_session=True,  # Detach from parent
         stdin=subprocess.DEVNULL,
-        stdout=open("/tmp/comfygit_orchestrator.log", "a"),
+        stdout=open(log_file, "a"),
         stderr=subprocess.STDOUT,
-        cwd="/tmp"
+        cwd=str(env.workspace.path)
     )
 
-    print(f"[ComfyGit] Spawned orchestrator daemon")
+    print(f"[ComfyGit] Spawned orchestrator daemon (log: {log_file})")
 
 
 @routes.get("/v2/comfygit/status")
@@ -571,6 +577,199 @@ async def comfygit_switch_branch(request):
         return web.json_response({
             "status": "error",
             "message": str(e)
+        }, status=500)
+
+
+# Phase 3 endpoints - Environment switching
+
+@routes.post("/v2/comfygit/switch_environment")
+async def switch_environment(request):
+    """
+    Initiate environment switch.
+
+    Request body:
+        {
+            "target_env": "env2"
+        }
+
+    Returns:
+        {
+            "status": "switching",
+            "message": "Switching to env2..."
+        }
+
+    Side effects:
+        - Spawns orchestrator if first switch
+        - Writes .switch_request.json
+        - Exits ComfyUI with code 43
+    """
+    # 1. Get current environment (validate managed)
+    is_managed, workspace, environment = orchestrator.detect_environment_type()
+    if not is_managed or not environment:
+        return web.json_response({
+            "error": "Not in managed environment"
+        }, status=500)
+
+    # 2. Parse request
+    try:
+        data = await request.json()
+        target_env = data.get("target_env")
+
+        if not target_env:
+            return web.json_response({
+                "error": "target_env required"
+            }, status=400)
+    except Exception:
+        return web.json_response({
+            "error": "Invalid JSON"
+        }, status=400)
+
+    # 3. Validate target environment exists
+    try:
+        workspace.get_environment(target_env, auto_sync=False)
+    except CDEnvironmentNotFoundError:
+        return web.json_response({
+            "error": f"Environment '{target_env}' not found"
+        }, status=404)
+
+    # 4. Check for concurrent switch (acquire lock)
+    metadata_dir = workspace.path / ".metadata"
+    if not orchestrator.acquire_switch_lock(metadata_dir):
+        return web.json_response({
+            "error": "Environment switch already in progress"
+        }, status=409)
+
+    try:
+        # 5. Spawn orchestrator if needed (first switch)
+        if orchestrator.should_spawn_orchestrator_for_switch():
+            spawn_orchestrator(environment, target_env)
+
+        # 6. Write switch request
+        orchestrator.write_switch_request(metadata_dir, target_env, source_env=environment.name)
+
+        # 7. Schedule exit with code 43 (after response sent)
+        async def delayed_exit():
+            await asyncio.sleep(2)  # Give response time to send
+            import os
+            os._exit(SWITCH_ENV_EXIT_CODE)
+
+        asyncio.create_task(delayed_exit())
+
+        return web.json_response({
+            "status": "switching",
+            "message": f"Switching to {target_env}..."
+        })
+
+    except Exception as e:
+        # Release lock on error
+        orchestrator.release_switch_lock(metadata_dir)
+        return web.json_response({
+            "error": str(e)
+        }, status=500)
+
+
+@routes.get("/v2/comfygit/switch_status")
+async def switch_status(request):
+    """
+    Get current environment switch status.
+
+    Browser polls this endpoint during switch to show progress.
+
+    Returns:
+        {
+            "state": "syncing",
+            "progress": 40,
+            "message": "Syncing env2...",
+            "target_env": "env2",
+            "source_env": "env1",
+            "updated_at": 1705776150.0
+        }
+
+    States:
+        - idle: No switch in progress
+        - preparing: Loading target environment
+        - syncing: Installing nodes/models
+        - starting: Starting ComfyUI
+        - validating: Waiting for health check
+        - complete: Switch successful
+        - rolling_back: Restoring old environment
+        - rolled_back: Rollback complete
+        - critical_failure: Both switch and rollback failed
+    """
+    is_managed, workspace, environment = orchestrator.detect_environment_type()
+
+    if not is_managed or not workspace:
+        # Server might be restarting
+        return web.json_response({
+            "state": "unknown",
+            "message": "Server restarting..."
+        })
+
+    status_file = workspace.path / ".metadata" / ".switch_status.json"
+
+    if not status_file.exists():
+        return web.json_response({
+            "state": "idle",
+            "message": "No switch in progress"
+        })
+
+    try:
+        with open(status_file) as f:
+            status = json.load(f)
+
+        return web.json_response(status)
+
+    except Exception as e:
+        return web.json_response({
+            "error": str(e)
+        }, status=500)
+
+
+@routes.get("/v2/comfygit/environments")
+async def list_environments(request):
+    """
+    List all available environments in the workspace.
+
+    Returns:
+        {
+            "environments": [
+                {"name": "env1", "is_current": true},
+                {"name": "env2", "is_current": false}
+            ],
+            "current": "env1",
+            "is_managed": true
+        }
+    """
+    is_managed, workspace, current_env = orchestrator.detect_environment_type()
+
+    if not is_managed or not workspace:
+        return web.json_response({
+            "environments": [],
+            "current": None,
+            "is_managed": False
+        })
+
+    try:
+        # Get all environments
+        env_names = [e.name for e in workspace.list_environments()]
+
+        environments = [
+            {
+                "name": name,
+                "is_current": name == current_env.name if current_env else False
+            }
+            for name in env_names
+        ]
+
+        return web.json_response({
+            "environments": environments,
+            "current": current_env.name if current_env else None,
+            "is_managed": True
+        })
+    except Exception as e:
+        print(f"[ComfyGit Panel] List environments error: {e}")
+        return web.json_response({
+            "error": str(e)
         }, status=500)
 
 

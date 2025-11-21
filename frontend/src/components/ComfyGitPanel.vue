@@ -32,6 +32,7 @@
         Loading status...
       </div>
       <template v-else>
+        <EnvironmentSwitcher @toast="handleToast" />
         <StatusSection :status="status" />
         <BranchSection
           :branches="branches"
@@ -101,6 +102,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import EnvironmentSwitcher from './EnvironmentSwitcher.vue'
 import StatusSection from './StatusSection.vue'
 import BranchSection from './BranchSection.vue'
 import HistorySection from './HistorySection.vue'
@@ -179,6 +181,10 @@ function getToastIcon(type: Toast['type']): string {
     case 'error': return '✕'
     default: return '→'
   }
+}
+
+function handleToast(message: string, type: Toast['type']) {
+  showToast(message, type)
 }
 
 const statusColor = computed(() => {

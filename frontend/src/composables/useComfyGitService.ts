@@ -99,6 +99,24 @@ export function useComfyGitService() {
     })
   }
 
+  // Phase 3 - Environment switching
+
+  async function listEnvironments(): Promise<any> {
+    return fetchApi('/v2/comfygit/environments')
+  }
+
+  async function switchEnvironment(targetEnv: string): Promise<any> {
+    return fetchApi('/v2/comfygit/switch_environment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target_env: targetEnv })
+    })
+  }
+
+  async function getSwitchStatus(): Promise<any> {
+    return fetchApi('/v2/comfygit/switch_status')
+  }
+
   return {
     isLoading,
     error,
@@ -111,6 +129,10 @@ export function useComfyGitService() {
     getCommitDetail,
     checkout,
     createBranch,
-    switchBranch
+    switchBranch,
+    // Phase 3
+    listEnvironments,
+    switchEnvironment,
+    getSwitchStatus
   }
 }
