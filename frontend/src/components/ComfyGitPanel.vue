@@ -195,10 +195,7 @@
           <NodesSection v-else-if="currentView === 'nodes'" />
 
           <!-- Debug (Environment) View -->
-          <div v-else-if="currentView === 'debug-env'" class="view-placeholder">
-            <h3 class="view-title">DEBUG (ENVIRONMENT LOGS)</h3>
-            <p>Environment logs view coming soon...</p>
-          </div>
+          <DebugEnvSection v-else-if="currentView === 'debug-env'" />
 
           <!-- Environments View -->
           <div v-else-if="currentView === 'environments'" class="view-placeholder">
@@ -335,6 +332,7 @@ import NodesSection from './NodesSection.vue'
 import RemotesSection from './RemotesSection.vue'
 import WorkspaceSettingsSection from './WorkspaceSettingsSection.vue'
 import WorkspaceDebugSection from './WorkspaceDebugSection.vue'
+import DebugEnvSection from './DebugEnvSection.vue'
 import CommitDetailModal from './CommitDetailModal.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'

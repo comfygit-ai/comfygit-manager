@@ -1,95 +1,88 @@
 <template>
-  <span :class="['log-level', levelClass]">
-    <span class="log-level__icon">{{ icon }}</span>
-    <span class="log-level__text">{{ level }}</span>
+  <span :class="['log-level', levelClass, size]">
+    {{ levelText }}
   </span>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 
-/**
- * LogLevel Atom
- *
- * Badge component for displaying log entry severity levels
- * Shows an icon and level text with appropriate color coding
- *
- * @example
- * <LogLevel level="ERROR" />
- * <LogLevel level="WARNING" />
- */
+const props = withDefaults(defineProps<{
+  level: 'ERROR' | 'WARNING' | 'INFO' | 'DEBUG' | 'error' | 'warning' | 'info' | 'debug'
+  size?: 'sm' | 'md'
+}>(), {
+  size: 'sm'
+})
 
-interface LogLevelProps {
-  /** Log level severity */
-  level: 'ERROR' | 'WARNING' | 'INFO' | 'DEBUG'
+// Normalize level to uppercase for consistency
+const normalizedLevel = computed(() => props.level.toUpperCase() as 'ERROR' | 'WARNING' | 'INFO' | 'DEBUG')
+
+const levelConfig = {
+  ERROR: {
+    class: 'log-level-error',
+    text: 'ERROR'
+  },
+  WARNING: {
+    class: 'log-level-warning',
+    text: 'WARN'
+  },
+  INFO: {
+    class: 'log-level-info',
+    text: 'INFO'
+  },
+  DEBUG: {
+    class: 'log-level-debug',
+    text: 'DEBUG'
+  }
 }
 
-const props = defineProps<LogLevelProps>()
-
-const levelClass = computed(() => `log-level--${props.level.toLowerCase()}`)
-
-const icon = computed(() => {
-  switch (props.level) {
-    case 'ERROR': return '✕'
-    case 'WARNING': return '!'
-    case 'INFO': return '→'
-    case 'DEBUG': return '·'
-    default: return '·'
-  }
-})
+const levelClass = computed(() => levelConfig[normalizedLevel.value].class)
+const levelText = computed(() => levelConfig[normalizedLevel.value].text)
 </script>
 
 <style scoped>
 .log-level {
   display: inline-flex;
   align-items: center;
-  gap: var(--cg-space-1);
-  padding: 2px 8px;
-  border: 1px solid;
-  font-size: var(--cg-font-size-xs);
+  justify-content: center;
   font-family: var(--cg-font-mono);
   font-weight: var(--cg-font-weight-semibold);
-  text-transform: uppercase;
-  letter-spacing: var(--cg-letter-spacing-wide);
-  white-space: nowrap;
-  flex-shrink: 0;
+  border-radius: var(--cg-radius-sm);
+  padding: 2px 6px;
+  letter-spacing: 0.05em;
 }
 
-.log-level__icon {
-  font-size: 10px;
-  line-height: 1;
+.log-level.sm {
+  font-size: var(--cg-font-size-xs);
+  min-width: 50px;
 }
 
-.log-level__text {
-  font-size: 10px;
-  line-height: 1;
+.log-level.md {
+  font-size: var(--cg-font-size-sm);
+  min-width: 60px;
 }
 
-/* Error level - red */
-.log-level--error {
+.log-level-error {
+  background-color: var(--cg-color-error-muted);
   color: var(--cg-color-error);
-  border-color: var(--cg-color-error);
-  background: var(--cg-color-error-muted);
+  border: 1px solid var(--cg-color-error);
 }
 
-/* Warning level - yellow */
-.log-level--warning {
+.log-level-warning {
+  background-color: var(--cg-color-warning-muted);
   color: var(--cg-color-warning);
-  border-color: var(--cg-color-warning);
-  background: var(--cg-color-warning-muted);
+  border: 1px solid var(--cg-color-warning);
 }
 
-/* Info level - blue */
-.log-level--info {
+.log-level-info {
+  background-color: var(--cg-color-info-muted);
   color: var(--cg-color-info);
-  border-color: var(--cg-color-info);
-  background: var(--cg-color-info-muted);
+  border: 1px solid var(--cg-color-info);
 }
 
-/* Debug level - muted */
-.log-level--debug {
+.log-level-debug {
+  background-color: var(--cg-color-bg-hover);
   color: var(--cg-color-text-muted);
-  border-color: var(--cg-color-border);
-  background: transparent;
+  border: 1px solid var(--cg-color-border);
 }
 </style>
