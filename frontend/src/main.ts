@@ -197,6 +197,16 @@ styles.textContent = `
     display: flex;
     gap: 0;
     margin-right: 4px;
+    order: -1;
+  }
+
+  .comfygit-panel-btn,
+  .comfygit-commit-btn {
+    height: 32px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .comfygit-panel-btn {
