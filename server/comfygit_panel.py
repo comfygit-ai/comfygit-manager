@@ -728,13 +728,23 @@ async def switch_status(request):
 @routes.get("/v2/comfygit/environments")
 async def list_environments(request):
     """
-    List all available environments in the workspace.
+    List all available environments in the workspace with full details.
 
     Returns:
         {
             "environments": [
-                {"name": "env1", "is_current": true},
-                {"name": "env2", "is_current": false}
+                {
+                    "name": "env1",
+                    "is_current": true,
+                    "path": "/path/to/env1",
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "workflow_count": 10,
+                    "node_count": 25,
+                    "model_count": 5,
+                    "current_branch": "main",
+                    "last_commit": "abc123",
+                    "last_commit_date": "2024-01-15T10:30:00Z"
+                }
             ],
             "current": "env1",
             "is_managed": true
@@ -750,16 +760,28 @@ async def list_environments(request):
         })
 
     try:
-        # Get all environments
-        env_names = [e.name for e in workspace.list_environments()]
+        # Get all environment objects
+        all_envs = workspace.list_environments()
 
-        environments = [
-            {
-                "name": name,
-                "is_current": name == current_env.name if current_env else False
-            }
-            for name in env_names
-        ]
+        environments = []
+        for env in all_envs:
+            try:
+                # Get environment info
+                env_info = _get_environment_info(env, current_env)
+                environments.append(env_info)
+            except Exception as e:
+                print(f"[ComfyGit Panel] Error getting info for {env.name}: {e}")
+                # Include basic info even if detailed info fails
+                environments.append({
+                    "name": env.name,
+                    "is_current": env.name == current_env.name if current_env else False,
+                    "path": str(env.path),
+                    "created_at": None,
+                    "workflow_count": 0,
+                    "node_count": 0,
+                    "model_count": 0,
+                    "current_branch": None
+                })
 
         return web.json_response({
             "environments": environments,
@@ -771,6 +793,85 @@ async def list_environments(request):
         return web.json_response({
             "error": str(e)
         }, status=500)
+
+
+def _get_environment_info(env, current_env):
+    """Extract detailed information from an environment object."""
+    from datetime import datetime
+    import os
+
+    # Basic info
+    info = {
+        "name": env.name,
+        "is_current": env.name == current_env.name if current_env else False,
+        "path": str(env.path)
+    }
+
+    # Created at - from .cec directory creation time
+    try:
+        cec_stat = os.stat(env.cec_path)
+        info["created_at"] = datetime.fromtimestamp(cec_stat.st_ctime).isoformat() + "Z"
+    except Exception:
+        info["created_at"] = None
+
+    # Workflow count - count .json files in workflows directory
+    try:
+        workflows_dir = env.comfyui_path / "workflows"
+        if workflows_dir.exists():
+            workflow_files = list(workflows_dir.glob("*.json"))
+            info["workflow_count"] = len(workflow_files)
+        else:
+            info["workflow_count"] = 0
+    except Exception:
+        info["workflow_count"] = 0
+
+    # Node count - count directories in custom_nodes (excluding __pycache__ and .git)
+    try:
+        if env.custom_nodes_path.exists():
+            node_dirs = [
+                d for d in env.custom_nodes_path.iterdir()
+                if d.is_dir() and d.name not in ("__pycache__", ".git")
+            ]
+            info["node_count"] = len(node_dirs)
+        else:
+            info["node_count"] = 0
+    except Exception:
+        info["node_count"] = 0
+
+    # Model count - count symlinks in models directory
+    try:
+        model_count = 0
+        if env.models_path.exists():
+            for category_dir in env.models_path.iterdir():
+                if category_dir.is_dir():
+                    symlinks = [f for f in category_dir.iterdir() if f.is_symlink()]
+                    model_count += len(symlinks)
+        info["model_count"] = model_count
+    except Exception:
+        info["model_count"] = 0
+
+    # Git info - current branch and last commit
+    try:
+        branch = env.get_current_branch()
+        info["current_branch"] = branch
+    except Exception:
+        info["current_branch"] = None
+
+    try:
+        # Get last commit info
+        history = env.get_commit_history(limit=1)
+        if history:
+            last_commit = history[0]
+            info["last_commit"] = last_commit.get("short_hash") or last_commit.get("hash", "")[:7]
+            info["last_commit_date"] = last_commit.get("date")
+        else:
+            info["last_commit"] = None
+            info["last_commit_date"] = None
+    except Exception:
+        info["last_commit"] = None
+        info["last_commit_date"] = None
+
+    return info
 
 
 # ============================================================================

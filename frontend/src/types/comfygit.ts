@@ -167,9 +167,12 @@ export interface CreateEnvironmentResult {
 export interface WorkflowInfo {
   name: string
   status: 'broken' | 'new' | 'modified' | 'synced'
-  missing_nodes: string[]
-  missing_models: string[]
-  path: string
+  missing_nodes: number // Count of missing nodes
+  missing_models: number // Count of missing models
+  path?: string
+  node_count?: number // Total node count
+  model_count?: number // Total model count
+  sync_state?: 'new' | 'modified' | 'synced' | 'deleted' // Git sync state
 }
 
 export interface ModelUsageInfo {

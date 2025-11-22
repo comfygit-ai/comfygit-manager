@@ -136,19 +136,25 @@ export function useComfyGitService() {
     if (USE_MOCK) return mockApi.getEnvironments()
 
     try {
-      return fetchApi<EnvironmentInfo[]>('/v2/workspace/environments')
+      const response = await fetchApi<{ environments: EnvironmentInfo[], current: string | null, is_managed: boolean }>('/v2/comfygit/environments')
+      return response.environments
     } catch {
-      const status = await getStatus()
-      return [{
-        name: status.environment,
-        is_current: true,
-        path: '~/comfygit/environments/' + status.environment,
-        created_at: new Date().toISOString(),
-        workflow_count: status.workflows.total,
-        node_count: 0,
-        model_count: 0,
-        current_branch: status.branch
-      }]
+      // Fallback: try to build single environment from status
+      try {
+        const status = await getStatus()
+        return [{
+          name: status.environment,
+          is_current: true,
+          path: '~/comfygit/environments/' + status.environment,
+          created_at: new Date().toISOString(),
+          workflow_count: status.workflows.total,
+          node_count: 0,
+          model_count: 0,
+          current_branch: status.branch
+        }]
+      } catch {
+        return []
+      }
     }
   }
 
@@ -207,13 +213,13 @@ export function useComfyGitService() {
       const workflows: WorkflowInfo[] = []
 
       status.workflows.new.forEach(name => {
-        workflows.push({ name, status: 'new', missing_nodes: [], missing_models: [], path: name })
+        workflows.push({ name, status: 'new', missing_nodes: 0, missing_models: 0, path: name })
       })
       status.workflows.modified.forEach(name => {
-        workflows.push({ name, status: 'modified', missing_nodes: [], missing_models: [], path: name })
+        workflows.push({ name, status: 'modified', missing_nodes: 0, missing_models: 0, path: name })
       })
       status.workflows.synced.forEach(name => {
-        workflows.push({ name, status: 'synced', missing_nodes: [], missing_models: [], path: name })
+        workflows.push({ name, status: 'synced', missing_nodes: 0, missing_models: 0, path: name })
       })
 
       return workflows
