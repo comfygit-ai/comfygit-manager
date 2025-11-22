@@ -185,7 +185,7 @@ export interface WorkflowInfo {
 
 export interface ModelUsageInfo {
   filename: string
-  sha256: string
+  hash: string
   type: string
   size: number
   used_in_workflows: string[]
@@ -219,7 +219,7 @@ export interface WorkflowResolutionPlan {
 // Model Management Types
 export interface ModelInfo {
   filename: string
-  sha256: string
+  hash: string
   type: string
   size: number
   source_url?: string

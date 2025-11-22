@@ -33,18 +33,18 @@
         <SectionGroup v-if="filteredCheckpoints.length" title="CHECKPOINTS" :count="filteredCheckpoints.length">
           <ItemCard
             v-for="model in filteredCheckpoints"
-            :key="model.sha256 || model.hash || model.filename"
+            :key="model.hash || model.filename"
             status="synced"
           >
             <template #icon>📦</template>
             <template #title>{{ model.filename }}</template>
-            <template #subtitle>{{ formatSize(model.size_mb || model.size) }}</template>
+            <template #subtitle>{{ formatSize(model.size) }}</template>
             <template #details>
-              <DetailRow label="Used by:" :value="(model.used_by || model.used_in_workflows || []).join(', ') || 'Not used'" />
+              <DetailRow label="Used by:" :value="(model.used_in_workflows || []).join(', ') || 'Not used'" />
               <DetailRow label="Source:" value="Workspace index" />
             </template>
             <template #actions>
-              <ActionButton variant="secondary" size="xs" @click="viewInWorkspace(model.sha256 || model.sha256_hash || model.hash || '')">
+              <ActionButton variant="secondary" size="xs" @click="viewInWorkspace(model.hash)">
                 View in Workspace Index ↗
               </ActionButton>
             </template>
@@ -55,18 +55,18 @@
         <SectionGroup v-if="filteredLoras.length" title="LORAS" :count="filteredLoras.length">
           <ItemCard
             v-for="model in filteredLoras"
-            :key="model.sha256 || model.hash || model.filename"
+            :key="model.hash || model.filename"
             status="synced"
           >
             <template #icon>📦</template>
             <template #title>{{ model.filename }}</template>
-            <template #subtitle>{{ formatSize(model.size_mb || model.size) }}</template>
+            <template #subtitle>{{ formatSize(model.size) }}</template>
             <template #details>
-              <DetailRow label="Used by:" :value="(model.used_by || model.used_in_workflows || []).join(', ') || 'Not used'" />
+              <DetailRow label="Used by:" :value="(model.used_in_workflows || []).join(', ') || 'Not used'" />
               <DetailRow label="Source:" value="Workspace index" />
             </template>
             <template #actions>
-              <ActionButton variant="secondary" size="xs" @click="viewInWorkspace(model.sha256 || model.sha256_hash || model.hash || '')">
+              <ActionButton variant="secondary" size="xs" @click="viewInWorkspace(model.hash)">
                 View in Workspace Index ↗
               </ActionButton>
             </template>
@@ -77,18 +77,18 @@
         <SectionGroup v-if="filteredOther.length" title="OTHER" :count="filteredOther.length">
           <ItemCard
             v-for="model in filteredOther"
-            :key="model.sha256 || model.hash || model.filename"
+            :key="model.hash || model.filename"
             status="synced"
           >
             <template #icon>📦</template>
             <template #title>{{ model.filename }}</template>
-            <template #subtitle>{{ formatSize(model.size_mb || model.size) }}</template>
+            <template #subtitle>{{ formatSize(model.size) }}</template>
             <template #details>
               <DetailRow label="Type:" :value="model.type" />
-              <DetailRow label="Used by:" :value="(model.used_by || model.used_in_workflows || []).join(', ') || 'Not used'" />
+              <DetailRow label="Used by:" :value="(model.used_in_workflows || []).join(', ') || 'Not used'" />
             </template>
             <template #actions>
-              <ActionButton variant="secondary" size="xs" @click="viewInWorkspace(model.sha256 || model.sha256_hash || model.hash || '')">
+              <ActionButton variant="secondary" size="xs" @click="viewInWorkspace(model.hash)">
                 View in Workspace Index ↗
               </ActionButton>
             </template>
@@ -168,14 +168,7 @@ import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 
-// Extended type for mock data compatibility
-interface EnvModelInfo extends ModelInfo {
-  hash?: string
-  sha256_hash?: string
-  size_mb?: number
-  category?: string
-  used_by?: string[]
-}
+// No extended interface needed - use ModelInfo directly
 
 interface MissingModelInfo {
   filename: string
@@ -188,7 +181,7 @@ const emit = defineEmits<{
 
 const { getEnvironmentModels, getStatus } = useComfyGitService()
 
-const models = ref<EnvModelInfo[]>([])
+const models = ref<ModelInfo[]>([])
 const missingModels = ref<MissingModelInfo[]>([])
 const environmentName = ref('production')
 const loading = ref(false)
@@ -202,7 +195,7 @@ function navigateToIndex() {
 }
 
 const totalSize = computed(() =>
-  models.value.reduce((sum, m) => sum + (m.size_mb || m.size || 0), 0)
+  models.value.reduce((sum, m) => sum + (m.size || 0), 0)
 )
 
 // Search filtering for models
@@ -220,30 +213,28 @@ const filteredMissing = computed(() => {
 })
 
 const filteredCheckpoints = computed(() =>
-  filteredModels.value.filter(m => m.type === 'checkpoints' || m.category === 'checkpoints')
+  filteredModels.value.filter(m => m.type === 'checkpoints')
 )
 
 const filteredLoras = computed(() =>
-  filteredModels.value.filter(m => m.type === 'loras' || m.category === 'loras')
+  filteredModels.value.filter(m => m.type === 'loras')
 )
 
 const filteredOther = computed(() =>
-  filteredModels.value.filter(m =>
-    m.type !== 'checkpoints' && m.category !== 'checkpoints' &&
-    m.type !== 'loras' && m.category !== 'loras'
-  )
+  filteredModels.value.filter(m => m.type !== 'checkpoints' && m.type !== 'loras')
 )
 
-function formatSize(mb: number | undefined): string {
-  if (!mb) return 'Unknown'
+function formatSize(bytes: number | undefined): string {
+  if (!bytes) return 'Unknown'
+  const mb = bytes / (1024 * 1024)
   if (mb >= 1024) {
     return `${(mb / 1024).toFixed(1)} GB`
   }
   return `${mb.toFixed(0)} MB`
 }
 
-function viewInWorkspace(_sha256: string) {
-  // TODO: Navigate to model index with sha256 filter
+function viewInWorkspace(_hash: string) {
+  // TODO: Navigate to model index with hash filter
   emit('navigate', 'model-index')
 }
 
@@ -262,7 +253,7 @@ async function loadModels() {
   error.value = null
   try {
     const envModels = await getEnvironmentModels()
-    models.value = envModels as EnvModelInfo[]
+    models.value = envModels
 
     // TODO: Get missing models from workflow details API when available
     // For now, missingModels stays empty until the API is implemented
