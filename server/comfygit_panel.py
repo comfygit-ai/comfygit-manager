@@ -5,9 +5,11 @@ Provides /v2/comfygit/ endpoints for git operations, status, and environment man
 
 import asyncio
 import json
+import logging
 import re
 import subprocess
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime
 
@@ -23,9 +25,175 @@ import orchestrator
 
 routes = PromptServer.instance.routes
 
+# Try to import logging infrastructure from CLI (optional - graceful degradation)
+try:
+    # Temporarily add CLI to path only for import
+    _cli_path = str(Path(__file__).parent.parent.parent / "comfygit" / "packages" / "cli")
+    if _cli_path not in sys.path:
+        sys.path.insert(0, _cli_path)
+
+    from comfygit_cli.logging.environment_logger import EnvironmentLogger, WorkspaceLogger
+    from comfygit_cli.logging.logging_config import get_logger
+
+    # Remove from path after import to avoid polluting ComfyUI's module resolution
+    sys.path.remove(_cli_path)
+
+    logger = get_logger(__name__)
+    LOGGING_AVAILABLE = True
+except Exception as e:
+    # Logging not available - panel will work without it
+    print(f"[ComfyGit Panel] Logging infrastructure not available: {e}")
+    print("[ComfyGit Panel] Panel will function without detailed logging")
+    logger = logging.getLogger(__name__)
+    LOGGING_AVAILABLE = False
+    EnvironmentLogger = None
+    WorkspaceLogger = None
+
 RESTART_EXIT_CODE = 42
 SWITCH_ENV_EXIT_CODE = 43
 
+
+# ============================================================================
+# Logging Setup
+# ============================================================================
+
+def _initialize_panel_logging():
+    """Initialize environment logging for panel backend."""
+    if not LOGGING_AVAILABLE:
+        return
+
+    try:
+        # Detect workspace from current environment
+        env = get_environment_from_cwd()
+        if env and env.workspace:
+            EnvironmentLogger.set_workspace_path(env.workspace.path)
+            logger.info(f"Panel logging initialized for workspace: {env.workspace.path}")
+        elif _workspace:
+            EnvironmentLogger.set_workspace_path(_workspace.path)
+            logger.info(f"Panel logging initialized for workspace: {_workspace.path}")
+    except Exception as e:
+        # Non-fatal - panel can work without logging
+        print(f"[ComfyGit Panel] Could not initialize logging: {e}")
+
+
+@asynccontextmanager
+async def log_panel_request(env_name: str, endpoint: str, **context):
+    """
+    Async context manager for logging panel API requests.
+
+    Usage:
+        async with log_panel_request(env.name, "POST /v2/comfygit/commit", message=message):
+            result = await execute_commit()
+    """
+    # If logging not available, just yield without doing anything
+    if not LOGGING_AVAILABLE:
+        yield None
+        return
+
+    loop = asyncio.get_event_loop()
+
+    # Run logging context in executor to avoid blocking
+    def enter_logging():
+        return EnvironmentLogger.log_command(
+            env_name,
+            f"panel: {endpoint}",
+            **context
+        ).__enter__()
+
+    def exit_logging(cm, exc_type, exc_val, exc_tb):
+        return cm.__exit__(exc_type, exc_val, exc_tb)
+
+    # Enter context
+    cm = await loop.run_in_executor(None, enter_logging)
+
+    try:
+        yield cm
+    finally:
+        # Exit context (handles exception logging)
+        await loop.run_in_executor(None, exit_logging, cm, None, None, None)
+
+
+# Initialize logging on module load
+_initialize_panel_logging()
+
+
+# ============================================================================
+# Log File Parsing
+# ============================================================================
+
+def parse_log_file(log_file: Path, level_filter: str | None = None, lines: int = 100) -> list[dict]:
+    """
+    Parse Python logging file and return structured log entries.
+
+    Format: "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s"
+    Example: "2025-11-22 15:30:45,234 - comfygit_core.workflow - DEBUG - execute:456 - Starting"
+
+    Args:
+        log_file: Path to log file
+        level_filter: Optional level to filter by (ERROR, WARNING, INFO, DEBUG)
+        lines: Number of lines to return (from end of file)
+
+    Returns:
+        List of log entry dicts with timestamp, level, message, context
+    """
+    if not log_file.exists():
+        return []
+
+    try:
+        # Read last N lines from file
+        with open(log_file, 'r', encoding='utf-8') as f:
+            # Read all lines and take last N
+            all_lines = f.readlines()
+            recent_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
+
+        entries = []
+        import re
+
+        # Pattern to match log lines
+        # Format: timestamp - logger_name - LEVEL - funcName:lineno - message
+        pattern = re.compile(
+            r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) - ([^ ]+) - (DEBUG|INFO|WARNING|ERROR) - ([^:]+):(\d+) - (.+)$'
+        )
+
+        for line in recent_lines:
+            line = line.strip()
+            if not line:
+                continue
+
+            match = pattern.match(line)
+            if match:
+                timestamp_str, logger_name, level, func_name, line_no, message = match.groups()
+
+                # Filter by level if specified
+                if level_filter and level != level_filter.upper():
+                    continue
+
+                # Convert timestamp to ISO format
+                # Python format: "2025-11-22 15:30:45,234"
+                # ISO format: "2025-11-22T15:30:45.234Z"
+                timestamp_iso = timestamp_str.replace(',', '.').replace(' ', 'T') + 'Z'
+
+                # Extract context from logger name (e.g., "comfygit_core.workflow" -> "workflow")
+                context = logger_name.split('.')[-1] if '.' in logger_name else logger_name
+
+                entries.append({
+                    'timestamp': timestamp_iso,
+                    'level': level,
+                    'message': message,
+                    'context': context
+                })
+
+        # Reverse to show newest first
+        return list(reversed(entries))
+
+    except Exception as e:
+        logger.error(f"Failed to parse log file {log_file}: {e}")
+        return []
+
+
+# ============================================================================
+# Orchestrator Management
+# ============================================================================
 
 def spawn_orchestrator(env: Environment, target_env: str) -> None:
     """
@@ -122,62 +290,68 @@ async def comfygit_commit(request):
     if not env:
         return web.json_response({"error": "No environment detected"}, status=500)
 
-    try:
-        json_data = await request.json()
-        message = json_data.get("message", "Update workflows")
-        allow_issues = json_data.get("allow_issues", False)
+    json_data = await request.json()
+    message = json_data.get("message", "Update workflows")
+    allow_issues = json_data.get("allow_issues", False)
 
-        loop = asyncio.get_event_loop()
+    async with log_panel_request(
+        env.name,
+        "POST /commit",
+        message=message,
+        allow_issues=allow_issues
+    ):
+        try:
+            loop = asyncio.get_event_loop()
 
-        # Check for changes
-        has_changes = await loop.run_in_executor(None, env.has_committable_changes)
-        if not has_changes:
-            return web.json_response({
-                "status": "no_changes",
-                "message": "No changes to commit"
-            })
+            # Check for changes
+            has_changes = await loop.run_in_executor(None, env.has_committable_changes)
+            if not has_changes:
+                return web.json_response({
+                    "status": "no_changes",
+                    "message": "No changes to commit"
+                })
 
-        # Get workflow status
-        workflow_status = await loop.run_in_executor(
-            None, env.workflow_manager.get_workflow_status
-        )
-
-        # Check commit safety
-        if not workflow_status.is_commit_safe and not allow_issues:
-            issues = [{
-                "name": wf.name,
-                "issue": wf.issue_summary
-            } for wf in workflow_status.workflows_with_issues]
-            return web.json_response({
-                "status": "blocked",
-                "reason": "workflows_with_issues",
-                "issues": issues
-            }, status=400)
-
-        # Execute commit
-        await loop.run_in_executor(
-            None,
-            lambda: env.execute_commit(
-                workflow_status=workflow_status,
-                message=message,
-                allow_issues=allow_issues
+            # Get workflow status
+            workflow_status = await loop.run_in_executor(
+                None, env.workflow_manager.get_workflow_status
             )
-        )
 
-        return web.json_response({
-            "status": "success",
-            "summary": {
-                "new": len(workflow_status.sync_status.new),
-                "modified": len(workflow_status.sync_status.modified),
-                "deleted": len(workflow_status.sync_status.deleted),
-            }
-        })
-    except Exception as e:
-        print(f"[ComfyGit Panel] Commit error: {e}")
-        return web.json_response({
-            "status": "error",
-            "message": str(e)
-        }, status=500)
+            # Check commit safety
+            if not workflow_status.is_commit_safe and not allow_issues:
+                issues = [{
+                    "name": wf.name,
+                    "issue": wf.issue_summary
+                } for wf in workflow_status.workflows_with_issues]
+                return web.json_response({
+                    "status": "blocked",
+                    "reason": "workflows_with_issues",
+                    "issues": issues
+                }, status=400)
+
+            # Execute commit
+            await loop.run_in_executor(
+                None,
+                lambda: env.execute_commit(
+                    workflow_status=workflow_status,
+                    message=message,
+                    allow_issues=allow_issues
+                )
+            )
+
+            return web.json_response({
+                "status": "success",
+                "summary": {
+                    "new": len(workflow_status.sync_status.new),
+                    "modified": len(workflow_status.sync_status.modified),
+                    "deleted": len(workflow_status.sync_status.deleted),
+                }
+            })
+        except Exception as e:
+            logger.error(f"Commit failed: {e}", exc_info=True)
+            return web.json_response({
+                "status": "error",
+                "message": str(e)
+            }, status=500)
 
 
 @routes.get("/v2/comfygit/log")
@@ -272,36 +446,42 @@ async def comfygit_sync_environment(request):
     if not env:
         return web.json_response({"error": "No environment detected"}, status=500)
 
-    try:
-        json_data = await request.json()
-        model_strategy = json_data.get("model_strategy", "skip")
-        remove_extra_nodes = json_data.get("remove_extra_nodes", True)
+    json_data = await request.json()
+    model_strategy = json_data.get("model_strategy", "skip")
+    remove_extra_nodes = json_data.get("remove_extra_nodes", True)
 
-        loop = asyncio.get_event_loop()
+    async with log_panel_request(
+        env.name,
+        "POST /sync",
+        model_strategy=model_strategy,
+        remove_extra_nodes=remove_extra_nodes
+    ):
+        try:
+            loop = asyncio.get_event_loop()
 
-        # Run sync operation
-        result = await loop.run_in_executor(
-            None,
-            lambda: env.sync(
-                model_strategy=model_strategy,
-                remove_extra_nodes=remove_extra_nodes
+            # Run sync operation
+            result = await loop.run_in_executor(
+                None,
+                lambda: env.sync(
+                    model_strategy=model_strategy,
+                    remove_extra_nodes=remove_extra_nodes
+                )
             )
-        )
 
-        # Convert SyncResult to JSON
-        return web.json_response({
-            "status": "success" if result.success else "error",
-            "nodes_installed": result.nodes_installed,
-            "nodes_removed": result.nodes_removed,
-            "errors": result.errors,
-            "message": "Sync completed" if result.success else "Sync completed with errors"
-        })
-    except Exception as e:
-        print(f"[ComfyGit Panel] Sync error: {e}")
-        return web.json_response({
-            "status": "error",
-            "message": str(e)
-        }, status=500)
+            # Convert SyncResult to JSON
+            return web.json_response({
+                "status": "success" if result.success else "error",
+                "nodes_installed": result.nodes_installed,
+                "nodes_removed": result.nodes_removed,
+                "errors": result.errors,
+                "message": "Sync completed" if result.success else "Sync completed with errors"
+            })
+        except Exception as e:
+            logger.error(f"Sync failed: {e}", exc_info=True)
+            return web.json_response({
+                "status": "error",
+                "message": str(e)
+            }, status=500)
 
 
 # ============================================================================
@@ -353,30 +533,108 @@ async def get_workflow_details(request):
         if not workflow:
             return web.json_response({"error": "Workflow not found"}, status=404)
 
-        # Transform models
-        models = []
-        for model in workflow.resolution.models_resolved:
-            models.append({
-                "filename": model.reference.widget_value,
-                "hash": model.resolved_model.hash if model.resolved_model else None,
-                "type": model.resolved_model.category if model.resolved_model else "unknown",
-                "size": model.resolved_model.file_size if model.resolved_model else 0,
-                "used_in_workflows": [name],
-                "importance": "required" if not model.is_optional else "optional",
-                "node_type": model.reference.node_type
-            })
+        # Transform models with granular status determination and node aggregation
+        models_map = {}  # hash/filename -> model info with aggregated nodes
 
-        # Add unresolved models as missing
-        for model in workflow.resolution.models_unresolved:
-            models.append({
-                "filename": model.reference.widget_value,
-                "hash": "",
-                "type": "unknown",
-                "size": 0,
-                "used_in_workflows": [name],
-                "importance": "required" if not model.is_optional else "optional",
-                "node_type": model.reference.node_type
-            })
+        # Helper function to determine model status
+        def determine_model_status(resolved_model):
+            """
+            Determine model status from ResolvedModel.
+
+            Status hierarchy (checked in order):
+            1. path_mismatch - Model exists but workflow path doesn't match
+            2. available - Model exists locally
+            3. downloadable - Not local but has download source
+            4. missing - Neither local nor downloadable
+            """
+            if resolved_model.resolved_model is not None:
+                if resolved_model.needs_path_sync:
+                    return "path_mismatch"
+                return "available"
+            elif resolved_model.model_source is not None:
+                return "downloadable"
+            else:
+                return "missing"
+
+        # Helper to determine most important importance level
+        def get_importance_priority(importance):
+            """Return priority value (lower = more important)."""
+            priorities = {"required": 0, "flexible": 1, "optional": 2}
+            return priorities.get(importance, 2)
+
+        # Process resolved models - deduplicate by hash
+        print(f"[DEBUG] Processing {len(workflow.resolution.models_resolved)} resolved models for workflow '{name}'")
+
+        for model in workflow.resolution.models_resolved:
+            status = determine_model_status(model)
+            model_hash = model.resolved_model.hash if model.resolved_model else ""
+            filename = model.reference.widget_value
+
+            # Use hash as key, fallback to filename if no hash
+            key = model_hash if model_hash else f"unhashed_{filename}"
+
+            if key not in models_map:
+                models_map[key] = {
+                    "filename": filename,
+                    "hash": model_hash,
+                    "type": model.resolved_model.category if model.resolved_model else "unknown",
+                    "size": model.resolved_model.file_size if model.resolved_model else 0,
+                    "status": status,
+                    "used_in_workflows": [name],
+                    "importance": "required" if not model.is_optional else "optional",
+                    "loaded_by": []
+                }
+
+            # Aggregate node references
+            node_ref = {
+                "node_type": model.reference.node_type,
+                "node_id": model.reference.node_id
+            }
+            print(f"[DEBUG] Adding node reference: {node_ref} for model {filename} (hash: {model_hash})")
+
+            if node_ref not in models_map[key]["loaded_by"]:
+                models_map[key]["loaded_by"].append(node_ref)
+                print(f"[DEBUG] Node added. Total nodes for this model: {len(models_map[key]['loaded_by'])}")
+            else:
+                print(f"[DEBUG] Node already exists in list (skipped)")
+
+            # Update importance to most important level across all nodes
+            current_importance = models_map[key]["importance"]
+            new_importance = "required" if not model.is_optional else "optional"
+            if get_importance_priority(new_importance) < get_importance_priority(current_importance):
+                models_map[key]["importance"] = new_importance
+
+        # Add unresolved models (always missing) - deduplicate by filename
+        for model_ref in workflow.resolution.models_unresolved:
+            filename = model_ref.widget_value
+            key = f"unresolved_{filename}"
+
+            if key not in models_map:
+                models_map[key] = {
+                    "filename": filename,
+                    "hash": "",
+                    "type": "unknown",
+                    "size": 0,
+                    "status": "missing",
+                    "used_in_workflows": [name],
+                    "importance": "required",
+                    "loaded_by": []
+                }
+
+            # Aggregate node references
+            node_ref = {
+                "node_type": model_ref.node_type,
+                "node_id": model_ref.node_id
+            }
+            if node_ref not in models_map[key]["loaded_by"]:
+                models_map[key]["loaded_by"].append(node_ref)
+
+        # Convert to list
+        models = list(models_map.values())
+
+        print(f"[DEBUG] Final model list for workflow '{name}':")
+        for m in models:
+            print(f"[DEBUG]   - {m['filename']}: {len(m['loaded_by'])} nodes: {[n['node_id'] for n in m['loaded_by']]}")
 
         # Transform nodes - deduplicate by package_id since multiple node types can come from same package
         # Status determined by workflow.uninstalled_nodes (authoritative source of what's NOT installed)
@@ -513,45 +771,51 @@ async def install_workflow_dependencies(request):
 
     name = request.match_info["name"]
 
-    try:
-        loop = asyncio.get_event_loop()
+    async with log_panel_request(
+        env.name,
+        f"POST /workflow/{name}/install",
+        workflow=name
+    ):
+        try:
+            loop = asyncio.get_event_loop()
 
-        # Get uninstalled nodes for this workflow
-        uninstalled = await loop.run_in_executor(
-            None,
-            lambda: env.get_uninstalled_nodes(workflow_name=name)
-        )
+            # Get uninstalled nodes for this workflow
+            uninstalled = await loop.run_in_executor(
+                None,
+                lambda: env.get_uninstalled_nodes(workflow_name=name)
+            )
 
-        if not uninstalled:
+            if not uninstalled:
+                return web.json_response({
+                    "status": "success",
+                    "message": "No nodes to install",
+                    "nodes_installed": []
+                })
+
+            # Install nodes
+            def install_nodes():
+                installed = []
+                failed = []
+                for node_id in uninstalled:
+                    try:
+                        env.install_node(node_id)
+                        installed.append(node_id)
+                    except Exception as e:
+                        failed.append({"name": node_id, "error": str(e)})
+                return installed, failed
+
+            installed, failed = await loop.run_in_executor(None, install_nodes)
+
+            logger.info(f"Workflow install complete: {len(installed)} installed, {len(failed)} failed")
             return web.json_response({
-                "status": "success",
-                "message": "No nodes to install",
-                "nodes_installed": []
+                "status": "success" if not failed else "partial",
+                "message": f"Installed {len(installed)} node(s)",
+                "nodes_installed": installed,
+                "nodes_failed": failed
             })
-
-        # Install nodes
-        def install_nodes():
-            installed = []
-            failed = []
-            for node_id in uninstalled:
-                try:
-                    env.install_node(node_id)
-                    installed.append(node_id)
-                except Exception as e:
-                    failed.append({"name": node_id, "error": str(e)})
-            return installed, failed
-
-        installed, failed = await loop.run_in_executor(None, install_nodes)
-
-        return web.json_response({
-            "status": "success" if not failed else "partial",
-            "message": f"Installed {len(installed)} node(s)",
-            "nodes_installed": installed,
-            "nodes_failed": failed
-        })
-    except Exception as e:
-        print(f"[ComfyGit Panel] Install workflow dependencies error: {e}")
-        return web.json_response({"error": str(e)}, status=500)
+        except Exception as e:
+            logger.error(f"Workflow install failed: {e}", exc_info=True)
+            return web.json_response({"error": str(e)}, status=500)
 
 
 # ============================================================================
@@ -570,10 +834,22 @@ async def get_environment_models(request):
         status = await loop.run_in_executor(None, env.status)
 
         # Aggregate models across all workflows, tracking which workflows use each
-        models_map = {}  # hash -> model info with usage tracking
+        models_map = {}  # hash/key -> model info with usage tracking
 
+        # Helper function to determine model status (same as workflow details)
+        def determine_model_status(resolved_model):
+            """Determine model status from ResolvedModel."""
+            if resolved_model.resolved_model is not None:
+                if resolved_model.needs_path_sync:
+                    return "path_mismatch"
+                return "available"
+            elif resolved_model.model_source is not None:
+                return "downloadable"
+            else:
+                return "missing"
+
+        # Process models from analyzed workflows
         for wf in status.workflow.analyzed_workflows:
-            # Process resolved models
             for resolved_model in wf.resolution.models_resolved:
                 model_ref = resolved_model.resolved_model
                 if not model_ref:
@@ -583,20 +859,37 @@ async def get_environment_models(request):
                 model_hash = model_ref.hash
 
                 if model_hash not in models_map:
-                    # Determine category from relative_path
+                    # Determine category and status
                     category = model_ref.category if hasattr(model_ref, 'category') else "unknown"
+                    model_status = determine_model_status(resolved_model)
 
                     models_map[model_hash] = {
                         "filename": model_ref.filename,
                         "hash": model_hash,
                         "type": category,
                         "size": model_ref.file_size,
+                        "status": model_status,
                         "used_in_workflows": []
                     }
 
                 # Track workflow usage
                 if wf.name not in models_map[model_hash]["used_in_workflows"]:
                     models_map[model_hash]["used_in_workflows"].append(wf.name)
+
+        # Process missing models from env status
+        for missing_model in status.missing_models:
+            # Use filename-based key for missing models (no hash available)
+            key = f"missing_{missing_model.filename}"
+
+            if key not in models_map:
+                models_map[key] = {
+                    "filename": missing_model.filename,
+                    "hash": "",
+                    "type": "unknown",
+                    "size": 0,
+                    "status": "missing",
+                    "used_in_workflows": missing_model.required_by.copy()
+                }
 
         # Convert to list sorted by filename
         models = sorted(models_map.values(), key=lambda m: m["filename"])
@@ -778,59 +1071,68 @@ async def comfygit_checkout(request):
     if not env:
         return web.json_response({"error": "No environment detected"}, status=500)
 
-    try:
-        json_data = await request.json()
-        ref = json_data.get("ref")
-        force = json_data.get("force", False)
+    json_data = await request.json()
+    ref = json_data.get("ref")
+    force = json_data.get("force", False)
 
-        if not ref:
-            return web.json_response({"error": "ref is required"}, status=400)
+    if not ref:
+        return web.json_response({"error": "ref is required"}, status=400)
 
-        loop = asyncio.get_event_loop()
+    async with log_panel_request(
+        env.name,
+        "POST /checkout",
+        ref=ref,
+        force=force
+    ):
+        try:
+            loop = asyncio.get_event_loop()
 
-        # Check for uncommitted changes using same logic as core
-        def check_uncommitted():
-            has_git_changes = env.git_manager.has_uncommitted_changes()
-            has_workflow_changes = env.workflow_manager.get_workflow_sync_status().has_changes
-            return has_git_changes or has_workflow_changes
+            # Check for uncommitted changes using same logic as core
+            def check_uncommitted():
+                has_git_changes = env.git_manager.has_uncommitted_changes()
+                has_workflow_changes = env.workflow_manager.get_workflow_sync_status().has_changes
+                return has_git_changes or has_workflow_changes
 
-        has_uncommitted = await loop.run_in_executor(None, check_uncommitted)
+            has_uncommitted = await loop.run_in_executor(None, check_uncommitted)
 
-        if has_uncommitted and not force:
+            if has_uncommitted and not force:
+                return web.json_response({
+                    "status": "warning",
+                    "reason": "uncommitted_changes",
+                    "message": "You have uncommitted changes that will be lost"
+                })
+
+            # Just do git checkout - let cg run handle sync on restart
+            def git_checkout():
+                from comfygit_core.utils.git import _git
+                repo_path = env.git_manager.repo_path
+                _git(["checkout", "--force", ref], repo_path)
+                if force:
+                    _git(["clean", "-fd"], repo_path)
+
+            await loop.run_in_executor(None, git_checkout)
+
+            logger.info(f"Checked out {ref}, restarting ComfyUI")
+
+            # Trigger restart to sync the new state
+            async def delayed_exit():
+                await asyncio.sleep(0.3)
+                import os
+                os._exit(RESTART_EXIT_CODE)
+
+            asyncio.create_task(delayed_exit())
+
             return web.json_response({
-                "status": "warning",
-                "reason": "uncommitted_changes",
-                "message": "You have uncommitted changes that will be lost"
+                "status": "success",
+                "message": "Restarting to apply changes..."
             })
 
-        # Just do git checkout - let cg run handle sync on restart
-        def git_checkout():
-            from comfygit_core.utils.git import _git
-            repo_path = env.git_manager.repo_path
-            _git(["checkout", "--force", ref], repo_path)
-            if force:
-                _git(["clean", "-fd"], repo_path)
-
-        await loop.run_in_executor(None, git_checkout)
-
-        # Trigger restart to sync the new state
-        async def delayed_exit():
-            await asyncio.sleep(0.3)
-            import os
-            os._exit(RESTART_EXIT_CODE)
-
-        asyncio.create_task(delayed_exit())
-
-        return web.json_response({
-            "status": "success",
-            "message": "Restarting to apply changes..."
-        })
-
-    except ValueError as e:
-        return web.json_response({"error": str(e)}, status=404)
-    except Exception as e:
-        print(f"[ComfyGit Panel] Checkout error: {e}")
-        return web.json_response({"error": str(e)}, status=500)
+        except ValueError as e:
+            logger.error(f"Checkout failed: ref not found: {ref}")
+            return web.json_response({"error": str(e)}, status=404)
+        except Exception as e:
+            logger.error(f"Checkout failed: {e}", exc_info=True)
+            return web.json_response({"error": str(e)}, status=500)
 
 
 @routes.post("/v2/comfygit/branch")
@@ -872,56 +1174,64 @@ async def comfygit_switch_branch(request):
     if not env:
         return web.json_response({"error": "No environment detected"}, status=500)
 
-    try:
-        json_data = await request.json()
-        branch = json_data.get("branch")
-        force = json_data.get("force", False)
+    json_data = await request.json()
+    branch = json_data.get("branch")
+    force = json_data.get("force", False)
 
-        if not branch:
-            return web.json_response({"error": "branch is required"}, status=400)
+    if not branch:
+        return web.json_response({"error": "branch is required"}, status=400)
 
-        loop = asyncio.get_event_loop()
+    async with log_panel_request(
+        env.name,
+        "POST /switch",
+        branch=branch,
+        force=force
+    ):
+        try:
+            loop = asyncio.get_event_loop()
 
-        # Check for uncommitted changes using same logic as core
-        def check_uncommitted():
-            has_git_changes = env.git_manager.has_uncommitted_changes()
-            has_workflow_changes = env.workflow_manager.get_workflow_sync_status().has_changes
-            return has_git_changes or has_workflow_changes
+            # Check for uncommitted changes using same logic as core
+            def check_uncommitted():
+                has_git_changes = env.git_manager.has_uncommitted_changes()
+                has_workflow_changes = env.workflow_manager.get_workflow_sync_status().has_changes
+                return has_git_changes or has_workflow_changes
 
-        has_uncommitted = await loop.run_in_executor(None, check_uncommitted)
+            has_uncommitted = await loop.run_in_executor(None, check_uncommitted)
 
-        if has_uncommitted and not force:
+            if has_uncommitted and not force:
+                return web.json_response({
+                    "status": "warning",
+                    "reason": "uncommitted_changes",
+                    "message": "You have uncommitted changes that will be lost"
+                })
+
+            # Just do git switch - let cg run handle sync on restart
+            def git_switch():
+                env.git_manager.switch_branch(branch)
+
+            await loop.run_in_executor(None, git_switch)
+
+            logger.info(f"Switched to branch {branch}, restarting ComfyUI")
+
+            # Trigger restart to sync the new state
+            async def delayed_exit():
+                await asyncio.sleep(0.3)
+                import os
+                os._exit(RESTART_EXIT_CODE)
+
+            asyncio.create_task(delayed_exit())
+
             return web.json_response({
-                "status": "warning",
-                "reason": "uncommitted_changes",
-                "message": "You have uncommitted changes that will be lost"
+                "status": "success",
+                "message": "Restarting to sync new branch..."
             })
 
-        # Just do git switch - let cg run handle sync on restart
-        def git_switch():
-            env.git_manager.switch_branch(branch)
-
-        await loop.run_in_executor(None, git_switch)
-
-        # Trigger restart to sync the new state
-        async def delayed_exit():
-            await asyncio.sleep(0.3)
-            import os
-            os._exit(RESTART_EXIT_CODE)
-
-        asyncio.create_task(delayed_exit())
-
-        return web.json_response({
-            "status": "success",
-            "message": "Restarting to sync new branch..."
-        })
-
-    except Exception as e:
-        print(f"[ComfyGit Panel] Switch branch error: {e}")
-        return web.json_response({
-            "status": "error",
-            "message": str(e)
-        }, status=500)
+        except Exception as e:
+            logger.error(f"Branch switch failed: {e}", exc_info=True)
+            return web.json_response({
+                "status": "error",
+                "message": str(e)
+            }, status=500)
 
 
 # Phase 3 endpoints - Environment switching
@@ -976,40 +1286,50 @@ async def switch_environment(request):
             "error": f"Environment '{target_env}' not found"
         }, status=404)
 
-    # 4. Check for concurrent switch (acquire lock)
-    metadata_dir = workspace.path / ".metadata"
-    if not orchestrator.acquire_switch_lock(metadata_dir):
-        return web.json_response({
-            "error": "Environment switch already in progress"
-        }, status=409)
+    # Use workspace logger for environment switch (affects workspace, not single env)
+    async with log_panel_request(
+        environment.name,
+        "POST /switch_environment",
+        source_env=environment.name,
+        target_env=target_env
+    ):
+        # 4. Check for concurrent switch (acquire lock)
+        metadata_dir = workspace.path / ".metadata"
+        if not orchestrator.acquire_switch_lock(metadata_dir):
+            return web.json_response({
+                "error": "Environment switch already in progress"
+            }, status=409)
 
-    try:
-        # 5. Spawn orchestrator if needed (first switch)
-        if orchestrator.should_spawn_orchestrator_for_switch():
-            spawn_orchestrator(environment, target_env)
+        try:
+            # 5. Spawn orchestrator if needed (first switch)
+            if orchestrator.should_spawn_orchestrator_for_switch():
+                logger.info(f"Spawning orchestrator for switch to {target_env}")
+                spawn_orchestrator(environment, target_env)
 
-        # 6. Write switch request
-        orchestrator.write_switch_request(metadata_dir, target_env, source_env=environment.name)
+            # 6. Write switch request
+            orchestrator.write_switch_request(metadata_dir, target_env, source_env=environment.name)
+            logger.info(f"Environment switch initiated: {environment.name} -> {target_env}")
 
-        # 7. Schedule exit with code 43 (after response sent)
-        async def delayed_exit():
-            await asyncio.sleep(2)  # Give response time to send
-            import os
-            os._exit(SWITCH_ENV_EXIT_CODE)
+            # 7. Schedule exit with code 43 (after response sent)
+            async def delayed_exit():
+                await asyncio.sleep(2)  # Give response time to send
+                import os
+                os._exit(SWITCH_ENV_EXIT_CODE)
 
-        asyncio.create_task(delayed_exit())
+            asyncio.create_task(delayed_exit())
 
-        return web.json_response({
-            "status": "switching",
-            "message": f"Switching to {target_env}..."
-        })
+            return web.json_response({
+                "status": "switching",
+                "message": f"Switching to {target_env}..."
+            })
 
-    except Exception as e:
-        # Release lock on error
-        orchestrator.release_switch_lock(metadata_dir)
-        return web.json_response({
-            "error": str(e)
-        }, status=500)
+        except Exception as e:
+            # Release lock on error
+            logger.error(f"Environment switch failed: {e}", exc_info=True)
+            orchestrator.release_switch_lock(metadata_dir)
+            return web.json_response({
+                "error": str(e)
+            }, status=500)
 
 
 @routes.get("/v2/comfygit/switch_status")
@@ -1262,6 +1582,105 @@ async def orchestrator_port_endpoint(request):
         return web.json_response({"port": port})
     except Exception:
         return web.json_response({"error": "Invalid port file"}, status=500)
+
+
+# ============================================================================
+# Debug/Logs Endpoints
+# ============================================================================
+
+@routes.get("/v2/comfygit/debug/logs")
+async def get_environment_debug_logs(request):
+    """
+    Get environment-specific debug logs.
+
+    Query params:
+        - level: Filter by log level (ERROR, WARNING, INFO, DEBUG)
+        - lines: Number of lines to return (default: 100)
+
+    Returns:
+        List of LogEntry objects from logs/<env>/full.log
+    """
+    # Return empty array if logging not available
+    if not LOGGING_AVAILABLE:
+        return web.json_response([])
+
+    env = get_environment_from_cwd()
+    if not env:
+        return web.json_response({"error": "No environment detected"}, status=500)
+
+    try:
+        # Get query params
+        level = request.query.get('level')
+        lines = int(request.query.get('lines', '100'))
+
+        # Get log file path
+        log_file = env.workspace.path / "logs" / env.name / "full.log"
+
+        # Parse and return logs
+        loop = asyncio.get_event_loop()
+        logs = await loop.run_in_executor(
+            None,
+            parse_log_file,
+            log_file,
+            level,
+            lines
+        )
+
+        return web.json_response(logs)
+
+    except Exception as e:
+        logger.error(f"Failed to get environment logs: {e}", exc_info=True)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+@routes.get("/v2/workspace/debug/logs")
+async def get_workspace_debug_logs(request):
+    """
+    Get workspace-level debug logs.
+
+    Query params:
+        - level: Filter by log level (ERROR, WARNING, INFO, DEBUG)
+        - lines: Number of lines to return (default: 100)
+
+    Returns:
+        List of LogEntry objects from logs/workspace/full.log
+    """
+    # Return empty array if logging not available
+    if not LOGGING_AVAILABLE:
+        return web.json_response([])
+
+    env = get_environment_from_cwd()
+    if not env:
+        # Try to get workspace from global
+        if not _workspace:
+            return web.json_response({"error": "No workspace detected"}, status=500)
+        workspace = _workspace
+    else:
+        workspace = env.workspace
+
+    try:
+        # Get query params
+        level = request.query.get('level')
+        lines = int(request.query.get('lines', '100'))
+
+        # Get log file path
+        log_file = workspace.path / "logs" / "workspace" / "full.log"
+
+        # Parse and return logs
+        loop = asyncio.get_event_loop()
+        logs = await loop.run_in_executor(
+            None,
+            parse_log_file,
+            log_file,
+            level,
+            lines
+        )
+
+        return web.json_response(logs)
+
+    except Exception as e:
+        logger.error(f"Failed to get workspace logs: {e}", exc_info=True)
+        return web.json_response({"error": str(e)}, status=500)
 
 
 print("[ComfyGit] Control Panel API endpoints registered")
