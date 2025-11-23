@@ -25,27 +25,15 @@ import orchestrator
 
 routes = PromptServer.instance.routes
 
-# Try to import logging infrastructure from CLI (optional - graceful degradation)
+# Import panel-specific logging infrastructure (co-located in server/ directory)
 try:
-    # Temporarily add CLI to path only for import
-    _cli_path = str(Path(__file__).parent.parent.parent / "comfygit" / "packages" / "cli")
-    if _cli_path not in sys.path:
-        sys.path.insert(0, _cli_path)
-
-    from comfygit_cli.logging.environment_logger import EnvironmentLogger, WorkspaceLogger
-    from comfygit_cli.logging.logging_config import get_logger
-
-    # Remove from path after import to avoid polluting ComfyUI's module resolution
-    sys.path.remove(_cli_path)
-
+    from panel_environment_logger import EnvironmentLogger, WorkspaceLogger
+    from panel_logging_config import get_logger
     logger = get_logger(__name__)
-    LOGGING_AVAILABLE = True
 except Exception as e:
-    # Logging not available - panel will work without it
-    print(f"[ComfyGit Panel] Logging infrastructure not available: {e}")
-    print("[ComfyGit Panel] Panel will function without detailed logging")
+    # Graceful degradation - panel still works without our logging
+    print(f"[ComfyGit Panel] Could not import panel logging: {e}")
     logger = logging.getLogger(__name__)
-    LOGGING_AVAILABLE = False
     EnvironmentLogger = None
     WorkspaceLogger = None
 
@@ -59,20 +47,22 @@ SWITCH_ENV_EXIT_CODE = 43
 
 def _initialize_panel_logging():
     """Initialize environment logging for panel backend."""
-    if not LOGGING_AVAILABLE:
-        return
+    if not EnvironmentLogger or not WorkspaceLogger:
+        return  # Logging not available
 
     try:
         # Detect workspace from current environment
         env = get_environment_from_cwd()
         if env and env.workspace:
             EnvironmentLogger.set_workspace_path(env.workspace.path)
-            logger.info(f"Panel logging initialized for workspace: {env.workspace.path}")
+            WorkspaceLogger.set_workspace_path(env.workspace.path)
+            print(f"[ComfyGit Panel] Panel logging initialized for workspace: {env.workspace.path}")
         elif _workspace:
             EnvironmentLogger.set_workspace_path(_workspace.path)
-            logger.info(f"Panel logging initialized for workspace: {_workspace.path}")
+            WorkspaceLogger.set_workspace_path(_workspace.path)
+            print(f"[ComfyGit Panel] Panel logging initialized for workspace: {_workspace.path}")
     except Exception as e:
-        # Non-fatal - panel can work without logging
+        # Non-fatal - log but don't crash
         print(f"[ComfyGit Panel] Could not initialize logging: {e}")
 
 
@@ -82,11 +72,11 @@ async def log_panel_request(env_name: str, endpoint: str, **context):
     Async context manager for logging panel API requests.
 
     Usage:
-        async with log_panel_request(env.name, "POST /v2/comfygit/commit", message=message):
+        async with log_panel_request(env.name, "POST /commit", message=message):
             result = await execute_commit()
     """
     # If logging not available, just yield without doing anything
-    if not LOGGING_AVAILABLE:
+    if not EnvironmentLogger:
         yield None
         return
 
@@ -1600,8 +1590,8 @@ async def get_environment_debug_logs(request):
     Returns:
         List of LogEntry objects from logs/<env>/full.log
     """
-    # Return empty array if logging not available
-    if not LOGGING_AVAILABLE:
+    # Return empty array if logging modules not available
+    if not EnvironmentLogger:
         return web.json_response([])
 
     env = get_environment_from_cwd()
@@ -1645,8 +1635,8 @@ async def get_workspace_debug_logs(request):
     Returns:
         List of LogEntry objects from logs/workspace/full.log
     """
-    # Return empty array if logging not available
-    if not LOGGING_AVAILABLE:
+    # Return empty array if logging modules not available
+    if not WorkspaceLogger:
         return web.json_response([])
 
     env = get_environment_from_cwd()

@@ -5,7 +5,18 @@
         title="DEBUG (ENVIRONMENT LOGS)"
         :show-info="true"
         @info-click="showPopover = true"
-      />
+      >
+        <template #actions>
+          <ActionButton
+            variant="secondary"
+            size="sm"
+            @click="loadLogs"
+            :disabled="loading"
+          >
+            {{ loading ? 'Loading...' : 'Refresh' }}
+          </ActionButton>
+        </template>
+      </PanelHeader>
     </template>
 
     <template #content>
@@ -16,56 +27,14 @@
         <ErrorState :message="error" :retry="true" @retry="loadLogs" />
       </template>
       <template v-else>
-        <!-- Summary bar -->
-        <SummaryBar v-if="logs.length > 0" variant="compact">
-          Total: {{ logs.length }} entries •
-          {{ errorCount }} errors •
-          {{ warningCount }} warnings •
-          {{ infoCount }} info •
-          {{ debugCount }} debug
-        </SummaryBar>
-
-        <!-- Filter bar -->
-        <LogFilterBar
-          :active-levels="activeLevels"
-          @toggle="toggleLevel"
-          @clear="clearFilters"
-        />
-
-        <!-- Log entries -->
-        <LogList v-if="filteredLogs.length > 0">
-          <LogItem
-            v-for="(log, index) in displayedLogs"
-            :key="`${log.timestamp}-${index}`"
-            :level="log.level"
-            :timestamp="formatTimestamp(log.timestamp)"
-            :message="log.message"
-            :context="formatContext(log.context)"
-          />
-        </LogList>
-
-        <!-- Load more button -->
-        <div v-if="canLoadMore" class="load-more">
-          <ActionButton
-            variant="secondary"
-            @click="loadMoreLogs"
-          >
-            Load More ({{ filteredLogs.length - displayLimit }} remaining)
-          </ActionButton>
-        </div>
-
-        <!-- Empty state -->
-        <EmptyState
-          v-if="logs.length > 0 && filteredLogs.length === 0"
-          icon="🔍"
-          message="No logs match the current filters"
-        />
-
         <EmptyState
           v-if="logs.length === 0"
           icon="📝"
           message="No environment logs available"
         />
+
+        <!-- Simple text output for logs -->
+        <pre v-else ref="logOutputElement" class="log-output">{{ formattedLogs }}</pre>
       </template>
     </template>
   </PanelLayout>
@@ -107,10 +76,6 @@ import { useComfyGitService } from '@/composables/useComfyGitService'
 import type { LogEntry as LogEntryType } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
-import LogFilterBar from '@/components/base/molecules/LogFilterBar.vue'
-import LogItem from '@/components/base/molecules/LogItem.vue'
-import LogList from '@/components/base/molecules/LogList.vue'
-import SummaryBar from '@/components/base/molecules/SummaryBar.vue'
 import EmptyState from '@/components/base/molecules/EmptyState.vue'
 import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
@@ -123,88 +88,41 @@ const logs = ref<LogEntryType[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const showPopover = ref(false)
-const activeLevels = ref<string[]>(['ERROR', 'WARNING', 'INFO', 'DEBUG'])
-const displayLimit = ref(50)
 const environmentName = ref('production')
+const logOutputElement = ref<HTMLPreElement | null>(null)
 
-// Computed: Filter logs by active levels
-const filteredLogs = computed(() => {
-  return logs.value.filter(log => activeLevels.value.includes(log.level.toUpperCase()))
+// Format logs as plain text (oldest first for readability)
+const formattedLogs = computed(() => {
+  if (logs.value.length === 0) return ''
+
+  // Sort oldest first (reverse of what we got from API)
+  const sortedLogs = [...logs.value].reverse()
+
+  return sortedLogs.map(log => {
+    // Parse timestamp to readable format
+    const date = new Date(log.timestamp)
+    const timeStr = date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).replace(',', '')
+
+    // Format: timestamp LEVEL [context] - message
+    const contextStr = log.context ? `[${log.context}]` : ''
+    return `${timeStr} ${log.level.padEnd(7)} ${contextStr} ${log.message}`
+  }).join('\n')
 })
-
-// Computed: Displayed logs (with limit)
-const displayedLogs = computed(() => {
-  return filteredLogs.value.slice(0, displayLimit.value)
-})
-
-// Computed: Can load more?
-const canLoadMore = computed(() => {
-  return filteredLogs.value.length > displayLimit.value
-})
-
-// Computed: Count by level
-const errorCount = computed(() =>
-  logs.value.filter(log => log.level.toUpperCase() === 'ERROR').length
-)
-
-const warningCount = computed(() =>
-  logs.value.filter(log => log.level.toUpperCase() === 'WARNING').length
-)
-
-const infoCount = computed(() =>
-  logs.value.filter(log => log.level.toUpperCase() === 'INFO').length
-)
-
-const debugCount = computed(() =>
-  logs.value.filter(log => log.level.toUpperCase() === 'DEBUG').length
-)
-
-function toggleLevel(level: string) {
-  const index = activeLevels.value.indexOf(level)
-  if (index > -1) {
-    activeLevels.value.splice(index, 1)
-  } else {
-    activeLevels.value.push(level)
-  }
-}
-
-function clearFilters() {
-  activeLevels.value = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
-}
-
-function loadMoreLogs() {
-  displayLimit.value += 50
-}
-
-function formatTimestamp(timestamp: string): string {
-  const date = new Date(timestamp)
-  return date.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  })
-}
-
-function formatContext(context?: Record<string, any>): string | undefined {
-  if (!context) return undefined
-  // Convert context object to a short string representation
-  const entries = Object.entries(context)
-  if (entries.length === 0) return undefined
-  // Show first key-value pair or just the first key if value is complex
-  const [key, value] = entries[0]
-  if (typeof value === 'string' || typeof value === 'number') {
-    return `${key}: ${value}`
-  }
-  return key
-}
 
 async function loadLogs() {
   loading.value = true
   error.value = null
   try {
-    logs.value = await getEnvironmentLogs(undefined, 200)
-    // Sort logs by timestamp (newest first)
+    logs.value = await getEnvironmentLogs(undefined, 500)
+    // API returns newest first, we'll reverse when displaying
     logs.value.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
     // Get environment name
@@ -218,6 +136,13 @@ async function loadLogs() {
     error.value = err instanceof Error ? err.message : 'Failed to load environment logs'
   } finally {
     loading.value = false
+
+    // Scroll to bottom after rendering completes
+    setTimeout(() => {
+      if (logOutputElement.value) {
+        logOutputElement.value.scrollTop = logOutputElement.value.scrollHeight
+      }
+    }, 0)
   }
 }
 
@@ -225,9 +150,17 @@ onMounted(loadLogs)
 </script>
 
 <style scoped>
-.load-more {
-  display: flex;
-  justify-content: center;
-  margin-top: var(--cg-space-3);
+.log-output {
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  line-height: 1.5;
+  color: var(--cg-color-text-primary);
+  background: var(--cg-color-bg-tertiary);
+  border: 1px solid var(--cg-color-border-subtle);
+  padding: var(--cg-space-3);
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-x: auto;
 }
 </style>
