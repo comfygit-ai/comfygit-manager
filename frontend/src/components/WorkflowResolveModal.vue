@@ -7,128 +7,202 @@
     @close="emit('close')"
   >
     <template #body>
-        <template v-if="resolution">
-          <div class="intro-message">
-            This workflow needs the following to work:
-          </div>
+      <!-- Wizard Stepper -->
+      <ResolutionStepper
+        v-if="analysisResult"
+        :steps="wizardSteps"
+        :current-step="currentStep"
+        :completed-steps="completedSteps"
+        @step-change="handleStepChange"
+      >
+        <!-- Analysis Step -->
+        <div v-if="currentStep === 'analysis'" class="step-content">
+          <div class="analysis-summary">
+            <h3 class="summary-title">Analysis Complete</h3>
+            <p class="summary-description">
+              Found {{ analysisResult.stats.total_nodes }} nodes and {{ analysisResult.stats.total_models }} models in this workflow.
+            </p>
 
-          <!-- Nodes Section -->
-          <section v-if="resolution.nodes_unresolved.length > 0" class="resolve-section">
-            <BaseTitle variant="section">NODES ({{ resolution.nodes_unresolved.length }})</BaseTitle>
-            <div class="resolve-card success-card">
-              <div class="card-header">
-                <span class="status-icon">✓</span>
-                <span class="card-title">Can install automatically</span>
+            <div class="stats-grid">
+              <!-- Node Stats -->
+              <div class="stat-card">
+                <div class="stat-header">Nodes</div>
+                <div class="stat-items">
+                  <div class="stat-item success">
+                    <span class="stat-icon">✓</span>
+                    <span class="stat-count">{{ analysisResult.nodes.resolved.length }}</span>
+                    <span class="stat-label">resolved</span>
+                  </div>
+                  <div v-if="analysisResult.nodes.ambiguous.length > 0" class="stat-item warning">
+                    <span class="stat-icon">⚡</span>
+                    <span class="stat-count">{{ analysisResult.nodes.ambiguous.length }}</span>
+                    <span class="stat-label">ambiguous</span>
+                  </div>
+                  <div v-if="analysisResult.nodes.unresolved.length > 0" class="stat-item error">
+                    <span class="stat-icon">⚠</span>
+                    <span class="stat-count">{{ analysisResult.nodes.unresolved.length }}</span>
+                    <span class="stat-label">unresolved</span>
+                  </div>
+                </div>
               </div>
-              <div class="items-list">
-                <div
-                  v-for="node in resolution.nodes_unresolved"
-                  :key="node.node_type"
-                  class="item"
-                >
-                  <div class="item-info">
-                    <div class="item-name">{{ getBestMatch(node)?.package_id || node.node_type }}</div>
-                    <div v-if="getBestMatch(node)" class="item-meta">
-                      <span class="confidence-badge" :class="getConfidenceClass(getBestMatch(node)!.match_confidence)">
-                        {{ Math.round(getBestMatch(node)!.match_confidence * 100) }}% match
-                      </span>
-                      <span class="match-type">{{ getBestMatch(node)!.match_type }}</span>
-                      <span class="source">Source: {{ getNodeSource(node) }}</span>
-                    </div>
+
+              <!-- Model Stats -->
+              <div class="stat-card">
+                <div class="stat-header">Models</div>
+                <div class="stat-items">
+                  <div class="stat-item success">
+                    <span class="stat-icon">✓</span>
+                    <span class="stat-count">{{ analysisResult.models.resolved.length }}</span>
+                    <span class="stat-label">resolved</span>
+                  </div>
+                  <div v-if="analysisResult.models.ambiguous.length > 0" class="stat-item warning">
+                    <span class="stat-icon">⚡</span>
+                    <span class="stat-count">{{ analysisResult.models.ambiguous.length }}</span>
+                    <span class="stat-label">ambiguous</span>
+                  </div>
+                  <div v-if="analysisResult.models.unresolved.length > 0" class="stat-item error">
+                    <span class="stat-icon">⚠</span>
+                    <span class="stat-count">{{ analysisResult.models.unresolved.length }}</span>
+                    <span class="stat-label">unresolved</span>
                   </div>
                 </div>
               </div>
             </div>
-          </section>
 
-          <!-- Models Section -->
-          <section v-if="resolution.models_unresolved.length > 0" class="resolve-section">
-            <BaseTitle variant="section">MODELS ({{ resolution.models_unresolved.length }})</BaseTitle>
-            <div class="resolve-card warning-card">
-              <div class="card-header">
-                <span class="status-icon">⚠</span>
-                <span class="card-title">Manual download required</span>
-              </div>
-              <div class="items-list">
-                <div
-                  v-for="model in resolution.models_unresolved"
-                  :key="model.filename"
-                  class="item"
-                >
-                  <div class="item-info">
-                    <div class="item-name">{{ model.filename }}</div>
-                    <div class="item-meta">
-                      <span v-if="model.expected_category">Type: {{ model.expected_category }}</span>
-                      <span v-if="getDownloadInfo(model.filename)">
-                        Size: ~{{ getDownloadInfo(model.filename)!.estimated_size_mb }} MB
-                      </span>
-                    </div>
-                    <div v-if="!canDownload(model.filename)" class="item-warning">
-                      No auto-download source configured
-                    </div>
-                  </div>
-                  <div v-if="getDownloadUrl(model.filename)" class="item-action">
-                    <button class="link-btn" @click="openDownloadUrl(getDownloadUrl(model.filename)!)">
-                      Open Source ↗
-                    </button>
+            <div v-if="needsUserInput" class="user-action-required">
+              <span class="action-icon">👤</span>
+              <span class="action-text">User input required to resolve dependencies</span>
+            </div>
+            <div v-else class="all-resolved">
+              <span class="success-icon">✓</span>
+              <span class="success-text">All dependencies are resolved!</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Node Resolution Step -->
+        <NodeResolutionStep
+          v-if="currentStep === 'nodes'"
+          :nodes="unresolvedAndAmbiguousNodes"
+          :current-index="nodeCurrentIndex"
+          @next="handleNodeNext"
+          @previous="handleNodePrevious"
+          @complete="handleNodeComplete"
+          @search="handleNodeSearch"
+          @manual-entry="handleNodeManualEntry"
+          @mark-optional="handleNodeMarkOptional"
+          @skip="handleNodeSkip"
+          @option-selected="handleNodeOptionSelected"
+        />
+
+        <!-- Model Resolution Step -->
+        <ModelResolutionStep
+          v-if="currentStep === 'models'"
+          :models="unresolvedAndAmbiguousModels"
+          :current-index="modelCurrentIndex"
+          @next="handleModelNext"
+          @previous="handleModelPrevious"
+          @complete="handleModelComplete"
+          @search="handleModelSearch"
+          @download-url="handleModelDownloadUrl"
+          @mark-optional="handleModelMarkOptional"
+          @skip="handleModelSkip"
+          @option-selected="handleModelOptionSelected"
+        />
+
+        <!-- Review Step -->
+        <div v-if="currentStep === 'review'" class="step-content">
+          <div class="review-summary">
+            <h3 class="summary-title">Review Your Choices</h3>
+            <p class="summary-description">
+              Please review the dependencies that will be installed and the actions taken.
+            </p>
+
+            <!-- Node Choices Review -->
+            <div v-if="nodeChoices.size > 0" class="review-section">
+              <h4 class="section-title">Nodes ({{ nodeChoices.size }})</h4>
+              <div class="review-items">
+                <div v-for="[nodeType, choice] in nodeChoices" :key="nodeType" class="review-item">
+                  <div class="item-name">{{ nodeType }}</div>
+                  <div class="item-choice">
+                    <span v-if="choice.action === 'install'" class="choice-badge install">
+                      Install: {{ choice.package_id }}
+                    </span>
+                    <span v-else-if="choice.action === 'optional'" class="choice-badge optional">
+                      Mark as Optional
+                    </span>
+                    <span v-else-if="choice.action === 'skip'" class="choice-badge skip">
+                      Skip
+                    </span>
                   </div>
                 </div>
               </div>
             </div>
-          </section>
 
-          <!-- Already Resolved -->
-          <section v-if="resolution.nodes_resolved.length > 0 || resolution.models_resolved.length > 0" class="resolve-section">
-            <BaseTitle variant="section">
-              ALREADY AVAILABLE ({{ resolution.nodes_resolved.length + resolution.models_resolved.length }})
-            </BaseTitle>
-            <div class="info-text">
-              {{ resolution.nodes_resolved.length }} nodes and {{ resolution.models_resolved.length }} models are already installed
+            <!-- Model Choices Review -->
+            <div v-if="modelChoices.size > 0" class="review-section">
+              <h4 class="section-title">Models ({{ modelChoices.size }})</h4>
+              <div class="review-items">
+                <div v-for="[filename, choice] in modelChoices" :key="filename" class="review-item">
+                  <div class="item-name">{{ filename }}</div>
+                  <div class="item-choice">
+                    <span v-if="choice.action === 'select'" class="choice-badge install">
+                      Use: {{ choice.selected_model?.filename }}
+                    </span>
+                    <span v-else-if="choice.action === 'download'" class="choice-badge download">
+                      Download from URL
+                    </span>
+                    <span v-else-if="choice.action === 'optional'" class="choice-badge optional">
+                      Mark as Optional
+                    </span>
+                    <span v-else-if="choice.action === 'skip'" class="choice-badge skip">
+                      Skip
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-          </section>
 
-          <!-- Actions Summary -->
-          <div class="actions-summary">
-            <div class="summary-title">This will:</div>
-            <ol class="summary-list">
-              <li v-if="resolution.nodes_to_install.length">
-                Install {{ resolution.nodes_to_install.length }} nodes (~{{ resolution.estimated_time_seconds }}s)
-              </li>
-              <li v-if="resolution.nodes_to_install.length">
-                Restart ComfyUI to load new nodes
-              </li>
-              <li v-if="resolution.models_to_download.length">
-                You'll still need to download {{ resolution.models_to_download.length }} model(s) manually
-              </li>
-            </ol>
-            <div v-if="resolution.estimated_size_mb" class="estimated-size">
-              Estimated download: {{ resolution.estimated_size_mb }} MB
+            <div v-if="nodeChoices.size === 0 && modelChoices.size === 0" class="no-choices">
+              No actions selected. All items were skipped.
             </div>
           </div>
-        </template>
+        </div>
+      </ResolutionStepper>
     </template>
 
     <template #footer>
       <BaseButton variant="secondary" @click="emit('close')">
         Cancel
       </BaseButton>
+
+      <!-- Analysis Step Footer -->
       <BaseButton
-        v-if="resolution && resolution.nodes_to_install.length && resolution.models_to_download.length"
-        variant="secondary"
-        :disabled="installing"
-        :loading="installing"
-        @click="handleInstallNodesOnly"
+        v-if="currentStep === 'analysis'"
+        variant="primary"
+        :disabled="loading"
+        @click="handleContinueFromAnalysis"
       >
-        Install Nodes Only
+        Continue
+      </BaseButton>
+
+      <!-- Review Step Footer -->
+      <BaseButton
+        v-if="currentStep === 'review'"
+        variant="secondary"
+        :disabled="applying"
+        @click="goToPreviousStep"
+      >
+        Back
       </BaseButton>
       <BaseButton
-        v-if="resolution && (resolution.nodes_to_install.length || resolution.models_to_download.length)"
+        v-if="currentStep === 'review'"
         variant="primary"
-        :disabled="installing || (resolution.models_to_download.length > 0 && !allModelsCanDownload)"
-        :loading="installing"
-        @click="handleInstallAll"
+        :disabled="applying"
+        :loading="applying"
+        @click="handleApply"
       >
-        Install All
+        Apply
       </BaseButton>
     </template>
   </BaseModal>
@@ -136,11 +210,21 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useComfyGitService } from '@/composables/useComfyGitService'
-import type { WorkflowResolutionPlan, UnresolvedNode } from '@/types/comfygit'
+import { useWorkflowResolution } from '@/composables/useWorkflowResolution'
+import type {
+  FullResolutionResult,
+  UnresolvedNode,
+  AmbiguousNode,
+  UnresolvedModel,
+  AmbiguousModel,
+  NodeChoice,
+  ModelChoice
+} from '@/types/comfygit'
 import BaseModal from './base/BaseModal.vue'
 import BaseButton from './base/BaseButton.vue'
-import BaseTitle from './base/BaseTitle.vue'
+import ResolutionStepper from './base/molecules/ResolutionStepper.vue'
+import NodeResolutionStep from './base/organisms/NodeResolutionStep.vue'
+import ModelResolutionStep from './base/organisms/ModelResolutionStep.vue'
 
 const props = defineProps<{
   workflowName: string
@@ -152,23 +236,85 @@ const emit = defineEmits<{
   refresh: []
 }>()
 
-const { resolveWorkflow, installWorkflowDeps } = useComfyGitService()
+const { analyzeWorkflow, applyResolution } = useWorkflowResolution()
 
-const resolution = ref<WorkflowResolutionPlan | null>(null)
+// State
+const analysisResult = ref<FullResolutionResult | null>(null)
 const loading = ref(false)
-const installing = ref(false)
+const applying = ref(false)
 const error = ref<string | null>(null)
 
-const allModelsCanDownload = computed(() => {
-  if (!resolution.value) return false
-  return resolution.value.download_results?.every(d => d.can_download) ?? false
+// Wizard state
+type WizardStep = 'analysis' | 'nodes' | 'models' | 'review'
+const currentStep = ref<WizardStep>('analysis')
+const completedSteps = ref<WizardStep[]>([])
+const nodeCurrentIndex = ref(0)
+const modelCurrentIndex = ref(0)
+
+// User choices
+const nodeChoices = ref<Map<string, NodeChoice>>(new Map())
+const modelChoices = ref<Map<string, ModelChoice>>(new Map())
+
+// Wizard steps configuration
+const wizardSteps = computed(() => {
+  const steps = [
+    { id: 'analysis', label: 'Analysis' }
+  ]
+
+  if (needsNodeResolution.value) {
+    steps.push({ id: 'nodes', label: 'Nodes' })
+  }
+
+  if (needsModelResolution.value) {
+    steps.push({ id: 'models', label: 'Models' })
+  }
+
+  steps.push({ id: 'review', label: 'Review' })
+
+  return steps
 })
 
-async function loadResolution() {
+// Computed properties
+const needsUserInput = computed(() => {
+  if (!analysisResult.value) return false
+  return analysisResult.value.stats.needs_user_input
+})
+
+const needsNodeResolution = computed(() => {
+  if (!analysisResult.value) return false
+  return analysisResult.value.nodes.unresolved.length > 0 ||
+         analysisResult.value.nodes.ambiguous.length > 0
+})
+
+const needsModelResolution = computed(() => {
+  if (!analysisResult.value) return false
+  return analysisResult.value.models.unresolved.length > 0 ||
+         analysisResult.value.models.ambiguous.length > 0
+})
+
+const unresolvedAndAmbiguousNodes = computed(() => {
+  if (!analysisResult.value) return []
+  return [
+    ...analysisResult.value.nodes.unresolved,
+    ...analysisResult.value.nodes.ambiguous
+  ]
+})
+
+const unresolvedAndAmbiguousModels = computed(() => {
+  if (!analysisResult.value) return []
+  return [
+    ...analysisResult.value.models.unresolved,
+    ...analysisResult.value.models.ambiguous
+  ]
+})
+
+// Methods
+async function loadAnalysis() {
   loading.value = true
   error.value = null
+
   try {
-    resolution.value = await resolveWorkflow(props.workflowName)
+    analysisResult.value = await analyzeWorkflow(props.workflowName)
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to analyze workflow'
   } finally {
@@ -176,261 +322,358 @@ async function loadResolution() {
   }
 }
 
-function getBestMatch(node: UnresolvedNode) {
-  if (!node.possible_matches || node.possible_matches.length === 0) return null
-  return node.possible_matches.reduce((best, current) =>
-    current.match_confidence > best.match_confidence ? current : best
-  )
+function handleContinueFromAnalysis() {
+  completedSteps.value.push('analysis')
+
+  if (needsNodeResolution.value) {
+    currentStep.value = 'nodes'
+  } else if (needsModelResolution.value) {
+    currentStep.value = 'models'
+  } else {
+    currentStep.value = 'review'
+  }
 }
 
-function getConfidenceClass(confidence: number): string {
-  if (confidence >= 0.9) return 'high'
-  if (confidence >= 0.7) return 'medium'
-  return 'low'
+function handleStepChange(stepId: string) {
+  currentStep.value = stepId as WizardStep
 }
 
-function getNodeSource(node: UnresolvedNode): string {
-  const match = getBestMatch(node)
-  if (!match) return 'Unknown'
-  if (match.package_id.startsWith('http')) return 'GitHub'
-  return 'ComfyUI Registry'
+function goToPreviousStep() {
+  const currentIndex = wizardSteps.value.findIndex(s => s.id === currentStep.value)
+  if (currentIndex > 0) {
+    currentStep.value = wizardSteps.value[currentIndex - 1].id as WizardStep
+  }
 }
 
-function getDownloadInfo(filename: string) {
-  return resolution.value?.download_results?.find(d => d.model === filename)
+// Node resolution handlers
+function handleNodeNext() {
+  nodeCurrentIndex.value++
 }
 
-function canDownload(filename: string): boolean {
-  const info = getDownloadInfo(filename)
-  return info?.can_download ?? false
+function handleNodePrevious() {
+  if (nodeCurrentIndex.value > 0) {
+    nodeCurrentIndex.value--
+  } else {
+    // Go back to analysis
+    currentStep.value = 'analysis'
+  }
 }
 
-function getDownloadUrl(filename: string): string | null {
-  const info = getDownloadInfo(filename)
-  return info?.source_url || null
+function handleNodeComplete() {
+  completedSteps.value.push('nodes')
+
+  if (needsModelResolution.value) {
+    currentStep.value = 'models'
+  } else {
+    currentStep.value = 'review'
+  }
 }
 
-function openDownloadUrl(url: string) {
-  window.open(url, '_blank')
+function handleNodeSearch(data: any) {
+  // Handle node search - to be implemented with search panel
+  console.log('Node search:', data)
 }
 
-async function handleInstallNodesOnly() {
-  if (!resolution.value || installing.value) return
+function handleNodeManualEntry(data: any) {
+  // Handle manual node entry
+  const nodeType = data.nodeType
+  nodeChoices.value.set(nodeType, {
+    action: 'install',
+    package_id: data.packageId
+  })
+}
 
-  installing.value = true
+function handleNodeMarkOptional(data: any) {
+  const nodeType = data.nodeType
+  nodeChoices.value.set(nodeType, {
+    action: 'optional'
+  })
+}
+
+function handleNodeSkip(data: any) {
+  const nodeType = data.nodeType
+  nodeChoices.value.set(nodeType, {
+    action: 'skip'
+  })
+}
+
+function handleNodeOptionSelected(data: any) {
+  const nodeType = data.nodeType
+  const packageId = data.packageId
+
+  nodeChoices.value.set(nodeType, {
+    action: 'install',
+    package_id: packageId
+  })
+}
+
+// Model resolution handlers
+function handleModelNext() {
+  modelCurrentIndex.value++
+}
+
+function handleModelPrevious() {
+  if (modelCurrentIndex.value > 0) {
+    modelCurrentIndex.value--
+  } else {
+    // Go back to nodes or analysis
+    currentStep.value = needsNodeResolution.value ? 'nodes' : 'analysis'
+  }
+}
+
+function handleModelComplete() {
+  completedSteps.value.push('models')
+  currentStep.value = 'review'
+}
+
+function handleModelSearch(data: any) {
+  // Handle model search - to be implemented
+  console.log('Model search:', data)
+}
+
+function handleModelDownloadUrl(data: any) {
+  const filename = data.filename
+  modelChoices.value.set(filename, {
+    action: 'download',
+    url: data.url,
+    target_path: data.targetPath
+  })
+}
+
+function handleModelMarkOptional(data: any) {
+  const filename = data.filename
+  modelChoices.value.set(filename, {
+    action: 'optional'
+  })
+}
+
+function handleModelSkip(data: any) {
+  const filename = data.filename
+  modelChoices.value.set(filename, {
+    action: 'skip'
+  })
+}
+
+function handleModelOptionSelected(data: any) {
+  const filename = data.filename
+  const selectedModel = data.model
+
+  modelChoices.value.set(filename, {
+    action: 'select',
+    selected_model: selectedModel
+  })
+}
+
+async function handleApply() {
+  applying.value = true
   error.value = null
 
   try {
-    await installWorkflowDeps(
-      props.workflowName,
-      resolution.value.nodes_to_install,
-      []
-    )
+    await applyResolution(props.workflowName, nodeChoices.value, modelChoices.value)
     emit('install')
     emit('refresh')
     emit('close')
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Installation failed'
+    error.value = err instanceof Error ? err.message : 'Failed to apply resolution'
   } finally {
-    installing.value = false
+    applying.value = false
   }
 }
 
-async function handleInstallAll() {
-  if (!resolution.value || installing.value) return
-
-  installing.value = true
-  error.value = null
-
-  try {
-    await installWorkflowDeps(
-      props.workflowName,
-      resolution.value.nodes_to_install,
-      resolution.value.models_to_download
-    )
-    emit('install')
-    emit('refresh')
-    emit('close')
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Installation failed'
-  } finally {
-    installing.value = false
-  }
-}
-
-onMounted(loadResolution)
+onMounted(loadAnalysis)
 </script>
 
 <style scoped>
-.intro-message {
-  color: var(--cg-color-text-primary);
-  font-size: var(--cg-font-size-base);
-  margin-bottom: var(--cg-space-4);
+.step-content {
+  padding: var(--cg-space-4);
 }
 
-.resolve-section {
-  margin-bottom: var(--cg-space-4);
-}
-
-.resolve-card {
-  border: 1px solid;
-  padding: var(--cg-space-3);
-}
-
-.success-card {
-  border-color: var(--cg-color-success);
-  background: var(--cg-color-bg-tertiary);
-}
-
-.warning-card {
-  border-color: var(--cg-color-warning);
-  background: var(--cg-color-bg-tertiary);
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: var(--cg-space-3);
-}
-
-.status-icon {
-  font-size: var(--cg-font-size-lg);
-}
-
-.card-title {
-  color: var(--cg-color-text-primary);
-  font-size: var(--cg-font-size-base);
-  font-weight: var(--cg-font-weight-semibold);
-}
-
-.items-list {
+.analysis-summary {
   display: flex;
   flex-direction: column;
-  gap: var(--cg-space-3);
-}
-
-.item {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding-left: var(--cg-space-3);
-  border-left: 2px solid var(--cg-color-border-subtle);
-}
-
-.item-info {
-  flex: 1;
-}
-
-.item-name {
-  color: var(--cg-color-text-primary);
-  font-size: var(--cg-font-size-base);
-  margin-bottom: 4px;
-}
-
-.item-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: var(--cg-color-text-muted);
-  font-size: var(--cg-font-size-xs);
-}
-
-.confidence-badge {
-  padding: 2px 6px;
-  border: 1px solid;
-  font-family: var(--cg-font-mono);
-}
-
-.confidence-badge.high {
-  color: var(--cg-color-success);
-  border-color: var(--cg-color-success);
-}
-
-.confidence-badge.medium {
-  color: var(--cg-color-warning);
-  border-color: var(--cg-color-warning);
-}
-
-.confidence-badge.low {
-  color: var(--cg-color-error);
-  border-color: var(--cg-color-error);
-}
-
-.match-type {
-  text-transform: uppercase;
-  letter-spacing: var(--cg-letter-spacing-wide);
-}
-
-.source {
-  font-style: italic;
-}
-
-.item-warning {
-  color: var(--cg-color-warning);
-  font-size: var(--cg-font-size-xs);
-  margin-top: 4px;
-}
-
-.item-action {
-  margin-left: var(--cg-space-2);
-}
-
-.link-btn {
-  padding: 4px 8px;
-  background: transparent;
-  color: var(--cg-color-info);
-  border: 1px solid var(--cg-color-info);
-  font-family: var(--cg-font-mono);
-  font-size: var(--cg-font-size-xs);
-  text-transform: uppercase;
-  letter-spacing: var(--cg-letter-spacing-wide);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.link-btn:hover {
-  background: var(--cg-color-bg-hover);
-  box-shadow: 0 0 8px rgba(0, 168, 255, 0.3);
-}
-
-.info-text {
-  color: var(--cg-color-text-secondary);
-  font-size: var(--cg-font-size-sm);
-  padding: var(--cg-space-2);
-  background: var(--cg-color-bg-tertiary);
-  border: 1px solid var(--cg-color-border-subtle);
-}
-
-.actions-summary {
-  background: var(--cg-color-bg-tertiary);
-  border: 1px solid var(--cg-color-border);
-  padding: var(--cg-space-3);
-  margin-top: var(--cg-space-4);
+  gap: var(--cg-space-4);
 }
 
 .summary-title {
   color: var(--cg-color-text-primary);
-  font-size: var(--cg-font-size-base);
+  font-size: var(--cg-font-size-lg);
   font-weight: var(--cg-font-weight-semibold);
+  margin: 0;
+}
+
+.summary-description {
+  color: var(--cg-color-text-secondary);
+  font-size: var(--cg-font-size-base);
+  margin: 0;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--cg-space-3);
+}
+
+.stat-card {
+  background: var(--cg-color-bg-tertiary);
+  border: 1px solid var(--cg-color-border);
+  padding: var(--cg-space-3);
+}
+
+.stat-header {
+  color: var(--cg-color-text-primary);
+  font-size: var(--cg-font-size-sm);
+  font-weight: var(--cg-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
   margin-bottom: var(--cg-space-2);
 }
 
-.summary-list {
-  color: var(--cg-color-text-secondary);
+.stat-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-2);
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
   font-size: var(--cg-font-size-sm);
+}
+
+.stat-item.success {
+  color: var(--cg-color-success);
+}
+
+.stat-item.warning {
+  color: var(--cg-color-warning);
+}
+
+.stat-item.error {
+  color: var(--cg-color-error);
+}
+
+.stat-icon {
+  font-size: var(--cg-font-size-base);
+}
+
+.stat-count {
+  font-family: var(--cg-font-mono);
+  font-weight: var(--cg-font-weight-semibold);
+}
+
+.stat-label {
+  color: var(--cg-color-text-secondary);
+}
+
+.user-action-required {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  padding: var(--cg-space-3);
+  background: var(--cg-color-bg-tertiary);
+  border: 1px solid var(--cg-color-warning);
+  color: var(--cg-color-warning);
+  font-size: var(--cg-font-size-base);
+}
+
+.action-icon {
+  font-size: var(--cg-font-size-lg);
+}
+
+.all-resolved {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  padding: var(--cg-space-3);
+  background: var(--cg-color-bg-tertiary);
+  border: 1px solid var(--cg-color-success);
+  color: var(--cg-color-success);
+  font-size: var(--cg-font-size-base);
+}
+
+.success-icon {
+  font-size: var(--cg-font-size-lg);
+}
+
+.review-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-4);
+}
+
+.review-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-2);
+}
+
+.section-title {
+  color: var(--cg-color-text-primary);
+  font-size: var(--cg-font-size-base);
+  font-weight: var(--cg-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
   margin: 0;
-  padding-left: var(--cg-space-4);
 }
 
-.summary-list li {
-  margin-bottom: 4px;
+.review-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-2);
 }
 
-.estimated-size {
+.review-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--cg-space-2);
+  background: var(--cg-color-bg-tertiary);
+  border: 1px solid var(--cg-color-border);
+}
+
+.item-name {
+  color: var(--cg-color-text-primary);
+  font-size: var(--cg-font-size-sm);
+  font-family: var(--cg-font-mono);
+}
+
+.item-choice {
+  display: flex;
+  gap: var(--cg-space-2);
+}
+
+.choice-badge {
+  padding: 2px 8px;
+  font-size: var(--cg-font-size-xs);
+  font-family: var(--cg-font-mono);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+  border: 1px solid;
+}
+
+.choice-badge.install,
+.choice-badge.download {
+  color: var(--cg-color-success);
+  border-color: var(--cg-color-success);
+}
+
+.choice-badge.optional {
+  color: var(--cg-color-info);
+  border-color: var(--cg-color-info);
+}
+
+.choice-badge.skip {
+  color: var(--cg-color-text-muted);
+  border-color: var(--cg-color-border);
+}
+
+.no-choices {
+  padding: var(--cg-space-4);
+  background: var(--cg-color-bg-tertiary);
+  border: 1px solid var(--cg-color-border);
   color: var(--cg-color-text-muted);
   font-size: var(--cg-font-size-sm);
-  margin-top: var(--cg-space-2);
-  font-style: italic;
+  text-align: center;
 }
 </style>
