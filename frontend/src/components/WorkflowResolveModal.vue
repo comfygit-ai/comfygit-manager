@@ -427,15 +427,19 @@ function handleNodeManualEntry(nodeType: string) {
 }
 
 function handleNodeMarkOptional(nodeType: string) {
+  console.log('[WorkflowResolveModal] handleNodeMarkOptional called with:', nodeType)
   nodeChoices.value.set(nodeType, {
     action: 'optional'
   })
+  console.log('[WorkflowResolveModal] nodeChoices after optional:', Array.from(nodeChoices.value.entries()))
 }
 
 function handleNodeSkip(nodeType: string) {
+  console.log('[WorkflowResolveModal] handleNodeSkip called with:', nodeType)
   nodeChoices.value.set(nodeType, {
     action: 'skip'
   })
+  console.log('[WorkflowResolveModal] nodeChoices after skip:', Array.from(nodeChoices.value.entries()))
 }
 
 function handleNodeOptionSelected(nodeType: string, index: number) {

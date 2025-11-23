@@ -215,29 +215,37 @@ const emit = defineEmits<{
 }
 
 .action-btn {
-  padding: var(--cg-spacing-xs) var(--cg-spacing-sm);
-  font-size: var(--cg-font-size-xs);
-  border: 1px solid var(--cg-color-border);
-  background: var(--cg-color-bg);
-  color: var(--cg-color-text);
-  border-radius: var(--cg-border-radius-sm);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 2px solid #555;
+  background: #2a2a2a;
+  color: #fff;
+  border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .action-btn:hover {
-  background: var(--cg-color-bg-tertiary);
-  border-color: var(--cg-color-primary);
+  background: #3a3a3a;
+  border-color: #0066cc;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 102, 204, 0.3);
 }
 
 .action-btn.primary {
-  background: var(--cg-color-primary);
+  background: #0066cc;
   color: white;
-  border-color: var(--cg-color-primary);
+  border-color: #0066cc;
 }
 
 .action-btn.primary:hover {
-  background: var(--cg-color-primary-hover);
+  background: #0052a3;
+  border-color: #0052a3;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 102, 204, 0.4);
 }
 
 .item-body {

@@ -202,18 +202,33 @@ const progressPercentage = computed(() =>
 
 const canGoPrevious = computed(() => props.currentIndex > 0)
 const canContinue = computed(() => {
-  if (!currentNode.value) return false
+  if (!currentNode.value) {
+    console.log('[NodeResolutionStep] canContinue: no current node')
+    return false
+  }
 
   // Check if user has made a choice for this node
   const hasChoice = props.nodeChoices && props.nodeChoices.has(currentNode.value.node_type)
 
+  console.log('[NodeResolutionStep] canContinue check:', {
+    nodeType: currentNode.value.node_type,
+    hasChoice,
+    package_id: currentNode.value.package_id,
+    is_optional: currentNode.value.is_optional,
+    selected_option_index: currentNode.value.selected_option_index,
+    nodeChoices: props.nodeChoices ? Array.from(props.nodeChoices.entries()) : 'none'
+  })
+
   // Can continue if node has a selection, is optional, has a choice made, or has ambiguous option selected
-  return !!(
+  const result = !!(
     currentNode.value.package_id ||
     currentNode.value.is_optional ||
     currentNode.value.selected_option_index !== undefined ||
     hasChoice
   )
+
+  console.log('[NodeResolutionStep] canContinue result:', result)
+  return result
 })
 
 function handleSearchInput() {

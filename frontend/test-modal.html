@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Workflow Resolution Modal</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #fff; }
+        .controls { margin-bottom: 20px; }
+        button { padding: 10px 20px; margin: 5px; background: #0066cc; color: white; border: none; cursor: pointer; }
+        button:hover { background: #0052a3; }
+        #result { margin-top: 20px; padding: 15px; background: #2a2a2a; border: 1px solid #444; }
+    </style>
+</head>
+<body>
+    <h1>Workflow Resolution Modal Test</h1>
+    <div class="controls">
+        <h3>Test Scenarios:</h3>
+        <button onclick="testScenario('test-unresolved-nodes.json')">Unresolved Nodes</button>
+        <button onclick="testScenario('test-unresolved-models.json')">Unresolved Models</button>
+        <button onclick="testScenario('test-ambiguous-nodes.json')">Ambiguous Nodes</button>
+        <button onclick="testScenario('test-ambiguous-models.json')">Ambiguous Models</button>
+        <button onclick="testScenario('test-mixed-complex.json')">Mixed Complex</button>
+        <button onclick="testScenario('test-all-resolved.json')">All Resolved</button>
+        <button onclick="testScenario('default-workflow.json')">Default</button>
+    </div>
+    <div id="result"></div>
+
+    <script type="module">
+        import { mockApi } from './src/services/mockApi.ts';
+
+        window.testScenario = async function(workflowName) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p>Loading analysis for: ' + workflowName + '...</p>';
+            
+            try {
+                const result = await mockApi.analyzeWorkflow(workflowName);
+                resultDiv.innerHTML = '<h3>Analysis Result:</h3><pre>' + 
+                    JSON.stringify(result, null, 2) + '</pre>';
+            } catch (error) {
+                resultDiv.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+            }
+        };
+    </script>
+</body>
+</html>
