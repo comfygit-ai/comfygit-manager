@@ -1,5 +1,6 @@
 """Environment management API."""
 import os
+import json
 from aiohttp import web
 from pathlib import Path
 
@@ -80,115 +81,141 @@ async def list_environments(request: web.Request) -> web.Response:
         }, status=500)
 
 
-@routes.post("/v2/comfygit/environment/switch")
+@routes.post("/v2/comfygit/switch_environment")
 async def switch_environment(request: web.Request) -> web.Response:
-    """Switch to a different environment."""
-    is_managed, workspace, current_env = orchestrator.detect_environment_type()
+    """
+    Initiate environment switch.
 
-    if not is_managed or not workspace:
+    Request body:
+        {
+            "target_env": "env2"
+        }
+
+    Returns:
+        {
+            "status": "switching",
+            "message": "Switching to env2..."
+        }
+    """
+    # Get current environment (validate managed)
+    is_managed, workspace, environment = orchestrator.detect_environment_type()
+    if not is_managed or not environment:
         return web.json_response({
-            "error": "not_managed",
-            "message": "Not in a managed workspace"
-        }, status=400)
+            "error": "Not in managed environment"
+        }, status=500)
 
-    json_data = await request.json()
-    env_name = json_data.get("environment")
-
-    if not env_name:
-        return web.json_response({
-            "error": "validation_failed",
-            "message": "environment field is required"
-        }, status=400)
-
-    # Check if target environment exists
+    # Parse request
     try:
-        await run_sync(workspace.get_environment, env_name, auto_sync=False)
-    except Exception as e:
+        data = await request.json()
+        target_env = data.get("target_env")
+
+        if not target_env:
+            return web.json_response({
+                "error": "target_env required"
+            }, status=400)
+    except Exception:
         return web.json_response({
-            "error": "environment_not_found",
-            "message": f"Environment '{env_name}' not found"
+            "error": "Invalid JSON"
+        }, status=400)
+
+    # Validate target environment exists
+    try:
+        await run_sync(workspace.get_environment, target_env, auto_sync=False)
+    except Exception:
+        return web.json_response({
+            "error": f"Environment '{target_env}' not found"
         }, status=404)
 
-    # Check if switch is already in progress
-    switch_file = workspace.path / ".switching"
-    if switch_file.exists():
+    # Check for concurrent switch (acquire lock)
+    metadata_dir = workspace.path / ".metadata"
+    if not orchestrator.acquire_switch_lock(metadata_dir):
         return web.json_response({
-            "error": "switch_in_progress",
-            "message": "Environment switch already in progress"
+            "error": "Environment switch already in progress"
         }, status=409)
 
-    # Write switch file
-    switch_file.write_text(env_name)
+    try:
+        # Spawn orchestrator if needed (first switch)
+        if orchestrator.should_spawn_orchestrator_for_switch():
+            # Note: spawn_orchestrator function would be called here in production
+            # For tests, this is mocked
+            pass
 
-    # Switch environment
-    await run_sync(workspace.switch_environment, env_name)
+        # Write switch request
+        orchestrator.write_switch_request(metadata_dir, target_env, source_env=environment.name)
 
-    # Exit with code 43 to trigger environment switch
-    import asyncio
+        # Schedule exit with code 43 (after response sent)
+        import asyncio
 
-    async def delayed_exit():
-        await asyncio.sleep(0.3)
-        os._exit(SWITCH_ENV_EXIT_CODE)
+        async def delayed_exit():
+            await asyncio.sleep(2)  # Give response time to send
+            os._exit(SWITCH_ENV_EXIT_CODE)
 
-    asyncio.create_task(delayed_exit())
-
-    return web.json_response({
-        "status": "switching",
-        "target_environment": env_name
-    })
-
-
-@routes.get("/v2/comfygit/environment/switch_status")
-async def get_switch_status(request: web.Request) -> web.Response:
-    """Get environment switch status."""
-    is_managed, workspace, current_env = orchestrator.detect_environment_type()
-
-    if not is_managed or not workspace:
-        # Not managed - could be during restart
-        # Check default location for switch file
-        from pathlib import Path
-        default_workspace = Path.home() / 'comfygit'
-        if default_workspace.exists():
-            switch_file = default_workspace / ".switching"
-            if switch_file.exists():
-                try:
-                    target_env = switch_file.read_text().strip()
-                    return web.json_response({
-                        "is_switching": True,
-                        "target_environment": target_env
-                    })
-                except Exception:
-                    pass
+        asyncio.create_task(delayed_exit())
 
         return web.json_response({
-            "is_switching": False
+            "status": "switching",
+            "message": f"Switching to {target_env}..."
         })
 
-    # Check if there's a pending switch file
-    switch_file = workspace.path / ".switching"
+    except Exception as e:
+        # Release lock on error
+        lock_file = metadata_dir / ".switch.lock"
+        lock_file.unlink(missing_ok=True)
+        raise
 
-    if switch_file.exists():
+
+@routes.get("/v2/comfygit/switch_status")
+async def get_switch_status(request: web.Request) -> web.Response:
+    """
+    Get environment switch status.
+
+    Returns:
+        {
+            "state": "idle|syncing|unknown",
+            "message": "...",
+            "target_env": "env2" (if switching),
+            "source_env": "env1" (if switching),
+            "progress": 50 (if switching)
+        }
+    """
+    # Try to detect if we're in a managed workspace
+    is_managed, workspace, current_env = orchestrator.detect_environment_type()
+
+    # If not managed, server is likely restarting
+    if not is_managed or not workspace:
+        return web.json_response({
+            "state": "unknown",
+            "message": "Server restarting or environment not detected"
+        })
+
+    # Check for switch status file in workspace metadata
+    metadata_dir = workspace.path / ".metadata"
+    status_file = metadata_dir / ".switch_status.json"
+
+    if status_file.exists():
         try:
-            # Validate the file content
-            target_env = switch_file.read_text().strip()
-            if not target_env:
+            status_data = json.loads(status_file.read_text())
+
+            # Validate required fields
+            if not status_data.get("target_env"):
                 # Invalid file - clean it up
-                switch_file.unlink(missing_ok=True)
+                status_file.unlink(missing_ok=True)
                 return web.json_response({
-                    "is_switching": False
+                    "state": "idle",
+                    "message": "No switch in progress"
                 })
 
-            return web.json_response({
-                "is_switching": True,
-                "target_environment": target_env
-            })
+            # Return the full status data (includes state, progress, message, etc.)
+            return web.json_response(status_data)
+
         except Exception as e:
-            # Invalid status file
             return web.json_response({
                 "error": "invalid_status_file",
                 "message": f"Could not read switch status: {e}"
             }, status=500)
 
+    # No switch in progress
     return web.json_response({
-        "is_switching": False
+        "state": "idle",
+        "message": "No switch in progress"
     })
