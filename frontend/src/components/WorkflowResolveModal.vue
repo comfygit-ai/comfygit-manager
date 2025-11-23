@@ -294,18 +294,55 @@ const needsModelResolution = computed(() => {
 
 const unresolvedAndAmbiguousNodes = computed(() => {
   if (!analysisResult.value) return []
-  return [
-    ...analysisResult.value.nodes.unresolved,
-    ...analysisResult.value.nodes.ambiguous
-  ]
+
+  // Transform unresolved nodes
+  const unresolved = analysisResult.value.nodes.unresolved.map(node => ({
+    node_type: node.reference.node_type,
+    reason: node.reason,
+    is_unresolved: true
+  }))
+
+  // Transform ambiguous nodes
+  const ambiguous = analysisResult.value.nodes.ambiguous.map(node => ({
+    node_type: node.reference.node_type,
+    has_multiple_options: true,
+    options: node.options.map(opt => ({
+      package_id: opt.package.package_id,
+      title: opt.package.title,
+      match_confidence: opt.match_confidence,
+      match_type: opt.match_type,
+      is_installed: opt.is_installed
+    }))
+  }))
+
+  return [...unresolved, ...ambiguous]
 })
 
 const unresolvedAndAmbiguousModels = computed(() => {
   if (!analysisResult.value) return []
-  return [
-    ...analysisResult.value.models.unresolved,
-    ...analysisResult.value.models.ambiguous
-  ]
+
+  // Transform unresolved models
+  const unresolved = analysisResult.value.models.unresolved.map(model => ({
+    filename: model.reference.widget_value,
+    reference: model.reference,
+    reason: model.reason,
+    is_unresolved: true
+  }))
+
+  // Transform ambiguous models
+  const ambiguous = analysisResult.value.models.ambiguous.map(model => ({
+    filename: model.reference.widget_value,
+    reference: model.reference,
+    has_multiple_options: true,
+    options: model.options.map(opt => ({
+      model: opt.model,
+      match_confidence: opt.match_confidence,
+      match_type: opt.match_type,
+      has_download_source: opt.has_download_source
+    }))
+  }))
+
+  return [...unresolved, ...ambiguous]
 })
 
 // Methods

@@ -338,19 +338,37 @@ export interface ResolvedNode {
   is_optional: boolean
 }
 
-export interface UnresolvedNode {
+export interface NodeReference {
   node_type: string
+  workflow: string
+  node_id?: string
+}
+
+export interface ResolvedNode {
+  reference: NodeReference
+  package: {
+    package_id: string
+    title: string
+  }
+  match_confidence: number
+  match_type: string
+  is_installed: boolean
+}
+
+export interface UnresolvedNode {
+  reference: NodeReference
   reason: string
 }
 
 export interface AmbiguousNode {
-  node_type: string
+  reference: NodeReference
   options: Array<{
-    package_id: string
+    package: {
+      package_id: string
+      title: string
+    }
     match_confidence: number
     match_type: string
-    description?: string
-    repository?: string
     is_installed: boolean
   }>
 }
@@ -422,9 +440,10 @@ export interface NodeChoice {
 }
 
 export interface ModelChoice {
-  action: 'download' | 'optional' | 'skip' | 'manual'
+  action: 'download' | 'select' | 'optional' | 'skip'
   url?: string
   target_path?: string
+  selected_model?: ResolvedModelData
 }
 
 export interface AppliedResolutionResult {

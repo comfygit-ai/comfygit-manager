@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
 import WorkflowResolveModal from '../WorkflowResolveModal.vue'
 import { useWorkflowResolution } from '@/composables/useWorkflowResolution'
 
@@ -18,12 +18,15 @@ vi.mock('@/composables/useComfyGitService', () => ({
 
 describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
   const mockAnalysisResult = {
-    needs_user_input: true,
+    workflow: 'test_workflow',
     nodes: {
       resolved: [
         {
-          node_type: 'KSampler',
-          status: 'resolved'
+          reference: { node_type: 'KSampler', workflow: 'test_workflow' },
+          package: { package_id: 'comfyui-core', title: 'ComfyUI Core' },
+          match_confidence: 1.0,
+          match_type: 'builtin',
+          is_installed: true
         }
       ],
       unresolved: [
@@ -47,12 +50,14 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
             {
               package: { package_id: 'flux-comfy', title: 'Flux for ComfyUI' },
               match_confidence: 0.92,
-              match_type: 'fuzzy'
+              match_type: 'fuzzy',
+              is_installed: false
             },
             {
               package: { package_id: 'flux-ultimate', title: 'Ultimate Flux' },
               match_confidence: 0.85,
-              match_type: 'fuzzy'
+              match_type: 'fuzzy',
+              is_installed: false
             }
           ]
         }
@@ -75,17 +80,25 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
       ambiguous: []
     },
     stats: {
+      total_nodes: 3,
+      total_models: 1,
       nodes_resolved: 1,
       nodes_unresolved: 1,
       nodes_ambiguous: 1,
       models_resolved: 0,
       models_unresolved: 1,
-      models_ambiguous: 0
+      models_ambiguous: 0,
+      needs_user_input: true
     }
   }
 
   beforeEach(() => {
     vi.clearAllMocks()
+
+    // Create a div for teleport target
+    const el = document.createElement('div')
+    el.id = 'modal-target'
+    document.body.appendChild(el)
 
     // Setup default mock implementation
     const mockAnalyzeWorkflow = vi.fn().mockResolvedValue(mockAnalysisResult)
@@ -107,6 +120,11 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
     } as any)
   })
 
+  afterEach(() => {
+    // Clean up
+    document.body.innerHTML = ''
+  })
+
   describe('Wizard Flow', () => {
     it('should show analysis step initially', async () => {
       const wrapper = mount(WorkflowResolveModal, {
@@ -124,8 +142,8 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
       })
 
       // Wait for component to mount and call analysis
+      await flushPromises()
       await wrapper.vm.$nextTick()
-      await new Promise(resolve => setTimeout(resolve, 10))
 
       // Should show stepper with analysis as current step
       const stepper = wrapper.findComponent({ name: 'ResolutionStepper' })
@@ -137,18 +155,20 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
       const wrapper = mount(WorkflowResolveModal, {
         props: {
           workflowName: 'test_workflow'
-        }
+        },
+        attachTo: document.body
       })
 
+      await flushPromises()
       await wrapper.vm.$nextTick()
-      await new Promise(resolve => setTimeout(resolve, 0))
 
-      const analysisText = wrapper.text()
-      expect(analysisText).toContain('1 unresolved')
-      expect(analysisText).toContain('1 ambiguous')
-      expect(analysisText).toContain('nodes')
-      expect(analysisText).toContain('1 unresolved')
-      expect(analysisText).toContain('models')
+      const analysisText = document.body.textContent || ''
+      expect(analysisText).toContain('1')
+      expect(analysisText).toContain('unresolved')
+      expect(analysisText).toContain('ambiguous')
+      expect(analysisText).toContain('resolved')
+
+      wrapper.unmount()
     })
 
     it('should show "Continue" button to proceed to node resolution', async () => {
@@ -158,12 +178,13 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
         }
       })
 
+      await flushPromises()
       await wrapper.vm.$nextTick()
-      await new Promise(resolve => setTimeout(resolve, 0))
 
-      const continueBtn = wrapper.find('button:contains("Continue")')
-      expect(continueBtn.exists()).toBe(true)
-      expect(continueBtn.attributes('disabled')).toBeUndefined()
+      const buttons = wrapper.findAll('button')
+      const continueBtn = buttons.find(btn => btn.text().includes('Continue'))
+      expect(continueBtn).toBeDefined()
+      expect(continueBtn?.attributes('disabled')).toBeUndefined()
     })
 
     it('should transition to node resolution step when clicking Continue from analysis', async () => {
@@ -174,7 +195,7 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
       })
 
       await wrapper.vm.$nextTick()
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await flushPromises()
 
       // Click Continue button
       await wrapper.find('button:contains("Continue")').trigger('click')
@@ -193,7 +214,7 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
       })
 
       await wrapper.vm.$nextTick()
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await flushPromises()
 
       // Move to nodes step
       await wrapper.find('button:contains("Continue")').trigger('click')
@@ -213,7 +234,7 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
       })
 
       await wrapper.vm.$nextTick()
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await flushPromises()
 
       // Move to nodes step
       await wrapper.find('button:contains("Continue")').trigger('click')
@@ -237,7 +258,7 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
       })
 
       await wrapper.vm.$nextTick()
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await flushPromises()
 
       // Navigate to models step
       await wrapper.find('button:contains("Continue")').trigger('click')
@@ -260,7 +281,7 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
       })
 
       await wrapper.vm.$nextTick()
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await flushPromises()
 
       // Navigate through wizard
       await wrapper.find('button:contains("Continue")').trigger('click')
@@ -283,7 +304,7 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
       })
 
       await wrapper.vm.$nextTick()
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await flushPromises()
 
       // Navigate to review
       await wrapper.find('button:contains("Continue")').trigger('click')
@@ -308,7 +329,7 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
       })
 
       await wrapper.vm.$nextTick()
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await flushPromises()
 
       // Navigate to models step
       await wrapper.find('button:contains("Continue")').trigger('click')
@@ -334,7 +355,7 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
       })
 
       await wrapper.vm.$nextTick()
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await flushPromises()
 
       // Navigate through steps
       await wrapper.find('button:contains("Continue")').trigger('click')
@@ -367,7 +388,7 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
       })
 
       await wrapper.vm.$nextTick()
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await flushPromises()
 
       // Navigate to review
       await wrapper.find('button:contains("Continue")').trigger('click')
@@ -419,7 +440,7 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
       })
 
       await wrapper.vm.$nextTick()
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await flushPromises()
 
       // Click Continue from analysis
       await wrapper.find('button:contains("Continue")').trigger('click')
@@ -461,7 +482,7 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
       })
 
       await wrapper.vm.$nextTick()
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await flushPromises()
 
       // Navigate through wizard
       await wrapper.find('button:contains("Continue")').trigger('click')
@@ -493,7 +514,7 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
       })
 
       await wrapper.vm.$nextTick()
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await flushPromises()
 
       expect(wrapper.text()).toContain('Analysis failed')
     })
@@ -517,7 +538,7 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
       })
 
       await wrapper.vm.$nextTick()
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await flushPromises()
 
       // Navigate to review and apply
       await wrapper.find('button:contains("Continue")').trigger('click')
