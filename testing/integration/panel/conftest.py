@@ -165,10 +165,14 @@ def panel_routes():
 
 
 @pytest.fixture
-async def app(panel_routes):
+async def app(panel_routes, mock_environment):
     """Create aiohttp Application instance with panel routes."""
     # Create a real app and register the routes
     app = web.Application()
+
+    # Setup app state for context access (like comfygit_panel.py does)
+    app['get_environment'] = lambda: mock_environment
+    app['workspace'] = None  # Will be set by tests that need it
 
     # Register all captured routes
     for method, path, handler in panel_routes:

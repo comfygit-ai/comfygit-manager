@@ -11,6 +11,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.4.1",
+    "pytest-aiohttp>=1.1.0",
     "pytest-mock>=3.15.1",
 ]
 
