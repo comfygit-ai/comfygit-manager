@@ -126,25 +126,30 @@ async def install_workflow(request: web.Request, env) -> web.Response:
     """Install all missing dependencies for a workflow."""
     name = request.match_info["name"]
 
-    # Get workflow status
-    status = await run_sync(env.status)
-    workflow = next((w for w in status.workflow.analyzed_workflows if w.name == name), None)
-    if not workflow:
-        return web.json_response({"error": "Workflow not found"}, status=404)
+    try:
+        # Get uninstalled nodes for workflow
+        uninstalled = await run_sync(env.get_uninstalled_nodes, workflow_name=name)
 
-    if not workflow.uninstalled_nodes:
+        if not uninstalled:
+            return web.json_response({
+                "status": "success",
+                "message": "All dependencies already installed",
+                "nodes_installed": []
+            })
+
+        # Install each node
+        installed = []
+        for node_id in uninstalled:
+            await run_sync(env.install_node, node_id)
+            installed.append(node_id)
+
         return web.json_response({
             "status": "success",
-            "message": "All dependencies already installed",
-            "installed": []
+            "message": f"Installed {len(installed)} node packages",
+            "nodes_installed": installed
         })
-
-    # Install nodes
-    node_ids = list(workflow.uninstalled_nodes)
-    await run_sync(env.install_nodes, node_ids)
-
-    return web.json_response({
-        "status": "success",
-        "message": f"Installed {len(node_ids)} node packages",
-        "installed": node_ids
-    })
+    except Exception as e:
+        return web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)

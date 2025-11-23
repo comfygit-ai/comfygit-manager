@@ -33,13 +33,19 @@ async def export_environment(request: web.Request, env) -> web.Response:
 
     callbacks = ExportCallbacks()
 
-    tarball_path = await run_sync(env.export_environment, path, callbacks=callbacks)
+    try:
+        tarball_path = await run_sync(env.export_environment, path, callbacks=callbacks)
 
-    return web.json_response({
-        "status": "success",
-        "path": str(tarball_path),
-        "models_without_sources": len(models_without_sources),
-    })
+        return web.json_response({
+            "status": "success",
+            "path": str(tarball_path),
+            "models_without_sources": len(models_without_sources),
+        })
+    except Exception as e:
+        return web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
 
 
 @routes.post("/v2/comfygit/sync")
@@ -50,17 +56,23 @@ async def sync_environment(request: web.Request, env) -> web.Response:
     model_strategy = json_data.get("model_strategy", "skip")
     remove_extra_nodes = json_data.get("remove_extra_nodes", True)
 
-    # Run sync operation
-    result = await run_sync(
-        env.sync,
-        model_strategy=model_strategy,
-        remove_extra_nodes=remove_extra_nodes
-    )
+    try:
+        # Run sync operation
+        result = await run_sync(
+            env.sync,
+            model_strategy=model_strategy,
+            remove_extra_nodes=remove_extra_nodes
+        )
 
-    return web.json_response({
-        "status": "success" if result.success else "error",
-        "nodes_installed": result.nodes_installed,
-        "nodes_removed": result.nodes_removed,
-        "errors": result.errors,
-        "message": "Sync completed" if result.success else "Sync completed with errors"
-    })
+        return web.json_response({
+            "status": "success" if result.success else "error",
+            "nodes_installed": result.nodes_installed,
+            "nodes_removed": result.nodes_removed,
+            "errors": result.errors,
+            "message": "Sync completed" if result.success else "Sync completed with errors"
+        })
+    except Exception as e:
+        return web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)

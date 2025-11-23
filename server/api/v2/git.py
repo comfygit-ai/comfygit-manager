@@ -95,7 +95,13 @@ async def create_branch(request: web.Request, env) -> web.Response:
     if not name:
         return web.json_response({"error": "name is required"}, status=400)
 
-    await run_sync(env.create_branch, name, start_point)
+    try:
+        await run_sync(env.create_branch, name, start_point)
+    except Exception as e:
+        return web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
 
     return web.json_response({
         "status": "success",
@@ -157,9 +163,20 @@ async def checkout_commit(request: web.Request, env) -> web.Response:
 
     json_data = await request.json()
     ref = json_data.get("ref")
+    force = json_data.get("force", False)
 
     if not ref:
         return web.json_response({"error": "ref is required"}, status=400)
+
+    # Check for uncommitted changes if not forcing
+    if not force:
+        has_uncommitted = await run_sync(env.git_manager.has_uncommitted_changes)
+        if has_uncommitted:
+            return web.json_response({
+                "status": "warning",
+                "reason": "uncommitted_changes",
+                "message": "You have uncommitted changes that will be lost"
+            })
 
     # Do checkout
     try:

@@ -17,5 +17,10 @@ async def get_status(request: web.Request, env) -> web.Response:
     Returns:
         Environment status with git, workflow, and comparison info.
     """
-    status = await run_sync(env.status)
-    return web.json_response(serialize_environment_status(status, env.name))
+    try:
+        status = await run_sync(env.status)
+        return web.json_response(serialize_environment_status(status, env.name))
+    except Exception as e:
+        return web.json_response({
+            "error": str(e)
+        }, status=500)
