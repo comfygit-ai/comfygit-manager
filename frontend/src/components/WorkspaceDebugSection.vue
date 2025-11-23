@@ -34,7 +34,15 @@
         />
 
         <!-- Simple text output for logs -->
-        <pre v-else ref="logOutputElement" class="log-output">{{ formattedLogs }}</pre>
+        <div v-else ref="logOutputElement" class="log-output">
+          <div
+            v-for="(line, index) in formattedLogs"
+            :key="index"
+            :class="`log-line log-level-${line.level.toLowerCase()}`"
+          >
+            {{ line.text }}
+          </div>
+        </div>
       </template>
     </template>
   </PanelLayout>
@@ -89,9 +97,9 @@ const error = ref<string | null>(null)
 const showPopover = ref(false)
 const logOutputElement = ref<HTMLPreElement | null>(null)
 
-// Format logs as plain text (oldest first for readability)
+// Format logs as array of colored lines (oldest first for readability)
 const formattedLogs = computed(() => {
-  if (logs.value.length === 0) return ''
+  if (logs.value.length === 0) return []
 
   // Sort oldest first (reverse of what we got from API)
   const sortedLogs = [...logs.value].reverse()
@@ -111,8 +119,13 @@ const formattedLogs = computed(() => {
 
     // Format: timestamp LEVEL [context] - message
     const contextStr = log.context ? `[${log.context}]` : ''
-    return `${timeStr} ${log.level.padEnd(7)} ${contextStr} ${log.message}`
-  }).join('\n')
+    const text = `${timeStr} ${log.level.padEnd(7)} ${contextStr} ${log.message}`
+
+    return {
+      text,
+      level: log.level
+    }
+  })
 })
 
 async function loadLogs() {
@@ -127,10 +140,10 @@ async function loadLogs() {
   } finally {
     loading.value = false
 
-    // Scroll to bottom after rendering completes
+    // Scroll parent container to bottom after rendering completes
     setTimeout(() => {
-      if (logOutputElement.value) {
-        logOutputElement.value.scrollTop = logOutputElement.value.scrollHeight
+      if (logOutputElement.value?.parentElement) {
+        logOutputElement.value.parentElement.scrollTop = logOutputElement.value.parentElement.scrollHeight
       }
     }, 0)
   }
@@ -143,14 +156,31 @@ onMounted(loadLogs)
 .log-output {
   font-family: var(--cg-font-mono);
   font-size: var(--cg-font-size-xs);
-  line-height: 1.5;
-  color: var(--cg-color-text-primary);
   background: var(--cg-color-bg-tertiary);
   border: 1px solid var(--cg-color-border-subtle);
   padding: var(--cg-space-3);
   margin: 0;
+}
+
+.log-line {
+  line-height: 1.5;
   white-space: pre-wrap;
   word-wrap: break-word;
-  overflow-x: auto;
+}
+
+.log-level-error {
+  color: #ff5555;
+}
+
+.log-level-warning {
+  color: #ffb86c;
+}
+
+.log-level-info {
+  color: #50fa7b;
+}
+
+.log-level-debug {
+  color: #6272a4;
 }
 </style>
