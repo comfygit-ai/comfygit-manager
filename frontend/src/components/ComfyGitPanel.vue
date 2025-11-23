@@ -165,7 +165,6 @@
             @view-workflows="selectView('workflows', 'this-env')"
             @view-history="selectView('history', 'this-env')"
             @view-debug="selectView('debug-env', 'this-env')"
-            @resolve-models="selectView('workflows', 'this-env')"
           />
 
           <!-- Workflows View -->

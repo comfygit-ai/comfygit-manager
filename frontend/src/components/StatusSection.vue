@@ -139,11 +139,8 @@
           :items="brokenSyncedWorkflows.map(w => `${w.name} — ${w.issue_summary}`)"
         >
           <template #actions>
-            <ActionButton variant="secondary" size="sm" @click="$emit('view-workflows')">
-              View Details
-            </ActionButton>
-            <ActionButton variant="primary" size="sm" @click="$emit('resolve-models')">
-              Resolve
+            <ActionButton variant="primary" size="sm" @click="$emit('view-workflows')">
+              See Workflows
             </ActionButton>
           </template>
         </IssueCard>
@@ -158,11 +155,8 @@
           :items="brokenUncommittedWorkflows.map(w => `${w.name} — ${w.issue_summary}`)"
         >
           <template #actions>
-            <ActionButton variant="secondary" size="sm" @click="$emit('view-workflows')">
-              View Details
-            </ActionButton>
-            <ActionButton variant="primary" size="sm" @click="$emit('resolve-models')">
-              Resolve
+            <ActionButton variant="primary" size="sm" @click="$emit('view-workflows')">
+              See Workflows
             </ActionButton>
           </template>
         </IssueCard>
@@ -176,11 +170,8 @@
           description="Some workflows reference models that are not found in the workspace index."
         >
           <template #actions>
-            <ActionButton variant="secondary" size="sm" @click="$emit('view-workflows')">
-              View Details
-            </ActionButton>
-            <ActionButton variant="primary" size="sm" @click="$emit('resolve-models')">
-              Resolve
+            <ActionButton variant="primary" size="sm" @click="$emit('view-workflows')">
+              See Workflows
             </ActionButton>
           </template>
         </IssueCard>
@@ -283,7 +274,6 @@ function handleViewChanges() {
 
 const emit = defineEmits<{
   'view-workflows': []
-  'resolve-models': []
   'view-history': []
   'commit-changes': []
   'view-debug': []
