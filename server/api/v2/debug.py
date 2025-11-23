@@ -12,7 +12,7 @@ routes = web.RouteTableDef()
 
 def parse_log_file(log_file: Path, level_filter: str | None = None, lines: int = 100) -> list[dict]:
     """
-    Parse Python logging file and return structured log entries.
+    Parse Python logging file and return raw log entries matching CLI format.
 
     Format: "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s"
     Example: "2025-11-22 15:30:45,234 - comfygit_core.workflow - DEBUG - execute:456 - Starting"
@@ -20,30 +20,51 @@ def parse_log_file(log_file: Path, level_filter: str | None = None, lines: int =
     Args:
         log_file: Path to log file
         level_filter: Optional level to filter by (ERROR, WARNING, INFO, DEBUG)
-        lines: Number of lines to return (from end of file)
+        lines: Number of log records to return (from end of file)
 
     Returns:
-        List of log entry dicts with timestamp, level, message, context
+        List of log entry dicts with raw timestamp and full module info
     """
     if not log_file.exists():
         return []
 
     try:
-        # Read last N lines from file
+        # Read all lines from file
         with open(log_file, 'r', encoding='utf-8') as f:
             all_lines = f.readlines()
-            recent_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
+
+        # Group lines into complete log records (header + continuation lines)
+        # This matches CLI behavior for handling multi-line entries
+        log_pattern = re.compile(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} - ')
+        records = []
+        current_record = []
+
+        for line in all_lines:
+            if log_pattern.match(line):
+                if current_record:
+                    records.append(current_record)
+                current_record = [line]
+            else:
+                if current_record:
+                    current_record.append(line)
+
+        if current_record:
+            records.append(current_record)
+
+        # Take last N records (like CLI does)
+        records = records[-lines:] if len(records) > lines else records
 
         # Parse format: "timestamp - name - level - func:line - message"
-        log_pattern = re.compile(
+        detail_pattern = re.compile(
             r'^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})\s+-\s+'
             r'(?P<name>[\w.]+)\s+-\s+(?P<level>\w+)\s+-\s+'
             r'(?P<func>\w+):(?P<line>\d+)\s+-\s+(?P<message>.*)$'
         )
 
         entries = []
-        for line in recent_lines:
-            match = log_pattern.match(line.strip())
+        for record in records:
+            # Parse the first line of the record
+            match = detail_pattern.match(record[0].strip())
             if match:
                 data = match.groupdict()
 
@@ -51,19 +72,16 @@ def parse_log_file(log_file: Path, level_filter: str | None = None, lines: int =
                 if level_filter and data['level'] != level_filter.upper():
                     continue
 
-                # Convert timestamp to ISO format that JavaScript can parse
-                # Python format: "2025-11-22 15:30:45,234"
-                # ISO format: "2025-11-22T15:30:45.234Z"
-                timestamp_iso = data['timestamp'].replace(',', '.').replace(' ', 'T') + 'Z'
-
-                # Extract context from logger name (e.g., "comfygit_core.workflow" -> "workflow")
-                context = data['name'].split('.')[-1] if '.' in data['name'] else data['name']
-
+                # Return raw timestamp (matches CLI output exactly)
+                # Preserve full logger name for complete context
+                # Include function and line for debugging
                 entries.append({
-                    'timestamp': timestamp_iso,
+                    'timestamp': data['timestamp'],
+                    'name': data['name'],
                     'level': data['level'],
-                    'message': data['message'],
-                    'context': context
+                    'func': data['func'],
+                    'line': data['line'],
+                    'message': data['message']
                 })
 
         return entries

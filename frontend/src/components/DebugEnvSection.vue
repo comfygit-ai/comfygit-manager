@@ -99,29 +99,14 @@ const showPopover = ref(false)
 const environmentName = ref('production')
 const logOutputElement = ref<HTMLPreElement | null>(null)
 
-// Format logs as array of colored lines (oldest first for readability)
+// Format logs to match CLI output exactly
 const formattedLogs = computed(() => {
   if (logs.value.length === 0) return []
 
-  // Sort oldest first (reverse of what we got from API)
-  const sortedLogs = [...logs.value].reverse()
-
-  return sortedLogs.map(log => {
-    // Parse timestamp to readable format
-    const date = new Date(log.timestamp)
-    const timeStr = date.toLocaleString('en-US', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    }).replace(',', '')
-
-    // Format: timestamp LEVEL [context] - message
-    const contextStr = log.context ? `[${log.context}]` : ''
-    const text = `${timeStr} ${log.level.padEnd(7)} ${contextStr} ${log.message}`
+  // Display in order received (already oldest->newest from backend)
+  return logs.value.map(log => {
+    // Match CLI format: timestamp - name - level - func:line - message
+    const text = `${log.timestamp} - ${log.name} - ${log.level} - ${log.func}:${log.line} - ${log.message}`
 
     return {
       text,
@@ -134,9 +119,8 @@ async function loadLogs() {
   loading.value = true
   error.value = null
   try {
+    // Backend returns logs in file order (oldest->newest), display as-is
     logs.value = await getEnvironmentLogs(undefined, 500)
-    // API returns newest first, we'll reverse when displaying
-    logs.value.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
     // Get environment name
     try {

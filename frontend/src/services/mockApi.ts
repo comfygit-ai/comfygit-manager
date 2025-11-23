@@ -516,28 +516,44 @@ const MOCK_COMMITS: GitCommit[] = [
 
 const MOCK_LOGS: LogEntry[] = [
   {
-    timestamp: new Date().toISOString(),
-    level: 'info',
-    message: 'Environment synced successfully',
-    context: { duration_ms: 2340 }
+    timestamp: '2025-11-23 13:07:40,285',
+    name: 'comfygit_core.core.environment',
+    level: 'INFO',
+    func: 'sync',
+    line: '306',
+    message: 'Restored workflows from .cec/'
   },
   {
-    timestamp: new Date(Date.now() - 60000).toISOString(),
-    level: 'warning',
-    message: 'Model not found in index: flux_vae.safetensors',
-    context: { workflow: 'flux-dev-img2img.json' }
+    timestamp: '2025-11-23 13:07:40,285',
+    name: 'comfygit_core.managers.workflow_manager',
+    level: 'INFO',
+    func: 'restore_from_cec',
+    line: '554',
+    message: "Restored workflow 'default' to ComfyUI"
   },
   {
-    timestamp: new Date(Date.now() - 120000).toISOString(),
-    level: 'error',
-    message: 'Failed to install node: rgthree-comfy',
-    context: { error: 'Connection timeout' }
+    timestamp: '2025-11-23 13:07:40,286',
+    name: 'comfygit_core.core.environment',
+    level: 'DEBUG',
+    func: 'sync',
+    line: '399',
+    message: 'User content symlinks configured'
   },
   {
-    timestamp: new Date(Date.now() - 180000).toISOString(),
-    level: 'debug',
-    message: 'Resolving workflow dependencies',
-    context: { workflow: 'sdxl-lightning.json', node_count: 8 }
+    timestamp: '2025-11-23 13:07:42,130',
+    name: 'comfygit_core.managers.workflow_manager',
+    level: 'DEBUG',
+    func: 'resolve_workflow',
+    line: '884',
+    message: "Resolved node: ResolvedNodePackage(package='comfyui-basic-math', node='FloatInput', match=exact, confidence=1.00, 3 version(s), rank=1)"
+  },
+  {
+    timestamp: '2025-11-23 13:07:42,157',
+    name: 'comfygit.command',
+    level: 'INFO',
+    func: 'log_command',
+    line: '180',
+    message: "Command 'env status' completed successfully"
   }
 ]
 
@@ -822,7 +838,7 @@ export const mockApi = {
     // Workspace logs would include entries from all environments
     const allLogs = [...MOCK_LOGS, ...MOCK_LOGS.map(log => ({
       ...log,
-      context: { ...log.context, environment: 'testing' }
+      name: 'comfygit.workspace'
     }))]
     const filtered = level
       ? allLogs.filter(log => log.level === level)

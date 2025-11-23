@@ -287,10 +287,12 @@ export interface NodesResult {
 
 // Debug/Logs Types
 export interface LogEntry {
-  timestamp: string
+  timestamp: string  // Raw Python format: "2025-11-23 13:07:42,157"
+  name: string       // Full logger name: "comfygit_core.managers.workflow_manager"
   level: 'ERROR' | 'WARNING' | 'INFO' | 'DEBUG'
-  message: string
-  context?: string
+  func: string       // Function name: "resolve_workflow"
+  line: string       // Line number: "871"
+  message: string    // Log message
 }
 
 // Git Remotes Types
