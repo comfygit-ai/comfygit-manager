@@ -97,7 +97,7 @@
       <!-- Current Branch Section -->
       <div style="margin-top: var(--cg-space-1);">
         <BranchIndicator
-          :branch-name="status.branch || 'main'"
+          :branch-name="status.branch || 'Detached HEAD'"
         >
           <template #actions>
             <ActionButton variant="secondary" size="sm" @click="$emit('switch-branch')">
@@ -107,15 +107,69 @@
         </BranchIndicator>
       </div>
 
+      <!-- Detached HEAD Warning (Critical Priority) -->
+      <IssueCard
+        v-if="status.is_detached_head"
+        severity="error"
+        icon="⚠"
+        title="You are in detached HEAD state"
+        description="Any commits you make will not be saved to a branch! Create a branch to preserve your work."
+        style="margin-top: var(--cg-space-3)"
+      >
+        <template #actions>
+          <ActionButton variant="primary" size="sm" @click="$emit('create-branch')">
+            Create Branch
+          </ActionButton>
+        </template>
+      </IssueCard>
+
       <!-- Issues Detected Section -->
       <div v-if="hasIssues" style="margin-top: var(--cg-space-4)">
         <SectionTitle level="4" style="margin-bottom: var(--cg-space-2)">
           ISSUES DETECTED
         </SectionTitle>
 
-        <!-- Missing Models Issue -->
+        <!-- Priority 1: CRITICAL - Broken Synced Workflows -->
         <IssueCard
-          v-if="status.missing_models_count > 0"
+          v-if="brokenSyncedWorkflows.length > 0"
+          severity="error"
+          icon="⚠"
+          :title="`${brokenSyncedWorkflows.length} committed workflow${brokenSyncedWorkflows.length === 1 ? '' : 's'} can't run`"
+          description="These workflows were committed but dependencies are now missing. They need to be fixed to run."
+          :items="brokenSyncedWorkflows.map(w => `${w.name} — ${w.issue_summary}`)"
+        >
+          <template #actions>
+            <ActionButton variant="secondary" size="sm" @click="$emit('view-workflows')">
+              View Details
+            </ActionButton>
+            <ActionButton variant="primary" size="sm" @click="$emit('resolve-models')">
+              Resolve
+            </ActionButton>
+          </template>
+        </IssueCard>
+
+        <!-- Priority 2: WARNING - Broken Uncommitted Workflows -->
+        <IssueCard
+          v-if="brokenUncommittedWorkflows.length > 0"
+          severity="warning"
+          icon="⚠"
+          :title="`${brokenUncommittedWorkflows.length} workflow${brokenUncommittedWorkflows.length === 1 ? '' : 's'} with issues`"
+          description="Fix dependencies before committing these workflows."
+          :items="brokenUncommittedWorkflows.map(w => `${w.name} — ${w.issue_summary}`)"
+        >
+          <template #actions>
+            <ActionButton variant="secondary" size="sm" @click="$emit('view-workflows')">
+              View Details
+            </ActionButton>
+            <ActionButton variant="primary" size="sm" @click="$emit('resolve-models')">
+              Resolve
+            </ActionButton>
+          </template>
+        </IssueCard>
+
+        <!-- Missing Models Issue (Legacy - kept for backward compatibility) -->
+        <IssueCard
+          v-if="status.missing_models_count > 0 && !hasBrokenWorkflows"
           severity="warning"
           icon="⚠"
           :title="`${status.missing_models_count} missing model${status.missing_models_count === 1 ? '' : 's'}`"
@@ -133,11 +187,11 @@
 
         <!-- Unsaved Changes Issue -->
         <IssueCard
-          v-if="hasGitChanges"
+          v-if="hasUncommittedWork"
           severity="warning"
           icon="⚠"
-          title="You have unsaved changes"
-          :description="gitChangesDescription"
+          title="You have uncommitted changes"
+          :description="uncommittedChangesDescription"
         >
           <template #actions>
             <ActionButton variant="secondary" size="sm" @click="handleViewChanges">
@@ -235,6 +289,7 @@ const emit = defineEmits<{
   'view-debug': []
   'sync-environment': []
   'switch-branch': []
+  'create-branch': []
 }>()
 
 const hasWorkflowChanges = computed(() => {
@@ -251,6 +306,10 @@ const hasGitChanges = computed(() => {
          gc.has_other_changes
 })
 
+const hasUncommittedWork = computed(() => {
+  return hasWorkflowChanges.value || hasGitChanges.value
+})
+
 const workflowChangesCount = computed(() => {
   return Object.keys(props.status.git_changes.workflow_changes_detail).length
 })
@@ -259,13 +318,30 @@ const hasOtherWorkflowChanges = computed(() => {
   return props.status.git_changes.has_other_changes
 })
 
+const brokenSyncedWorkflows = computed(() => {
+  return props.status.workflows.analyzed?.filter(w =>
+    w.status === 'broken' && w.sync_state === 'synced'
+  ) || []
+})
+
+const brokenUncommittedWorkflows = computed(() => {
+  return props.status.workflows.analyzed?.filter(w =>
+    w.status === 'broken' && w.sync_state !== 'synced'
+  ) || []
+})
+
+const hasBrokenWorkflows = computed(() => {
+  return brokenSyncedWorkflows.value.length > 0 || brokenUncommittedWorkflows.value.length > 0
+})
+
 const hasIssues = computed(() => {
-  return props.status.missing_models_count > 0 ||
-         hasGitChanges.value ||
+  return hasBrokenWorkflows.value ||
+         props.status.missing_models_count > 0 ||
+         hasUncommittedWork.value ||
          !props.status.comparison.is_synced
 })
 
-const gitChangesDescription = computed(() => {
+const uncommittedChangesDescription = computed(() => {
   const parts: string[] = []
 
   if (props.status.workflows.new.length > 0) {

@@ -154,3 +154,70 @@ class TestStatusEndpoint:
 
         # Verify
         assert data["missing_models_count"] == 2
+
+    async def test_analyzed_workflows_in_response(
+        self,
+        client,
+        mock_environment,
+        mock_env_status
+    ):
+        """Should include analyzed workflows with full resolution state."""
+        from unittest.mock import Mock
+
+        # Setup: Create broken and healthy workflows
+        wf_broken = Mock()
+        wf_broken.name = "broken.json"
+        wf_broken.sync_state = "synced"
+        wf_broken.has_issues = True
+        wf_broken.uninstalled_nodes = ["node-pkg-1"]
+        wf_broken.issue_summary = "2 unresolved nodes, 1 missing model"
+        wf_broken.node_count = 10
+        wf_broken.model_count = 3
+        wf_broken.resolution = Mock()
+        wf_broken.resolution.nodes_unresolved = [Mock(), Mock()]
+        wf_broken.resolution.models_unresolved = [Mock()]
+        wf_broken.resolution.models_ambiguous = []
+        wf_broken.resolution.nodes_ambiguous = []
+
+        wf_healthy = Mock()
+        wf_healthy.name = "healthy.json"
+        wf_healthy.sync_state = "new"
+        wf_healthy.has_issues = False
+        wf_healthy.uninstalled_nodes = []
+        wf_healthy.issue_summary = "No issues"
+        wf_healthy.node_count = 5
+        wf_healthy.model_count = 2
+        wf_healthy.resolution = Mock()
+        wf_healthy.resolution.nodes_unresolved = []
+        wf_healthy.resolution.models_unresolved = []
+        wf_healthy.resolution.models_ambiguous = []
+        wf_healthy.resolution.nodes_ambiguous = []
+
+        mock_env_status.workflow.analyzed_workflows = [wf_broken, wf_healthy]
+        mock_environment.status.return_value = mock_env_status
+
+        # Execute
+        resp = await client.get("/v2/comfygit/status")
+        data = await resp.json()
+
+        # Verify: analyzed array exists in workflows
+        assert "workflows" in data
+        assert "analyzed" in data["workflows"]
+        assert len(data["workflows"]["analyzed"]) == 2
+
+        # Verify broken workflow
+        broken = next(w for w in data["workflows"]["analyzed"] if w["name"] == "broken.json")
+        assert broken["sync_state"] == "synced"
+        assert broken["status"] == "broken"
+        assert broken["has_issues"] is True
+        assert broken["uninstalled_nodes"] == 1
+        assert broken["unresolved_nodes_count"] == 2
+        assert broken["unresolved_models_count"] == 1
+        assert broken["node_count"] == 10
+        assert broken["model_count"] == 3
+
+        # Verify healthy workflow
+        healthy = next(w for w in data["workflows"]["analyzed"] if w["name"] == "healthy.json")
+        assert healthy["status"] == "new"
+        assert healthy["has_issues"] is False
+        assert healthy["unresolved_nodes_count"] == 0

@@ -760,7 +760,7 @@ class Orchestrator:
         print(f"[Orchestrator] Syncing {env.name}...")
 
         try:
-            env.sync()
+            env.sync(preserve_workflows=True, remove_extra_nodes=False)
             print(f"[Orchestrator] Sync complete")
         except Exception as e:
             print(f"[Orchestrator] Sync failed: {e}")

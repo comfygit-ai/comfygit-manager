@@ -29,14 +29,18 @@ class TestWorkflowsListEndpoint:
         mock_wf1.has_issues = False
         mock_wf1.sync_state = "synced"
         mock_wf1.uninstalled_count = 0
-        mock_wf1.models_needing_path_sync_count = 0
+        mock_wf1.resolution = Mock()
+        mock_wf1.resolution.models_unresolved = []
+        mock_wf1.resolution.models_ambiguous = []
 
         mock_wf2 = Mock()
         mock_wf2.name = "workflow2.json"
         mock_wf2.has_issues = True
         mock_wf2.sync_state = "modified"
         mock_wf2.uninstalled_count = 2
-        mock_wf2.models_needing_path_sync_count = 1
+        mock_wf2.resolution = Mock()
+        mock_wf2.resolution.models_unresolved = [Mock()]
+        mock_wf2.resolution.models_ambiguous = []
 
         mock_env_status.workflow.analyzed_workflows = [mock_wf1, mock_wf2]
         mock_environment.status.return_value = mock_env_status

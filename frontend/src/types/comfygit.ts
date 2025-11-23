@@ -6,6 +6,21 @@ export interface WorkflowSyncStatus {
   total: number
 }
 
+export interface AnalyzedWorkflow {
+  name: string
+  sync_state: 'new' | 'modified' | 'synced' | 'deleted'
+  status: 'broken' | 'new' | 'modified' | 'synced' | 'deleted'
+  has_issues: boolean
+  uninstalled_nodes: number
+  unresolved_nodes_count: number
+  unresolved_models_count: number
+  ambiguous_models_count: number
+  ambiguous_nodes_count: number
+  issue_summary: string
+  node_count: number
+  model_count: number
+}
+
 export interface GitChanges {
   nodes_added: string[]
   nodes_removed: string[]
@@ -26,7 +41,7 @@ export interface ComfyGitStatus {
   is_detached_head: boolean
   is_synced: boolean
   has_changes: boolean
-  workflows: WorkflowSyncStatus
+  workflows: WorkflowSyncStatus & { analyzed: AnalyzedWorkflow[] }
   git_changes: GitChanges
   comparison: ComparisonStatus
   missing_models_count: number

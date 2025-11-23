@@ -834,13 +834,17 @@ export const mockApi = {
   /**
    * Get Environment Status - Matching ComfyGitStatus type
    * See frontend/src/types/comfygit.ts lines 22-32
+   *
+   * To test detached HEAD warning:
+   * - Set branch: null
+   * - Set is_detached_head: true
    */
   getStatus: async (): Promise<any> => {
     await delay(400)
     return {
       environment: 'production',
-      branch: 'main',
-      is_detached_head: false,
+      branch: 'main',  // Set to null to test detached HEAD
+      is_detached_head: false,  // Set to true to test detached HEAD warning
       is_synced: false,
       has_changes: false,
       workflows: {
@@ -848,7 +852,79 @@ export const mockApi = {
         modified: ['flux-schnell.json'],
         deleted: [],
         synced: MOCK_WORKFLOWS.filter(w => w.status === 'synced').map(w => w.name),
-        total: 18
+        total: 18,
+        analyzed: [
+          {
+            name: 'img2img-basic.json',
+            sync_state: 'new',
+            status: 'new',
+            has_issues: false,
+            uninstalled_nodes: 0,
+            unresolved_nodes_count: 0,
+            unresolved_models_count: 0,
+            ambiguous_models_count: 0,
+            ambiguous_nodes_count: 0,
+            issue_summary: 'No issues',
+            node_count: 8,
+            model_count: 2
+          },
+          {
+            name: 'controlnet-pose.json',
+            sync_state: 'new',
+            status: 'broken',
+            has_issues: true,
+            uninstalled_nodes: 1,
+            unresolved_nodes_count: 1,
+            unresolved_models_count: 0,
+            ambiguous_models_count: 0,
+            ambiguous_nodes_count: 0,
+            issue_summary: '1 unresolved node',
+            node_count: 12,
+            model_count: 3
+          },
+          {
+            name: 'flux-schnell.json',
+            sync_state: 'modified',
+            status: 'modified',
+            has_issues: false,
+            uninstalled_nodes: 0,
+            unresolved_nodes_count: 0,
+            unresolved_models_count: 0,
+            ambiguous_models_count: 0,
+            ambiguous_nodes_count: 0,
+            issue_summary: 'No issues',
+            node_count: 15,
+            model_count: 4
+          },
+          {
+            name: 'sdxl-lightning.json',
+            sync_state: 'synced',
+            status: 'broken',
+            has_issues: true,
+            uninstalled_nodes: 0,
+            unresolved_nodes_count: 2,
+            unresolved_models_count: 1,
+            ambiguous_models_count: 0,
+            ambiguous_nodes_count: 0,
+            issue_summary: '2 unresolved nodes, 1 missing model',
+            node_count: 20,
+            model_count: 5
+          },
+          {
+            name: 'flux-dev-img2img.json',
+            sync_state: 'synced',
+            status: 'synced',
+            has_issues: false,
+            uninstalled_nodes: 0,
+            unresolved_nodes_count: 0,
+            unresolved_models_count: 0,
+            ambiguous_models_count: 0,
+            ambiguous_nodes_count: 0,
+            issue_summary: 'No issues',
+            node_count: 18,
+            model_count: 3
+          }
+        ]
       },
       git_changes: {
         nodes_added: [],

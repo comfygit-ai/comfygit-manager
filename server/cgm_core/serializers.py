@@ -109,6 +109,24 @@ def serialize_environment_status(status, env_name: str) -> dict:
     """
     workflow_sync = status.workflow.sync_status
 
+    # Serialize analyzed workflows with full resolution state
+    analyzed = []
+    for wf in status.workflow.analyzed_workflows:
+        analyzed.append({
+            "name": wf.name,
+            "sync_state": wf.sync_state,
+            "status": "broken" if wf.has_issues else wf.sync_state,
+            "has_issues": wf.has_issues,
+            "uninstalled_nodes": len(wf.uninstalled_nodes),
+            "unresolved_nodes_count": len(wf.resolution.nodes_unresolved),
+            "unresolved_models_count": len(wf.resolution.models_unresolved),
+            "ambiguous_models_count": len(wf.resolution.models_ambiguous),
+            "ambiguous_nodes_count": len(wf.resolution.nodes_ambiguous),
+            "issue_summary": wf.issue_summary,
+            "node_count": wf.node_count,
+            "model_count": wf.model_count
+        })
+
     return {
         "environment": env_name,
         "branch": status.git.current_branch,
@@ -121,6 +139,7 @@ def serialize_environment_status(status, env_name: str) -> dict:
             "deleted": list(workflow_sync.deleted),
             "synced": list(workflow_sync.synced),
             "total": workflow_sync.total_count,
+            "analyzed": analyzed,
         },
         "git_changes": {
             "nodes_added": [

@@ -22,7 +22,7 @@ async def get_workflows(request: web.Request, env) -> web.Response:
             "name": wf.name,
             "status": "broken" if wf.has_issues else wf.sync_state,
             "missing_nodes": wf.uninstalled_count,
-            "missing_models": wf.models_needing_path_sync_count,
+            "missing_models": len(wf.resolution.models_unresolved) + len(wf.resolution.models_ambiguous),
             "sync_state": wf.sync_state
         })
 

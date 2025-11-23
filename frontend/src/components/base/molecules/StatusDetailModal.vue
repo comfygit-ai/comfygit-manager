@@ -22,6 +22,34 @@
           <div v-if="hasWorkflows" class="status-section">
             <SectionTitle level="4">WORKFLOWS</SectionTitle>
 
+            <!-- Broken Synced Workflows (CRITICAL) -->
+            <div v-if="brokenSyncedWorkflows.length" class="workflow-group">
+              <div class="workflow-group-header">
+                <span class="workflow-status-icon broken">⚠</span>
+                <span class="workflow-group-title">BROKEN (COMMITTED) ({{ brokenSyncedWorkflows.length }})</span>
+              </div>
+              <div class="workflow-list">
+                <div v-for="wf in brokenSyncedWorkflows" :key="wf.name" class="workflow-item">
+                  <span class="workflow-name">{{ wf.name }}</span>
+                  <span class="workflow-issue">{{ wf.issue_summary }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Broken Uncommitted Workflows (WARNING) -->
+            <div v-if="brokenUncommittedWorkflows.length" class="workflow-group">
+              <div class="workflow-group-header">
+                <span class="workflow-status-icon broken">⚠</span>
+                <span class="workflow-group-title">BROKEN (UNCOMMITTED) ({{ brokenUncommittedWorkflows.length }})</span>
+              </div>
+              <div class="workflow-list">
+                <div v-for="wf in brokenUncommittedWorkflows" :key="wf.name" class="workflow-item">
+                  <span class="workflow-name">{{ wf.name }}</span>
+                  <span class="workflow-issue">{{ wf.issue_summary }}</span>
+                </div>
+              </div>
+            </div>
+
             <!-- New Workflows -->
             <div v-if="status.workflows?.new?.length" class="workflow-group">
               <div class="workflow-group-header">
@@ -62,17 +90,17 @@
             </div>
 
             <!-- Synced Workflows (collapsible) -->
-            <div v-if="status.workflows?.synced?.length" class="workflow-group">
+            <div v-if="healthySyncedWorkflows.length" class="workflow-group">
               <div
                 class="workflow-group-header clickable"
                 @click="showSynced = !showSynced"
               >
                 <span class="workflow-status-icon synced">✓</span>
-                <span class="workflow-group-title">SYNCED ({{ status.workflows.synced.length }})</span>
+                <span class="workflow-group-title">SYNCED ({{ healthySyncedWorkflows.length }})</span>
                 <span class="expand-icon">{{ showSynced ? '▼' : '▶' }}</span>
               </div>
               <div v-if="showSynced" class="workflow-list">
-                <div v-for="wf in status.workflows.synced" :key="wf" class="workflow-item">
+                <div v-for="wf in healthySyncedWorkflows" :key="wf" class="workflow-item">
                   <span class="workflow-name">{{ wf }}</span>
                 </div>
               </div>
@@ -274,6 +302,25 @@ watch(() => props.show, (newVal, oldVal) => {
   console.log('StatusDetailModal show prop changed from', oldVal, 'to', newVal)
 }, { immediate: true })
 
+const brokenSyncedWorkflows = computed(() => {
+  return props.status?.workflows?.analyzed?.filter(w =>
+    w.status === 'broken' && w.sync_state === 'synced'
+  ) || []
+})
+
+const brokenUncommittedWorkflows = computed(() => {
+  return props.status?.workflows?.analyzed?.filter(w =>
+    w.status === 'broken' && w.sync_state !== 'synced'
+  ) || []
+})
+
+const healthySyncedWorkflows = computed(() => {
+  return props.status?.workflows?.synced?.filter(wfName => {
+    const analyzed = props.status?.workflows?.analyzed?.find(w => w.name === wfName)
+    return !analyzed || analyzed.status !== 'broken'
+  }) || []
+})
+
 const hasWorkflows = computed(() => {
   if (!props.status?.workflows) return false
   return (props.status.workflows.new?.length ?? 0) > 0 ||
@@ -447,6 +494,10 @@ function isDevNode(node: string | { name: string; is_development?: boolean }): b
   color: var(--cg-color-success);
 }
 
+.workflow-status-icon.broken {
+  color: var(--cg-color-error);
+}
+
 .workflow-group-title {
   font-weight: var(--cg-font-weight-semibold);
   text-transform: uppercase;
@@ -476,6 +527,13 @@ function isDevNode(node: string | { name: string; is_development?: boolean }): b
   font-family: var(--cg-font-mono);
   font-size: var(--cg-font-size-sm);
   color: var(--cg-color-text-primary);
+}
+
+.workflow-issue {
+  font-size: var(--cg-font-size-xs);
+  color: var(--cg-color-text-muted);
+  margin-left: var(--cg-space-2);
+  font-style: italic;
 }
 
 /* Change Groups */

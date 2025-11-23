@@ -78,7 +78,7 @@
           >
             <template #icon>●</template>
             <template #title>{{ wf.name }}</template>
-            <template #subtitle>✓ Ready</template>
+            <template #subtitle>New</template>
             <template #actions>
               <ActionButton
                 variant="secondary"
@@ -104,7 +104,7 @@
           >
             <template #icon>⚡</template>
             <template #title>{{ wf.name }}</template>
-            <template #subtitle>✓ Ready</template>
+            <template #subtitle>Modified</template>
             <template #actions>
               <ActionButton
                 variant="secondary"
@@ -133,7 +133,7 @@
           >
             <template #icon>✓</template>
             <template #title>{{ wf.name }}</template>
-            <template #subtitle>✓ Ready</template>
+            <template #subtitle>Synced</template>
             <template #actions>
               <ActionButton
                 variant="secondary"
