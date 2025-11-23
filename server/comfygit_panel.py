@@ -82,25 +82,31 @@ async def log_panel_request(env_name: str, endpoint: str, **context):
 
     loop = asyncio.get_event_loop()
 
-    # Run logging context in executor to avoid blocking
-    def enter_logging():
+    # Create the context manager object
+    def create_context_manager():
         return EnvironmentLogger.log_command(
             env_name,
             f"panel: {endpoint}",
             **context
-        ).__enter__()
+        )
 
-    def exit_logging(cm, exc_type, exc_val, exc_tb):
-        return cm.__exit__(exc_type, exc_val, exc_tb)
+    # Get the context manager (not the yielded value)
+    context_manager = await loop.run_in_executor(None, create_context_manager)
 
-    # Enter context
-    cm = await loop.run_in_executor(None, enter_logging)
+    # Enter the context and get the yielded value
+    def enter_context(cm):
+        return cm.__enter__()
+
+    yielded_value = await loop.run_in_executor(None, enter_context, context_manager)
 
     try:
-        yield cm
+        yield yielded_value
     finally:
-        # Exit context (handles exception logging)
-        await loop.run_in_executor(None, exit_logging, cm, None, None, None)
+        # Exit using the context manager object (not the yielded value)
+        def exit_context(cm, exc_type, exc_val, exc_tb):
+            return cm.__exit__(exc_type, exc_val, exc_tb)
+
+        await loop.run_in_executor(None, exit_context, context_manager, None, None, None)
 
 
 # Initialize logging on module load
@@ -552,79 +558,66 @@ async def get_workflow_details(request):
             priorities = {"required": 0, "flexible": 1, "optional": 2}
             return priorities.get(importance, 2)
 
-        # Process resolved models - deduplicate by hash
-        print(f"[DEBUG] Processing {len(workflow.resolution.models_resolved)} resolved models for workflow '{name}'")
+        # Build resolution lookup map (filename -> ResolvedModel) for quick access
+        resolution_map = {}
+        for resolved in workflow.resolution.models_resolved:
+            resolution_map[resolved.reference.widget_value] = resolved
 
-        for model in workflow.resolution.models_resolved:
-            status = determine_model_status(model)
-            model_hash = model.resolved_model.hash if model.resolved_model else ""
-            filename = model.reference.widget_value
+        # Process ALL model references from dependencies (before deduplication)
+        # This captures all nodes that load each model
+        for model_ref in workflow.dependencies.found_models:
+            filename = model_ref.widget_value
+
+            # Look up resolution data for this model
+            resolved = resolution_map.get(filename)
+
+            if resolved:
+                # Model is resolved - get details
+                status = determine_model_status(resolved)
+                model_hash = resolved.resolved_model.hash if resolved.resolved_model else ""
+                model_type = resolved.resolved_model.category if resolved.resolved_model else "unknown"
+                model_size = resolved.resolved_model.file_size if resolved.resolved_model else 0
+                importance = "required" if not resolved.is_optional else "optional"
+            else:
+                # Model is unresolved - defaults
+                status = "missing"
+                model_hash = ""
+                model_type = "unknown"
+                model_size = 0
+                importance = "required"
 
             # Use hash as key, fallback to filename if no hash
             key = model_hash if model_hash else f"unhashed_{filename}"
 
+            # Initialize model entry if first time seeing this model
             if key not in models_map:
                 models_map[key] = {
                     "filename": filename,
                     "hash": model_hash,
-                    "type": model.resolved_model.category if model.resolved_model else "unknown",
-                    "size": model.resolved_model.file_size if model.resolved_model else 0,
+                    "type": model_type,
+                    "size": model_size,
                     "status": status,
                     "used_in_workflows": [name],
-                    "importance": "required" if not model.is_optional else "optional",
+                    "importance": importance,
                     "loaded_by": []
                 }
 
-            # Aggregate node references
-            node_ref = {
-                "node_type": model.reference.node_type,
-                "node_id": model.reference.node_id
-            }
-            print(f"[DEBUG] Adding node reference: {node_ref} for model {filename} (hash: {model_hash})")
-
-            if node_ref not in models_map[key]["loaded_by"]:
-                models_map[key]["loaded_by"].append(node_ref)
-                print(f"[DEBUG] Node added. Total nodes for this model: {len(models_map[key]['loaded_by'])}")
-            else:
-                print(f"[DEBUG] Node already exists in list (skipped)")
-
-            # Update importance to most important level across all nodes
-            current_importance = models_map[key]["importance"]
-            new_importance = "required" if not model.is_optional else "optional"
-            if get_importance_priority(new_importance) < get_importance_priority(current_importance):
-                models_map[key]["importance"] = new_importance
-
-        # Add unresolved models (always missing) - deduplicate by filename
-        for model_ref in workflow.resolution.models_unresolved:
-            filename = model_ref.widget_value
-            key = f"unresolved_{filename}"
-
-            if key not in models_map:
-                models_map[key] = {
-                    "filename": filename,
-                    "hash": "",
-                    "type": "unknown",
-                    "size": 0,
-                    "status": "missing",
-                    "used_in_workflows": [name],
-                    "importance": "required",
-                    "loaded_by": []
-                }
-
-            # Aggregate node references
+            # Aggregate node reference
             node_ref = {
                 "node_type": model_ref.node_type,
                 "node_id": model_ref.node_id
             }
+
             if node_ref not in models_map[key]["loaded_by"]:
                 models_map[key]["loaded_by"].append(node_ref)
 
+            # Update importance to most important level across all nodes
+            current_importance = models_map[key]["importance"]
+            if get_importance_priority(importance) < get_importance_priority(current_importance):
+                models_map[key]["importance"] = importance
+
         # Convert to list
         models = list(models_map.values())
-
-        print(f"[DEBUG] Final model list for workflow '{name}':")
-        for m in models:
-            print(f"[DEBUG]   - {m['filename']}: {len(m['loaded_by'])} nodes: {[n['node_id'] for n in m['loaded_by']]}")
 
         # Transform nodes - deduplicate by package_id since multiple node types can come from same package
         # Status determined by workflow.uninstalled_nodes (authoritative source of what's NOT installed)

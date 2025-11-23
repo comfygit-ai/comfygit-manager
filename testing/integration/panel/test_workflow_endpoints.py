@@ -110,6 +110,11 @@ class TestWorkflowDetailsEndpoint:
             nodes_resolved=[]
         )
 
+        # Mock dependencies (required for new node aggregation logic)
+        mock_dependencies = Mock()
+        mock_dependencies.found_models = []  # Empty list (no models)
+        mock_wf.dependencies = mock_dependencies
+
         mock_env_status.workflow.analyzed_workflows = [mock_wf]
         mock_environment.status.return_value = mock_env_status
 
@@ -154,6 +159,105 @@ class TestWorkflowDetailsEndpoint:
 
         resp = await client.get("/v2/comfygit/workflow/test.json/details")
         assert resp.status == 500
+
+    async def test_aggregates_multiple_nodes_loading_same_model(
+        self,
+        client,
+        mock_environment,
+        mock_env_status
+    ):
+        """Should aggregate all nodes that load the same model into loaded_by array.
+
+        When multiple nodes load the same model file (e.g., 3 CheckpointLoaderSimple nodes
+        all using the same checkpoint), the workflow details should show all 3 nodes
+        in the loaded_by array of that model entry.
+        """
+        # Setup: Create mock workflow with 3 nodes loading the same model
+        mock_wf = Mock()
+        mock_wf.name = "test.json"
+        mock_wf.has_issues = False
+        mock_wf.sync_state = "synced"
+        mock_wf.uninstalled_nodes = []
+
+        # Create mock model reference objects - one for each node
+        mock_ref_node4 = Mock()
+        mock_ref_node4.widget_value = "SD1.5/v1-5-pruned-emaonly.safetensors"
+        mock_ref_node4.node_type = "CheckpointLoaderSimple"
+        mock_ref_node4.node_id = "4"
+
+        mock_ref_node14 = Mock()
+        mock_ref_node14.widget_value = "SD1.5/v1-5-pruned-emaonly.safetensors"
+        mock_ref_node14.node_type = "CheckpointLoaderSimple"
+        mock_ref_node14.node_id = "14"
+
+        mock_ref_node25 = Mock()
+        mock_ref_node25.widget_value = "SD1.5/v1-5-pruned-emaonly.safetensors"
+        mock_ref_node25.node_type = "CheckpointLoaderSimple"
+        mock_ref_node25.node_id = "25"
+
+        # Create mock resolved model (same model for all 3 nodes)
+        mock_model = Mock()
+        mock_model.filename = "v1-5-pruned-emaonly.safetensors"
+        mock_model.hash = "48835672f5450d12"
+        mock_model.file_size = 4265146304
+        mock_model.category = "checkpoints"
+
+        # Core library returns ONLY ONE ResolvedModel (deduplicated)
+        # but we have 3 raw model references in dependencies
+        mock_resolved_model = Mock()
+        mock_resolved_model.reference = mock_ref_node4  # Points to FIRST node only
+        mock_resolved_model.resolved_model = mock_model
+        mock_resolved_model.model_source = None
+        mock_resolved_model.is_optional = False
+        mock_resolved_model.needs_path_sync = False
+
+        # Mock dependencies - this has ALL 3 references (before deduplication)
+        mock_dependencies = Mock()
+        mock_dependencies.found_models = [
+            mock_ref_node4,
+            mock_ref_node14,
+            mock_ref_node25
+        ]
+
+        # Mock resolution - this has deduplicated models (only 1 entry)
+        mock_wf.resolution = create_mock_resolution(
+            models_resolved=[mock_resolved_model],
+            models_unresolved=[],
+            nodes_resolved=[]
+        )
+
+        # Add dependencies to workflow
+        mock_wf.dependencies = mock_dependencies
+
+        mock_env_status.workflow.analyzed_workflows = [mock_wf]
+        mock_environment.status.return_value = mock_env_status
+
+        # Execute
+        resp = await client.get("/v2/comfygit/workflow/test.json/details")
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+
+        # Should have 1 model entry (deduplicated)
+        assert len(data["models"]) == 1
+
+        model = data["models"][0]
+        assert model["filename"] == "SD1.5/v1-5-pruned-emaonly.safetensors"
+        assert model["hash"] == "48835672f5450d12"
+        assert model["status"] == "available"
+
+        # CRITICAL: Should have all 3 nodes in loaded_by array
+        assert "loaded_by" in model
+        assert len(model["loaded_by"]) == 3, f"Expected 3 nodes in loaded_by, got {len(model['loaded_by'])}: {model['loaded_by']}"
+
+        # Verify all 3 node IDs are present
+        node_ids = {node["node_id"] for node in model["loaded_by"]}
+        assert node_ids == {"4", "14", "25"}, f"Expected nodes 4, 14, 25, got {node_ids}"
+
+        # Verify all nodes have the correct type
+        for node in model["loaded_by"]:
+            assert node["node_type"] == "CheckpointLoaderSimple"
 
 
 @pytest.mark.integration
