@@ -26,8 +26,8 @@
               <div class="model-details">
                 <div class="model-row">
                   <span class="label">Status:</span>
-                  <span :class="['value', model.status === 'available' ? 'success' : 'error']">
-                    {{ model.status === 'available' ? '✓ Available' : '⚠ Missing' }}
+                  <span :class="['value', getStatusClass(model.status)]">
+                    {{ getStatusLabel(model.status) }}
                   </span>
                 </div>
                 <div class="model-row">
@@ -45,17 +45,53 @@
                     @update:model-value="handleImportanceChange(model.hash, $event)"
                   />
                 </div>
-                <div v-if="model.node_type" class="model-row">
-                  <span class="label">Used in:</span>
-                  <span class="value">{{ model.node_type }} (Node {{ model.node_id }})</span>
+                <div v-if="model.loaded_by && model.loaded_by.length > 0" class="model-row model-row-nodes">
+                  <span class="label">Loaded by:</span>
+                  <div class="node-list">
+                    <div
+                      v-for="(node, index) in getVisibleNodes(model)"
+                      :key="`${node.node_id}-${index}`"
+                      class="node-reference"
+                    >
+                      {{ node.node_type }} (Node #{{ node.node_id }})
+                    </div>
+                    <button
+                      v-if="model.loaded_by.length > 3"
+                      class="expand-toggle"
+                      @click="toggleNodeExpansion(model.hash || model.filename)"
+                    >
+                      {{ isNodeListExpanded(model.hash || model.filename) ? '▼ Show less' : `▶ View all (${model.loaded_by.length})` }}
+                    </button>
+                  </div>
                 </div>
                 <div v-if="model.size_mb" class="model-row">
                   <span class="label">Size:</span>
                   <span class="value">{{ model.size_mb }} MB</span>
                 </div>
               </div>
-              <div v-if="model.status === 'missing'" class="model-actions">
-                <BaseButton variant="secondary" size="sm" @click="emit('resolve')">
+              <div v-if="model.status !== 'available'" class="model-actions">
+                <BaseButton
+                  v-if="model.status === 'downloadable'"
+                  variant="primary"
+                  size="sm"
+                  @click="emit('resolve')"
+                >
+                  Download
+                </BaseButton>
+                <BaseButton
+                  v-else-if="model.status === 'path_mismatch'"
+                  variant="secondary"
+                  size="sm"
+                  @click="emit('resolve')"
+                >
+                  Sync Path
+                </BaseButton>
+                <BaseButton
+                  v-else
+                  variant="secondary"
+                  size="sm"
+                  @click="emit('resolve')"
+                >
                   Resolve
                 </BaseButton>
               </div>
@@ -152,12 +188,65 @@ const hasChanges = ref(false)
 const importanceChanges = ref<Record<string, string>>({})
 const installingNodes = ref<Record<string, boolean>>({})
 const showImportanceInfo = ref(false)
+const expandedNodeLists = ref<Set<string>>(new Set())
 
 const importanceOptions = [
   { label: 'Required', value: 'required' },
   { label: 'Flexible', value: 'flexible' },
   { label: 'Optional', value: 'optional' }
 ]
+
+function getStatusClass(status: string): string {
+  switch (status) {
+    case 'available':
+      return 'success'
+    case 'path_mismatch':
+      return 'warning'
+    case 'downloadable':
+      return 'info'
+    case 'missing':
+    default:
+      return 'error'
+  }
+}
+
+function getStatusLabel(status: string): string {
+  switch (status) {
+    case 'available':
+      return '✓ Available'
+    case 'path_mismatch':
+      return '⚠ Path Mismatch'
+    case 'downloadable':
+      return '⬇ Downloadable'
+    case 'missing':
+    default:
+      return '✗ Missing'
+  }
+}
+
+function getVisibleNodes(model: any) {
+  if (!model.loaded_by || model.loaded_by.length === 0) return []
+
+  const key = model.hash || model.filename
+  const isExpanded = expandedNodeLists.value.has(key)
+
+  // Show first 3 nodes by default, or all if expanded
+  return isExpanded ? model.loaded_by : model.loaded_by.slice(0, 3)
+}
+
+function isNodeListExpanded(key: string): boolean {
+  return expandedNodeLists.value.has(key)
+}
+
+function toggleNodeExpansion(key: string) {
+  if (expandedNodeLists.value.has(key)) {
+    expandedNodeLists.value.delete(key)
+  } else {
+    expandedNodeLists.value.add(key)
+  }
+  // Force reactivity update
+  expandedNodeLists.value = new Set(expandedNodeLists.value)
+}
 
 async function loadDetails() {
   loading.value = true
@@ -284,6 +373,46 @@ onMounted(loadDetails)
 
 .model-row .value.error {
   color: var(--cg-color-error);
+}
+
+.model-row .value.warning {
+  color: var(--cg-color-warning, #f59e0b);
+}
+
+.model-row .value.info {
+  color: var(--cg-color-info, #3b82f6);
+}
+
+.model-row-nodes {
+  align-items: flex-start;
+}
+
+.node-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.node-reference {
+  color: var(--cg-color-text-secondary);
+  font-size: var(--cg-font-size-sm);
+  padding: 2px 0;
+}
+
+.expand-toggle {
+  background: none;
+  border: none;
+  color: var(--cg-color-accent);
+  cursor: pointer;
+  font-size: var(--cg-font-size-sm);
+  padding: 4px 0;
+  text-align: left;
+  margin-top: 2px;
+}
+
+.expand-toggle:hover {
+  text-decoration: underline;
 }
 
 .model-actions {

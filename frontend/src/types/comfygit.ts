@@ -188,10 +188,14 @@ export interface ModelUsageInfo {
   hash: string
   type: string
   size: number
+  status: 'available' | 'missing' | 'downloadable' | 'path_mismatch'
   used_in_workflows: string[]
   importance: 'required' | 'flexible' | 'optional'
+  loaded_by: Array<{ node_type: string; node_id: string }>
   line_number?: number
+  // Deprecated - use loaded_by instead
   node_type?: string
+  node_id?: string
 }
 
 export interface WorkflowDetails {
@@ -222,6 +226,7 @@ export interface ModelInfo {
   hash: string
   type: string
   size: number
+  status: 'available' | 'missing' | 'downloadable' | 'path_mismatch'
   source_url?: string
   used_in_environments?: Array<{ env_name: string; workflow_count: number }>
   used_in_workflows?: string[]
