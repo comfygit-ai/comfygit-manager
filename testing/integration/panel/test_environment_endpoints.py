@@ -31,7 +31,7 @@ class TestListEnvironmentsEndpoint:
         def mock_detect():
             return (True, mock_workspace, mock_current_env)
 
-        monkeypatch.setattr("comfygit_panel.orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
 
         # Mock _get_environment_info to return basic info
         def mock_get_info(env, current_env):
@@ -46,7 +46,7 @@ class TestListEnvironmentsEndpoint:
                 "current_branch": "main"
             }
 
-        monkeypatch.setattr("comfygit_panel._get_environment_info", mock_get_info)
+        monkeypatch.setattr("api.v2.environments._get_environment_info", mock_get_info)
 
         # Execute
         resp = await client.get("/v2/comfygit/environments")
@@ -68,7 +68,7 @@ class TestListEnvironmentsEndpoint:
         def mock_detect():
             return (False, None, None)
 
-        monkeypatch.setattr("comfygit_panel.orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
 
         # Execute
         resp = await client.get("/v2/comfygit/environments")
@@ -91,7 +91,7 @@ class TestListEnvironmentsEndpoint:
         def mock_detect():
             return (True, mock_workspace, mock_current_env)
 
-        monkeypatch.setattr("comfygit_panel.orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
 
         # Execute
         resp = await client.get("/v2/comfygit/environments")
@@ -122,12 +122,12 @@ class TestSwitchEnvironmentEndpoint:
         def mock_detect():
             return (True, mock_workspace, mock_current_env)
 
-        monkeypatch.setattr("comfygit_panel.orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
 
         # Mock orchestrator methods
-        monkeypatch.setattr("comfygit_panel.orchestrator.acquire_switch_lock", lambda _: True)
-        monkeypatch.setattr("comfygit_panel.orchestrator.should_spawn_orchestrator_for_switch", lambda: False)
-        monkeypatch.setattr("comfygit_panel.orchestrator.write_switch_request", Mock())
+        monkeypatch.setattr("orchestrator.acquire_switch_lock", lambda _: True)
+        monkeypatch.setattr("orchestrator.should_spawn_orchestrator_for_switch", lambda: False)
+        monkeypatch.setattr("orchestrator.write_switch_request", Mock())
 
         # Mock delayed exit to prevent actual exit
         async def mock_delayed_exit():
@@ -149,7 +149,7 @@ class TestSwitchEnvironmentEndpoint:
         def mock_detect():
             return (False, None, None)
 
-        monkeypatch.setattr("comfygit_panel.orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
 
         # Execute
         resp = await client.post("/v2/comfygit/switch_environment", json={
@@ -171,7 +171,7 @@ class TestSwitchEnvironmentEndpoint:
         def mock_detect():
             return (True, mock_workspace, mock_current_env)
 
-        monkeypatch.setattr("comfygit_panel.orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
 
         # Execute: No target_env in body
         resp = await client.post("/v2/comfygit/switch_environment", json={})
@@ -197,7 +197,7 @@ class TestSwitchEnvironmentEndpoint:
         def mock_detect():
             return (True, mock_workspace, mock_current_env)
 
-        monkeypatch.setattr("comfygit_panel.orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
 
         # Execute
         resp = await client.post("/v2/comfygit/switch_environment", json={
@@ -222,10 +222,10 @@ class TestSwitchEnvironmentEndpoint:
         def mock_detect():
             return (True, mock_workspace, mock_current_env)
 
-        monkeypatch.setattr("comfygit_panel.orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
 
         # Mock acquire_switch_lock to return False (lock already held)
-        monkeypatch.setattr("comfygit_panel.orchestrator.acquire_switch_lock", lambda _: False)
+        monkeypatch.setattr("orchestrator.acquire_switch_lock", lambda _: False)
 
         # Execute
         resp = await client.post("/v2/comfygit/switch_environment", json={
@@ -253,7 +253,7 @@ class TestSwitchStatusEndpoint:
         def mock_detect():
             return (True, mock_workspace, mock_current_env)
 
-        monkeypatch.setattr("comfygit_panel.orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
 
         # Create mock status file
         metadata_dir = tmp_path / ".metadata"
@@ -292,7 +292,7 @@ class TestSwitchStatusEndpoint:
         def mock_detect():
             return (True, mock_workspace, mock_current_env)
 
-        monkeypatch.setattr("comfygit_panel.orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
 
         # No status file exists
 
@@ -311,7 +311,7 @@ class TestSwitchStatusEndpoint:
         def mock_detect():
             return (False, None, None)
 
-        monkeypatch.setattr("comfygit_panel.orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
 
         # Execute
         resp = await client.get("/v2/comfygit/switch_status")
@@ -332,7 +332,7 @@ class TestSwitchStatusEndpoint:
         def mock_detect():
             return (True, mock_workspace, mock_current_env)
 
-        monkeypatch.setattr("comfygit_panel.orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
 
         # Create corrupted status file
         metadata_dir = tmp_path / ".metadata"

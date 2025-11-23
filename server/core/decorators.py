@@ -17,10 +17,9 @@ def requires_environment(handler):
     async def wrapper(request: web.Request, *args, **kwargs):
         env = get_environment_from_request(request)
         if not env:
-            raise web.HTTPInternalServerError(
-                reason="No environment detected",
-                text='{"error": "no_environment"}'
-            )
+            return web.json_response({
+                "error": "No environment detected"
+            }, status=500)
         return await handler(request, env, *args, **kwargs)
     return wrapper
 
@@ -38,9 +37,8 @@ def requires_workspace(handler):
     async def wrapper(request: web.Request, *args, **kwargs):
         workspace = get_workspace_from_request(request)
         if not workspace:
-            raise web.HTTPInternalServerError(
-                reason="No workspace detected",
-                text='{"error": "no_workspace"}'
-            )
+            return web.json_response({
+                "error": "No workspace detected"
+            }, status=500)
         return await handler(request, workspace, *args, **kwargs)
     return wrapper
