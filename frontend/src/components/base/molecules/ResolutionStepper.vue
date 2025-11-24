@@ -108,27 +108,17 @@ function handleStepClick(stepId: string) {
   flex: 1;
   position: relative;
   cursor: pointer;
-  opacity: 0.6;
   transition: opacity 0.2s;
 }
 
-.step:hover {
-  opacity: 1;
-}
-
-.step.active {
-  opacity: 1;
-}
-
-.step.completed,
-.step.in-progress {
-  opacity: 0.9;
-}
-
 .step.disabled {
-  opacity: 0.4;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+.step.disabled .step-indicator,
+.step.disabled .step-label {
+  opacity: 0.4;
 }
 
 .step-indicator {
@@ -144,6 +134,8 @@ function handleStepClick(stepId: string) {
   font-weight: var(--cg-font-weight-semibold);
   font-size: var(--cg-font-size-xs);
   transition: all 0.2s;
+  position: relative;
+  z-index: 2;
 }
 
 /* State: pending (gray) */
@@ -192,7 +184,7 @@ function handleStepClick(stepId: string) {
   right: calc(-50% + 14px);
   height: 2px;
   background: var(--cg-color-border);
-  z-index: -1;
+  z-index: 1;
 }
 
 .stepper-content {

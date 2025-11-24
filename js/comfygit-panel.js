@@ -3849,7 +3849,7 @@ const Yn = { class: "resolution-stepper" }, Xn = { class: "stepper-header" }, Zn
       ])
     ]));
   }
-}), al = /* @__PURE__ */ Y(sl, [["__scopeId", "data-v-f4abb59e"]]), nl = /* @__PURE__ */ q({
+}), al = /* @__PURE__ */ Y(sl, [["__scopeId", "data-v-2a7b3af8"]]), nl = /* @__PURE__ */ q({
   __name: "ConfidenceBadge",
   props: {
     confidence: {},
