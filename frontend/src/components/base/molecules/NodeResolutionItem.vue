@@ -1,21 +1,5 @@
 <template>
   <div :class="['node-resolution-item', { selected: isSelected, ambiguous: hasMultipleOptions, resolved: hasChoice }]">
-    <!-- Header: Node type and status -->
-    <div class="item-header">
-      <div class="item-title">
-        <code class="node-type">{{ nodeType }}</code>
-        <span v-if="hasChoice" class="choice-status">
-          <span v-if="choiceAction === 'install'" class="status-badge install">Installing: {{ choicePackageId }}</span>
-          <span v-else-if="choiceAction === 'optional'" class="status-badge optional">Marked Optional</span>
-          <span v-else-if="choiceAction === 'skip'" class="status-badge skip">Skipped</span>
-        </span>
-      </div>
-      <div v-if="!hasChoice" class="item-status">
-        <span v-if="hasMultipleOptions" class="status-badge ambiguous">{{ options?.length }} matches</span>
-        <span v-else-if="!packageId" class="status-badge unresolved">Not Found</span>
-      </div>
-    </div>
-
     <div class="item-body">
       <!-- Already resolved state - show change option -->
       <div v-if="hasChoice" class="resolved-state">
@@ -165,75 +149,6 @@ function handleOptionClick(index: number) {
 .node-resolution-item.resolved {
   border-color: var(--cg-color-success);
   background: var(--cg-color-success-muted);
-}
-
-.item-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--cg-space-3);
-  background: var(--cg-color-bg-tertiary);
-  border-bottom: 1px solid var(--cg-color-border-subtle);
-}
-
-.item-title {
-  display: flex;
-  align-items: center;
-  gap: var(--cg-space-2);
-  flex-wrap: wrap;
-}
-
-.node-type {
-  font-family: var(--cg-font-mono);
-  font-size: var(--cg-font-size-sm);
-  color: var(--cg-color-accent);
-  background: var(--cg-color-bg-primary);
-  padding: var(--cg-space-1) var(--cg-space-2);
-  border-radius: var(--cg-radius-sm);
-}
-
-.choice-status {
-  display: flex;
-  align-items: center;
-}
-
-.item-status {
-  display: flex;
-  align-items: center;
-}
-
-.status-badge {
-  padding: var(--cg-space-1) var(--cg-space-2);
-  border-radius: var(--cg-radius-sm);
-  font-size: var(--cg-font-size-xs);
-  font-weight: var(--cg-font-weight-medium);
-  text-transform: uppercase;
-  letter-spacing: var(--cg-letter-spacing-wide);
-}
-
-.status-badge.install {
-  background: var(--cg-color-success-muted);
-  color: var(--cg-color-success);
-}
-
-.status-badge.optional {
-  background: var(--cg-color-info-muted);
-  color: var(--cg-color-info);
-}
-
-.status-badge.skip {
-  background: var(--cg-color-bg-hover);
-  color: var(--cg-color-text-muted);
-}
-
-.status-badge.ambiguous {
-  background: var(--cg-color-warning-muted);
-  color: var(--cg-color-warning);
-}
-
-.status-badge.unresolved {
-  background: var(--cg-color-error-muted);
-  color: var(--cg-color-error);
 }
 
 .item-body {

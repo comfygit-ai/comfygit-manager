@@ -9,47 +9,20 @@
           Unaddressed items will be skipped.
         </p>
       </div>
-      <div class="step-stats">
-        <span class="stat resolved">{{ resolvedCount }} resolved</span>
-        <span class="stat pending">{{ pendingCount }} pending</span>
-      </div>
+      <span class="stat-badge">{{ resolvedCount }}/{{ models.length }} resolved</span>
     </div>
 
-    <!-- Item Navigator - browse all models -->
-    <div class="item-navigator">
-      <button
-        class="nav-arrow"
-        :disabled="currentIndex === 0"
-        @click="goToItem(currentIndex - 1)"
-      >
-        ←
-      </button>
-
-      <div class="item-indicators">
-        <button
-          v-for="(model, index) in models"
-          :key="model.filename"
-          :class="['item-dot', {
-            active: index === currentIndex,
-            resolved: modelChoices.has(model.filename)
-          }]"
-          :title="model.filename"
-          @click="goToItem(index)"
-        >
-          <span v-if="modelChoices.has(model.filename)" class="dot-check">✓</span>
-        </button>
-      </div>
-
-      <button
-        class="nav-arrow"
-        :disabled="currentIndex === models.length - 1"
-        @click="goToItem(currentIndex + 1)"
-      >
-        →
-      </button>
-
-      <span class="nav-position">{{ currentIndex + 1 }} / {{ models.length }}</span>
-    </div>
+    <!-- Item Navigator -->
+    <ItemNavigator
+      v-if="currentModel"
+      :item-name="currentModel.filename"
+      :status="currentModelStatus"
+      :status-label-override="currentModelStatusLabel"
+      :current-index="currentIndex"
+      :total-items="models.length"
+      @prev="goToItem(currentIndex - 1)"
+      @next="goToItem(currentIndex + 1)"
+    />
 
     <!-- Current Model Card -->
     <div v-if="currentModel" class="step-body">
@@ -152,6 +125,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import ModelResolutionItem from '../molecules/ModelResolutionItem.vue'
+import ItemNavigator from '../molecules/ItemNavigator.vue'
+import type { ResolutionStatus } from '../molecules/ItemNavigator.vue'
 import BaseButton from '../BaseButton.vue'
 import BaseInput from '../BaseInput.vue'
 import type { ModelSearchResult, ModelChoice } from '@/types/comfygit'
@@ -213,13 +188,50 @@ const resolvedCount = computed(() => {
   return props.models.filter(m => props.modelChoices.has(m.filename)).length
 })
 
-const pendingCount = computed(() => {
-  return props.models.length - resolvedCount.value
-})
-
 const suggestedPath = computed(() => {
   if (!currentModel.value) return 'checkpoints/'
   return `checkpoints/${currentModel.value.filename}`
+})
+
+// Compute status for ItemNavigator
+const currentModelStatus = computed((): ResolutionStatus => {
+  if (!currentModel.value) return 'not-found'
+
+  const choice = props.modelChoices.get(currentModel.value.filename)
+  if (choice) {
+    switch (choice.action) {
+      case 'select': return 'select'
+      case 'download': return 'download'
+      case 'optional': return 'optional'
+      case 'skip': return 'skip'
+    }
+  }
+
+  // No choice yet - show current state
+  if (currentModel.value.options?.length) {
+    return 'ambiguous'
+  }
+  return 'not-found'
+})
+
+const currentModelStatusLabel = computed((): string | undefined => {
+  if (!currentModel.value) return undefined
+
+  const choice = props.modelChoices.get(currentModel.value.filename)
+  if (choice) {
+    switch (choice.action) {
+      case 'select': return choice.selected_model?.filename ? `→ ${choice.selected_model.filename}` : 'Selected'
+      case 'download': return 'Download'
+      case 'optional': return 'Optional'
+      case 'skip': return 'Skipped'
+    }
+  }
+
+  // No choice yet
+  if (currentModel.value.options?.length) {
+    return `${currentModel.value.options.length} matches`
+  }
+  return 'Not Found'
 })
 
 // Item navigation (within section)
@@ -337,119 +349,15 @@ function formatSize(bytes: number): string {
   margin: 2px 0 0 0;
 }
 
-.step-stats {
-  display: flex;
-  gap: var(--cg-space-2);
-}
-
-.stat {
+.stat-badge {
   font-size: var(--cg-font-size-xs);
   font-family: var(--cg-font-mono);
-  padding: 2px 6px;
+  padding: 4px 8px;
   border-radius: var(--cg-radius-sm);
-}
-
-.stat.resolved {
-  background: var(--cg-color-success-muted);
-  color: var(--cg-color-success);
-}
-
-.stat.pending {
-  background: var(--cg-color-warning-muted);
-  color: var(--cg-color-warning);
-}
-
-/* Item Navigator - compact */
-.item-navigator {
-  display: flex;
-  align-items: center;
-  gap: var(--cg-space-2);
-  padding: 6px var(--cg-space-2);
   background: var(--cg-color-bg-tertiary);
-  border-radius: var(--cg-radius-sm);
+  color: var(--cg-color-text-secondary);
   border: 1px solid var(--cg-color-border-subtle);
-}
-
-.nav-arrow {
-  background: var(--cg-color-bg-secondary);
-  border: 1px solid var(--cg-color-border);
-  color: var(--cg-color-text-primary);
-  width: 24px;
-  height: 24px;
-  border-radius: var(--cg-radius-sm);
-  cursor: pointer;
-  font-size: var(--cg-font-size-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--cg-transition-fast);
-}
-
-.nav-arrow:hover:not(:disabled) {
-  background: var(--cg-color-bg-hover);
-  border-color: var(--cg-color-accent);
-  color: var(--cg-color-accent);
-}
-
-.nav-arrow:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.item-indicators {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  flex: 1;
-  justify-content: center;
-}
-
-.item-dot {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid var(--cg-color-border);
-  background: var(--cg-color-bg-secondary);
-  cursor: pointer;
-  transition: all var(--cg-transition-fast);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 8px;
-  color: transparent;
-}
-
-.item-dot:hover {
-  border-color: var(--cg-color-accent);
-  transform: scale(1.1);
-}
-
-.item-dot.active {
-  border-color: var(--cg-color-accent);
-  background: var(--cg-color-accent);
-  box-shadow: 0 0 0 2px var(--cg-color-accent-muted);
-}
-
-.item-dot.resolved {
-  border-color: var(--cg-color-success);
-  background: var(--cg-color-success);
-  color: white;
-}
-
-.item-dot.resolved.active {
-  box-shadow: 0 0 0 2px var(--cg-color-success-muted);
-}
-
-.dot-check {
-  font-weight: bold;
-}
-
-.nav-position {
-  font-size: var(--cg-font-size-xs);
-  font-family: var(--cg-font-mono);
-  color: var(--cg-color-text-muted);
-  min-width: 40px;
-  text-align: right;
+  white-space: nowrap;
 }
 
 .step-body {

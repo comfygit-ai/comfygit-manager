@@ -9,47 +9,20 @@
           Unaddressed items will be skipped.
         </p>
       </div>
-      <div class="step-stats">
-        <span class="stat resolved">{{ resolvedCount }} resolved</span>
-        <span class="stat pending">{{ pendingCount }} pending</span>
-      </div>
+      <span class="stat-badge">{{ resolvedCount }}/{{ nodes.length }} resolved</span>
     </div>
 
-    <!-- Item Navigator - browse all nodes -->
-    <div class="item-navigator">
-      <button
-        class="nav-arrow"
-        :disabled="currentIndex === 0"
-        @click="goToItem(currentIndex - 1)"
-      >
-        ←
-      </button>
-
-      <div class="item-indicators">
-        <button
-          v-for="(node, index) in nodes"
-          :key="node.node_type"
-          :class="['item-dot', {
-            active: index === currentIndex,
-            resolved: nodeChoices.has(node.node_type)
-          }]"
-          :title="node.node_type"
-          @click="goToItem(index)"
-        >
-          <span v-if="nodeChoices.has(node.node_type)" class="dot-check">✓</span>
-        </button>
-      </div>
-
-      <button
-        class="nav-arrow"
-        :disabled="currentIndex === nodes.length - 1"
-        @click="goToItem(currentIndex + 1)"
-      >
-        →
-      </button>
-
-      <span class="nav-position">{{ currentIndex + 1 }} / {{ nodes.length }}</span>
-    </div>
+    <!-- Item Navigator -->
+    <ItemNavigator
+      v-if="currentNode"
+      :item-name="currentNode.node_type"
+      :status="currentNodeStatus"
+      :status-label-override="currentNodeStatusLabel"
+      :current-index="currentIndex"
+      :total-items="nodes.length"
+      @prev="goToItem(currentIndex - 1)"
+      @next="goToItem(currentIndex + 1)"
+    />
 
     <!-- Current Node Card -->
     <div v-if="currentNode" class="step-body">
@@ -143,6 +116,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import NodeResolutionItem from '../molecules/NodeResolutionItem.vue'
+import ItemNavigator from '../molecules/ItemNavigator.vue'
+import type { ResolutionStatus } from '../molecules/ItemNavigator.vue'
 import ConfidenceBadge from '../atoms/ConfidenceBadge.vue'
 import BaseButton from '../BaseButton.vue'
 import BaseInput from '../BaseInput.vue'
@@ -192,8 +167,43 @@ const resolvedCount = computed(() => {
   return props.nodes.filter(n => props.nodeChoices.has(n.node_type)).length
 })
 
-const pendingCount = computed(() => {
-  return props.nodes.length - resolvedCount.value
+// Compute status for ItemNavigator
+const currentNodeStatus = computed((): ResolutionStatus => {
+  if (!currentNode.value) return 'not-found'
+
+  const choice = props.nodeChoices.get(currentNode.value.node_type)
+  if (choice) {
+    switch (choice.action) {
+      case 'install': return 'install'
+      case 'optional': return 'optional'
+      case 'skip': return 'skip'
+    }
+  }
+
+  // No choice yet - show current state
+  if (currentNode.value.options?.length) {
+    return 'ambiguous'
+  }
+  return 'not-found'
+})
+
+const currentNodeStatusLabel = computed((): string | undefined => {
+  if (!currentNode.value) return undefined
+
+  const choice = props.nodeChoices.get(currentNode.value.node_type)
+  if (choice) {
+    switch (choice.action) {
+      case 'install': return choice.package_id ? `→ ${choice.package_id}` : 'Installing'
+      case 'optional': return 'Optional'
+      case 'skip': return 'Skipped'
+    }
+  }
+
+  // No choice yet
+  if (currentNode.value.options?.length) {
+    return `${currentNode.value.options.length} matches`
+  }
+  return 'Not Found'
 })
 
 // Item navigation (within section)
@@ -301,119 +311,15 @@ function submitManualEntry() {
   margin: 2px 0 0 0;
 }
 
-.step-stats {
-  display: flex;
-  gap: var(--cg-space-2);
-}
-
-.stat {
+.stat-badge {
   font-size: var(--cg-font-size-xs);
   font-family: var(--cg-font-mono);
-  padding: 2px 6px;
+  padding: 4px 8px;
   border-radius: var(--cg-radius-sm);
-}
-
-.stat.resolved {
-  background: var(--cg-color-success-muted);
-  color: var(--cg-color-success);
-}
-
-.stat.pending {
-  background: var(--cg-color-warning-muted);
-  color: var(--cg-color-warning);
-}
-
-/* Item Navigator - compact */
-.item-navigator {
-  display: flex;
-  align-items: center;
-  gap: var(--cg-space-2);
-  padding: 6px var(--cg-space-2);
   background: var(--cg-color-bg-tertiary);
-  border-radius: var(--cg-radius-sm);
+  color: var(--cg-color-text-secondary);
   border: 1px solid var(--cg-color-border-subtle);
-}
-
-.nav-arrow {
-  background: var(--cg-color-bg-secondary);
-  border: 1px solid var(--cg-color-border);
-  color: var(--cg-color-text-primary);
-  width: 44px;
-  height: 24px;
-  border-radius: var(--cg-radius-sm);
-  cursor: pointer;
-  font-size: var(--cg-font-size-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--cg-transition-fast);
-}
-
-.nav-arrow:hover:not(:disabled) {
-  background: var(--cg-color-bg-hover);
-  border-color: var(--cg-color-accent);
-  color: var(--cg-color-accent);
-}
-
-.nav-arrow:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.item-indicators {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  flex: 1;
-  justify-content: center;
-}
-
-.item-dot {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid var(--cg-color-border);
-  background: var(--cg-color-bg-secondary);
-  cursor: pointer;
-  transition: all var(--cg-transition-fast);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 8px;
-  color: transparent;
-}
-
-.item-dot:hover {
-  border-color: var(--cg-color-accent);
-  transform: scale(1.1);
-}
-
-.item-dot.active {
-  border-color: var(--cg-color-accent);
-  background: var(--cg-color-accent);
-  box-shadow: 0 0 0 2px var(--cg-color-accent-muted);
-}
-
-.item-dot.resolved {
-  border-color: var(--cg-color-success);
-  background: var(--cg-color-success);
-  color: white;
-}
-
-.item-dot.resolved.active {
-  box-shadow: 0 0 0 2px var(--cg-color-success-muted);
-}
-
-.dot-check {
-  font-weight: bold;
-}
-
-.nav-position {
-  font-size: var(--cg-font-size-xs);
-  font-family: var(--cg-font-mono);
-  color: var(--cg-color-text-muted);
-  min-width: 40px;
-  text-align: right;
+  white-space: nowrap;
 }
 
 .step-body {

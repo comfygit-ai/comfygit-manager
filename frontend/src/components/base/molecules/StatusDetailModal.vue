@@ -20,7 +20,12 @@
 
           <!-- Workflows Section -->
           <div v-if="hasWorkflows" class="status-section">
-            <SectionTitle level="4">WORKFLOWS</SectionTitle>
+            <div class="section-header-row">
+              <SectionTitle level="4">WORKFLOWS</SectionTitle>
+              <button class="link-btn" @click="$emit('navigate-workflows')">
+                See Workflows →
+              </button>
+            </div>
 
             <!-- Broken Synced Workflows (CRITICAL) -->
             <div v-if="brokenSyncedWorkflows.length" class="workflow-group">
@@ -288,6 +293,7 @@ const props = defineProps<{
 
 defineEmits<{
   close: []
+  'navigate-workflows': []
 }>()
 
 const showSynced = ref(false)
@@ -448,6 +454,30 @@ function isDevNode(node: string | { name: string; is_development?: boolean }): b
 
 .status-section:last-child {
   margin-bottom: 0;
+}
+
+.section-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.link-btn {
+  background: transparent;
+  border: none;
+  color: var(--cg-color-accent);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  cursor: pointer;
+  padding: 4px 8px;
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+  transition: opacity var(--cg-transition-fast);
+}
+
+.link-btn:hover {
+  opacity: 0.8;
+  text-decoration: underline;
 }
 
 /* Workflow Groups */

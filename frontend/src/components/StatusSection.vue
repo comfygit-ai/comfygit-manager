@@ -229,6 +229,7 @@
     :show="showDetailModal"
     :status="status"
     @close="showDetailModal = false"
+    @navigate-workflows="handleNavigateWorkflows"
   />
 </template>
 
@@ -270,6 +271,11 @@ function handleViewChanges() {
   console.log('showDetailModal before:', showDetailModal.value)
   showDetailModal.value = true
   console.log('showDetailModal after:', showDetailModal.value)
+}
+
+function handleNavigateWorkflows() {
+  showDetailModal.value = false
+  emit('view-workflows')
 }
 
 const emit = defineEmits<{

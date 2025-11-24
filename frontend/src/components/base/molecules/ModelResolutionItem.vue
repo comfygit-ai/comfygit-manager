@@ -1,23 +1,6 @@
 <template>
   <div :class="['model-resolution-item', { resolved: hasChoice, ambiguous: hasMultipleOptions }]">
-    <!-- Header: Filename and status -->
-    <div class="item-header">
-      <div class="item-title">
-        <code class="model-filename">{{ filename }}</code>
-        <span v-if="hasChoice" class="choice-status">
-          <span v-if="choiceAction === 'select'" class="status-badge select">Using: {{ choiceModel }}</span>
-          <span v-else-if="choiceAction === 'download'" class="status-badge download">Downloading</span>
-          <span v-else-if="choiceAction === 'optional'" class="status-badge optional">Marked Optional</span>
-          <span v-else-if="choiceAction === 'skip'" class="status-badge skip">Skipped</span>
-        </span>
-      </div>
-      <div v-if="!hasChoice" class="item-status">
-        <span v-if="hasMultipleOptions" class="status-badge ambiguous">{{ options?.length }} matches</span>
-        <span v-else class="status-badge unresolved">Not Found</span>
-      </div>
-    </div>
-
-    <!-- Node info -->
+    <!-- Node info context -->
     <div class="node-info">
       Used by: <code>{{ nodeType }}</code>
     </div>
@@ -184,76 +167,6 @@ function formatSize(bytes: number): string {
 .model-resolution-item.resolved {
   border-color: var(--cg-color-success);
   background: var(--cg-color-success-muted);
-}
-
-.item-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--cg-space-3);
-  background: var(--cg-color-bg-tertiary);
-  border-bottom: 1px solid var(--cg-color-border-subtle);
-}
-
-.item-title {
-  display: flex;
-  align-items: center;
-  gap: var(--cg-space-2);
-  flex-wrap: wrap;
-}
-
-.model-filename {
-  font-family: var(--cg-font-mono);
-  font-size: var(--cg-font-size-sm);
-  color: var(--cg-color-accent);
-  background: var(--cg-color-bg-primary);
-  padding: var(--cg-space-1) var(--cg-space-2);
-  border-radius: var(--cg-radius-sm);
-}
-
-.choice-status {
-  display: flex;
-  align-items: center;
-}
-
-.item-status {
-  display: flex;
-  align-items: center;
-}
-
-.status-badge {
-  padding: var(--cg-space-1) var(--cg-space-2);
-  border-radius: var(--cg-radius-sm);
-  font-size: var(--cg-font-size-xs);
-  font-weight: var(--cg-font-weight-medium);
-  text-transform: uppercase;
-  letter-spacing: var(--cg-letter-spacing-wide);
-}
-
-.status-badge.select,
-.status-badge.download {
-  background: var(--cg-color-success-muted);
-  color: var(--cg-color-success);
-}
-
-.status-badge.optional {
-  background: var(--cg-color-info-muted);
-  color: var(--cg-color-info);
-}
-
-.status-badge.skip {
-  background: var(--cg-color-bg-hover);
-  color: var(--cg-color-text-muted);
-}
-
-.status-badge.ambiguous {
-  background: var(--cg-color-warning-muted);
-  color: var(--cg-color-warning);
-}
-
-.status-badge.unresolved {
-  background: var(--cg-color-error-muted);
-  color: var(--cg-color-error);
 }
 
 .node-info {
