@@ -303,10 +303,10 @@ export function useModelDownloadQueue() {
     }
   }
 
-  // Remove completed/failed item from list
+  // Remove completed/failed/paused item from list
   function removeItem(id: string) {
     const idx = queue.items.findIndex(i => i.id === id)
-    if (idx >= 0 && (queue.items[idx].status === 'completed' || queue.items[idx].status === 'failed')) {
+    if (idx >= 0 && ['completed', 'failed', 'paused'].includes(queue.items[idx].status)) {
       queue.items.splice(idx, 1)
     }
   }

@@ -835,6 +835,86 @@ class TestApplyResolutionEndpoint:
         )
         assert resp.status == 500
 
+    async def test_mark_download_intent_as_optional_keeps_unresolved_status(
+        self, client, mock_environment
+    ):
+        """
+        Bug regression test: When marking an existing download intent as optional,
+        the model's status MUST remain 'unresolved' (not 'resolved').
+
+        A download intent model has no hash (never downloaded), so setting
+        status='resolved' creates an invalid state that violates core invariants.
+        """
+        # Setup: Create a mock model that represents an existing download intent
+        # This is what get_workflow_models() returns for a download intent
+        mock_download_intent_model = Mock()
+        mock_download_intent_model.filename = "pending_model.safetensors"
+        mock_download_intent_model.status = "unresolved"  # Download intent
+        mock_download_intent_model.sources = ["https://example.com/model.safetensors"]
+        mock_download_intent_model.relative_path = "loras/pending_model.safetensors"
+        mock_download_intent_model.criticality = "flexible"
+        mock_download_intent_model.hash = None  # No hash - never downloaded
+
+        # Mock pyproject.workflows.get_workflow_models to return our download intent
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {}
+        mock_environment.pyproject.workflows = Mock()
+        mock_environment.pyproject.workflows.get_workflow_models.return_value = [
+            mock_download_intent_model
+        ]
+        mock_environment.pyproject.workflows.get_all_with_resolutions.return_value = {}
+
+        # Track what gets written
+        saved_models = []
+        def capture_set_workflow_models(name, models):
+            saved_models.extend(models)
+        mock_environment.pyproject.workflows.set_workflow_models = capture_set_workflow_models
+
+        # Mock workspace for models_dir check
+        mock_environment.workspace = Mock()
+        mock_environment.workspace.workspace_config_manager = Mock()
+        mock_environment.workspace.workspace_config_manager.get_models_directory.return_value = None
+
+        # Mock resolution result (empty - all resolution happens via Path 2)
+        mock_result = create_mock_resolution(
+            nodes_resolved=[],
+            nodes_unresolved=[],
+            models_resolved=[],
+            models_unresolved=[],
+            models_ambiguous=[]
+        )
+        mock_result.has_issues = False
+        mock_environment.workflow_manager.analyze_and_resolve_workflow.return_value = (Mock(), mock_result)
+
+        # Execute: Mark the download intent as optional
+        resp = await client.post(
+            "/v2/comfygit/workflow/test.json/apply-resolution",
+            json={
+                "node_choices": {},
+                "model_choices": {
+                    "pending_model.safetensors": {
+                        "action": "optional"
+                    }
+                }
+            }
+        )
+
+        # Verify response is successful
+        assert resp.status == 200
+
+        # CRITICAL: The model status MUST remain 'unresolved'
+        # Setting it to 'resolved' without a hash is invalid
+        assert len(saved_models) == 1, "Expected model to be saved"
+        saved_model = saved_models[0]
+        assert saved_model.status == "unresolved", (
+            f"Bug: status should be 'unresolved' but was '{saved_model.status}'. "
+            "A download intent marked as optional has no hash, so it cannot be 'resolved'."
+        )
+        assert saved_model.criticality == "optional", "criticality should be 'optional'"
+        assert saved_model.sources == [], "sources should be cleared"
+        assert saved_model.relative_path is None, "relative_path should be cleared"
+
 
 @pytest.mark.integration
 class TestApplyResolutionStreamEndpoint:

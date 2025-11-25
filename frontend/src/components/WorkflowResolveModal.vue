@@ -403,11 +403,13 @@ const downloadIntentModels = computed(() => {
   if (!analysisResult.value) return []
   return analysisResult.value.models.resolved
     .filter((m: { match_type: string }) => m.match_type === 'download_intent')
-    .map((m: { reference: { widget_value: string; node_id: string; node_type: string }; model: { filename: string; hash: string; size: number; category: string; relative_path: string } | null }) => ({
+    .map((m: { reference: { widget_value: string; node_id: string; node_type: string }; model: { filename: string; hash: string; size: number; category: string; relative_path: string } | null; download_source?: string; target_path?: string }) => ({
       filename: m.reference.widget_value,
       reference: m.reference,
       is_download_intent: true,
-      resolved_model: m.model
+      resolved_model: m.model,
+      download_source: m.download_source,
+      target_path: m.target_path
     }))
 })
 
@@ -473,12 +475,14 @@ const unresolvedAndAmbiguousModels = computed(() => {
 const allEditableModels = computed(() => {
   const base = unresolvedAndAmbiguousModels.value
 
-  // Add download intents as editable items
+  // Add download intents as editable items (include existing URL/path for editing)
   const downloadIntents = downloadIntentModels.value.map(m => ({
     filename: m.filename,
     reference: m.reference,
     is_download_intent: true,
     resolved_model: m.resolved_model,
+    download_source: m.download_source,
+    target_path: m.target_path,
     options: undefined as undefined | ModelOptionType[]
   }))
 

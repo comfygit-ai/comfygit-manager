@@ -193,6 +193,8 @@ interface ModelToResolve {
   is_unresolved?: boolean
   is_download_intent?: boolean
   resolved_model?: ModelOption['model'] | null
+  download_source?: string  // Existing URL for download intents
+  target_path?: string      // Existing target path for download intents
   options?: ModelOption[]
 }
 
@@ -324,8 +326,10 @@ function handleSearch() {
 }
 
 function handleDownloadUrl() {
-  downloadUrl.value = ''
-  downloadPath.value = suggestedPath.value
+  if (!currentModel.value) return
+  // Pre-populate with existing download intent data if available
+  downloadUrl.value = currentModel.value.download_source || ''
+  downloadPath.value = currentModel.value.target_path || suggestedPath.value
   showDownloadUrl.value = true
 }
 

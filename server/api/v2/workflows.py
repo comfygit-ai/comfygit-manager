@@ -98,6 +98,8 @@ def _serialize_resolved_model(model: ResolvedModel) -> dict:
         "match_type": model.match_type,
         "needs_path_sync": model.needs_path_sync,
         "has_download_source": bool(model.model_source),
+        "download_source": model.model_source,  # Include actual URL for download intents
+        "target_path": str(model.target_path) if model.target_path else None,
         "is_optional": model.is_optional
     }
 
@@ -663,7 +665,7 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
             if node.package_id not in installed:
                 nodes_to_install.append(node.package_id)
 
-    # Handle user overrides for existing download intents (cancel/optional)
+    # Handle user overrides for existing download intents
     # Get current workflow models from pyproject to check for download intents
     try:
         current_models = env.pyproject.workflows.get_workflow_models(name)
@@ -682,11 +684,21 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
                         updated_models = True
                     elif action == "optional":
                         # Mark as optional and clear download intent
-                        model.status = "resolved"
+                        # Status remains 'unresolved' - model has no hash (never downloaded)
+                        model.status = "unresolved"
                         model.criticality = "optional"
                         model.sources = []
                         model.relative_path = None
                         updated_models = True
+                    elif action == "download":
+                        # Update download intent with new URL/path
+                        new_url = choice.get("url")
+                        new_path = choice.get("target_path")
+                        if new_url:
+                            model.sources = [new_url]
+                            if new_path:
+                                model.relative_path = new_path
+                            updated_models = True
 
         if updated_models:
             env.pyproject.workflows.set_workflow_models(name, current_models)
@@ -701,19 +713,28 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
     models_to_download = []
     for model in result.models_resolved:
         if model.model_source and model.match_type == "download_intent":
+            filename = model.reference.widget_value
+            choice = model_choices.get(filename)
+
             # Check if user cancelled this download
-            choice = model_choices.get(model.reference.widget_value)
             if choice and choice.get("action") in ("skip", "cancel_download", "optional"):
                 continue  # User cancelled this download
 
-            # Skip if file already exists at target path
+            # Use user's URL if they provided a new one, otherwise use existing
+            url = model.model_source
             target_path = str(model.target_path) if model.target_path else None
+            if choice and choice.get("action") == "download" and choice.get("url"):
+                url = choice["url"]
+                if choice.get("target_path"):
+                    target_path = choice["target_path"]
+
+            # Skip if file already exists at target path
             if target_path and models_dir and (models_dir / target_path).exists():
                 continue  # File already downloaded
 
             models_to_download.append({
-                "filename": model.reference.widget_value,
-                "url": model.model_source,
+                "filename": filename,
+                "url": url,
                 "size": 0,  # Unknown until download starts
                 "target_path": target_path
             })

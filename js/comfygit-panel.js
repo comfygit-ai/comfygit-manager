@@ -1,5 +1,5 @@
 import { app as ot } from "../../scripts/app.js";
-import { defineComponent as q, createElementBlock as n, openBlock as o, createCommentVNode as c, createElementVNode as e, renderSlot as de, createBlock as _, resolveDynamicComponent as It, normalizeClass as ee, withCtx as a, toDisplayString as l, createVNode as m, createTextVNode as g, computed as N, Fragment as G, renderList as Z, normalizeStyle as Ze, ref as E, onMounted as _e, watch as Et, Teleport as Le, withModifiers as be, Transition as so, withKeys as Ge, onUnmounted as no, reactive as At, readonly as ao, unref as ve, resolveComponent as lo, createSlots as Vt, TransitionGroup as io, createApp as zt, h as Mt } from "vue";
+import { defineComponent as q, createElementBlock as n, openBlock as o, createCommentVNode as c, createElementVNode as e, renderSlot as de, createBlock as _, resolveDynamicComponent as It, normalizeClass as ee, withCtx as a, toDisplayString as l, createVNode as m, createTextVNode as g, computed as N, Fragment as G, renderList as Z, normalizeStyle as Ze, ref as E, onMounted as _e, watch as Et, Teleport as Le, withModifiers as be, Transition as so, withKeys as Ge, onUnmounted as no, reactive as At, readonly as ao, unref as me, resolveComponent as lo, createSlots as Vt, TransitionGroup as io, createApp as zt, h as Mt } from "vue";
 const ro = { class: "panel-layout" }, co = {
   key: 0,
   class: "panel-layout-header"
@@ -2626,7 +2626,7 @@ const va = { class: "base-modal-header" }, fa = {
       }, 8, ["show"])
     ], 64));
   }
-}), tl = /* @__PURE__ */ J(el, [["__scopeId", "data-v-1325d542"]]), me = At({
+}), tl = /* @__PURE__ */ J(el, [["__scopeId", "data-v-1325d542"]]), ve = At({
   items: [],
   status: "idle"
 });
@@ -2635,22 +2635,22 @@ function Gt() {
   return `dl-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 function _t(t) {
-  return me.items.find((d) => d.id === t);
+  return ve.items.find((d) => d.id === t);
 }
 async function tt() {
-  if (me.status === "downloading") return;
-  const t = me.items.find((d) => d.status === "queued");
+  if (ve.status === "downloading") return;
+  const t = ve.items.find((d) => d.status === "queued");
   if (!t) {
-    me.status = "idle";
+    ve.status = "idle";
     return;
   }
-  me.status = "downloading", t.status = "downloading", t.progress = 0, t.downloaded = 0;
+  ve.status = "downloading", t.status = "downloading", t.progress = 0, t.downloaded = 0;
   try {
     await ol(t), t.status = "completed", t.progress = 100;
   } catch (d) {
     t.status = "failed", t.error = d instanceof Error ? d.message : "Download failed", t.retries++;
   } finally {
-    me.status = "idle", tt();
+    ve.status = "idle", tt();
   }
 }
 async function ol(t) {
@@ -2701,7 +2701,7 @@ async function sl() {
     const d = await t.json();
     if (!d.pending_downloads || d.pending_downloads.length === 0) return;
     for (const s of d.pending_downloads) {
-      if (me.items.some((f) => f.url === s.url && f.filename === s.filename))
+      if (ve.items.some((f) => f.url === s.url && f.filename === s.filename))
         continue;
       const i = {
         id: Gt(),
@@ -2719,7 +2719,7 @@ async function sl() {
         eta: 0,
         retries: 0
       };
-      me.items.push(i);
+      ve.items.push(i);
     }
     console.log(`[ComfyGit] Loaded ${d.pending_downloads.length} pending download(s)`);
   } catch (t) {
@@ -2729,7 +2729,7 @@ async function sl() {
 function wt() {
   function t(k) {
     for (const C of k) {
-      if (me.items.some(
+      if (ve.items.some(
         (w) => w.url === C.url && w.targetPath === C.targetPath && ["queued", "downloading", "paused", "completed"].includes(w.status)
       )) {
         console.log(`[ComfyGit] Skipping duplicate download: ${C.filename}`);
@@ -2750,9 +2750,9 @@ function wt() {
         eta: 0,
         retries: 0
       };
-      me.items.push(L);
+      ve.items.push(L);
     }
-    me.status === "idle" && tt();
+    ve.status === "idle" && tt();
   }
   async function d(k) {
     const C = _t(k);
@@ -2764,55 +2764,55 @@ function wt() {
           });
         } catch {
         }
-        Ae && (Ae.close(), Ae = null), C.status = "failed", C.error = "Cancelled by user", me.status = "idle", tt();
+        Ae && (Ae.close(), Ae = null), C.status = "failed", C.error = "Cancelled by user", ve.status = "idle", tt();
       } else if (C.status === "queued") {
-        const P = me.items.findIndex((L) => L.id === k);
-        P >= 0 && me.items.splice(P, 1);
+        const P = ve.items.findIndex((L) => L.id === k);
+        P >= 0 && ve.items.splice(P, 1);
       }
     }
   }
   function s(k) {
     const C = _t(k);
-    !C || C.status !== "failed" || (C.status = "queued", C.error = void 0, C.progress = 0, C.downloaded = 0, me.status === "idle" && tt());
+    !C || C.status !== "failed" || (C.status = "queued", C.error = void 0, C.progress = 0, C.downloaded = 0, ve.status === "idle" && tt());
   }
   function i(k) {
     const C = _t(k);
-    !C || C.status !== "paused" || (C.status = "queued", me.status === "idle" && tt());
+    !C || C.status !== "paused" || (C.status = "queued", ve.status === "idle" && tt());
   }
   function f() {
-    const k = me.items.filter((C) => C.status === "paused");
+    const k = ve.items.filter((C) => C.status === "paused");
     for (const C of k)
       C.status = "queued";
-    me.status === "idle" && tt();
+    ve.status === "idle" && tt();
   }
   function y(k) {
-    const C = me.items.findIndex((P) => P.id === k);
-    C >= 0 && (me.items[C].status === "completed" || me.items[C].status === "failed") && me.items.splice(C, 1);
+    const C = ve.items.findIndex((P) => P.id === k);
+    C >= 0 && ["completed", "failed", "paused"].includes(ve.items[C].status) && ve.items.splice(C, 1);
   }
   function h() {
-    me.items = me.items.filter((k) => k.status !== "completed");
+    ve.items = ve.items.filter((k) => k.status !== "completed");
   }
   function v() {
-    me.items = me.items.filter((k) => k.status !== "failed");
+    ve.items = ve.items.filter((k) => k.status !== "failed");
   }
   const r = N(
-    () => me.items.find((k) => k.status === "downloading")
+    () => ve.items.find((k) => k.status === "downloading")
   ), u = N(
-    () => me.items.filter((k) => k.status === "queued")
+    () => ve.items.filter((k) => k.status === "queued")
   ), b = N(
-    () => me.items.filter((k) => k.status === "completed")
+    () => ve.items.filter((k) => k.status === "completed")
   ), p = N(
-    () => me.items.filter((k) => k.status === "failed")
+    () => ve.items.filter((k) => k.status === "failed")
   ), z = N(
-    () => me.items.filter((k) => k.status === "paused")
-  ), I = N(() => me.items.length > 0), $ = N(
-    () => me.items.filter((k) => k.status === "queued" || k.status === "downloading").length
+    () => ve.items.filter((k) => k.status === "paused")
+  ), I = N(() => ve.items.length > 0), $ = N(
+    () => ve.items.filter((k) => k.status === "queued" || k.status === "downloading").length
   ), S = N(
-    () => me.items.some((k) => k.status === "paused")
+    () => ve.items.some((k) => k.status === "paused")
   );
   return {
     // State (readonly to prevent external mutations)
-    queue: ao(me),
+    queue: ao(ve),
     // Computed
     currentDownload: r,
     queuedItems: u,
@@ -3915,7 +3915,7 @@ const al = { class: "resolution-stepper" }, ll = { class: "stepper-header" }, il
       $.value && (u.value = $.value.filename, v.value = !0);
     }
     function O() {
-      b.value = "", p.value = C.value, r.value = !0;
+      $.value && (b.value = $.value.download_source || "", p.value = $.value.target_path || C.value, r.value = !0);
     }
     function F() {
       v.value = !1, u.value = "", z.value = [];
@@ -4077,7 +4077,7 @@ const al = { class: "resolution-stepper" }, ll = { class: "stepper-header" }, il
       ]);
     };
   }
-}), nr = /* @__PURE__ */ J(sr, [["__scopeId", "data-v-33a202c8"]]), ar = { class: "applying-step" }, lr = {
+}), nr = /* @__PURE__ */ J(sr, [["__scopeId", "data-v-c6acbada"]]), ar = { class: "applying-step" }, lr = {
   key: 0,
   class: "phase-content"
 }, ir = {
@@ -4221,7 +4221,9 @@ const al = { class: "resolution-stepper" }, ll = { class: "stepper-header" }, il
       filename: H.reference.widget_value,
       reference: H.reference,
       is_download_intent: !0,
-      resolved_model: H.model
+      resolved_model: H.model,
+      download_source: H.download_source,
+      target_path: H.target_path
     })) : []), R = N(() => {
       if (!b.value) return [];
       const H = b.value.nodes.unresolved.map((te) => ({
@@ -4267,6 +4269,8 @@ const al = { class: "resolution-stepper" }, ll = { class: "stepper-header" }, il
         reference: te.reference,
         is_download_intent: !0,
         resolved_model: te.resolved_model,
+        download_source: te.download_source,
+        target_path: te.target_path,
         options: void 0
       }));
       return [...H, ...B];
@@ -4576,7 +4580,7 @@ const al = { class: "resolution-stepper" }, ll = { class: "stepper-header" }, il
           ])) : c("", !0),
           $.value === "applying" ? (o(), _(fr, {
             key: 4,
-            progress: ve(v)
+            progress: me(v)
           }, null, 8, ["progress"])) : c("", !0)
         ])) : c("", !0)
       ]),
@@ -4593,13 +4597,13 @@ const al = { class: "resolution-stepper" }, ll = { class: "stepper-header" }, il
           _: 1
         }, 8, ["disabled"])) : c("", !0),
         B[31] || (B[31] = e("div", { class: "footer-spacer" }, null, -1)),
-        $.value !== "applying" || ve(v).phase === "complete" || ve(v).phase === "error" ? (o(), _(re, {
+        $.value !== "applying" || me(v).phase === "complete" || me(v).phase === "error" ? (o(), _(re, {
           key: 1,
           variant: "secondary",
           onClick: B[0] || (B[0] = (te) => i("close"))
         }, {
           default: a(() => [
-            g(l(ve(v).phase === "complete" ? "Close" : "Cancel"), 1)
+            g(l(me(v).phase === "complete" ? "Close" : "Cancel"), 1)
           ]),
           _: 1
         })) : c("", !0),
@@ -4650,7 +4654,7 @@ const al = { class: "resolution-stepper" }, ll = { class: "stepper-header" }, il
       _: 1
     }, 8, ["title", "loading", "error"]));
   }
-}), xd = /* @__PURE__ */ J(Cd, [["__scopeId", "data-v-c69fd67a"]]), Sd = { class: "search-input-wrapper" }, Id = ["value", "placeholder"], Ed = /* @__PURE__ */ q({
+}), xd = /* @__PURE__ */ J(Cd, [["__scopeId", "data-v-08beb8e3"]]), Sd = { class: "search-input-wrapper" }, Id = ["value", "placeholder"], Ed = /* @__PURE__ */ q({
   __name: "SearchInput",
   props: {
     modelValue: {},
@@ -10273,7 +10277,7 @@ const Hf = { class: "comfygit-panel" }, Kf = { class: "panel-header" }, qf = { c
       return w === 0 ? "" : `${(w / (1024 * 1024)).toFixed(1)} MB/s`;
     }
     return (w, M) => (o(), _(Le, { to: "body" }, [
-      ve(v) ? (o(), n("div", {
+      me(v) ? (o(), n("div", {
         key: 0,
         class: ee(["model-download-queue", { minimized: !S.value }])
       }, [
@@ -10284,77 +10288,77 @@ const Hf = { class: "comfygit-panel" }, Kf = { class: "panel-header" }, qf = { c
           e("div", Gg, [
             M[4] || (M[4] = e("span", { class: "icon" }, "↓", -1)),
             M[5] || (M[5] = e("span", { class: "title" }, "Downloads", -1)),
-            e("span", jg, "(" + l(ve(r)) + "/" + l(ve(d).items.length) + ")", 1)
+            e("span", jg, "(" + l(me(r)) + "/" + l(me(d).items.length) + ")", 1)
           ]),
           e("div", Hg, [
             e("span", Kg, l(S.value ? "minimize" : "expand"), 1)
           ])
         ]),
         S.value ? (o(), n("div", Zg, [
-          ve(s) ? (o(), n("div", eh, [
+          me(s) ? (o(), n("div", eh, [
             M[6] || (M[6] = e("div", { class: "section-label" }, "Downloading", -1)),
             m(it, {
-              item: ve(s),
-              onCancel: M[1] || (M[1] = (x) => P(ve(s).id))
+              item: me(s),
+              onCancel: M[1] || (M[1] = (x) => P(me(s).id))
             }, null, 8, ["item"])
           ])) : c("", !0),
-          ve(h).length > 0 ? (o(), n("div", th, [
+          me(h).length > 0 ? (o(), n("div", th, [
             e("div", oh, [
-              e("span", sh, "Paused (" + l(ve(h).length) + ")", 1),
+              e("span", sh, "Paused (" + l(me(h).length) + ")", 1),
               e("button", {
                 class: "resume-all-btn",
                 onClick: M[2] || (M[2] = //@ts-ignore
-                (...x) => ve(z) && ve(z)(...x))
+                (...x) => me(z) && me(z)(...x))
               }, "Resume All")
             ]),
             e("div", nh, [
-              (o(!0), n(G, null, Z(ve(h), (x) => (o(), _(it, {
+              (o(!0), n(G, null, Z(me(h), (x) => (o(), _(it, {
                 key: x.id,
                 item: x,
-                onResume: (U) => ve(p)(x.id),
-                onRemove: (U) => ve(I)(x.id)
+                onResume: (U) => me(p)(x.id),
+                onRemove: (U) => me(I)(x.id)
               }, null, 8, ["item", "onResume", "onRemove"]))), 128))
             ])
           ])) : c("", !0),
-          ve(i).length > 0 ? (o(), n("div", ah, [
+          me(i).length > 0 ? (o(), n("div", ah, [
             e("div", lh, [
-              e("span", ih, "Queued (" + l(ve(i).length) + ")", 1)
+              e("span", ih, "Queued (" + l(me(i).length) + ")", 1)
             ]),
             e("div", rh, [
-              (o(!0), n(G, null, Z(ve(i), (x) => (o(), _(it, {
+              (o(!0), n(G, null, Z(me(i), (x) => (o(), _(it, {
                 key: x.id,
                 item: x,
                 onCancel: (U) => P(x.id)
               }, null, 8, ["item", "onCancel"]))), 128))
             ])
           ])) : c("", !0),
-          ve(f).length > 0 ? (o(), n("div", dh, [
+          me(f).length > 0 ? (o(), n("div", dh, [
             e("div", ch, [
-              e("span", uh, "Completed (" + l(ve(f).length) + ")", 1),
+              e("span", uh, "Completed (" + l(me(f).length) + ")", 1),
               e("button", {
                 class: "clear-btn",
                 onClick: M[3] || (M[3] = //@ts-ignore
-                (...x) => ve($) && ve($)(...x))
+                (...x) => me($) && me($)(...x))
               }, "Clear")
             ]),
             e("div", mh, [
-              (o(!0), n(G, null, Z(ve(f).slice(0, 3), (x) => (o(), _(it, {
+              (o(!0), n(G, null, Z(me(f).slice(0, 3), (x) => (o(), _(it, {
                 key: x.id,
                 item: x,
-                onRemove: (U) => ve(I)(x.id)
+                onRemove: (U) => me(I)(x.id)
               }, null, 8, ["item", "onRemove"]))), 128))
             ])
           ])) : c("", !0),
-          ve(y).length > 0 ? (o(), n("div", vh, [
+          me(y).length > 0 ? (o(), n("div", vh, [
             e("div", fh, [
-              e("span", gh, "Failed (" + l(ve(y).length) + ")", 1)
+              e("span", gh, "Failed (" + l(me(y).length) + ")", 1)
             ]),
             e("div", hh, [
-              (o(!0), n(G, null, Z(ve(y), (x) => (o(), _(it, {
+              (o(!0), n(G, null, Z(me(y), (x) => (o(), _(it, {
                 key: x.id,
                 item: x,
-                onRetry: (U) => ve(b)(x.id),
-                onRemove: (U) => ve(I)(x.id)
+                onRetry: (U) => me(b)(x.id),
+                onRemove: (U) => me(I)(x.id)
               }, null, 8, ["item", "onRetry", "onRemove"]))), 128))
             ])
           ])) : c("", !0)
@@ -10365,9 +10369,9 @@ const Hf = { class: "comfygit-panel" }, Kf = { class: "panel-header" }, qf = { c
               style: Ze({ width: `${C.value}%` })
             }, null, 4)
           ]),
-          ve(s) ? (o(), n("div", Yg, [
-            e("span", Xg, l(ve(s).filename), 1),
-            e("span", Qg, l(L(ve(s).speed)), 1)
+          me(s) ? (o(), n("div", Yg, [
+            e("span", Xg, l(me(s).filename), 1),
+            e("span", Qg, l(L(me(s).speed)), 1)
           ])) : c("", !0)
         ]))
       ], 2)) : c("", !0)
