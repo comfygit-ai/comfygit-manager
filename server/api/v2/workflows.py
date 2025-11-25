@@ -304,6 +304,7 @@ async def get_workflows(request: web.Request, env) -> web.Response:
 
     Query params:
         refresh: If "true", forces refresh of cached environment before listing.
+                 This also syncs the model index to detect filesystem changes.
     """
     # Check if refresh is requested
     if request.query.get("refresh", "").lower() == "true":
@@ -314,6 +315,16 @@ async def get_workflows(request: web.Request, env) -> web.Response:
         env = get_environment_from_request(request)
         if not env:
             return web.json_response({"error": "Failed to refresh environment"}, status=500)
+
+        # Sync model index to detect filesystem changes (like deleted/added models)
+        # This mirrors the CLI behavior where get_environment() auto-syncs
+        if env.workspace:
+            try:
+                await run_sync(env.workspace.sync_model_directory)
+            except Exception as e:
+                # Don't fail the whole request if model sync fails
+                # (e.g., if models directory is not configured)
+                print(f"[ComfyGit] Warning: Model sync failed: {e}")
 
     status = await run_sync(env.status)
 
@@ -1095,21 +1106,32 @@ async def download_model_stream(request: web.Request, env) -> web.StreamResponse
         result = await download_task
         active["result"] = result
 
-        # Broadcast final result to all remaining subscribers
+        # Send final result to THIS client directly (we've exited the queue reading loop)
+        # Also broadcast to other subscribers who may have joined
         if result.success and result.model:
+            complete_data = {
+                "downloaded": result.model.file_size,
+                "total": result.model.file_size,
+                "hash": result.model.hash,
+                "path": result.model.relative_path
+            }
+            # Send directly to this client
+            await send_event("complete", complete_data)
+            # Broadcast to other subscribers (not us - we already sent)
             for q in active["queues"]:
-                loop.call_soon_threadsafe(q.put_nowait, ("complete", {
-                    "downloaded": result.model.file_size,
-                    "total": result.model.file_size,
-                    "hash": result.model.hash,
-                    "path": result.model.relative_path
-                }))
+                if q is not my_queue:
+                    loop.call_soon_threadsafe(q.put_nowait, ("complete", complete_data))
             # Finalize if any client is watching
             if active["queues"] and workflow_name:
                 await _finalize_download(env, workflow_name, filename, result.model.hash)
         else:
+            error_msg = result.error or "Download failed"
+            # Send directly to this client
+            await send_event("error", {"message": error_msg})
+            # Broadcast to other subscribers
             for q in active["queues"]:
-                loop.call_soon_threadsafe(q.put_nowait, ("error", {"message": result.error or "Download failed"}))
+                if q is not my_queue:
+                    loop.call_soon_threadsafe(q.put_nowait, ("error", {"message": error_msg}))
 
     except DownloadCancelled:
         # Download was cancelled - notify all subscribers

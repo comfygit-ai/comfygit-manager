@@ -4,6 +4,7 @@ Provides /v2/ endpoints that the built-in Manager UI expects.
 """
 
 import asyncio
+import logging
 import sys
 import uuid
 from pathlib import Path
@@ -11,6 +12,10 @@ from datetime import datetime
 
 from aiohttp import web
 from server import PromptServer
+
+# Suppress verbose INFO logs from the core library during server operation
+# We only want to see WARNING and above (errors, etc.)
+logging.getLogger('comfygit_core').setLevel(logging.WARNING)
 
 # Get the routes object
 routes = PromptServer.instance.routes
@@ -80,40 +85,40 @@ def get_environment_from_cwd():
     if _environment is not None:
         return _environment
 
-    try:
-        from comfygit_core.core.workspace import Workspace, WorkspacePaths
-        from comfygit_core.core.environment import Environment
+    from comfygit_core.core.workspace import Workspace, WorkspacePaths
 
-        cwd = Path.cwd()
+    cwd = Path.cwd()
 
-        # Expected: {workspace}/environments/{env_name}/ComfyUI
-        if cwd.name == 'ComfyUI':
-            env_path = cwd.parent
-            env_name = env_path.name
-            environments_path = env_path.parent
+    # Expected: {workspace}/environments/{env_name}/ComfyUI
+    if cwd.name == 'ComfyUI':
+        env_path = cwd.parent
+        env_name = env_path.name
+        environments_path = env_path.parent
 
-            if environments_path.name == 'environments':
-                workspace_root = environments_path.parent
-                workspace_paths = WorkspacePaths(workspace_root)
+        if environments_path.name == 'environments':
+            workspace_root = environments_path.parent
+            workspace_paths = WorkspacePaths(workspace_root)
 
-                if workspace_paths.exists():
+            if workspace_paths.exists():
+                try:
                     _workspace = Workspace(workspace_paths)
-                    _environment = Environment(
-                        name=env_name,
-                        path=env_path,
-                        workspace=_workspace
-                    )
+                    # Use workspace.get_environment() which handles initialization properly
+                    # Pass auto_sync=False to avoid slow sync on every request
+                    _environment = _workspace.get_environment(env_name, auto_sync=False)
                     print(f"[ComfyGit] Detected environment '{env_name}' from CWD")
                     return _environment
+                except Exception as e:
+                    print(f"[ComfyGit] Direct environment creation failed: {e}")
+                    # Fall through to WorkspaceFactory fallback
 
-        # Fallback: try standard workspace discovery
+    # Fallback: try standard workspace discovery
+    try:
         from comfygit_core.factories.workspace_factory import WorkspaceFactory
         _workspace = WorkspaceFactory.find()
         _environment = _workspace.get_active_environment()
         if _environment:
             print(f"[ComfyGit] Using active environment '{_environment.name}'")
         return _environment
-
     except Exception as e:
         print(f"[ComfyGit] Failed to detect environment: {e}")
         return None

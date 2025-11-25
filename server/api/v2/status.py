@@ -16,6 +16,7 @@ async def get_status(request: web.Request, env) -> web.Response:
 
     Query params:
         refresh: If "true", forces refresh of cached environment before status check.
+                 This also syncs the model index to detect filesystem changes.
 
     Returns:
         Environment status with git, workflow, and comparison info.
@@ -30,6 +31,16 @@ async def get_status(request: web.Request, env) -> web.Response:
             env = get_environment_from_request(request)
             if not env:
                 return web.json_response({"error": "Failed to refresh environment"}, status=500)
+
+            # Sync model index to detect filesystem changes (like deleted models)
+            # This mirrors the CLI behavior where get_environment() auto-syncs
+            if env.workspace:
+                try:
+                    await run_sync(env.workspace.sync_model_directory)
+                except Exception as e:
+                    # Don't fail the whole request if model sync fails
+                    # (e.g., if models directory is not configured)
+                    print(f"[ComfyGit] Warning: Model sync failed: {e}")
 
         status = await run_sync(env.status)
         return web.json_response(serialize_environment_status(status, env.name))

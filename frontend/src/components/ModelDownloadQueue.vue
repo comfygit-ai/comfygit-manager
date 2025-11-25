@@ -109,7 +109,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useModelDownloadQueue } from '@/composables/useModelDownloadQueue'
 import DownloadQueueItem from './base/molecules/DownloadQueueItem.vue'
 
@@ -132,6 +132,44 @@ const {
 } = useModelDownloadQueue()
 
 const expanded = ref(false)
+let autoCloseTimer: ReturnType<typeof setTimeout> | null = null
+
+// Auto-close when all downloads complete successfully
+// Wait a moment so user can see the success state
+watch(
+  () => ({
+    active: activeCount.value,
+    failed: failedItems.value.length,
+    paused: pausedItems.value.length,
+    completed: completedItems.value.length
+  }),
+  (newVal, oldVal) => {
+    // Clear any pending auto-close
+    if (autoCloseTimer) {
+      clearTimeout(autoCloseTimer)
+      autoCloseTimer = null
+    }
+
+    // Check if all downloads just finished successfully
+    // (no active, no failed, no paused, but has completed items)
+    const allDone = newVal.active === 0 &&
+                    newVal.failed === 0 &&
+                    newVal.paused === 0 &&
+                    newVal.completed > 0
+
+    // Only trigger if we just transitioned from active to done
+    const wasActive = oldVal && (oldVal.active > 0 || oldVal.paused > 0)
+
+    if (allDone && wasActive) {
+      // Auto-close after 2 seconds so user can see success
+      autoCloseTimer = setTimeout(() => {
+        clearCompleted()
+        autoCloseTimer = null
+      }, 2000)
+    }
+  },
+  { deep: true }
+)
 
 const overallProgress = computed(() => {
   if (queue.items.length === 0) return 0

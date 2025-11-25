@@ -79,6 +79,7 @@ async function downloadFile(item: DownloadQueueItem): Promise<void> {
 
     let lastTime = Date.now()
     let lastDownloaded = 0
+    let settled = false  // Track if promise is already resolved/rejected
 
     eventSource.onmessage = (event) => {
       try {
@@ -112,12 +113,14 @@ async function downloadFile(item: DownloadQueueItem): Promise<void> {
             break
 
           case 'complete':
+            settled = true
             eventSource.close()
             activeEventSource = null
             resolve()
             break
 
           case 'error':
+            settled = true
             eventSource.close()
             activeEventSource = null
             reject(new Error(data.message || 'Download failed'))
@@ -131,7 +134,10 @@ async function downloadFile(item: DownloadQueueItem): Promise<void> {
     eventSource.onerror = () => {
       eventSource.close()
       activeEventSource = null
-      reject(new Error('Connection lost'))
+      // Only reject if we haven't already settled (complete/error event was received)
+      if (!settled) {
+        reject(new Error('Connection lost'))
+      }
     }
   })
 }
