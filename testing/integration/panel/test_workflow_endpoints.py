@@ -969,3 +969,130 @@ class TestApplyResolutionStreamEndpoint:
             json={}
         )
         assert resp.status == 500
+
+
+@pytest.mark.integration
+class TestModelImportanceEndpoint:
+    """POST /v2/comfygit/workflow/{name}/model-importance - Update model importance/criticality."""
+
+    async def test_success_update_importance(self, client, mock_environment):
+        """Should update model importance and return success."""
+        # Setup: Mock update_model_criticality to succeed
+        mock_environment.workflow_manager.update_model_criticality.return_value = True
+
+        # Execute
+        resp = await client.post(
+            "/v2/comfygit/workflow/test_workflow/model-importance",
+            json={
+                "model": "model.safetensors",
+                "importance": "optional"
+            }
+        )
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "success"
+
+        # Verify the core library method was called correctly
+        mock_environment.workflow_manager.update_model_criticality.assert_called_once_with(
+            "test_workflow",
+            "model.safetensors",
+            "optional"
+        )
+
+    async def test_success_with_hash_identifier(self, client, mock_environment):
+        """Should accept hash as model identifier."""
+        mock_environment.workflow_manager.update_model_criticality.return_value = True
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/test_workflow/model-importance",
+            json={
+                "model": "abc123def456",
+                "importance": "flexible"
+            }
+        )
+
+        assert resp.status == 200
+        mock_environment.workflow_manager.update_model_criticality.assert_called_once_with(
+            "test_workflow",
+            "abc123def456",
+            "flexible"
+        )
+
+    async def test_error_model_not_found(self, client, mock_environment):
+        """Should return 404 when model not found in workflow."""
+        mock_environment.workflow_manager.update_model_criticality.return_value = False
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/test_workflow/model-importance",
+            json={
+                "model": "nonexistent.safetensors",
+                "importance": "required"
+            }
+        )
+
+        assert resp.status == 404
+        data = await resp.json()
+        assert "error" in data
+
+    async def test_error_invalid_importance(self, client, mock_environment):
+        """Should return 400 for invalid importance value."""
+        resp = await client.post(
+            "/v2/comfygit/workflow/test_workflow/model-importance",
+            json={
+                "model": "model.safetensors",
+                "importance": "invalid_value"
+            }
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "error" in data
+
+    async def test_error_missing_model_field(self, client, mock_environment):
+        """Should return 400 when model field is missing."""
+        resp = await client.post(
+            "/v2/comfygit/workflow/test_workflow/model-importance",
+            json={
+                "importance": "optional"
+            }
+        )
+
+        assert resp.status == 400
+
+    async def test_error_missing_importance_field(self, client, mock_environment):
+        """Should return 400 when importance field is missing."""
+        resp = await client.post(
+            "/v2/comfygit/workflow/test_workflow/model-importance",
+            json={
+                "model": "model.safetensors"
+            }
+        )
+
+        assert resp.status == 400
+
+    async def test_error_invalid_json(self, client, mock_environment):
+        """Should return 400 for invalid JSON body."""
+        resp = await client.post(
+            "/v2/comfygit/workflow/test_workflow/model-importance",
+            data="not json",
+            headers={"Content-Type": "application/json"}
+        )
+        assert resp.status == 400
+
+    async def test_error_no_environment(self, client, monkeypatch):
+        """Should return 500 when no environment detected."""
+        monkeypatch.setattr(
+            "comfygit_panel.get_environment_from_cwd",
+            lambda: None
+        )
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/test_workflow/model-importance",
+            json={
+                "model": "model.safetensors",
+                "importance": "optional"
+            }
+        )
+        assert resp.status == 500

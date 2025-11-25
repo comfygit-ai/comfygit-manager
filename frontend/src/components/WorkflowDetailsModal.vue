@@ -16,7 +16,7 @@
             </div>
             <div
               v-for="model in details.models"
-              :key="model.hash"
+              :key="model.hash || model.filename"
               class="model-card"
             >
               <div class="model-header">
@@ -40,9 +40,9 @@
                     />
                   </span>
                   <BaseSelect
-                    :model-value="importanceChanges[model.hash] || model.importance"
+                    :model-value="importanceChanges[model.filename] || model.importance"
                     :options="importanceOptions"
-                    @update:model-value="handleImportanceChange(model.hash, $event)"
+                    @update:model-value="handleImportanceChange(model.filename, $event)"
                   />
                 </div>
                 <div v-if="model.loaded_by && model.loaded_by.length > 0" class="model-row model-row-nodes">
@@ -177,6 +177,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   resolve: []
+  refresh: []
 }>()
 
 const { getWorkflowDetails, setModelImportance, installWorkflowDeps } = useComfyGitService()
@@ -279,6 +280,8 @@ async function handleSave() {
     for (const [hash, importance] of Object.entries(importanceChanges.value)) {
       await setModelImportance(props.workflowName, hash, importance as any)
     }
+    // Refresh status since importance changes can affect workflow resolution status
+    emit('refresh')
     emit('close')
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to save changes'

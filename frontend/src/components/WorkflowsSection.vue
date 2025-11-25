@@ -173,6 +173,7 @@
     :workflow-name="selectedWorkflow"
     @close="showDetailsModal = false"
     @resolve="handleResolve(selectedWorkflow)"
+    @refresh="emit('refresh')"
   />
 
   <!-- Workflow Resolve Modal -->

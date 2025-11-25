@@ -1,9 +1,23 @@
 """Convert core library types to JSON-serializable dicts."""
 
 
-def serialize_workflow_details(workflow, name: str) -> dict:
-    """Serialize workflow details with models and nodes."""
+def serialize_workflow_details(
+    workflow,
+    name: str,
+    criticality_map: dict | None = None,
+    available_models: set | None = None
+) -> dict:
+    """Serialize workflow details with models and nodes.
+
+    Args:
+        workflow: Analyzed workflow object
+        name: Workflow name
+        criticality_map: Optional dict mapping filename -> criticality from pyproject
+        available_models: Optional set of filenames that exist in the model index
+    """
     models_map = {}
+    criticality_map = criticality_map or {}
+    available_models = available_models or set()
 
     def determine_model_status(resolved_model):
         if resolved_model.resolved_model is not None:
@@ -19,6 +33,11 @@ def serialize_workflow_details(workflow, name: str) -> dict:
         priorities = {"required": 0, "flexible": 1, "optional": 2}
         return priorities.get(importance, 2)
 
+    def get_filename_from_widget_value(widget_value: str) -> str:
+        """Extract filename from widget_value which may include subdirectory path."""
+        # widget_value can be "checkpoints/model.safetensors" or just "model.safetensors"
+        return widget_value.split("/")[-1] if "/" in widget_value else widget_value
+
     # Build resolution lookup map
     resolution_map = {}
     for resolved in workflow.resolution.models_resolved:
@@ -29,18 +48,30 @@ def serialize_workflow_details(workflow, name: str) -> dict:
         filename = model_ref.widget_value
         resolved = resolution_map.get(filename)
 
+        # Get criticality from pyproject (try both full path and basename)
+        base_filename = get_filename_from_widget_value(filename)
+        importance = criticality_map.get(filename) or criticality_map.get(base_filename) or "required"
+
+        # Check if model is available in model index (ground truth for file existence)
+        is_in_index = base_filename in available_models or filename in available_models
+
         if resolved:
             status = determine_model_status(resolved)
             model_hash = resolved.resolved_model.hash if resolved.resolved_model else ""
             model_type = resolved.resolved_model.category if resolved.resolved_model else "unknown"
             model_size = resolved.resolved_model.file_size if resolved.resolved_model else 0
-            importance = "required" if not resolved.is_optional else "optional"
+            # Override with "optional" only if is_optional is True and we don't have pyproject data
+            if resolved.is_optional and importance == "required":
+                importance = "optional"
+            # If resolution says "missing" but model is actually in index, override
+            if status == "missing" and is_in_index:
+                status = "available"
         else:
-            status = "missing"
+            # Model not in resolution - use index as source of truth
+            status = "available" if is_in_index else "missing"
             model_hash = ""
             model_type = "unknown"
             model_size = 0
-            importance = "required"
 
         key = model_hash if model_hash else f"unhashed_{filename}"
 

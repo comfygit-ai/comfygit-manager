@@ -357,7 +357,70 @@ async def get_workflow_details(request: web.Request, env) -> web.Response:
     if not workflow:
         return web.json_response({"error": "Workflow not found"}, status=404)
 
-    return web.json_response(serialize_workflow_details(workflow, name))
+    # Get criticality map from pyproject (filename -> criticality)
+    criticality_map = {}
+    try:
+        manifest_models = env.pyproject.workflows.get_workflow_models(name)
+        for model in manifest_models:
+            criticality_map[model.filename] = model.criticality or "required"
+    except Exception:
+        pass  # Fallback to default behavior if pyproject read fails
+
+    # Get set of available model filenames from the model index
+    available_models = set()
+    try:
+        all_models = env.workspace.list_models()
+        for model in all_models:
+            available_models.add(model.filename)
+    except Exception:
+        pass  # Fallback if model index unavailable
+
+    return web.json_response(serialize_workflow_details(workflow, name, criticality_map, available_models))
+
+
+@routes.post("/v2/comfygit/workflow/{name}/model-importance")
+@requires_environment
+async def set_model_importance(request: web.Request, env) -> web.Response:
+    """Update model importance/criticality for a workflow."""
+    name = request.match_info["name"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    model = body.get("model")
+    importance = body.get("importance")
+
+    # Validate required fields
+    if not model:
+        return web.json_response({"error": "Missing 'model' field"}, status=400)
+    if not importance:
+        return web.json_response({"error": "Missing 'importance' field"}, status=400)
+
+    # Validate importance value
+    valid_values = ("required", "flexible", "optional")
+    if importance not in valid_values:
+        return web.json_response(
+            {"error": f"Invalid importance value. Must be one of: {', '.join(valid_values)}"},
+            status=400
+        )
+
+    # Call core library
+    success = await run_sync(
+        env.workflow_manager.update_model_criticality,
+        name,
+        model,
+        importance
+    )
+
+    if not success:
+        return web.json_response(
+            {"error": f"Model '{model}' not found in workflow '{name}'"},
+            status=404
+        )
+
+    return web.json_response({"status": "success"})
 
 
 @routes.post("/v2/comfygit/workflow/{name}/resolve")
