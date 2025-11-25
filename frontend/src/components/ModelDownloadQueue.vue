@@ -14,9 +14,7 @@
         </div>
 
         <div class="queue-actions">
-          <button class="action-btn" @click.stop="expanded = !expanded">
-            {{ expanded ? '−' : '+' }}
-          </button>
+          <span class="action-label">{{ expanded ? 'minimize' : 'expand' }}</span>
         </div>
       </div>
 
@@ -156,21 +154,17 @@ function formatSpeed(bytesPerSec: number): string {
 <style scoped>
 .model-download-queue {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: 16px;
+  right: 340px;
   width: 360px;
-  max-height: 500px;
   background: var(--cg-color-bg-primary);
   border: 1px solid var(--cg-color-border);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-  z-index: 9999;
+  border-radius: var(--cg-radius-md);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  z-index: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.model-download-queue.minimized {
-  max-height: 100px;
 }
 
 .queue-header {
@@ -207,18 +201,11 @@ function formatSpeed(bytesPerSec: number): string {
   font-size: var(--cg-font-size-xs);
 }
 
-.action-btn {
-  padding: 2px 8px;
-  background: transparent;
-  border: 1px solid var(--cg-color-border);
-  color: var(--cg-color-text-primary);
-  cursor: pointer;
-  font-size: var(--cg-font-size-sm);
-}
-
-.action-btn:hover {
-  background: var(--cg-color-bg-hover);
-  border-color: var(--cg-color-accent);
+.action-label {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  text-transform: lowercase;
+  font-style: italic;
 }
 
 .overall-progress {
@@ -259,7 +246,7 @@ function formatSpeed(bytesPerSec: number): string {
 }
 
 .queue-content {
-  flex: 1;
+  max-height: 450px;
   overflow-y: auto;
   padding: var(--cg-space-2);
   display: flex;

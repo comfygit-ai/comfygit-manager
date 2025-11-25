@@ -504,8 +504,8 @@ const io = { class: "panel-layout" }, ro = {
     }), y = O(() => {
       var _, C, N;
       return ((N = (C = (_ = c.status) == null ? void 0 : _.workflows) == null ? void 0 : C.synced) == null ? void 0 : N.filter(($) => {
-        var S, F, z;
-        const b = (z = (F = (S = c.status) == null ? void 0 : S.workflows) == null ? void 0 : F.analyzed) == null ? void 0 : z.find((p) => p.name === $);
+        var x, F, z;
+        const b = (z = (F = (x = c.status) == null ? void 0 : x.workflows) == null ? void 0 : F.analyzed) == null ? void 0 : z.find((p) => p.name === $);
         return !b || b.status !== "broken";
       })) || [];
     }), g = O(() => {
@@ -516,8 +516,8 @@ const io = { class: "panel-layout" }, ro = {
       const _ = (C = c.status) == null ? void 0 : C.git_changes;
       return _ ? (((N = _.nodes_added) == null ? void 0 : N.length) ?? 0) > 0 || ((($ = _.nodes_removed) == null ? void 0 : $.length) ?? 0) > 0 || _.workflow_changes || _.has_other_changes : !1;
     }), d = O(() => {
-      var _, C, N, $, b, S;
-      return !g.value && !i.value && ((C = (_ = c.status) == null ? void 0 : _.comparison) == null ? void 0 : C.is_synced) && (((N = c.status) == null ? void 0 : N.missing_models_count) ?? 0) === 0 && (((S = (b = ($ = c.status) == null ? void 0 : $.comparison) == null ? void 0 : b.disabled_nodes) == null ? void 0 : S.length) ?? 0) === 0;
+      var _, C, N, $, b, x;
+      return !g.value && !i.value && ((C = (_ = c.status) == null ? void 0 : _.comparison) == null ? void 0 : C.is_synced) && (((N = c.status) == null ? void 0 : N.missing_models_count) ?? 0) === 0 && (((x = (b = ($ = c.status) == null ? void 0 : $.comparison) == null ? void 0 : b.disabled_nodes) == null ? void 0 : x.length) ?? 0) === 0;
     }), v = O(() => {
       var C, N;
       const _ = (N = (C = c.status) == null ? void 0 : C.git_changes) == null ? void 0 : N.workflow_changes;
@@ -530,7 +530,7 @@ const io = { class: "panel-layout" }, ro = {
       return typeof _ == "object" && _.is_development === !0;
     }
     return (_, C) => {
-      var N, $, b, S, F, z, p, x, M, V, T, D, U, K, B, R, X, H, fe, Ie, me, ve;
+      var N, $, b, x, F, z, p, S, M, V, T, D, U, K, B, R, X, H, fe, Ie, me, ve;
       return o(), k(Se, { to: "body" }, [
         t.show ? (o(), n("div", {
           key: 0,
@@ -620,7 +620,7 @@ const io = { class: "panel-layout" }, ro = {
                     ]))), 128))
                   ])
                 ])) : u("", !0),
-                (S = (b = t.status.workflows) == null ? void 0 : b.modified) != null && S.length ? (o(), n("div", Os, [
+                (x = (b = t.status.workflows) == null ? void 0 : b.modified) != null && x.length ? (o(), n("div", Os, [
                   e("div", Us, [
                     C[12] || (C[12] = e("span", { class: "workflow-status-icon modified" }, "●", -1)),
                     e("span", Bs, "MODIFIED (" + l(t.status.workflows.modified.length) + ")", 1)
@@ -674,7 +674,7 @@ const io = { class: "panel-layout" }, ro = {
                   ])]),
                   _: 1
                 }),
-                (x = (p = t.status.git_changes) == null ? void 0 : p.nodes_added) != null && x.length ? (o(), n("div", Qs, [
+                (S = (p = t.status.git_changes) == null ? void 0 : p.nodes_added) != null && S.length ? (o(), n("div", Qs, [
                   e("div", Zs, [
                     C[16] || (C[16] = e("span", { class: "change-icon add" }, "+", -1)),
                     e("span", en, "NODES ADDED (" + l(t.status.git_changes.nodes_added.length) + ")", 1)
@@ -870,7 +870,7 @@ const io = { class: "panel-layout" }, ro = {
       return ((z = s.status.workflows.analyzed) == null ? void 0 : z.filter(
         (p) => p.status === "broken" && p.sync_state !== "synced"
       )) || [];
-    }), b = O(() => N.value.length > 0 || $.value.length > 0), S = O(() => b.value || s.status.missing_models_count > 0 || w.value || !s.status.comparison.is_synced), F = O(() => {
+    }), b = O(() => N.value.length > 0 || $.value.length > 0), x = O(() => b.value || s.status.missing_models_count > 0 || w.value || !s.status.comparison.is_synced), F = O(() => {
       const z = [];
       return s.status.workflows.new.length > 0 && z.push(`${s.status.workflows.new.length} new workflow${s.status.workflows.new.length === 1 ? "" : "s"}`), s.status.workflows.modified.length > 0 && z.push(`${s.status.workflows.modified.length} modified workflow${s.status.workflows.modified.length === 1 ? "" : "s"}`), s.status.workflows.deleted.length > 0 && z.push(`${s.status.workflows.deleted.length} deleted workflow${s.status.workflows.deleted.length === 1 ? "" : "s"}`), s.status.git_changes.nodes_added.length > 0 && z.push(`${s.status.git_changes.nodes_added.length} node${s.status.git_changes.nodes_added.length === 1 ? "" : "s"} added`), s.status.git_changes.nodes_removed.length > 0 && z.push(`${s.status.git_changes.nodes_removed.length} node${s.status.git_changes.nodes_removed.length === 1 ? "" : "s"} removed`), `${z.length > 0 ? z.join(", ") + "." : "You have uncommitted changes."} Your work could be lost if you switch branches without committing.`;
     });
@@ -882,8 +882,8 @@ const io = { class: "panel-layout" }, ro = {
         content: a(() => [
           e("div", {
             class: "health-section-wrapper",
-            onMouseenter: p[0] || (p[0] = (x) => f.value = !0),
-            onMouseleave: p[1] || (p[1] = (x) => f.value = !1)
+            onMouseenter: p[0] || (p[0] = (S) => f.value = !0),
+            onMouseleave: p[1] || (p[1] = (S) => f.value = !1)
           }, [
             e("div", Nn, [
               m(Ce, {
@@ -993,7 +993,7 @@ const io = { class: "panel-layout" }, ro = {
                 m(j, {
                   variant: "secondary",
                   size: "sm",
-                  onClick: p[2] || (p[2] = (x) => z.$emit("switch-branch"))
+                  onClick: p[2] || (p[2] = (S) => z.$emit("switch-branch"))
                 }, {
                   default: a(() => [...p[13] || (p[13] = [
                     h(" Switch Branch ", -1)
@@ -1016,7 +1016,7 @@ const io = { class: "panel-layout" }, ro = {
               m(j, {
                 variant: "primary",
                 size: "sm",
-                onClick: p[3] || (p[3] = (x) => z.$emit("create-branch"))
+                onClick: p[3] || (p[3] = (S) => z.$emit("create-branch"))
               }, {
                 default: a(() => [...p[14] || (p[14] = [
                   h(" Create Branch ", -1)
@@ -1026,7 +1026,7 @@ const io = { class: "panel-layout" }, ro = {
             ]),
             _: 1
           })) : u("", !0),
-          S.value ? (o(), n("div", On, [
+          x.value ? (o(), n("div", On, [
             m(Ce, {
               level: "4",
               style: { "margin-bottom": "var(--cg-space-2)" }
@@ -1042,13 +1042,13 @@ const io = { class: "panel-layout" }, ro = {
               icon: "⚠",
               title: `${N.value.length} committed workflow${N.value.length === 1 ? "" : "s"} can't run`,
               description: "These workflows were committed but dependencies are now missing. They need to be fixed to run.",
-              items: N.value.map((x) => `${x.name} — ${x.issue_summary}`)
+              items: N.value.map((S) => `${S.name} — ${S.issue_summary}`)
             }, {
               actions: a(() => [
                 m(j, {
                   variant: "primary",
                   size: "sm",
-                  onClick: p[4] || (p[4] = (x) => z.$emit("view-workflows"))
+                  onClick: p[4] || (p[4] = (S) => z.$emit("view-workflows"))
                 }, {
                   default: a(() => [...p[16] || (p[16] = [
                     h(" See Workflows ", -1)
@@ -1064,13 +1064,13 @@ const io = { class: "panel-layout" }, ro = {
               icon: "⚠",
               title: `${$.value.length} workflow${$.value.length === 1 ? "" : "s"} with issues`,
               description: "Fix dependencies before committing these workflows.",
-              items: $.value.map((x) => `${x.name} — ${x.issue_summary}`)
+              items: $.value.map((S) => `${S.name} — ${S.issue_summary}`)
             }, {
               actions: a(() => [
                 m(j, {
                   variant: "primary",
                   size: "sm",
-                  onClick: p[5] || (p[5] = (x) => z.$emit("view-workflows"))
+                  onClick: p[5] || (p[5] = (S) => z.$emit("view-workflows"))
                 }, {
                   default: a(() => [...p[17] || (p[17] = [
                     h(" See Workflows ", -1)
@@ -1091,7 +1091,7 @@ const io = { class: "panel-layout" }, ro = {
                 m(j, {
                   variant: "primary",
                   size: "sm",
-                  onClick: p[6] || (p[6] = (x) => z.$emit("view-workflows"))
+                  onClick: p[6] || (p[6] = (S) => z.$emit("view-workflows"))
                 }, {
                   default: a(() => [...p[18] || (p[18] = [
                     h(" See Workflows ", -1)
@@ -1122,7 +1122,7 @@ const io = { class: "panel-layout" }, ro = {
                 m(j, {
                   variant: "primary",
                   size: "sm",
-                  onClick: p[7] || (p[7] = (x) => z.$emit("commit-changes"))
+                  onClick: p[7] || (p[7] = (S) => z.$emit("commit-changes"))
                 }, {
                   default: a(() => [...p[20] || (p[20] = [
                     h(" Commit Changes ", -1)
@@ -1143,7 +1143,7 @@ const io = { class: "panel-layout" }, ro = {
                 m(j, {
                   variant: "secondary",
                   size: "sm",
-                  onClick: p[8] || (p[8] = (x) => z.$emit("view-debug"))
+                  onClick: p[8] || (p[8] = (S) => z.$emit("view-debug"))
                 }, {
                   default: a(() => [...p[21] || (p[21] = [
                     h(" View Logs ", -1)
@@ -1153,7 +1153,7 @@ const io = { class: "panel-layout" }, ro = {
                 m(j, {
                   variant: "primary",
                   size: "sm",
-                  onClick: p[9] || (p[9] = (x) => z.$emit("sync-environment"))
+                  onClick: p[9] || (p[9] = (S) => z.$emit("sync-environment"))
                 }, {
                   default: a(() => [...p[22] || (p[22] = [
                     h(" Sync Now ", -1)
@@ -1164,7 +1164,7 @@ const io = { class: "panel-layout" }, ro = {
               _: 1
             }))
           ])) : u("", !0),
-          !S.value && !E.value ? (o(), k(Te, {
+          !x.value && !E.value ? (o(), k(Te, {
             key: 2,
             icon: "✅",
             message: "Everything looks good! No issues detected.",
@@ -1176,7 +1176,7 @@ const io = { class: "panel-layout" }, ro = {
       m(Lt, {
         show: r.value,
         status: t.status,
-        onClose: p[10] || (p[10] = (x) => r.value = !1),
+        onClose: p[10] || (p[10] = (S) => r.value = !1),
         onNavigateWorkflows: i
       }, null, 8, ["show", "status"])
     ], 64));
@@ -1490,7 +1490,7 @@ const io = { class: "panel-layout" }, ro = {
       _: 1
     }));
   }
-}), ca = /* @__PURE__ */ J(da, [["__scopeId", "data-v-981c3c64"]]), ph = [
+}), ca = /* @__PURE__ */ J(da, [["__scopeId", "data-v-981c3c64"]]), yh = [
   // BROKEN workflows (3) - Missing dependencies
   {
     name: "flux-dev-img2img.json",
@@ -1560,7 +1560,7 @@ const io = { class: "panel-layout" }, ro = {
     model_count: 1 + c % 3,
     sync_state: "synced"
   }))
-], yh = {
+], wh = {
   "flux-dev-img2img.json": {
     name: "flux-dev-img2img.json",
     status: "broken",
@@ -1737,7 +1737,7 @@ const io = { class: "panel-layout" }, ro = {
       clip_type: "clip_l"
     }
   }
-], wh = [
+], bh = [
   ...ua,
   {
     filename: "v1-5-pruned.ckpt",
@@ -1899,7 +1899,7 @@ function _e() {
       method: "DELETE"
     });
   }
-  async function S() {
+  async function x() {
     try {
       return s("/v2/comfygit/workflows");
     } catch {
@@ -1928,7 +1928,7 @@ function _e() {
       body: JSON.stringify({ install_nodes: oe, install_models: P })
     });
   }
-  async function x(Y, oe, P) {
+  async function S(Y, oe, P) {
     return s(`/v2/comfygit/workflow/${encodeURIComponent(Y)}/model-importance`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2098,11 +2098,11 @@ function _e() {
     createEnvironment: $,
     deleteEnvironment: b,
     // Workflow Management
-    getWorkflows: S,
+    getWorkflows: x,
     getWorkflowDetails: F,
     resolveWorkflow: z,
     installWorkflowDeps: p,
-    setModelImportance: x,
+    setModelImportance: S,
     // Model Management
     getEnvironmentModels: M,
     getWorkspaceModels: V,
@@ -2379,7 +2379,7 @@ const ma = { class: "base-modal-header" }, va = {
           return "error";
       }
     }
-    function S(D) {
+    function x(D) {
       switch (D) {
         case "available":
           return "✓ Available";
@@ -2403,7 +2403,7 @@ const ma = { class: "base-modal-header" }, va = {
     function p(D) {
       N.value.has(D) ? N.value.delete(D) : N.value.add(D), N.value = new Set(N.value);
     }
-    async function x() {
+    async function S() {
       d.value = !0, v.value = null;
       try {
         i.value = await f(s.workflowName);
@@ -2435,14 +2435,14 @@ const ma = { class: "base-modal-header" }, va = {
     async function T(D) {
       _.value[D] = !0, v.value = null;
       try {
-        await g(s.workflowName, !0, !1), await x();
+        await g(s.workflowName, !0, !1), await S();
       } catch (U) {
         v.value = U instanceof Error ? U.message : "Failed to install node";
       } finally {
         _.value[D] = !1;
       }
     }
-    return we(x), (D, U) => (o(), n(G, null, [
+    return we(S), (D, U) => (o(), n(G, null, [
       m(ht, {
         title: `WORKFLOW DETAILS: ${t.workflowName}`,
         size: "lg",
@@ -2473,7 +2473,7 @@ const ma = { class: "base-modal-header" }, va = {
                     U[8] || (U[8] = e("span", { class: "label" }, "Status:", -1)),
                     e("span", {
                       class: Z(["value", b(K.status)])
-                    }, l(S(K.status)), 3)
+                    }, l(x(K.status)), 3)
                   ]),
                   e("div", Aa, [
                     e("span", Fa, [
@@ -2728,15 +2728,15 @@ async function ol() {
 }
 function St() {
   function t(b) {
-    for (const S of b) {
+    for (const x of b) {
       const F = {
         id: At(),
-        workflow: S.workflow,
-        filename: S.filename,
-        url: S.url,
-        targetPath: S.targetPath,
-        size: S.size || 0,
-        type: S.type || "model",
+        workflow: x.workflow,
+        filename: x.filename,
+        url: x.url,
+        targetPath: x.targetPath,
+        size: x.size || 0,
+        type: x.type || "model",
         status: "queued",
         progress: 0,
         downloaded: 0,
@@ -2749,39 +2749,39 @@ function St() {
     de.status === "idle" && Ye();
   }
   async function c(b) {
-    const S = yt(b);
-    if (S) {
-      if (S.status === "downloading") {
+    const x = yt(b);
+    if (x) {
+      if (x.status === "downloading") {
         try {
-          await fetch(`/v2/comfygit/models/download?url=${encodeURIComponent(S.url)}`, {
+          await fetch(`/v2/comfygit/models/download?url=${encodeURIComponent(x.url)}`, {
             method: "DELETE"
           });
         } catch {
         }
-        Ne && (Ne.close(), Ne = null), S.status = "failed", S.error = "Cancelled by user", de.status = "idle", Ye();
-      } else if (S.status === "queued") {
+        Ne && (Ne.close(), Ne = null), x.status = "failed", x.error = "Cancelled by user", de.status = "idle", Ye();
+      } else if (x.status === "queued") {
         const F = de.items.findIndex((z) => z.id === b);
         F >= 0 && de.items.splice(F, 1);
       }
     }
   }
   function s(b) {
-    const S = yt(b);
-    !S || S.status !== "failed" || (S.status = "queued", S.error = void 0, S.progress = 0, S.downloaded = 0, de.status === "idle" && Ye());
+    const x = yt(b);
+    !x || x.status !== "failed" || (x.status = "queued", x.error = void 0, x.progress = 0, x.downloaded = 0, de.status === "idle" && Ye());
   }
   function r(b) {
-    const S = yt(b);
-    !S || S.status !== "paused" || (S.status = "queued", de.status === "idle" && Ye());
+    const x = yt(b);
+    !x || x.status !== "paused" || (x.status = "queued", de.status === "idle" && Ye());
   }
   function f() {
-    const b = de.items.filter((S) => S.status === "paused");
-    for (const S of b)
-      S.status = "queued";
+    const b = de.items.filter((x) => x.status === "paused");
+    for (const x of b)
+      x.status = "queued";
     de.status === "idle" && Ye();
   }
   function y(b) {
-    const S = de.items.findIndex((F) => F.id === b);
-    S >= 0 && (de.items[S].status === "completed" || de.items[S].status === "failed") && de.items.splice(S, 1);
+    const x = de.items.findIndex((F) => F.id === b);
+    x >= 0 && (de.items[x].status === "completed" || de.items[x].status === "failed") && de.items.splice(x, 1);
   }
   function g() {
     de.items = de.items.filter((b) => b.status !== "completed");
@@ -2830,41 +2830,41 @@ function St() {
 }
 function sl() {
   const t = I(null), c = I(null), s = I([]), r = I([]), f = I(!1), y = I(null);
-  async function g(b, S) {
+  async function g(b, x) {
     var z;
     if (!((z = window.app) != null && z.api))
       throw new Error("ComfyUI API not available");
-    const F = await window.app.api.fetchApi(b, S);
+    const F = await window.app.api.fetchApi(b, x);
     if (!F.ok) {
-      const p = await F.json().catch(() => ({})), x = p.error || p.message || `Request failed: ${F.status}`;
-      throw new Error(x);
+      const p = await F.json().catch(() => ({})), S = p.error || p.message || `Request failed: ${F.status}`;
+      throw new Error(S);
     }
     return F.json();
   }
   async function i(b) {
     f.value = !0, y.value = null;
     try {
-      let S;
-      return ft() || (S = await g(
+      let x;
+      return ft() || (x = await g(
         `/v2/comfygit/workflow/${b}/analyze`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" }
         }
-      )), t.value = S, S;
-    } catch (S) {
-      const F = S instanceof Error ? S.message : "Unknown error occurred";
-      throw y.value = F, S;
+      )), t.value = x, x;
+    } catch (x) {
+      const F = x instanceof Error ? x.message : "Unknown error occurred";
+      throw y.value = F, x;
     } finally {
       f.value = !1;
     }
   }
-  async function d(b, S, F) {
+  async function d(b, x, F) {
     f.value = !0, y.value = null;
     try {
       let z;
       if (!ft()) {
-        const p = Object.fromEntries(S), x = Object.fromEntries(F);
+        const p = Object.fromEntries(x), S = Object.fromEntries(F);
         z = await g(
           `/v2/comfygit/workflow/${b}/apply-resolution`,
           {
@@ -2872,7 +2872,7 @@ function sl() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               node_choices: p,
-              model_choices: x
+              model_choices: S
             })
           }
         );
@@ -2885,7 +2885,7 @@ function sl() {
       f.value = !1;
     }
   }
-  async function v(b, S = 10) {
+  async function v(b, x = 10) {
     f.value = !0, y.value = null;
     try {
       let F;
@@ -2894,7 +2894,7 @@ function sl() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: b, limit: S })
+          body: JSON.stringify({ query: b, limit: x })
         }
       )), s.value = F.results, F.results;
     } catch (F) {
@@ -2904,7 +2904,7 @@ function sl() {
       f.value = !1;
     }
   }
-  async function E(b, S = 10) {
+  async function E(b, x = 10) {
     f.value = !0, y.value = null;
     try {
       let F;
@@ -2913,7 +2913,7 @@ function sl() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: b, limit: S })
+          body: JSON.stringify({ query: b, limit: x })
         }
       )), r.value = F.results, F.results;
     } catch (F) {
@@ -2931,11 +2931,11 @@ function sl() {
   function _() {
     w.phase = "idle", w.currentFile = void 0, w.currentFileIndex = void 0, w.totalFiles = void 0, w.bytesDownloaded = void 0, w.bytesTotal = void 0, w.completedFiles = [], w.nodesToInstall = [], w.error = void 0;
   }
-  async function C(b, S, F) {
+  async function C(b, x, F) {
     _(), w.phase = "resolving", y.value = null;
-    const z = Object.fromEntries(S), p = Object.fromEntries(F);
+    const z = Object.fromEntries(x), p = Object.fromEntries(F);
     try {
-      const x = await fetch(`/v2/comfygit/workflow/${b}/apply-resolution-stream`, {
+      const S = await fetch(`/v2/comfygit/workflow/${b}/apply-resolution-stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2943,11 +2943,11 @@ function sl() {
           model_choices: p
         })
       });
-      if (!x.ok)
-        throw new Error(`Request failed: ${x.status}`);
-      if (!x.body)
+      if (!S.ok)
+        throw new Error(`Request failed: ${S.status}`);
+      if (!S.body)
         throw new Error("No response body");
-      const M = x.body.getReader(), V = new TextDecoder();
+      const M = S.body.getReader(), V = new TextDecoder();
       let T = "";
       for (; ; ) {
         const { done: D, value: U } = await M.read();
@@ -2973,41 +2973,41 @@ function sl() {
             }
         }
       }
-    } catch (x) {
-      const M = x instanceof Error ? x.message : "Unknown error occurred";
-      throw y.value = M, w.error = M, w.phase = "error", x;
+    } catch (S) {
+      const M = S instanceof Error ? S.message : "Unknown error occurred";
+      throw y.value = M, w.error = M, w.phase = "error", S;
     }
   }
-  function N(b, S) {
+  function N(b, x) {
     switch (b) {
       case "batch_start":
-        w.phase = "downloading", w.totalFiles = S.total;
+        w.phase = "downloading", w.totalFiles = x.total;
         break;
       case "file_start":
-        w.currentFile = S.filename, w.currentFileIndex = S.index, w.bytesDownloaded = 0, w.bytesTotal = void 0;
+        w.currentFile = x.filename, w.currentFileIndex = x.index, w.bytesDownloaded = 0, w.bytesTotal = void 0;
         break;
       case "file_progress":
-        w.bytesDownloaded = S.downloaded, w.bytesTotal = S.total;
+        w.bytesDownloaded = x.downloaded, w.bytesTotal = x.total;
         break;
       case "file_complete":
         w.completedFiles.push({
-          filename: S.filename,
-          success: S.success,
-          error: S.error
+          filename: x.filename,
+          success: x.success,
+          error: x.error
         });
         break;
       case "batch_complete":
         break;
       case "done":
-        w.nodesToInstall = S.nodes_to_install || [], S.download_results && (w.completedFiles = S.download_results), w.phase = "complete";
+        w.nodesToInstall = x.nodes_to_install || [], x.download_results && (w.completedFiles = x.download_results), w.phase = "complete";
         break;
       case "error":
-        w.error = S.message, w.phase = "error", y.value = S.message;
+        w.error = x.message, w.phase = "error", y.value = x.message;
         break;
     }
   }
-  function $(b, S) {
-    const { addToQueue: F } = St(), z = S.filter((p) => p.url && p.target_path).map((p) => ({
+  function $(b, x) {
+    const { addToQueue: F } = St(), z = x.filter((p) => p.url && p.target_path).map((p) => ({
       workflow: b,
       filename: p.filename,
       url: p.url,
@@ -3453,7 +3453,7 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
     function b() {
       w.value && r("mark-optional", w.value.node_type);
     }
-    function S() {
+    function x() {
       w.value && r("skip", w.value.node_type);
     }
     function F(K) {
@@ -3465,7 +3465,7 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
     function p() {
       w.value && (i.value = w.value.node_type, y.value = !0);
     }
-    function x() {
+    function S() {
       d.value = "", g.value = !0;
     }
     function M() {
@@ -3512,8 +3512,8 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
             options: w.value.options,
             choice: (X = t.nodeChoices) == null ? void 0 : X.get(w.value.node_type),
             onMarkOptional: b,
-            onSkip: S,
-            onManualEntry: x,
+            onSkip: x,
+            onManualEntry: S,
             onSearch: p,
             onOptionSelected: F,
             onClearChoice: z
@@ -3838,7 +3838,7 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
         }
       return (fe = _.value.options) != null && fe.length ? `${_.value.options.length} matches` : "Not Found";
     });
-    function S(X) {
+    function x(X) {
       X >= 0 && X < s.models.length && (f.value = X);
     }
     function F() {
@@ -3850,7 +3850,7 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
     function p(X) {
       _.value && r("option-selected", _.value.filename, X);
     }
-    function x() {
+    function S() {
       _.value && r("clear-choice", _.value.filename);
     }
     function M() {
@@ -3898,8 +3898,8 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
           "status-label-override": b.value,
           "current-index": f.value,
           "total-items": t.models.length,
-          onPrev: H[0] || (H[0] = (ve) => S(f.value - 1)),
-          onNext: H[1] || (H[1] = (ve) => S(f.value + 1))
+          onPrev: H[0] || (H[0] = (ve) => x(f.value - 1)),
+          onNext: H[1] || (H[1] = (ve) => x(f.value + 1))
         }, null, 8, ["item-name", "status", "status-label-override", "current-index", "total-items"])) : u("", !0),
         _.value ? (o(), n("div", Li, [
           m(Ii, {
@@ -3913,7 +3913,7 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
             onDownloadUrl: V,
             onSearch: M,
             onOptionSelected: p,
-            onClearChoice: x
+            onClearChoice: S
           }, null, 8, ["filename", "node-type", "has-multiple-options", "options", "choice"])
         ])) : (o(), n("div", Ti, [...H[6] || (H[6] = [
           e("p", null, "No models need resolution.", -1)
@@ -4138,12 +4138,12 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
   },
   emits: ["close", "install", "refresh"],
   setup(t, { emit: c }) {
-    const s = t, r = c, { analyzeWorkflow: f, applyResolution: y, queueModelDownloads: g, progress: i, resetProgress: d } = sl(), v = I(null), E = I(!1), w = I(!1), _ = I(null), C = I("analysis"), N = I([]), $ = I(/* @__PURE__ */ new Map()), b = I(/* @__PURE__ */ new Map()), S = O(() => {
+    const s = t, r = c, { analyzeWorkflow: f, applyResolution: y, queueModelDownloads: g, progress: i, resetProgress: d } = sl(), v = I(null), E = I(!1), w = I(!1), _ = I(null), C = I("analysis"), N = I([]), $ = I(/* @__PURE__ */ new Map()), b = I(/* @__PURE__ */ new Map()), x = O(() => {
       const P = [
         { id: "analysis", label: "Analysis" }
       ];
       return z.value && P.push({ id: "nodes", label: "Nodes" }), p.value && P.push({ id: "models", label: "Models" }), P.push({ id: "review", label: "Review" }), C.value === "applying" && P.push({ id: "applying", label: "Applying" }), P;
-    }), F = O(() => v.value ? v.value.stats.needs_user_input : !1), z = O(() => v.value ? v.value.nodes.unresolved.length > 0 || v.value.nodes.ambiguous.length > 0 : !1), p = O(() => v.value ? v.value.models.unresolved.length > 0 || v.value.models.ambiguous.length > 0 : !1), x = O(() => {
+    }), F = O(() => v.value ? v.value.stats.needs_user_input : !1), z = O(() => v.value ? v.value.nodes.unresolved.length > 0 || v.value.nodes.ambiguous.length > 0 : !1), p = O(() => v.value ? v.value.models.unresolved.length > 0 || v.value.models.ambiguous.length > 0 : !1), S = O(() => {
       if (!v.value) return [];
       const P = v.value.nodes.unresolved.map((ee) => ({
         node_type: ee.reference.node_type,
@@ -4207,7 +4207,7 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
         A.action === "skip" && P++;
       for (const A of b.value.values())
         A.action === "skip" && P++;
-      for (const A of x.value)
+      for (const A of S.value)
         $.value.has(A.node_type) || P++;
       for (const A of M.value)
         b.value.has(A.filename) || P++;
@@ -4215,7 +4215,7 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
     }), K = O(() => {
       const P = {};
       if (P.analysis = { resolved: 1, total: 1 }, z.value) {
-        const A = x.value.length, ee = x.value.filter(
+        const A = S.value.length, ee = S.value.filter(
           (ue) => $.value.has(ue.node_type)
         ).length;
         P.nodes = { resolved: ee, total: A };
@@ -4236,12 +4236,12 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
       C.value = P;
     }
     function R() {
-      const P = S.value.findIndex((A) => A.id === C.value);
-      P > 0 && (C.value = S.value[P - 1].id);
+      const P = x.value.findIndex((A) => A.id === C.value);
+      P > 0 && (C.value = x.value[P - 1].id);
     }
     function X() {
-      const P = S.value.findIndex((A) => A.id === C.value);
-      P < S.value.length - 1 && (C.value = S.value[P + 1].id);
+      const P = x.value.findIndex((A) => A.id === C.value);
+      P < x.value.length - 1 && (C.value = x.value[P + 1].id);
     }
     async function H() {
       E.value = !0, _.value = null;
@@ -4264,7 +4264,7 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
     }
     function ve(P, A) {
       var ue;
-      const ee = x.value.find((Ee) => Ee.node_type === P);
+      const ee = S.value.find((Ee) => Ee.node_type === P);
       (ue = ee == null ? void 0 : ee.options) != null && ue[A] && $.value.set(P, {
         action: "install",
         package_id: ee.options[A].package_id
@@ -4330,7 +4330,7 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
           e("p", null, "Analyzing workflow dependencies...", -1)
         ])])) : v.value ? (o(), n("div", ir, [
           m(vl, {
-            steps: S.value,
+            steps: x.value,
             "current-step": C.value,
             "completed-steps": N.value,
             "step-stats": K.value,
@@ -4386,7 +4386,7 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
               ]),
               F.value ? (o(), n("div", zr, [
                 A[18] || (A[18] = e("span", { class: "status-icon" }, "⚠", -1)),
-                e("span", Mr, l(x.value.length + M.value.length) + " items need your input", 1)
+                e("span", Mr, l(S.value.length + M.value.length) + " items need your input", 1)
               ])) : (o(), n("div", Lr, [...A[19] || (A[19] = [
                 e("span", { class: "status-icon" }, "✓", -1),
                 e("span", { class: "status-text" }, "All dependencies are resolved!", -1)
@@ -4395,7 +4395,7 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
           ])) : u("", !0),
           C.value === "nodes" ? (o(), k(ri, {
             key: 1,
-            nodes: x.value,
+            nodes: S.value,
             "node-choices": $.value,
             onMarkOptional: Ie,
             onSkip: me,
@@ -4437,10 +4437,10 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
                   A[23] || (A[23] = e("span", { class: "stat-label" }, "skipped", -1))
                 ])
               ]),
-              x.value.length > 0 ? (o(), n("div", Wr, [
-                e("h4", Gr, "Node Packages (" + l(x.value.length) + ")", 1),
+              S.value.length > 0 ? (o(), n("div", Wr, [
+                e("h4", Gr, "Node Packages (" + l(S.value.length) + ")", 1),
                 e("div", jr, [
-                  (o(!0), n(G, null, Q(x.value, (ee) => {
+                  (o(!0), n(G, null, Q(S.value, (ee) => {
                     var ue, Ee, De, We;
                     return o(), n("div", {
                       key: ee.node_type,
@@ -4475,7 +4475,7 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
                   }), 128))
                 ])
               ])) : u("", !0),
-              x.value.length === 0 && M.value.length === 0 ? (o(), n("div", rd, " No dependencies need resolution. ")) : u("", !0)
+              S.value.length === 0 && M.value.length === 0 ? (o(), n("div", rd, " No dependencies need resolution. ")) : u("", !0)
             ])
           ])) : u("", !0),
           C.value === "applying" ? (o(), k(ar, {
@@ -4750,7 +4750,7 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
       () => f.value.filter((B) => B.status === "modified")
     ), b = O(
       () => f.value.filter((B) => B.status === "synced")
-    ), S = O(() => {
+    ), x = O(() => {
       if (!i.value.trim()) return f.value;
       const B = i.value.toLowerCase();
       return f.value.filter((R) => R.name.toLowerCase().includes(B));
@@ -4766,12 +4766,12 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
       () => $.value.filter(
         (B) => !i.value.trim() || B.name.toLowerCase().includes(i.value.toLowerCase())
       )
-    ), x = O(
+    ), S = O(
       () => b.value.filter(
         (B) => !i.value.trim() || B.name.toLowerCase().includes(i.value.toLowerCase())
       )
     ), M = O(
-      () => v.value ? x.value : x.value.slice(0, 5)
+      () => v.value ? S.value : S.value.slice(0, 5)
     );
     async function V() {
       y.value = !0, g.value = null;
@@ -4950,10 +4950,10 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
               ]),
               _: 1
             }, 8, ["count"])) : u("", !0),
-            x.value.length ? (o(), k(he, {
+            S.value.length ? (o(), k(he, {
               key: 3,
               title: "SYNCED",
-              count: x.value.length,
+              count: S.value.length,
               collapsible: !0,
               "initially-expanded": d.value,
               onToggle: R[2] || (R[2] = (X) => d.value = X)
@@ -4986,7 +4986,7 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
                   ]),
                   _: 2
                 }, 1024))), 128)),
-                !v.value && x.value.length > 5 ? (o(), k(j, {
+                !v.value && S.value.length > 5 ? (o(), k(j, {
                   key: 0,
                   variant: "ghost",
                   size: "sm",
@@ -4994,14 +4994,14 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
                   style: { width: "100%", "margin-top": "var(--cg-space-2)" }
                 }, {
                   default: a(() => [
-                    h(" View all " + l(x.value.length) + " → ", 1)
+                    h(" View all " + l(S.value.length) + " → ", 1)
                   ]),
                   _: 1
                 })) : u("", !0)
               ]),
               _: 1
             }, 8, ["count", "initially-expanded"])) : u("", !0),
-            S.value.length ? u("", !0) : (o(), k(Te, {
+            x.value.length ? u("", !0) : (o(), k(Te, {
               key: 4,
               icon: "📭",
               message: i.value ? `No workflows match '${i.value}'` : "No workflows found in this environment."
@@ -5057,7 +5057,7 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
       return g.value.filter((D) => D.filename.toLowerCase().includes(T));
     }), b = O(
       () => N.value.filter((T) => T.type === "checkpoints")
-    ), S = O(
+    ), x = O(
       () => N.value.filter((T) => T.type === "loras")
     ), F = O(
       () => N.value.filter((T) => T.type !== "checkpoints" && T.type !== "loras")
@@ -5070,7 +5070,7 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
     function p(T) {
       s("navigate", "model-index");
     }
-    function x(T) {
+    function S(T) {
       s("navigate", "model-index");
     }
     function M(T) {
@@ -5170,13 +5170,13 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
               ]),
               _: 1
             }, 8, ["count"])) : u("", !0),
-            S.value.length ? (o(), k(he, {
+            x.value.length ? (o(), k(he, {
               key: 2,
               title: "LORAS",
-              count: S.value.length
+              count: x.value.length
             }, {
               default: a(() => [
-                (o(!0), n(G, null, Q(S.value, (U) => (o(), k(ye, {
+                (o(!0), n(G, null, Q(x.value, (U) => (o(), k(ye, {
                   key: U.hash || U.filename,
                   status: "synced"
                 }, {
@@ -5304,7 +5304,7 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
                     m(j, {
                       variant: "secondary",
                       size: "sm",
-                      onClick: (K) => x(U.filename)
+                      onClick: (K) => S(U.filename)
                     }, {
                       default: a(() => [...D[12] || (D[12] = [
                         h(" Search Workspace Index ", -1)
@@ -5390,7 +5390,7 @@ const nl = { class: "resolution-stepper" }, al = { class: "stepper-header" }, ll
     function b(M) {
       prompt("Enter model source URL:", M.source_url || "") !== null && alert("URL update not yet implemented");
     }
-    function S(M) {
+    function x(M) {
       const V = M, T = M.used_in_workflows || V.used_by || [], D = T && T.length > 0 ? `
 
 ⚠ WARNING: This model is used by ${T.length} workflow(s):
@@ -5412,7 +5412,7 @@ This will free ${C(V.size_mb || M.size)} of space.`
     function p() {
       alert("Download new model not yet implemented");
     }
-    async function x() {
+    async function S() {
       r.value = !0, f.value = null;
       try {
         s.value = await c(), console.log("Loaded models:", s.value), console.log("Filtered checkpoints:", E.value), console.log("Filtered loras:", w.value), console.log("Filtered other:", _.value);
@@ -5422,7 +5422,7 @@ This will free ${C(V.size_mb || M.size)} of space.`
         r.value = !1;
       }
     }
-    return we(x), (M, V) => (o(), n(G, null, [
+    return we(S), (M, V) => (o(), n(G, null, [
       m(be, null, {
         header: a(() => [
           m(ke, {
@@ -5490,7 +5490,7 @@ This will free ${C(V.size_mb || M.size)} of space.`
             key: 1,
             message: f.value,
             retry: !0,
-            onRetry: x
+            onRetry: S
           }, null, 8, ["message"])) : (o(), n(G, { key: 2 }, [
             s.value.length ? (o(), k(tt, {
               key: 0,
@@ -5575,7 +5575,7 @@ This will free ${C(V.size_mb || M.size)} of space.`
                     m(j, {
                       variant: "destructive",
                       size: "xs",
-                      onClick: (D) => S(T)
+                      onClick: (D) => x(T)
                     }, {
                       default: a(() => [...V[10] || (V[10] = [
                         h(" Delete ", -1)
@@ -5662,7 +5662,7 @@ This will free ${C(V.size_mb || M.size)} of space.`
                     m(j, {
                       variant: "destructive",
                       size: "xs",
-                      onClick: (D) => S(T)
+                      onClick: (D) => x(T)
                     }, {
                       default: a(() => [...V[15] || (V[15] = [
                         h(" Delete ", -1)
@@ -5736,7 +5736,7 @@ This will free ${C(V.size_mb || M.size)} of space.`
                     m(j, {
                       variant: "destructive",
                       size: "xs",
-                      onClick: (D) => S(T)
+                      onClick: (D) => x(T)
                     }, {
                       default: a(() => [...V[19] || (V[19] = [
                         h(" Delete ", -1)
@@ -5792,9 +5792,9 @@ This will free ${C(V.size_mb || M.size)} of space.`
       if (!d.value.trim()) return y.value.nodes;
       const p = d.value.toLowerCase();
       return y.value.nodes.filter(
-        (x) => {
+        (S) => {
           var M, V;
-          return x.name.toLowerCase().includes(p) || ((M = x.description) == null ? void 0 : M.toLowerCase().includes(p)) || ((V = x.repository) == null ? void 0 : V.toLowerCase().includes(p));
+          return S.name.toLowerCase().includes(p) || ((M = S.description) == null ? void 0 : M.toLowerCase().includes(p)) || ((V = S.repository) == null ? void 0 : V.toLowerCase().includes(p));
         }
       );
     }), w = O(
@@ -5822,22 +5822,22 @@ This will free ${C(V.size_mb || M.size)} of space.`
 This will download and install the node from its repository.`))
         try {
           g.value = !0;
-          const x = await s(p);
-          x.status === "success" ? (alert(`Node "${p}" installed successfully!`), await z()) : alert(`Failed to install node: ${x.message || "Unknown error"}`);
-        } catch (x) {
-          alert(`Error installing node: ${x instanceof Error ? x.message : "Unknown error"}`);
+          const S = await s(p);
+          S.status === "success" ? (alert(`Node "${p}" installed successfully!`), await z()) : alert(`Failed to install node: ${S.message || "Unknown error"}`);
+        } catch (S) {
+          alert(`Error installing node: ${S instanceof Error ? S.message : "Unknown error"}`);
         } finally {
           g.value = !1;
         }
     }
-    async function S(p) {
+    async function x(p) {
       if (confirm(`Check for updates for "${p}"?`))
         try {
           g.value = !0;
-          const x = await r(p);
-          x.status === "success" ? (alert(`Node "${p}" is up to date or has been updated!`), await z()) : alert(`Update check failed: ${x.message || "Unknown error"}`);
-        } catch (x) {
-          alert(`Error checking for updates: ${x instanceof Error ? x.message : "Unknown error"}`);
+          const S = await r(p);
+          S.status === "success" ? (alert(`Node "${p}" is up to date or has been updated!`), await z()) : alert(`Update check failed: ${S.message || "Unknown error"}`);
+        } catch (S) {
+          alert(`Error checking for updates: ${S instanceof Error ? S.message : "Unknown error"}`);
         } finally {
           g.value = !1;
         }
@@ -5848,10 +5848,10 @@ This will download and install the node from its repository.`))
 This will remove the node from this environment.`))
         try {
           g.value = !0;
-          const x = await f(p);
-          x.status === "success" ? (alert(`Node "${p}" uninstalled successfully!`), await z()) : alert(`Failed to uninstall node: ${x.message || "Unknown error"}`);
-        } catch (x) {
-          alert(`Error uninstalling node: ${x instanceof Error ? x.message : "Unknown error"}`);
+          const S = await f(p);
+          S.status === "success" ? (alert(`Node "${p}" uninstalled successfully!`), await z()) : alert(`Failed to uninstall node: ${S.message || "Unknown error"}`);
+        } catch (S) {
+          alert(`Error uninstalling node: ${S instanceof Error ? S.message : "Unknown error"}`);
         } finally {
           g.value = !1;
         }
@@ -5866,19 +5866,19 @@ This will remove the node from this environment.`))
         g.value = !1;
       }
     }
-    return we(z), (p, x) => (o(), n(G, null, [
+    return we(z), (p, S) => (o(), n(G, null, [
       m(be, null, {
         header: a(() => [
           m(ke, {
             title: "NODES (GIT-TRACKED)",
             "show-info": !0,
-            onInfoClick: x[0] || (x[0] = (M) => v.value = !0)
+            onInfoClick: S[0] || (S[0] = (M) => v.value = !0)
           })
         ]),
         search: a(() => [
           m(et, {
             modelValue: d.value,
-            "onUpdate:modelValue": x[1] || (x[1] = (M) => d.value = M),
+            "onUpdate:modelValue": S[1] || (S[1] = (M) => d.value = M),
             placeholder: "🔍 Search git-tracked custom nodes..."
           }, null, 8, ["modelValue"])
         ]),
@@ -5913,7 +5913,7 @@ This will remove the node from this environment.`))
                   key: M.name,
                   status: "synced"
                 }, {
-                  icon: a(() => [...x[4] || (x[4] = [
+                  icon: a(() => [...S[4] || (S[4] = [
                     h("📦", -1)
                   ])]),
                   title: a(() => [
@@ -5946,7 +5946,7 @@ This will remove the node from this environment.`))
                       size: "xs",
                       onClick: (V) => $(M.repository)
                     }, {
-                      default: a(() => [...x[5] || (x[5] = [
+                      default: a(() => [...S[5] || (S[5] = [
                         h(" View Repository ↗ ", -1)
                       ])]),
                       _: 1
@@ -5955,9 +5955,9 @@ This will remove the node from this environment.`))
                       key: 1,
                       variant: "secondary",
                       size: "xs",
-                      onClick: (V) => S(M.name)
+                      onClick: (V) => x(M.name)
                     }, {
-                      default: a(() => [...x[6] || (x[6] = [
+                      default: a(() => [...S[6] || (S[6] = [
                         h(" Check for Updates ", -1)
                       ])]),
                       _: 1
@@ -5968,7 +5968,7 @@ This will remove the node from this environment.`))
                       size: "xs",
                       onClick: (V) => F(M.name)
                     }, {
-                      default: a(() => [...x[7] || (x[7] = [
+                      default: a(() => [...S[7] || (S[7] = [
                         h(" Uninstall ", -1)
                       ])]),
                       _: 1
@@ -5991,13 +5991,13 @@ This will remove the node from this environment.`))
                   key: M.name,
                   status: "missing"
                 }, {
-                  icon: a(() => [...x[8] || (x[8] = [
+                  icon: a(() => [...S[8] || (S[8] = [
                     h("⚠", -1)
                   ])]),
                   title: a(() => [
                     h(l(M.name), 1)
                   ]),
-                  subtitle: a(() => [...x[9] || (x[9] = [
+                  subtitle: a(() => [...S[9] || (S[9] = [
                     e("span", { style: { color: "var(--cg-color-warning)" } }, "Not installed", -1)
                   ])]),
                   details: a(() => [
@@ -6023,7 +6023,7 @@ This will remove the node from this environment.`))
                       size: "sm",
                       onClick: (V) => b(M.name)
                     }, {
-                      default: a(() => [...x[10] || (x[10] = [
+                      default: a(() => [...S[10] || (S[10] = [
                         h(" Install ", -1)
                       ])]),
                       _: 1
@@ -6034,7 +6034,7 @@ This will remove the node from this environment.`))
                       size: "sm",
                       onClick: (V) => $(M.repository)
                     }, {
-                      default: a(() => [...x[11] || (x[11] = [
+                      default: a(() => [...S[11] || (S[11] = [
                         h(" View Repository ↗ ", -1)
                       ])]),
                       _: 1
@@ -6057,9 +6057,9 @@ This will remove the node from this environment.`))
       m(Ve, {
         show: v.value,
         title: "About Git-Tracked Nodes",
-        onClose: x[3] || (x[3] = (M) => v.value = !1)
+        onClose: S[3] || (S[3] = (M) => v.value = !1)
       }, {
-        content: a(() => [...x[12] || (x[12] = [
+        content: a(() => [...S[12] || (S[12] = [
           e("p", null, " These are custom nodes tracked in your git repository. They are version-controlled and synced across environments. ", -1),
           e("p", { style: { "margin-top": "var(--cg-space-2)" } }, [
             e("strong", null, "Installed:"),
@@ -6072,9 +6072,9 @@ This will remove the node from this environment.`))
         actions: a(() => [
           m(j, {
             variant: "primary",
-            onClick: x[2] || (x[2] = (M) => v.value = !1)
+            onClick: S[2] || (S[2] = (M) => v.value = !1)
           }, {
-            default: a(() => [...x[13] || (x[13] = [
+            default: a(() => [...S[13] || (S[13] = [
               h(" Got it ", -1)
             ])]),
             _: 1
@@ -6422,7 +6422,7 @@ This will remove the node from this environment.`))
       updateRemoteUrl: f,
       fetchRemote: y,
       getRemoteSyncStatus: g
-    } = _e(), i = I([]), d = I(null), v = I({}), E = I(!1), w = I(null), _ = I(""), C = I(!1), N = I(null), $ = I(!1), b = I("add"), S = I({
+    } = _e(), i = I([]), d = I(null), v = I({}), E = I(!1), w = I(null), _ = I(""), C = I(!1), N = I(null), $ = I(!1), b = I("add"), x = I({
       name: "",
       fetchUrl: "",
       pushUrl: ""
@@ -6453,12 +6453,12 @@ This will remove the node from this environment.`))
         E.value = !1;
       }
     }
-    function x() {
-      b.value = "add", S.value = { name: "", fetchUrl: "", pushUrl: "" }, $.value = !0;
+    function S() {
+      b.value = "add", x.value = { name: "", fetchUrl: "", pushUrl: "" }, $.value = !0;
     }
     function M(B) {
       const R = i.value.find((X) => X.name === B);
-      R && (b.value = "edit", S.value = {
+      R && (b.value = "edit", x.value = {
         name: R.name,
         fetchUrl: R.fetch_url,
         pushUrl: R.push_url
@@ -6472,7 +6472,7 @@ This will remove the node from this environment.`))
       }
     }
     function T() {
-      $.value = !1, S.value = { name: "", fetchUrl: "", pushUrl: "" };
+      $.value = !1, x.value = { name: "", fetchUrl: "", pushUrl: "" };
     }
     async function D(B) {
       N.value = B;
@@ -6510,7 +6510,7 @@ This will remove the node from this environment.`))
                 key: 0,
                 variant: "primary",
                 size: "sm",
-                onClick: x
+                onClick: S
               }, {
                 default: a(() => [...R[3] || (R[3] = [
                   h(" + Add Remote ", -1)
@@ -6542,9 +6542,9 @@ This will remove the node from this environment.`))
             $.value ? (o(), k(yc, {
               key: 0,
               mode: b.value,
-              "remote-name": S.value.name,
-              "fetch-url": S.value.fetchUrl,
-              "push-url": S.value.pushUrl,
+              "remote-name": x.value.name,
+              "fetch-url": x.value.fetchUrl,
+              "push-url": x.value.pushUrl,
               onSubmit: V,
               onCancel: T
             }, null, 8, ["mode", "remote-name", "fetch-url", "push-url"])) : u("", !0),
@@ -6588,7 +6588,7 @@ This will remove the node from this environment.`))
               actions: a(() => [
                 m(j, {
                   variant: "primary",
-                  onClick: x
+                  onClick: S
                 }, {
                   default: a(() => [...R[4] || (R[4] = [
                     h(" Add Your First Remote ", -1)
@@ -6713,7 +6713,7 @@ This will remove the node from this environment.`))
     function b() {
       i.value && (d.value = i.value.civitai_api_key || "", v.value = i.value.huggingface_token || "", E.value = i.value.auto_sync_models, w.value = i.value.confirm_destructive, y.value = null);
     }
-    function S(F) {
+    function x(F) {
       localStorage.setItem("ComfyGit.Settings.AutoRefresh", String(F)), console.log("[ComfyGit] Auto-refresh setting saved:", F);
     }
     return we(N), (F, z) => (o(), k(be, null, {
@@ -6758,7 +6758,7 @@ This will remove the node from this environment.`))
         }, null, 8, ["message"])) : (o(), n(G, { key: 2 }, [
           m(he, { title: "WORKSPACE PATHS" }, {
             default: a(() => {
-              var p, x;
+              var p, S;
               return [
                 e("div", Lc, [
                   e("div", Tc, [
@@ -6769,7 +6769,7 @@ This will remove the node from this environment.`))
                   e("div", Nc, [
                     z[9] || (z[9] = e("div", { class: "path-label" }, "Models Directory", -1)),
                     z[10] || (z[10] = e("div", { class: "path-description" }, "Where model files are indexed and stored", -1)),
-                    e("div", Dc, l(((x = g.value) == null ? void 0 : x.models_path) || "Not configured"), 1)
+                    e("div", Dc, l(((S = g.value) == null ? void 0 : S.models_path) || "Not configured"), 1)
                   ])
                 ])
               ];
@@ -6827,7 +6827,7 @@ This will remove the node from this environment.`))
                       modelValue: _.value,
                       "onUpdate:modelValue": [
                         z[2] || (z[2] = (p) => _.value = p),
-                        S
+                        x
                       ]
                     }, null, 8, ["modelValue"])
                   ]),
@@ -7204,8 +7204,8 @@ This will remove the node from this environment.`))
       const z = i.value.toLowerCase();
       return f.value.filter(
         (p) => {
-          var x;
-          return p.name.toLowerCase().includes(z) || ((x = p.current_branch) == null ? void 0 : x.toLowerCase().includes(z));
+          var S;
+          return p.name.toLowerCase().includes(z) || ((S = p.current_branch) == null ? void 0 : S.toLowerCase().includes(z));
         }
       );
     });
@@ -7228,7 +7228,7 @@ This will remove the node from this environment.`))
     function b(z) {
       s("viewDetails", z);
     }
-    function S(z) {
+    function x(z) {
       confirm(`Delete environment "${z}"?
 
 This action cannot be undone.`) && s("delete", z);
@@ -7244,7 +7244,7 @@ This action cannot be undone.`) && s("delete", z);
       }
     }
     return we(F), (z, p) => {
-      const x = ao("SectionGroup");
+      const S = ao("SectionGroup");
       return o(), n(G, null, [
         m(be, null, {
           header: a(() => [
@@ -7378,7 +7378,7 @@ This action cannot be undone.`) && s("delete", z);
                 ]),
                 _: 1
               })) : u("", !0),
-              _.value.length ? (o(), k(x, {
+              _.value.length ? (o(), k(S, {
                 key: 2,
                 title: "ENVIRONMENTS",
                 count: _.value.length
@@ -7430,7 +7430,7 @@ This action cannot be undone.`) && s("delete", z);
                         key: 1,
                         variant: "ghost",
                         size: "sm",
-                        onClick: (V) => S(M.name),
+                        onClick: (V) => x(M.name),
                         title: "Delete environment"
                       }, {
                         default: a(() => [
@@ -7876,8 +7876,8 @@ This action cannot be undone.`) && s("delete", z);
       return b < 1024 ? `${b} B` : b < 1024 * 1024 ? `${(b / 1024).toFixed(1)} KB` : b < 1024 * 1024 * 1024 ? `${(b / (1024 * 1024)).toFixed(1)} MB` : `${(b / (1024 * 1024 * 1024)).toFixed(1)} GB`;
     });
     function v(b) {
-      var S;
-      y.value++, (S = b.dataTransfer) != null && S.types.includes("Files") && (r.value = !0);
+      var x;
+      y.value++, (x = b.dataTransfer) != null && x.types.includes("Files") && (r.value = !0);
     }
     function E(b) {
       b.dataTransfer && (b.dataTransfer.dropEffect = "copy");
@@ -7888,8 +7888,8 @@ This action cannot be undone.`) && s("delete", z);
     function _(b) {
       var F;
       y.value = 0, r.value = !1;
-      const S = (F = b.dataTransfer) == null ? void 0 : F.files;
-      S && S.length > 0 && N(S[0]);
+      const x = (F = b.dataTransfer) == null ? void 0 : F.files;
+      x && x.length > 0 && N(x[0]);
     }
     function C(b) {
       b.length > 0 && N(b[0]);
@@ -7900,7 +7900,7 @@ This action cannot be undone.`) && s("delete", z);
     function $() {
       f.value = null, s("clear");
     }
-    return (b, S) => (o(), n("div", {
+    return (b, x) => (o(), n("div", {
       class: Z(["file-drop-zone", { "drop-active": r.value, "has-file": g.value }]),
       onDragenter: pe(v, ["prevent"]),
       onDragover: pe(E, ["prevent"]),
@@ -7909,7 +7909,7 @@ This action cannot be undone.`) && s("delete", z);
     }, [
       g.value ? (o(), n("div", _u, [
         e("div", $u, [
-          S[1] || (S[1] = e("div", { class: "file-icon" }, "📦", -1)),
+          x[1] || (x[1] = e("div", { class: "file-icon" }, "📦", -1)),
           e("div", Cu, [
             e("div", xu, l(i.value), 1),
             e("div", Su, l(d.value), 1)
@@ -7921,7 +7921,7 @@ This action cannot be undone.`) && s("delete", z);
           onClick: $,
           title: "Remove file"
         }, {
-          default: a(() => [...S[2] || (S[2] = [
+          default: a(() => [...x[2] || (x[2] = [
             e("svg", {
               width: "14",
               height: "14",
@@ -7934,7 +7934,7 @@ This action cannot be undone.`) && s("delete", z);
           _: 1
         })
       ])) : (o(), n("div", pu, [
-        S[0] || (S[0] = e("div", { class: "drop-zone-icon" }, [
+        x[0] || (x[0] = e("div", { class: "drop-zone-icon" }, [
           e("svg", {
             width: "48",
             height: "48",
@@ -8315,7 +8315,7 @@ This action cannot be undone.`) && s("delete", z);
             { message: "Finalizing...", detail: "Applying git history and configuration", percent: 95 }
           ];
           for (const b of $)
-            i.value = b, await new Promise((S) => setTimeout(S, 800));
+            i.value = b, await new Promise((x) => setTimeout(x, 800));
           i.value = { message: "Complete!", detail: "", percent: 100 }, await new Promise((b) => setTimeout(b, 500)), f.value = !0, y.value = `Successfully imported ${d.value.workflows.length} workflows, ${d.value.models.length} models, and ${d.value.nodes.length} custom nodes.`;
         } catch ($) {
           f.value = !1, y.value = $ instanceof Error ? $.message : "Unknown error occurred during import";
@@ -8408,15 +8408,15 @@ This action cannot be undone.`) && s("delete", z);
           }, null, 8, ["source-environment", "workflows", "models", "nodes", "git-branch", "git-commit"]),
           m(pm, {
             "conflict-mode": g.value.conflictMode,
-            "onUpdate:conflictMode": b[0] || (b[0] = (S) => g.value.conflictMode = S),
+            "onUpdate:conflictMode": b[0] || (b[0] = (x) => g.value.conflictMode = x),
             "include-workflows": g.value.includeWorkflows,
-            "onUpdate:includeWorkflows": b[1] || (b[1] = (S) => g.value.includeWorkflows = S),
+            "onUpdate:includeWorkflows": b[1] || (b[1] = (x) => g.value.includeWorkflows = x),
             "include-models": g.value.includeModels,
-            "onUpdate:includeModels": b[2] || (b[2] = (S) => g.value.includeModels = S),
+            "onUpdate:includeModels": b[2] || (b[2] = (x) => g.value.includeModels = x),
             "include-nodes": g.value.includeNodes,
-            "onUpdate:includeNodes": b[3] || (b[3] = (S) => g.value.includeNodes = S),
+            "onUpdate:includeNodes": b[3] || (b[3] = (x) => g.value.includeNodes = x),
             "include-git-history": g.value.includeGitHistory,
-            "onUpdate:includeGitHistory": b[4] || (b[4] = (S) => g.value.includeGitHistory = S)
+            "onUpdate:includeGitHistory": b[4] || (b[4] = (x) => g.value.includeGitHistory = x)
           }, null, 8, ["conflict-mode", "include-workflows", "include-models", "include-nodes", "include-git-history"]),
           !g.value.includeModels && d.value.models.length > 0 ? (o(), k(qe, {
             key: 0,
@@ -8910,16 +8910,16 @@ This action cannot be undone.`) && s("delete", z);
       if (!(w.value && !i.value) && !(!v.value || !y.value.trim() || g.value)) {
         g.value = !0, d.value = null;
         try {
-          const S = await f(y.value.trim(), i.value);
-          S.status === "success" ? (d.value = {
+          const x = await f(y.value.trim(), i.value);
+          x.status === "success" ? (d.value = {
             type: "success",
-            message: `Committed: ${((N = S.summary) == null ? void 0 : N.new) || 0} new, ${(($ = S.summary) == null ? void 0 : $.modified) || 0} modified, ${((b = S.summary) == null ? void 0 : b.deleted) || 0} deleted`
-          }, y.value = "", i.value = !1, setTimeout(() => r("committed"), 1e3)) : S.status === "no_changes" ? d.value = { type: "error", message: "No changes to commit" } : S.status === "blocked" ? d.value = {
+            message: `Committed: ${((N = x.summary) == null ? void 0 : N.new) || 0} new, ${(($ = x.summary) == null ? void 0 : $.modified) || 0} modified, ${((b = x.summary) == null ? void 0 : b.deleted) || 0} deleted`
+          }, y.value = "", i.value = !1, setTimeout(() => r("committed"), 1e3)) : x.status === "no_changes" ? d.value = { type: "error", message: "No changes to commit" } : x.status === "blocked" ? d.value = {
             type: "error",
             message: 'Commit blocked - enable "Allow issues" to force commit'
-          } : d.value = { type: "error", message: S.message || "Commit failed" };
-        } catch (S) {
-          d.value = { type: "error", message: S instanceof Error ? S.message : "Commit failed" };
+          } : d.value = { type: "error", message: x.message || "Commit failed" };
+        } catch (x) {
+          d.value = { type: "error", message: x instanceof Error ? x.message : "Commit failed" };
         } finally {
           g.value = !1;
         }
@@ -9498,7 +9498,7 @@ const Lf = { class: "comfygit-panel" }, Tf = { class: "panel-header" }, Rf = { c
       switchEnvironment: E,
       getSwitchProgress: w,
       syncEnvironmentManually: _
-    } = _e(), C = Mf(), N = I(null), $ = I([]), b = I([]), S = I([]), F = O(() => S.value.find((W) => W.is_current)), z = I(!1), p = I(null), x = I(null), M = I(!1), V = I(!1), T = I(!1), D = I(""), U = I({ state: "idle", progress: 0, message: "" });
+    } = _e(), C = Mf(), N = I(null), $ = I([]), b = I([]), x = I([]), F = O(() => x.value.find((W) => W.is_current)), z = I(!1), p = I(null), S = I(null), M = I(!1), V = I(!1), T = I(!1), D = I(""), U = I({ state: "idle", progress: 0, message: "" });
     let K = null, B = null;
     const R = I("status"), X = I("this-env");
     function H(W, L) {
@@ -9551,7 +9551,7 @@ const Lf = { class: "comfygit-panel" }, Tf = { class: "panel-header" }, Rf = { c
           y(),
           v()
         ]);
-        N.value = W, $.value = L.commits, b.value = ie.branches, S.value = ge, s("statusUpdate", W);
+        N.value = W, $.value = L.commits, b.value = ie.branches, x.value = ge, s("statusUpdate", W);
       } catch (W) {
         p.value = W instanceof Error ? W.message : "Failed to load status", N.value = null, $.value = [], b.value = [];
       } finally {
@@ -9559,11 +9559,11 @@ const Lf = { class: "comfygit-panel" }, Tf = { class: "panel-header" }, Rf = { c
       }
     }
     function P(W) {
-      x.value = W;
+      S.value = W;
     }
     async function A(W) {
       var ie;
-      x.value = null;
+      S.value = null;
       const L = N.value && (N.value.workflows.new.length > 0 || N.value.workflows.modified.length > 0 || N.value.workflows.deleted.length > 0 || N.value.has_changes);
       me.value = {
         title: L ? "Checkout with Uncommitted Changes" : "Checkout Commit",
@@ -9602,7 +9602,7 @@ const Lf = { class: "comfygit-panel" }, Tf = { class: "panel-header" }, Rf = { c
       xe(L), ie.status === "success" ? (ce(`Branch "${W}" created`, "success"), await oe()) : ce(ie.message || "Failed to create branch", "error");
     }
     async function Ee(W) {
-      x.value = null;
+      S.value = null;
       const L = prompt("Enter branch name:");
       if (L) {
         const ie = ce(`Creating branch ${L}...`, "info", 0), ge = await i(L, W.hash);
@@ -9879,10 +9879,10 @@ const Lf = { class: "comfygit-panel" }, Tf = { class: "panel-header" }, Rf = { c
             ], 64))
           ])
         ]),
-        x.value ? (o(), k(nv, {
+        S.value ? (o(), k(nv, {
           key: 0,
-          commit: x.value,
-          onClose: L[21] || (L[21] = (ne) => x.value = null),
+          commit: S.value,
+          onClose: L[21] || (L[21] = (ne) => S.value = null),
           onCheckout: A,
           onCreateBranch: Ee
         }, null, 8, ["commit"])) : u("", !0),
@@ -9956,7 +9956,7 @@ const Lf = { class: "comfygit-panel" }, Tf = { class: "panel-header" }, Rf = { c
             e("div", Jf, [
               L[39] || (L[39] = e("p", { class: "dialog-message" }, "Select environment to switch to:", -1)),
               e("div", Xf, [
-                (o(!0), n(G, null, Q(S.value, (ne) => (o(), n("div", {
+                (o(!0), n(G, null, Q(x.value, (ne) => (o(), n("div", {
                   key: ne.name,
                   class: Z(["env-item", { current: ne.is_current }])
                 }, [
@@ -9972,7 +9972,7 @@ const Lf = { class: "comfygit-panel" }, Tf = { class: "panel-header" }, Rf = { c
                   ne.is_current ? u("", !0) : (o(), n("button", {
                     key: 0,
                     class: "switch-btn",
-                    onClick: (fh) => We(ne.name)
+                    onClick: (gh) => We(ne.name)
                   }, " SWITCH ", 8, ng))
                 ], 2))), 128))
               ])
@@ -10097,31 +10097,31 @@ const Lf = { class: "comfygit-panel" }, Tf = { class: "panel-header" }, Rf = { c
       ])) : u("", !0)
     ], 2));
   }
-}), at = /* @__PURE__ */ J(Eg, [["__scopeId", "data-v-2110df65"]]), zg = { class: "queue-title" }, Mg = { class: "count" }, Lg = { class: "queue-actions" }, Tg = {
+}), at = /* @__PURE__ */ J(Eg, [["__scopeId", "data-v-2110df65"]]), zg = { class: "queue-title" }, Mg = { class: "count" }, Lg = { class: "queue-actions" }, Tg = { class: "action-label" }, Rg = {
   key: 0,
   class: "overall-progress"
-}, Rg = { class: "progress-bar" }, Ng = {
+}, Ng = { class: "progress-bar" }, Dg = {
   key: 0,
   class: "current-mini"
-}, Dg = { class: "filename" }, Og = { class: "speed" }, Ug = {
+}, Og = { class: "filename" }, Ug = { class: "speed" }, Bg = {
   key: 1,
   class: "queue-content"
-}, Bg = {
+}, Pg = {
   key: 0,
   class: "section"
-}, Pg = {
+}, Vg = {
   key: 1,
   class: "section"
-}, Vg = { class: "section-header" }, Ag = { class: "section-label paused" }, Fg = { class: "items-list" }, Wg = {
+}, Ag = { class: "section-header" }, Fg = { class: "section-label paused" }, Wg = { class: "items-list" }, Gg = {
   key: 2,
   class: "section"
-}, Gg = { class: "section-header" }, jg = { class: "section-label" }, Hg = { class: "items-list" }, Kg = {
+}, jg = { class: "section-header" }, Hg = { class: "section-label" }, Kg = { class: "items-list" }, qg = {
   key: 3,
   class: "section"
-}, qg = { class: "section-header" }, Jg = { class: "section-label" }, Xg = { class: "items-list" }, Yg = {
+}, Jg = { class: "section-header" }, Xg = { class: "section-label" }, Yg = { class: "items-list" }, Qg = {
   key: 4,
   class: "section"
-}, Qg = { class: "section-header" }, Zg = { class: "section-label failed" }, eh = { class: "items-list" }, th = /* @__PURE__ */ q({
+}, Zg = { class: "section-header" }, eh = { class: "section-label failed" }, th = { class: "items-list" }, oh = /* @__PURE__ */ q({
   __name: "ModelDownloadQueue",
   setup(t) {
     const {
@@ -10140,12 +10140,12 @@ const Lf = { class: "comfygit-panel" }, Tf = { class: "panel-header" }, Rf = { c
       removeItem: C,
       clearCompleted: N
     } = St(), $ = I(!1), b = O(() => {
-      var x;
+      var S;
       if (c.items.length === 0) return 0;
-      const z = f.value.length, p = ((x = s.value) == null ? void 0 : x.progress) || 0;
+      const z = f.value.length, p = ((S = s.value) == null ? void 0 : S.progress) || 0;
       return Math.round((z + p / 100) / c.items.length * 100);
     });
-    function S(z) {
+    function x(z) {
       v(z);
     }
     function F(z) {
@@ -10158,109 +10158,106 @@ const Lf = { class: "comfygit-panel" }, Tf = { class: "panel-header" }, Rf = { c
       }, [
         e("div", {
           class: "queue-header",
-          onClick: p[1] || (p[1] = (x) => $.value = !$.value)
+          onClick: p[0] || (p[0] = (S) => $.value = !$.value)
         }, [
           e("div", zg, [
-            p[5] || (p[5] = e("span", { class: "icon" }, "↓", -1)),
-            p[6] || (p[6] = e("span", { class: "title" }, "Downloads", -1)),
+            p[4] || (p[4] = e("span", { class: "icon" }, "↓", -1)),
+            p[5] || (p[5] = e("span", { class: "title" }, "Downloads", -1)),
             e("span", Mg, "(" + l(re(d)) + "/" + l(re(c).items.length) + ")", 1)
           ]),
           e("div", Lg, [
-            e("button", {
-              class: "action-btn",
-              onClick: p[0] || (p[0] = pe((x) => $.value = !$.value, ["stop"]))
-            }, l($.value ? "−" : "+"), 1)
+            e("span", Tg, l($.value ? "minimize" : "expand"), 1)
           ])
         ]),
-        $.value ? (o(), n("div", Ug, [
-          re(s) ? (o(), n("div", Bg, [
-            p[7] || (p[7] = e("div", { class: "section-label" }, "Downloading", -1)),
+        $.value ? (o(), n("div", Bg, [
+          re(s) ? (o(), n("div", Pg, [
+            p[6] || (p[6] = e("div", { class: "section-label" }, "Downloading", -1)),
             m(at, {
               item: re(s),
-              onCancel: p[2] || (p[2] = (x) => S(re(s).id))
+              onCancel: p[1] || (p[1] = (S) => x(re(s).id))
             }, null, 8, ["item"])
           ])) : u("", !0),
-          re(g).length > 0 ? (o(), n("div", Pg, [
-            e("div", Vg, [
-              e("span", Ag, "Paused (" + l(re(g).length) + ")", 1),
+          re(g).length > 0 ? (o(), n("div", Vg, [
+            e("div", Ag, [
+              e("span", Fg, "Paused (" + l(re(g).length) + ")", 1),
               e("button", {
                 class: "resume-all-btn",
-                onClick: p[3] || (p[3] = //@ts-ignore
-                (...x) => re(_) && re(_)(...x))
+                onClick: p[2] || (p[2] = //@ts-ignore
+                (...S) => re(_) && re(_)(...S))
               }, "Resume All")
             ]),
-            e("div", Fg, [
-              (o(!0), n(G, null, Q(re(g), (x) => (o(), k(at, {
-                key: x.id,
-                item: x,
-                onResume: (M) => re(w)(x.id),
-                onRemove: (M) => re(C)(x.id)
+            e("div", Wg, [
+              (o(!0), n(G, null, Q(re(g), (S) => (o(), k(at, {
+                key: S.id,
+                item: S,
+                onResume: (M) => re(w)(S.id),
+                onRemove: (M) => re(C)(S.id)
               }, null, 8, ["item", "onResume", "onRemove"]))), 128))
             ])
           ])) : u("", !0),
-          re(r).length > 0 ? (o(), n("div", Wg, [
-            e("div", Gg, [
-              e("span", jg, "Queued (" + l(re(r).length) + ")", 1)
+          re(r).length > 0 ? (o(), n("div", Gg, [
+            e("div", jg, [
+              e("span", Hg, "Queued (" + l(re(r).length) + ")", 1)
             ]),
-            e("div", Hg, [
-              (o(!0), n(G, null, Q(re(r), (x) => (o(), k(at, {
-                key: x.id,
-                item: x,
-                onCancel: (M) => S(x.id)
+            e("div", Kg, [
+              (o(!0), n(G, null, Q(re(r), (S) => (o(), k(at, {
+                key: S.id,
+                item: S,
+                onCancel: (M) => x(S.id)
               }, null, 8, ["item", "onCancel"]))), 128))
             ])
           ])) : u("", !0),
-          re(f).length > 0 ? (o(), n("div", Kg, [
-            e("div", qg, [
-              e("span", Jg, "Completed (" + l(re(f).length) + ")", 1),
+          re(f).length > 0 ? (o(), n("div", qg, [
+            e("div", Jg, [
+              e("span", Xg, "Completed (" + l(re(f).length) + ")", 1),
               e("button", {
                 class: "clear-btn",
-                onClick: p[4] || (p[4] = //@ts-ignore
-                (...x) => re(N) && re(N)(...x))
+                onClick: p[3] || (p[3] = //@ts-ignore
+                (...S) => re(N) && re(N)(...S))
               }, "Clear")
             ]),
-            e("div", Xg, [
-              (o(!0), n(G, null, Q(re(f).slice(0, 3), (x) => (o(), k(at, {
-                key: x.id,
-                item: x,
-                onRemove: (M) => re(C)(x.id)
+            e("div", Yg, [
+              (o(!0), n(G, null, Q(re(f).slice(0, 3), (S) => (o(), k(at, {
+                key: S.id,
+                item: S,
+                onRemove: (M) => re(C)(S.id)
               }, null, 8, ["item", "onRemove"]))), 128))
             ])
           ])) : u("", !0),
-          re(y).length > 0 ? (o(), n("div", Yg, [
-            e("div", Qg, [
-              e("span", Zg, "Failed (" + l(re(y).length) + ")", 1)
+          re(y).length > 0 ? (o(), n("div", Qg, [
+            e("div", Zg, [
+              e("span", eh, "Failed (" + l(re(y).length) + ")", 1)
             ]),
-            e("div", eh, [
-              (o(!0), n(G, null, Q(re(y), (x) => (o(), k(at, {
-                key: x.id,
-                item: x,
-                onRetry: (M) => re(E)(x.id),
-                onRemove: (M) => re(C)(x.id)
+            e("div", th, [
+              (o(!0), n(G, null, Q(re(y), (S) => (o(), k(at, {
+                key: S.id,
+                item: S,
+                onRetry: (M) => re(E)(S.id),
+                onRemove: (M) => re(C)(S.id)
               }, null, 8, ["item", "onRetry", "onRemove"]))), 128))
             ])
           ])) : u("", !0)
-        ])) : (o(), n("div", Tg, [
-          e("div", Rg, [
+        ])) : (o(), n("div", Rg, [
+          e("div", Ng, [
             e("div", {
               class: "progress-fill",
               style: Xe({ width: `${b.value}%` })
             }, null, 4)
           ]),
-          re(s) ? (o(), n("div", Ng, [
-            e("span", Dg, l(re(s).filename), 1),
-            e("span", Og, l(F(re(s).speed)), 1)
+          re(s) ? (o(), n("div", Dg, [
+            e("span", Og, l(re(s).filename), 1),
+            e("span", Ug, l(F(re(s).speed)), 1)
           ])) : u("", !0)
         ]))
       ], 2)) : u("", !0)
     ]));
   }
-}), oh = /* @__PURE__ */ J(th, [["__scopeId", "data-v-8185bb95"]]), sh = '@import"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap";[data-comfygit-theme=comfy]{--cg-font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;--cg-font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;--cg-font-mono: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;--cg-font-size-xs: 14.3px;--cg-font-size-sm: 16.9px;--cg-font-size-base: 18.2px;--cg-font-size-lg: 20.8px;--cg-font-size-xl: 23.4px;--cg-font-size-2xl: 26px;--cg-font-weight-normal: 400;--cg-font-weight-medium: 500;--cg-font-weight-semibold: 600;--cg-font-weight-bold: 700;--cg-panel-width: 884px;--cg-space-1: 5.2px;--cg-space-2: 10.4px;--cg-space-3: 15.6px;--cg-space-4: 20.8px;--cg-space-5: 26px;--cg-space-6: 31.2px;--cg-space-8: 41.6px;--cg-space-10: 52px;--cg-space-12: 62.4px;--cg-letter-spacing-normal: 0;--cg-letter-spacing-wide: .025em;--cg-transition-fast: .15s ease;--cg-transition-base: .2s ease;--cg-transition-slow: .3s ease;--cg-color-bg-primary: #2d2e32;--cg-color-bg-secondary: #262729;--cg-color-bg-tertiary: #202121;--cg-color-bg-hover: #3c3d42;--cg-color-bg-overlay: rgba(0, 0, 0, .75);--cg-color-text-primary: #ffffff;--cg-color-text-secondary: #c5c5c5;--cg-color-text-muted: #8a8a8a;--cg-color-text-inverse: #000000;--cg-color-border: #55565e;--cg-color-border-subtle: #3c3d42;--cg-color-border-strong: #828282;--cg-color-accent: #31b9f4;--cg-color-accent-hover: #0b8ce9;--cg-color-accent-muted: rgba(49, 185, 244, .15);--cg-color-success: #47e469;--cg-color-success-muted: rgba(71, 228, 105, .15);--cg-color-warning: #fcbf64;--cg-color-warning-muted: rgba(252, 191, 100, .15);--cg-color-error: #dd424e;--cg-color-error-muted: rgba(221, 66, 78, .15);--cg-color-info: #31b9f4;--cg-color-info-muted: rgba(49, 185, 244, .15);--cg-radius-none: 0;--cg-radius-sm: 4px;--cg-radius-md: 6px;--cg-radius-lg: 8px;--cg-radius-xl: 12px;--cg-radius-2xl: 16px;--cg-radius-full: 9999px;--cg-shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);--cg-shadow-md: 0 2px 8px rgba(0, 0, 0, .4);--cg-shadow-lg: 0 4px 16px rgba(0, 0, 0, .5);--cg-shadow-xl: 0 8px 32px rgba(0, 0, 0, .6);--cg-btn-gradient-start: #31b9f4;--cg-btn-gradient-end: #0b8ce9;--cg-btn-shadow-inset: inset 0 1px 0 rgba(255, 255, 255, .1);--cg-decoration-title-prefix: "";--cg-decoration-label-prefix: "";--cg-decoration-label-suffix: "";--cg-decoration-status-animation: none;--cg-decoration-status-shape: circle;--cg-shadow-accent: rgba(49, 185, 244, .3);--cg-shadow-accent-strong: rgba(49, 185, 244, .5);--cg-shadow-error: rgba(221, 66, 78, .3);--cg-shadow-success: rgba(71, 228, 105, .3);--cg-text-shadow-title: none;--cg-text-shadow-accent: none}[data-comfygit-theme=comfy] .comfygit-panel{box-shadow:var(--cg-shadow-lg);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=comfy] .sidebar{background:var(--cg-color-bg-secondary);border-right:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=comfy] .sidebar-item{border-radius:var(--cg-radius-md);transition:background var(--cg-transition-fast),color var(--cg-transition-fast)}[data-comfygit-theme=comfy] .sidebar-item:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .sidebar-item.active{background:var(--cg-color-accent-muted);color:var(--cg-color-accent);font-weight:var(--cg-font-weight-medium)}[data-comfygit-theme=comfy] button{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .icon-btn{border-radius:var(--cg-radius-md);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .icon-btn:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .status-grid{border-radius:var(--cg-radius-lg);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .issue-card{border-radius:var(--cg-radius-lg);box-shadow:var(--cg-shadow-sm);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .issue-card:hover{box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=comfy] .issue-card--warning,[data-comfygit-theme=comfy] .issue-card--error,[data-comfygit-theme=comfy] .issue-card--info{border-left-width:4px}[data-comfygit-theme=comfy] .branch-indicator{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .branch-indicator__name{font-weight:var(--cg-font-weight-semibold)}[data-comfygit-theme=comfy] .commit-list{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .commit-item{transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .commit-item:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .branch-item,[data-comfygit-theme=comfy] .branch-list-item{border-radius:var(--cg-radius-md);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .branch-item:hover,[data-comfygit-theme=comfy] .branch-list-item:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .branch-list{border-radius:var(--cg-radius-md);overflow:hidden}[data-comfygit-theme=comfy] .branch-create-form,[data-comfygit-theme=comfy] .create-form{border-radius:var(--cg-radius-md);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .text-input{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] input[type=text],[data-comfygit-theme=comfy] textarea{border-radius:var(--cg-radius-md);border:1px solid var(--cg-color-border);transition:border-color var(--cg-transition-fast),box-shadow var(--cg-transition-fast)}[data-comfygit-theme=comfy] input[type=text]:focus,[data-comfygit-theme=comfy] textarea:focus{border-color:var(--cg-color-accent);box-shadow:0 0 0 3px var(--cg-color-accent-muted)}[data-comfygit-theme=comfy] .dialog-content{border-radius:var(--cg-radius-xl);box-shadow:var(--cg-shadow-xl);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=comfy] .status-badge{border-radius:var(--cg-radius-sm);font-size:var(--cg-font-size-xs);font-weight:var(--cg-font-weight-medium);padding:2px 8px}[data-comfygit-theme=comfy] .warning-box{border-radius:var(--cg-radius-md);border-left:4px solid var(--cg-color-warning);background:var(--cg-color-warning-muted)}[data-comfygit-theme=comfy] .env-switcher-btn{border-radius:var(--cg-radius-md);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .env-switcher-btn:hover{background:var(--cg-color-bg-hover);transform:translateY(-1px);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .section-title{font-weight:var(--cg-font-weight-semibold);letter-spacing:var(--cg-letter-spacing-wide);color:var(--cg-color-text-secondary)}[data-comfygit-theme=comfy] .commit-hash,[data-comfygit-theme=comfy] .branch-name-mono,[data-comfygit-theme=comfy] .file-path{font-family:var(--cg-font-mono)}[data-comfygit-theme=comfy] .settings-section{border-radius:var(--cg-radius-md);background:var(--cg-color-bg-secondary)}[data-comfygit-theme=comfy] .setting-row{transition:background var(--cg-transition-fast)}[data-comfygit-theme=comfy] .setting-row:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .toggle-slider{border-radius:var(--cg-radius-full)}[data-comfygit-theme=comfy] .commit-hash{color:var(--cg-color-accent);font-weight:var(--cg-font-weight-medium)}[data-comfygit-theme=comfy] .status-dot.success{background:var(--cg-color-success)}[data-comfygit-theme=comfy] .status-dot.warning{background:var(--cg-color-warning)}[data-comfygit-theme=comfy] .status-dot.error{background:var(--cg-color-error)}[data-comfygit-theme=comfy] ::-webkit-scrollbar{width:8px;height:8px}[data-comfygit-theme=comfy] ::-webkit-scrollbar-track{background:var(--cg-color-bg-secondary)}[data-comfygit-theme=comfy] ::-webkit-scrollbar-thumb{background:var(--cg-color-border);border-radius:var(--cg-radius-sm)}[data-comfygit-theme=comfy] ::-webkit-scrollbar-thumb:hover{background:var(--cg-color-border-strong)}[data-comfygit-theme=comfy] .view-title:before,[data-comfygit-theme=comfy] .panel-title:before,[data-comfygit-theme=comfy] .section-title:before{content:""}[data-comfygit-theme=comfy] .status-dot{width:8px;height:8px;border-radius:50%;animation:none}[data-comfygit-theme=comfy] .env-switcher-label{font-weight:var(--cg-font-weight-semibold)}[data-comfygit-theme=comfy] .panel-title,[data-comfygit-theme=comfy] .view-title{text-shadow:none}[data-comfygit-theme=comfy] .log-level{border-radius:var(--cg-radius-sm);font-weight:var(--cg-font-weight-semibold)}[data-comfygit-theme=comfy] .log-item{border-radius:var(--cg-radius-md);transition:all var(--cg-transition-fast);margin-bottom:var(--cg-space-1)}[data-comfygit-theme=comfy] .log-item:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .log-item__context{border-radius:var(--cg-radius-sm);font-weight:var(--cg-font-weight-medium)}[data-comfygit-theme=comfy] .log-filter-bar{border-radius:var(--cg-radius-md);background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle);margin-bottom:var(--cg-space-3)}[data-comfygit-theme=comfy] .filter-option{border-radius:var(--cg-radius-sm);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .filter-option:hover{transform:translateY(-1px);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .filter-option.active{box-shadow:0 0 8px var(--cg-shadow-accent)}[data-comfygit-theme=comfy] .log-list{border-radius:var(--cg-radius-md);overflow:hidden}[data-comfygit-theme=comfy] .remote-form{border-radius:var(--cg-radius-md);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .remote-url-display{background:var(--cg-color-bg-secondary);padding:var(--cg-space-1) var(--cg-space-2);border-radius:var(--cg-radius-sm)}[data-comfygit-theme=comfy] .default-badge,[data-comfygit-theme=comfy] .copy-btn{border-radius:var(--cg-radius-sm)}[data-comfygit-theme=comfy] .file-path,[data-comfygit-theme=comfy] .export-warning{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .file-drop-zone{border-radius:var(--cg-radius-lg);transition:all var(--cg-transition-base)}[data-comfygit-theme=comfy] .file-drop-zone.drop-active{transform:scale(1.01)}[data-comfygit-theme=comfy] .file-drop-zone.has-file{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .import-preview,[data-comfygit-theme=comfy] .import-options{border-radius:var(--cg-radius-lg);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .option-item{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .option-item:hover{transform:translate(2px)}[data-comfygit-theme=comfy] .selected-file-bar{border-radius:var(--cg-radius-md);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .import-help{border-radius:var(--cg-radius-lg);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .help-number{border-radius:var(--cg-radius-md);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .progress-bar{border-radius:var(--cg-radius-full);overflow:hidden}[data-comfygit-theme=comfy] .progress-bar-fill{border-radius:var(--cg-radius-full);box-shadow:0 0 8px var(--cg-shadow-accent-strong)}[data-comfygit-theme=comfy] .complete-icon.success{box-shadow:0 0 16px var(--cg-shadow-success)}[data-comfygit-theme=comfy] .complete-icon.error{box-shadow:0 0 16px var(--cg-shadow-error)}', nh = '@import"https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap";[data-comfygit-theme=phosphor]{--cg-font-display: "IBM Plex Mono", ui-monospace, monospace;--cg-font-body: "IBM Plex Mono", ui-monospace, monospace;--cg-font-mono: "IBM Plex Mono", ui-monospace, monospace;--cg-font-size-xs: 15.6px;--cg-font-size-sm: 18.2px;--cg-font-size-base: 22.1px;--cg-font-size-lg: 26px;--cg-font-size-xl: 31.2px;--cg-font-size-2xl: 36.4px;--cg-panel-width: 980px;--cg-space-1: 5.2px;--cg-space-2: 10.4px;--cg-space-3: 15.6px;--cg-space-4: 20.8px;--cg-space-5: 26px;--cg-space-6: 31.2px;--cg-space-8: 41.6px;--cg-space-10: 52px;--cg-space-12: 62.4px;--cg-letter-spacing-normal: .02em;--cg-letter-spacing-wide: .08em;--cg-color-bg-primary: #0a0a0a;--cg-color-bg-secondary: #050505;--cg-color-bg-tertiary: #000000;--cg-color-bg-hover: #0f1f0f;--cg-color-bg-overlay: rgba(0, 0, 0, .85);--cg-color-text-primary: #00ff41;--cg-color-text-secondary: #00cc33;--cg-color-text-muted: #008f11;--cg-color-text-inverse: #000000;--cg-color-border: #00ff41;--cg-color-border-subtle: #003b00;--cg-color-border-strong: #00ff41;--cg-color-accent: #00ff41;--cg-color-accent-hover: #39ff14;--cg-color-accent-muted: rgba(0, 255, 65, .15);--cg-color-success: #00ff41;--cg-color-success-muted: rgba(0, 255, 65, .2);--cg-color-warning: #ffff00;--cg-color-warning-muted: rgba(255, 255, 0, .15);--cg-color-error: #ff0040;--cg-color-error-muted: rgba(255, 0, 64, .15);--cg-color-info: #00ffff;--cg-color-info-muted: rgba(0, 255, 255, .15);--cg-radius-none: 0;--cg-radius-sm: 0;--cg-radius-md: 0;--cg-radius-lg: 0;--cg-radius-xl: 0;--cg-radius-2xl: 0;--cg-radius-full: 0;--cg-shadow-sm: 0 0 4px rgba(0, 255, 65, .3);--cg-shadow-md: 0 0 8px rgba(0, 255, 65, .4);--cg-shadow-lg: 0 0 16px rgba(0, 255, 65, .5);--cg-shadow-xl: 0 0 32px rgba(0, 255, 65, .6);--cg-btn-gradient-start: #00ff41;--cg-btn-gradient-end: #00cc33;--cg-btn-shadow-inset: none;--cg-decoration-title-prefix: "> ";--cg-decoration-label-prefix: "/* ";--cg-decoration-label-suffix: " */";--cg-decoration-status-animation: cursor-blink 1s step-end infinite;--cg-decoration-status-shape: cursor;--cg-shadow-accent: rgba(0, 255, 65, .3);--cg-shadow-accent-strong: rgba(0, 255, 65, .5);--cg-shadow-error: rgba(255, 0, 64, .3);--cg-shadow-success: rgba(0, 255, 65, .3);--cg-text-shadow-title: 0 0 8px var(--cg-color-accent);--cg-text-shadow-accent: 0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .comfygit-panel{position:relative;overflow:hidden}[data-comfygit-theme=phosphor] .comfygit-panel:before{content:"";position:absolute;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.15) 2px,rgba(0,0,0,.15) 3px);pointer-events:none;z-index:100}[data-comfygit-theme=phosphor] .comfygit-panel:after{content:"";position:absolute;top:0;left:0;right:0;bottom:0;background:#00ff4105;pointer-events:none;animation:phosphor-flicker 4s infinite;z-index:99}@keyframes phosphor-flicker{0%,to{opacity:1}50%{opacity:.98}52%{opacity:1}54%{opacity:.96}56%{opacity:1}}[data-comfygit-theme=phosphor] .comfygit-panel{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg),inset 0 0 100px #00ff4108;font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .panel-title{color:var(--cg-color-accent);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-sm);text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .panel-title:before{content:var(--cg-decoration-title-prefix);opacity:.7}[data-comfygit-theme=phosphor] .view-title{text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .view-title:before{content:var(--cg-decoration-title-prefix);opacity:.7}[data-comfygit-theme=phosphor] .env-name,[data-comfygit-theme=phosphor] .branch-name{color:var(--cg-color-text-secondary);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .branch-name:before{content:"@";margin-right:2px}[data-comfygit-theme=phosphor] .env-switcher-label:before{content:var(--cg-decoration-label-prefix)}[data-comfygit-theme=phosphor] .env-switcher-label:after{content:var(--cg-decoration-label-suffix)}[data-comfygit-theme=phosphor] .group-title:before{content:var(--cg-decoration-label-prefix)}[data-comfygit-theme=phosphor] .group-title:after{content:var(--cg-decoration-label-suffix)}[data-comfygit-theme=phosphor] .status-dot{width:6px;height:12px;border-radius:0;animation:var(--cg-decoration-status-animation)}[data-comfygit-theme=phosphor] .status-dot.success{background:var(--cg-color-success)}[data-comfygit-theme=phosphor] .status-dot.warning{background:var(--cg-color-warning)}[data-comfygit-theme=phosphor] .status-dot.error{background:var(--cg-color-error)}@keyframes cursor-blink{50%{opacity:0}}[data-comfygit-theme=phosphor] .icon-btn{color:var(--cg-color-text-primary);border:1px solid transparent}[data-comfygit-theme=phosphor] .icon-btn:hover{background:var(--cg-color-bg-hover);border-color:var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .status-section{margin-bottom:var(--cg-space-4)}[data-comfygit-theme=phosphor] .section-title{color:var(--cg-color-accent);font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);text-shadow:0 0 8px var(--cg-color-accent);margin-bottom:var(--cg-space-2)}[data-comfygit-theme=phosphor] .section-title:before{content:"> ";opacity:.7}[data-comfygit-theme=phosphor] .count{font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .status-grid{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .column-title{color:var(--cg-color-text-muted);font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wider)}[data-comfygit-theme=phosphor] .column-title:before{content:"/* "}[data-comfygit-theme=phosphor] .column-title:after{content:" */"}[data-comfygit-theme=phosphor] .status-item{font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .status-item .icon{display:none}[data-comfygit-theme=phosphor] .synced-item:before{content:"└─ "}[data-comfygit-theme=phosphor] .count{font-weight:var(--cg-font-weight-bold)}[data-comfygit-theme=phosphor] .count.new{color:var(--cg-color-success);text-shadow:0 0 4px var(--cg-color-success)}[data-comfygit-theme=phosphor] .count.modified{color:var(--cg-color-warning);text-shadow:0 0 4px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .count.deleted{color:var(--cg-color-error);text-shadow:0 0 4px var(--cg-color-error)}[data-comfygit-theme=phosphor] .count.synced{color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .warning-box{background:transparent;border:1px solid var(--cg-color-warning);color:var(--cg-color-warning);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .warning-box:before{content:"[!] ";font-weight:700}[data-comfygit-theme=phosphor] .warning-box.error{border-color:var(--cg-color-error);color:var(--cg-color-error)}[data-comfygit-theme=phosphor] .issue-card{background:transparent;border:1px solid;box-shadow:var(--cg-shadow-sm);transition:all var(--cg-transition-fast)}[data-comfygit-theme=phosphor] .issue-card:hover{box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=phosphor] .issue-card--warning{border-color:var(--cg-color-warning)}[data-comfygit-theme=phosphor] .issue-card--warning .issue-card__icon,[data-comfygit-theme=phosphor] .issue-card--warning .issue-card__title{text-shadow:0 0 8px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .issue-card--error{border-color:var(--cg-color-error)}[data-comfygit-theme=phosphor] .issue-card--error .issue-card__icon,[data-comfygit-theme=phosphor] .issue-card--error .issue-card__title{text-shadow:0 0 8px var(--cg-color-error)}[data-comfygit-theme=phosphor] .issue-card--info{border-color:var(--cg-color-accent)}[data-comfygit-theme=phosphor] .issue-card--info .issue-card__icon,[data-comfygit-theme=phosphor] .issue-card--info .issue-card__title{text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .status-item__icon{display:none}[data-comfygit-theme=phosphor] .status-item:before{content:"├─ ";color:var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .status-item.is-separator:before{content:"└─ "}[data-comfygit-theme=phosphor] .status-item__count{font-weight:var(--cg-font-weight-bold)}[data-comfygit-theme=phosphor] .status-item--new .status-item__count{text-shadow:0 0 4px var(--cg-color-success)}[data-comfygit-theme=phosphor] .status-item--modified .status-item__count{text-shadow:0 0 4px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .status-item--deleted .status-item__count{text-shadow:0 0 4px var(--cg-color-error)}[data-comfygit-theme=phosphor] .branch-indicator__label:before{content:"/* ";color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .branch-indicator__label:after{content:" */";color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .branch-indicator__name{font-weight:var(--cg-font-weight-bold);text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .branch-indicator__remote{opacity:.7}[data-comfygit-theme=phosphor] .branch-indicator__ahead{text-shadow:0 0 4px var(--cg-color-success)}[data-comfygit-theme=phosphor] .branch-indicator__behind{text-shadow:0 0 4px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .branch-item,[data-comfygit-theme=phosphor] .branch-name{font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .switch-btn,[data-comfygit-theme=phosphor] .current-label{font-size:var(--cg-font-size-sm)!important;padding:6px 12px!important}[data-comfygit-theme=phosphor] .switch-btn{background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .switch-btn:hover{border-color:var(--cg-color-accent);color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .current-label{color:var(--cg-color-text-muted);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .history-section{font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .history-title{color:var(--cg-color-text-muted);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .commit-item{background:transparent;border:none;border-left:2px solid var(--cg-color-border-subtle);padding-left:var(--cg-space-3);margin-left:var(--cg-space-2)}[data-comfygit-theme=phosphor] .commit-item:hover{border-left-color:var(--cg-color-accent);background:var(--cg-color-bg-hover)}[data-comfygit-theme=phosphor] .commit-hash{color:var(--cg-color-accent);font-weight:var(--cg-font-weight-bold);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .commit-hash:before{content:"#"}[data-comfygit-theme=phosphor] .commit-message{color:var(--cg-color-text-primary);font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .commit-date{color:var(--cg-color-text-muted);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .panel-footer{border-top:1px solid var(--cg-color-border);background:var(--cg-color-bg-tertiary)}[data-comfygit-theme=phosphor] .export-btn{background:transparent;color:var(--cg-color-text-primary);border:1px solid var(--cg-color-border);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .export-btn:hover:not(:disabled){background:var(--cg-color-bg-hover);border-color:var(--cg-color-accent);color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .commit-popover{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg)}[data-comfygit-theme=phosphor] .commit-input{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle);color:var(--cg-color-text-primary);font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .commit-input:focus{border-color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm);outline:none}[data-comfygit-theme=phosphor] .comfygit-panel-btn{background:var(--cg-color-accent)!important;color:var(--cg-color-bg-primary)!important;border:none!important;text-transform:uppercase;letter-spacing:.1em;font-family:var(--cg-font-mono);font-size:11px;box-shadow:0 0 8px var(--cg-color-accent)!important}[data-comfygit-theme=phosphor] .comfygit-panel-btn:hover{box-shadow:0 0 16px var(--cg-color-accent)!important}[data-comfygit-theme=phosphor] .comfygit-commit-btn{background:var(--cg-color-bg-tertiary)!important;color:var(--cg-color-text-primary)!important;border:1px solid var(--cg-color-border-subtle)!important;font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .comfygit-commit-btn:hover{border-color:var(--cg-color-accent)!important;box-shadow:0 0 8px #00ff414d!important}[data-comfygit-theme=phosphor] .commit-indicator{background:var(--cg-color-warning);box-shadow:0 0 6px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar{width:8px}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar-track{background:var(--cg-color-bg-tertiary)}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar-thumb{background:var(--cg-color-border-subtle);border:1px solid var(--cg-color-bg-tertiary)}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar-thumb:hover{background:var(--cg-color-accent)}[data-comfygit-theme=phosphor] .comfygit-panel ::selection,[data-comfygit-theme=phosphor] .toast ::selection,[data-comfygit-theme=phosphor] .dialog-content ::selection,[data-comfygit-theme=phosphor] .commit-popover ::selection{background:var(--cg-color-accent);color:var(--cg-color-bg-primary)}[data-comfygit-theme=phosphor] .toast{background:var(--cg-color-bg-primary);border:1px solid var(--cg-color-border);font-family:var(--cg-font-mono);box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=phosphor] .toast.info{border-left:3px solid var(--cg-color-info)}[data-comfygit-theme=phosphor] .toast.success{border-left:3px solid var(--cg-color-success)}[data-comfygit-theme=phosphor] .toast.warning{border-left:3px solid var(--cg-color-warning)}[data-comfygit-theme=phosphor] .toast.error{border-left:3px solid var(--cg-color-error)}[data-comfygit-theme=phosphor] .toast-icon{font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .toast-message:before{content:"> ";opacity:.5}[data-comfygit-theme=phosphor] .dialog-content{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg);font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .dialog-title{color:var(--cg-color-accent);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .dialog-title:before{content:"> ";opacity:.7}[data-comfygit-theme=phosphor] .dialog-message{color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .dialog-details{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .dialog-warning{background:transparent;border:1px solid var(--cg-color-warning);color:var(--cg-color-warning)}[data-comfygit-theme=phosphor] .dialog-btn{font-family:var(--cg-font-mono);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .dialog-btn.cancel{background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .dialog-btn.cancel:hover{border-color:var(--cg-color-accent);color:var(--cg-color-accent)}[data-comfygit-theme=phosphor] .dialog-btn.primary{background:var(--cg-color-accent);color:var(--cg-color-bg-primary);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .dialog-btn.primary:hover{box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=phosphor] .dialog-btn.primary.destructive{background:var(--cg-color-error)}[data-comfygit-theme=phosphor] .branch-input{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle);color:var(--cg-color-text-primary);font-family:var(--cg-font-mono);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .branch-input:focus{border-color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .action-btn{font-family:var(--cg-font-mono);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .action-btn.create{background:var(--cg-color-accent);color:var(--cg-color-bg-primary);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .action-btn.create:hover:not(:disabled){box-shadow:var(--cg-shadow-md);transform:none}[data-comfygit-theme=phosphor] .action-btn.cancel{background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .action-btn.cancel:hover{border-color:var(--cg-color-accent);color:var(--cg-color-accent);background:transparent}[data-comfygit-theme=phosphor] .commit-popover{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg);font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .popover-title{color:var(--cg-color-accent);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .popover-title:before{content:"> ";opacity:.7}[data-comfygit-theme=phosphor] .commit-input{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle);color:var(--cg-color-text-primary);font-family:var(--cg-font-mono);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .commit-input:focus{border-color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .commit-input::placeholder{color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .changes-summary{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .change-item:before{content:"├─ ";color:var(--cg-color-border-subtle);margin-right:4px}[data-comfygit-theme=phosphor] .cancel-btn{font-family:var(--cg-font-mono);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs);background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .cancel-btn:hover{border-color:var(--cg-color-accent);color:var(--cg-color-accent);background:transparent}[data-comfygit-theme=phosphor] .commit-btn{font-family:var(--cg-font-mono);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs);background:var(--cg-color-accent);color:var(--cg-color-bg-primary);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .commit-btn:hover:not(:disabled){box-shadow:var(--cg-shadow-md);transform:none}[data-comfygit-theme=phosphor] .result.success{background:transparent;border:1px solid var(--cg-color-success);color:var(--cg-color-success)}[data-comfygit-theme=phosphor] .result.error{background:transparent;border:1px solid var(--cg-color-error);color:var(--cg-color-error)}[data-comfygit-theme=phosphor] .base-modal-content{box-shadow:var(--cg-shadow-xl)}[data-comfygit-theme=phosphor] .base-title.view:before{content:var(--cg-decoration-title-prefix)}[data-comfygit-theme=phosphor] .base-title.section:before{content:var(--cg-decoration-label-prefix)}[data-comfygit-theme=phosphor] .base-title.section:after{content:var(--cg-decoration-label-suffix)}[data-comfygit-theme=phosphor] .base-title.dialog{text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .base-btn.primary{background:var(--cg-color-accent);color:var(--cg-color-bg-primary);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .base-btn.primary:hover:not(:disabled){box-shadow:var(--cg-shadow-md);transform:none}[data-comfygit-theme=phosphor] .base-btn.secondary{background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .base-btn.secondary:hover:not(:disabled){border-color:var(--cg-color-accent);color:var(--cg-color-accent);background:transparent}', ah = {
-  comfy: sh,
-  phosphor: nh
+}), sh = /* @__PURE__ */ J(oh, [["__scopeId", "data-v-152a0c0c"]]), nh = '@import"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap";[data-comfygit-theme=comfy]{--cg-font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;--cg-font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;--cg-font-mono: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;--cg-font-size-xs: 14.3px;--cg-font-size-sm: 16.9px;--cg-font-size-base: 18.2px;--cg-font-size-lg: 20.8px;--cg-font-size-xl: 23.4px;--cg-font-size-2xl: 26px;--cg-font-weight-normal: 400;--cg-font-weight-medium: 500;--cg-font-weight-semibold: 600;--cg-font-weight-bold: 700;--cg-panel-width: 884px;--cg-space-1: 5.2px;--cg-space-2: 10.4px;--cg-space-3: 15.6px;--cg-space-4: 20.8px;--cg-space-5: 26px;--cg-space-6: 31.2px;--cg-space-8: 41.6px;--cg-space-10: 52px;--cg-space-12: 62.4px;--cg-letter-spacing-normal: 0;--cg-letter-spacing-wide: .025em;--cg-transition-fast: .15s ease;--cg-transition-base: .2s ease;--cg-transition-slow: .3s ease;--cg-color-bg-primary: #2d2e32;--cg-color-bg-secondary: #262729;--cg-color-bg-tertiary: #202121;--cg-color-bg-hover: #3c3d42;--cg-color-bg-overlay: rgba(0, 0, 0, .75);--cg-color-text-primary: #ffffff;--cg-color-text-secondary: #c5c5c5;--cg-color-text-muted: #8a8a8a;--cg-color-text-inverse: #000000;--cg-color-border: #55565e;--cg-color-border-subtle: #3c3d42;--cg-color-border-strong: #828282;--cg-color-accent: #31b9f4;--cg-color-accent-hover: #0b8ce9;--cg-color-accent-muted: rgba(49, 185, 244, .15);--cg-color-success: #47e469;--cg-color-success-muted: rgba(71, 228, 105, .15);--cg-color-warning: #fcbf64;--cg-color-warning-muted: rgba(252, 191, 100, .15);--cg-color-error: #dd424e;--cg-color-error-muted: rgba(221, 66, 78, .15);--cg-color-info: #31b9f4;--cg-color-info-muted: rgba(49, 185, 244, .15);--cg-radius-none: 0;--cg-radius-sm: 4px;--cg-radius-md: 6px;--cg-radius-lg: 8px;--cg-radius-xl: 12px;--cg-radius-2xl: 16px;--cg-radius-full: 9999px;--cg-shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);--cg-shadow-md: 0 2px 8px rgba(0, 0, 0, .4);--cg-shadow-lg: 0 4px 16px rgba(0, 0, 0, .5);--cg-shadow-xl: 0 8px 32px rgba(0, 0, 0, .6);--cg-btn-gradient-start: #31b9f4;--cg-btn-gradient-end: #0b8ce9;--cg-btn-shadow-inset: inset 0 1px 0 rgba(255, 255, 255, .1);--cg-decoration-title-prefix: "";--cg-decoration-label-prefix: "";--cg-decoration-label-suffix: "";--cg-decoration-status-animation: none;--cg-decoration-status-shape: circle;--cg-shadow-accent: rgba(49, 185, 244, .3);--cg-shadow-accent-strong: rgba(49, 185, 244, .5);--cg-shadow-error: rgba(221, 66, 78, .3);--cg-shadow-success: rgba(71, 228, 105, .3);--cg-text-shadow-title: none;--cg-text-shadow-accent: none}[data-comfygit-theme=comfy] .comfygit-panel{box-shadow:var(--cg-shadow-lg);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=comfy] .sidebar{background:var(--cg-color-bg-secondary);border-right:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=comfy] .sidebar-item{border-radius:var(--cg-radius-md);transition:background var(--cg-transition-fast),color var(--cg-transition-fast)}[data-comfygit-theme=comfy] .sidebar-item:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .sidebar-item.active{background:var(--cg-color-accent-muted);color:var(--cg-color-accent);font-weight:var(--cg-font-weight-medium)}[data-comfygit-theme=comfy] button{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .icon-btn{border-radius:var(--cg-radius-md);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .icon-btn:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .status-grid{border-radius:var(--cg-radius-lg);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .issue-card{border-radius:var(--cg-radius-lg);box-shadow:var(--cg-shadow-sm);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .issue-card:hover{box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=comfy] .issue-card--warning,[data-comfygit-theme=comfy] .issue-card--error,[data-comfygit-theme=comfy] .issue-card--info{border-left-width:4px}[data-comfygit-theme=comfy] .branch-indicator{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .branch-indicator__name{font-weight:var(--cg-font-weight-semibold)}[data-comfygit-theme=comfy] .commit-list{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .commit-item{transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .commit-item:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .branch-item,[data-comfygit-theme=comfy] .branch-list-item{border-radius:var(--cg-radius-md);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .branch-item:hover,[data-comfygit-theme=comfy] .branch-list-item:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .branch-list{border-radius:var(--cg-radius-md);overflow:hidden}[data-comfygit-theme=comfy] .branch-create-form,[data-comfygit-theme=comfy] .create-form{border-radius:var(--cg-radius-md);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .text-input{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] input[type=text],[data-comfygit-theme=comfy] textarea{border-radius:var(--cg-radius-md);border:1px solid var(--cg-color-border);transition:border-color var(--cg-transition-fast),box-shadow var(--cg-transition-fast)}[data-comfygit-theme=comfy] input[type=text]:focus,[data-comfygit-theme=comfy] textarea:focus{border-color:var(--cg-color-accent);box-shadow:0 0 0 3px var(--cg-color-accent-muted)}[data-comfygit-theme=comfy] .dialog-content{border-radius:var(--cg-radius-xl);box-shadow:var(--cg-shadow-xl);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=comfy] .status-badge{border-radius:var(--cg-radius-sm);font-size:var(--cg-font-size-xs);font-weight:var(--cg-font-weight-medium);padding:2px 8px}[data-comfygit-theme=comfy] .warning-box{border-radius:var(--cg-radius-md);border-left:4px solid var(--cg-color-warning);background:var(--cg-color-warning-muted)}[data-comfygit-theme=comfy] .env-switcher-btn{border-radius:var(--cg-radius-md);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .env-switcher-btn:hover{background:var(--cg-color-bg-hover);transform:translateY(-1px);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .section-title{font-weight:var(--cg-font-weight-semibold);letter-spacing:var(--cg-letter-spacing-wide);color:var(--cg-color-text-secondary)}[data-comfygit-theme=comfy] .commit-hash,[data-comfygit-theme=comfy] .branch-name-mono,[data-comfygit-theme=comfy] .file-path{font-family:var(--cg-font-mono)}[data-comfygit-theme=comfy] .settings-section{border-radius:var(--cg-radius-md);background:var(--cg-color-bg-secondary)}[data-comfygit-theme=comfy] .setting-row{transition:background var(--cg-transition-fast)}[data-comfygit-theme=comfy] .setting-row:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .toggle-slider{border-radius:var(--cg-radius-full)}[data-comfygit-theme=comfy] .commit-hash{color:var(--cg-color-accent);font-weight:var(--cg-font-weight-medium)}[data-comfygit-theme=comfy] .status-dot.success{background:var(--cg-color-success)}[data-comfygit-theme=comfy] .status-dot.warning{background:var(--cg-color-warning)}[data-comfygit-theme=comfy] .status-dot.error{background:var(--cg-color-error)}[data-comfygit-theme=comfy] ::-webkit-scrollbar{width:8px;height:8px}[data-comfygit-theme=comfy] ::-webkit-scrollbar-track{background:var(--cg-color-bg-secondary)}[data-comfygit-theme=comfy] ::-webkit-scrollbar-thumb{background:var(--cg-color-border);border-radius:var(--cg-radius-sm)}[data-comfygit-theme=comfy] ::-webkit-scrollbar-thumb:hover{background:var(--cg-color-border-strong)}[data-comfygit-theme=comfy] .view-title:before,[data-comfygit-theme=comfy] .panel-title:before,[data-comfygit-theme=comfy] .section-title:before{content:""}[data-comfygit-theme=comfy] .status-dot{width:8px;height:8px;border-radius:50%;animation:none}[data-comfygit-theme=comfy] .env-switcher-label{font-weight:var(--cg-font-weight-semibold)}[data-comfygit-theme=comfy] .panel-title,[data-comfygit-theme=comfy] .view-title{text-shadow:none}[data-comfygit-theme=comfy] .log-level{border-radius:var(--cg-radius-sm);font-weight:var(--cg-font-weight-semibold)}[data-comfygit-theme=comfy] .log-item{border-radius:var(--cg-radius-md);transition:all var(--cg-transition-fast);margin-bottom:var(--cg-space-1)}[data-comfygit-theme=comfy] .log-item:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .log-item__context{border-radius:var(--cg-radius-sm);font-weight:var(--cg-font-weight-medium)}[data-comfygit-theme=comfy] .log-filter-bar{border-radius:var(--cg-radius-md);background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle);margin-bottom:var(--cg-space-3)}[data-comfygit-theme=comfy] .filter-option{border-radius:var(--cg-radius-sm);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .filter-option:hover{transform:translateY(-1px);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .filter-option.active{box-shadow:0 0 8px var(--cg-shadow-accent)}[data-comfygit-theme=comfy] .log-list{border-radius:var(--cg-radius-md);overflow:hidden}[data-comfygit-theme=comfy] .remote-form{border-radius:var(--cg-radius-md);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .remote-url-display{background:var(--cg-color-bg-secondary);padding:var(--cg-space-1) var(--cg-space-2);border-radius:var(--cg-radius-sm)}[data-comfygit-theme=comfy] .default-badge,[data-comfygit-theme=comfy] .copy-btn{border-radius:var(--cg-radius-sm)}[data-comfygit-theme=comfy] .file-path,[data-comfygit-theme=comfy] .export-warning{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .file-drop-zone{border-radius:var(--cg-radius-lg);transition:all var(--cg-transition-base)}[data-comfygit-theme=comfy] .file-drop-zone.drop-active{transform:scale(1.01)}[data-comfygit-theme=comfy] .file-drop-zone.has-file{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .import-preview,[data-comfygit-theme=comfy] .import-options{border-radius:var(--cg-radius-lg);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .option-item{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .option-item:hover{transform:translate(2px)}[data-comfygit-theme=comfy] .selected-file-bar{border-radius:var(--cg-radius-md);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .import-help{border-radius:var(--cg-radius-lg);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .help-number{border-radius:var(--cg-radius-md);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .progress-bar{border-radius:var(--cg-radius-full);overflow:hidden}[data-comfygit-theme=comfy] .progress-bar-fill{border-radius:var(--cg-radius-full);box-shadow:0 0 8px var(--cg-shadow-accent-strong)}[data-comfygit-theme=comfy] .complete-icon.success{box-shadow:0 0 16px var(--cg-shadow-success)}[data-comfygit-theme=comfy] .complete-icon.error{box-shadow:0 0 16px var(--cg-shadow-error)}', ah = '@import"https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap";[data-comfygit-theme=phosphor]{--cg-font-display: "IBM Plex Mono", ui-monospace, monospace;--cg-font-body: "IBM Plex Mono", ui-monospace, monospace;--cg-font-mono: "IBM Plex Mono", ui-monospace, monospace;--cg-font-size-xs: 15.6px;--cg-font-size-sm: 18.2px;--cg-font-size-base: 22.1px;--cg-font-size-lg: 26px;--cg-font-size-xl: 31.2px;--cg-font-size-2xl: 36.4px;--cg-panel-width: 980px;--cg-space-1: 5.2px;--cg-space-2: 10.4px;--cg-space-3: 15.6px;--cg-space-4: 20.8px;--cg-space-5: 26px;--cg-space-6: 31.2px;--cg-space-8: 41.6px;--cg-space-10: 52px;--cg-space-12: 62.4px;--cg-letter-spacing-normal: .02em;--cg-letter-spacing-wide: .08em;--cg-color-bg-primary: #0a0a0a;--cg-color-bg-secondary: #050505;--cg-color-bg-tertiary: #000000;--cg-color-bg-hover: #0f1f0f;--cg-color-bg-overlay: rgba(0, 0, 0, .85);--cg-color-text-primary: #00ff41;--cg-color-text-secondary: #00cc33;--cg-color-text-muted: #008f11;--cg-color-text-inverse: #000000;--cg-color-border: #00ff41;--cg-color-border-subtle: #003b00;--cg-color-border-strong: #00ff41;--cg-color-accent: #00ff41;--cg-color-accent-hover: #39ff14;--cg-color-accent-muted: rgba(0, 255, 65, .15);--cg-color-success: #00ff41;--cg-color-success-muted: rgba(0, 255, 65, .2);--cg-color-warning: #ffff00;--cg-color-warning-muted: rgba(255, 255, 0, .15);--cg-color-error: #ff0040;--cg-color-error-muted: rgba(255, 0, 64, .15);--cg-color-info: #00ffff;--cg-color-info-muted: rgba(0, 255, 255, .15);--cg-radius-none: 0;--cg-radius-sm: 0;--cg-radius-md: 0;--cg-radius-lg: 0;--cg-radius-xl: 0;--cg-radius-2xl: 0;--cg-radius-full: 0;--cg-shadow-sm: 0 0 4px rgba(0, 255, 65, .3);--cg-shadow-md: 0 0 8px rgba(0, 255, 65, .4);--cg-shadow-lg: 0 0 16px rgba(0, 255, 65, .5);--cg-shadow-xl: 0 0 32px rgba(0, 255, 65, .6);--cg-btn-gradient-start: #00ff41;--cg-btn-gradient-end: #00cc33;--cg-btn-shadow-inset: none;--cg-decoration-title-prefix: "> ";--cg-decoration-label-prefix: "/* ";--cg-decoration-label-suffix: " */";--cg-decoration-status-animation: cursor-blink 1s step-end infinite;--cg-decoration-status-shape: cursor;--cg-shadow-accent: rgba(0, 255, 65, .3);--cg-shadow-accent-strong: rgba(0, 255, 65, .5);--cg-shadow-error: rgba(255, 0, 64, .3);--cg-shadow-success: rgba(0, 255, 65, .3);--cg-text-shadow-title: 0 0 8px var(--cg-color-accent);--cg-text-shadow-accent: 0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .comfygit-panel{position:relative;overflow:hidden}[data-comfygit-theme=phosphor] .comfygit-panel:before{content:"";position:absolute;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.15) 2px,rgba(0,0,0,.15) 3px);pointer-events:none;z-index:100}[data-comfygit-theme=phosphor] .comfygit-panel:after{content:"";position:absolute;top:0;left:0;right:0;bottom:0;background:#00ff4105;pointer-events:none;animation:phosphor-flicker 4s infinite;z-index:99}@keyframes phosphor-flicker{0%,to{opacity:1}50%{opacity:.98}52%{opacity:1}54%{opacity:.96}56%{opacity:1}}[data-comfygit-theme=phosphor] .comfygit-panel{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg),inset 0 0 100px #00ff4108;font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .panel-title{color:var(--cg-color-accent);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-sm);text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .panel-title:before{content:var(--cg-decoration-title-prefix);opacity:.7}[data-comfygit-theme=phosphor] .view-title{text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .view-title:before{content:var(--cg-decoration-title-prefix);opacity:.7}[data-comfygit-theme=phosphor] .env-name,[data-comfygit-theme=phosphor] .branch-name{color:var(--cg-color-text-secondary);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .branch-name:before{content:"@";margin-right:2px}[data-comfygit-theme=phosphor] .env-switcher-label:before{content:var(--cg-decoration-label-prefix)}[data-comfygit-theme=phosphor] .env-switcher-label:after{content:var(--cg-decoration-label-suffix)}[data-comfygit-theme=phosphor] .group-title:before{content:var(--cg-decoration-label-prefix)}[data-comfygit-theme=phosphor] .group-title:after{content:var(--cg-decoration-label-suffix)}[data-comfygit-theme=phosphor] .status-dot{width:6px;height:12px;border-radius:0;animation:var(--cg-decoration-status-animation)}[data-comfygit-theme=phosphor] .status-dot.success{background:var(--cg-color-success)}[data-comfygit-theme=phosphor] .status-dot.warning{background:var(--cg-color-warning)}[data-comfygit-theme=phosphor] .status-dot.error{background:var(--cg-color-error)}@keyframes cursor-blink{50%{opacity:0}}[data-comfygit-theme=phosphor] .icon-btn{color:var(--cg-color-text-primary);border:1px solid transparent}[data-comfygit-theme=phosphor] .icon-btn:hover{background:var(--cg-color-bg-hover);border-color:var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .status-section{margin-bottom:var(--cg-space-4)}[data-comfygit-theme=phosphor] .section-title{color:var(--cg-color-accent);font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);text-shadow:0 0 8px var(--cg-color-accent);margin-bottom:var(--cg-space-2)}[data-comfygit-theme=phosphor] .section-title:before{content:"> ";opacity:.7}[data-comfygit-theme=phosphor] .count{font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .status-grid{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .column-title{color:var(--cg-color-text-muted);font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wider)}[data-comfygit-theme=phosphor] .column-title:before{content:"/* "}[data-comfygit-theme=phosphor] .column-title:after{content:" */"}[data-comfygit-theme=phosphor] .status-item{font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .status-item .icon{display:none}[data-comfygit-theme=phosphor] .synced-item:before{content:"└─ "}[data-comfygit-theme=phosphor] .count{font-weight:var(--cg-font-weight-bold)}[data-comfygit-theme=phosphor] .count.new{color:var(--cg-color-success);text-shadow:0 0 4px var(--cg-color-success)}[data-comfygit-theme=phosphor] .count.modified{color:var(--cg-color-warning);text-shadow:0 0 4px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .count.deleted{color:var(--cg-color-error);text-shadow:0 0 4px var(--cg-color-error)}[data-comfygit-theme=phosphor] .count.synced{color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .warning-box{background:transparent;border:1px solid var(--cg-color-warning);color:var(--cg-color-warning);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .warning-box:before{content:"[!] ";font-weight:700}[data-comfygit-theme=phosphor] .warning-box.error{border-color:var(--cg-color-error);color:var(--cg-color-error)}[data-comfygit-theme=phosphor] .issue-card{background:transparent;border:1px solid;box-shadow:var(--cg-shadow-sm);transition:all var(--cg-transition-fast)}[data-comfygit-theme=phosphor] .issue-card:hover{box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=phosphor] .issue-card--warning{border-color:var(--cg-color-warning)}[data-comfygit-theme=phosphor] .issue-card--warning .issue-card__icon,[data-comfygit-theme=phosphor] .issue-card--warning .issue-card__title{text-shadow:0 0 8px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .issue-card--error{border-color:var(--cg-color-error)}[data-comfygit-theme=phosphor] .issue-card--error .issue-card__icon,[data-comfygit-theme=phosphor] .issue-card--error .issue-card__title{text-shadow:0 0 8px var(--cg-color-error)}[data-comfygit-theme=phosphor] .issue-card--info{border-color:var(--cg-color-accent)}[data-comfygit-theme=phosphor] .issue-card--info .issue-card__icon,[data-comfygit-theme=phosphor] .issue-card--info .issue-card__title{text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .status-item__icon{display:none}[data-comfygit-theme=phosphor] .status-item:before{content:"├─ ";color:var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .status-item.is-separator:before{content:"└─ "}[data-comfygit-theme=phosphor] .status-item__count{font-weight:var(--cg-font-weight-bold)}[data-comfygit-theme=phosphor] .status-item--new .status-item__count{text-shadow:0 0 4px var(--cg-color-success)}[data-comfygit-theme=phosphor] .status-item--modified .status-item__count{text-shadow:0 0 4px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .status-item--deleted .status-item__count{text-shadow:0 0 4px var(--cg-color-error)}[data-comfygit-theme=phosphor] .branch-indicator__label:before{content:"/* ";color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .branch-indicator__label:after{content:" */";color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .branch-indicator__name{font-weight:var(--cg-font-weight-bold);text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .branch-indicator__remote{opacity:.7}[data-comfygit-theme=phosphor] .branch-indicator__ahead{text-shadow:0 0 4px var(--cg-color-success)}[data-comfygit-theme=phosphor] .branch-indicator__behind{text-shadow:0 0 4px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .branch-item,[data-comfygit-theme=phosphor] .branch-name{font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .switch-btn,[data-comfygit-theme=phosphor] .current-label{font-size:var(--cg-font-size-sm)!important;padding:6px 12px!important}[data-comfygit-theme=phosphor] .switch-btn{background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .switch-btn:hover{border-color:var(--cg-color-accent);color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .current-label{color:var(--cg-color-text-muted);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .history-section{font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .history-title{color:var(--cg-color-text-muted);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .commit-item{background:transparent;border:none;border-left:2px solid var(--cg-color-border-subtle);padding-left:var(--cg-space-3);margin-left:var(--cg-space-2)}[data-comfygit-theme=phosphor] .commit-item:hover{border-left-color:var(--cg-color-accent);background:var(--cg-color-bg-hover)}[data-comfygit-theme=phosphor] .commit-hash{color:var(--cg-color-accent);font-weight:var(--cg-font-weight-bold);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .commit-hash:before{content:"#"}[data-comfygit-theme=phosphor] .commit-message{color:var(--cg-color-text-primary);font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .commit-date{color:var(--cg-color-text-muted);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .panel-footer{border-top:1px solid var(--cg-color-border);background:var(--cg-color-bg-tertiary)}[data-comfygit-theme=phosphor] .export-btn{background:transparent;color:var(--cg-color-text-primary);border:1px solid var(--cg-color-border);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .export-btn:hover:not(:disabled){background:var(--cg-color-bg-hover);border-color:var(--cg-color-accent);color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .commit-popover{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg)}[data-comfygit-theme=phosphor] .commit-input{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle);color:var(--cg-color-text-primary);font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .commit-input:focus{border-color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm);outline:none}[data-comfygit-theme=phosphor] .comfygit-panel-btn{background:var(--cg-color-accent)!important;color:var(--cg-color-bg-primary)!important;border:none!important;text-transform:uppercase;letter-spacing:.1em;font-family:var(--cg-font-mono);font-size:11px;box-shadow:0 0 8px var(--cg-color-accent)!important}[data-comfygit-theme=phosphor] .comfygit-panel-btn:hover{box-shadow:0 0 16px var(--cg-color-accent)!important}[data-comfygit-theme=phosphor] .comfygit-commit-btn{background:var(--cg-color-bg-tertiary)!important;color:var(--cg-color-text-primary)!important;border:1px solid var(--cg-color-border-subtle)!important;font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .comfygit-commit-btn:hover{border-color:var(--cg-color-accent)!important;box-shadow:0 0 8px #00ff414d!important}[data-comfygit-theme=phosphor] .commit-indicator{background:var(--cg-color-warning);box-shadow:0 0 6px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar{width:8px}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar-track{background:var(--cg-color-bg-tertiary)}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar-thumb{background:var(--cg-color-border-subtle);border:1px solid var(--cg-color-bg-tertiary)}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar-thumb:hover{background:var(--cg-color-accent)}[data-comfygit-theme=phosphor] .comfygit-panel ::selection,[data-comfygit-theme=phosphor] .toast ::selection,[data-comfygit-theme=phosphor] .dialog-content ::selection,[data-comfygit-theme=phosphor] .commit-popover ::selection{background:var(--cg-color-accent);color:var(--cg-color-bg-primary)}[data-comfygit-theme=phosphor] .toast{background:var(--cg-color-bg-primary);border:1px solid var(--cg-color-border);font-family:var(--cg-font-mono);box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=phosphor] .toast.info{border-left:3px solid var(--cg-color-info)}[data-comfygit-theme=phosphor] .toast.success{border-left:3px solid var(--cg-color-success)}[data-comfygit-theme=phosphor] .toast.warning{border-left:3px solid var(--cg-color-warning)}[data-comfygit-theme=phosphor] .toast.error{border-left:3px solid var(--cg-color-error)}[data-comfygit-theme=phosphor] .toast-icon{font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .toast-message:before{content:"> ";opacity:.5}[data-comfygit-theme=phosphor] .dialog-content{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg);font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .dialog-title{color:var(--cg-color-accent);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .dialog-title:before{content:"> ";opacity:.7}[data-comfygit-theme=phosphor] .dialog-message{color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .dialog-details{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .dialog-warning{background:transparent;border:1px solid var(--cg-color-warning);color:var(--cg-color-warning)}[data-comfygit-theme=phosphor] .dialog-btn{font-family:var(--cg-font-mono);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .dialog-btn.cancel{background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .dialog-btn.cancel:hover{border-color:var(--cg-color-accent);color:var(--cg-color-accent)}[data-comfygit-theme=phosphor] .dialog-btn.primary{background:var(--cg-color-accent);color:var(--cg-color-bg-primary);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .dialog-btn.primary:hover{box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=phosphor] .dialog-btn.primary.destructive{background:var(--cg-color-error)}[data-comfygit-theme=phosphor] .branch-input{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle);color:var(--cg-color-text-primary);font-family:var(--cg-font-mono);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .branch-input:focus{border-color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .action-btn{font-family:var(--cg-font-mono);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .action-btn.create{background:var(--cg-color-accent);color:var(--cg-color-bg-primary);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .action-btn.create:hover:not(:disabled){box-shadow:var(--cg-shadow-md);transform:none}[data-comfygit-theme=phosphor] .action-btn.cancel{background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .action-btn.cancel:hover{border-color:var(--cg-color-accent);color:var(--cg-color-accent);background:transparent}[data-comfygit-theme=phosphor] .commit-popover{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg);font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .popover-title{color:var(--cg-color-accent);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .popover-title:before{content:"> ";opacity:.7}[data-comfygit-theme=phosphor] .commit-input{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle);color:var(--cg-color-text-primary);font-family:var(--cg-font-mono);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .commit-input:focus{border-color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .commit-input::placeholder{color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .changes-summary{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .change-item:before{content:"├─ ";color:var(--cg-color-border-subtle);margin-right:4px}[data-comfygit-theme=phosphor] .cancel-btn{font-family:var(--cg-font-mono);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs);background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .cancel-btn:hover{border-color:var(--cg-color-accent);color:var(--cg-color-accent);background:transparent}[data-comfygit-theme=phosphor] .commit-btn{font-family:var(--cg-font-mono);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs);background:var(--cg-color-accent);color:var(--cg-color-bg-primary);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .commit-btn:hover:not(:disabled){box-shadow:var(--cg-shadow-md);transform:none}[data-comfygit-theme=phosphor] .result.success{background:transparent;border:1px solid var(--cg-color-success);color:var(--cg-color-success)}[data-comfygit-theme=phosphor] .result.error{background:transparent;border:1px solid var(--cg-color-error);color:var(--cg-color-error)}[data-comfygit-theme=phosphor] .base-modal-content{box-shadow:var(--cg-shadow-xl)}[data-comfygit-theme=phosphor] .base-title.view:before{content:var(--cg-decoration-title-prefix)}[data-comfygit-theme=phosphor] .base-title.section:before{content:var(--cg-decoration-label-prefix)}[data-comfygit-theme=phosphor] .base-title.section:after{content:var(--cg-decoration-label-suffix)}[data-comfygit-theme=phosphor] .base-title.dialog{text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .base-btn.primary{background:var(--cg-color-accent);color:var(--cg-color-bg-primary);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .base-btn.primary:hover:not(:disabled){box-shadow:var(--cg-shadow-md);transform:none}[data-comfygit-theme=phosphor] .base-btn.secondary{background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .base-btn.secondary:hover:not(:disabled){border-color:var(--cg-color-accent);color:var(--cg-color-accent);background:transparent}', lh = {
+  comfy: nh,
+  phosphor: ah
 }, Et = "comfy", Gt = "comfygit-theme";
 let Ke = null, jt = Et;
-function lh() {
+function ih() {
   try {
     const t = localStorage.getItem(Gt);
     if (t && (t === "comfy" || t === "phosphor"))
@@ -10270,31 +10267,31 @@ function lh() {
   return Et;
 }
 function Ht(t = Et) {
-  Ke && Ke.remove(), Ke = document.createElement("style"), Ke.id = "comfygit-theme-styles", Ke.setAttribute("data-theme", t), Ke.textContent = ah[t], document.head.appendChild(Ke), document.body.setAttribute("data-comfygit-theme", t), jt = t;
+  Ke && Ke.remove(), Ke = document.createElement("style"), Ke.id = "comfygit-theme-styles", Ke.setAttribute("data-theme", t), Ke.textContent = lh[t], document.head.appendChild(Ke), document.body.setAttribute("data-comfygit-theme", t), jt = t;
   try {
     localStorage.setItem(Gt, t);
   } catch {
   }
   console.log(`[ComfyGit] Applied theme: ${t}`);
 }
-function ih() {
+function rh() {
   return jt;
 }
-function rh(t) {
+function dh(t) {
   Ht(t);
 }
 const zt = document.createElement("link");
 zt.rel = "stylesheet";
 zt.href = new URL("./comfygit-panel.css", import.meta.url).href;
 document.head.appendChild(zt);
-const dh = lh();
-Ht(dh);
+const ch = ih();
+Ht(ch);
 window.ComfyGit = {
   setTheme: (t) => {
-    console.log(`[ComfyGit] Switching to theme: ${t}`), rh(t);
+    console.log(`[ComfyGit] Switching to theme: ${t}`), dh(t);
   },
   getTheme: () => {
-    const t = ih();
+    const t = rh();
     return console.log(`[ComfyGit] Current theme: ${t}`), t;
   }
 };
@@ -10309,12 +10306,12 @@ async function gt() {
   } catch {
   }
 }
-function ch() {
+function uh() {
   if (!Ze.value) return !1;
   const t = Ze.value.workflows;
   return t.new.length > 0 || t.modified.length > 0 || t.deleted.length > 0 || Ze.value.has_changes;
 }
-function uh() {
+function mh() {
   Le && Le.remove(), Le = document.createElement("div"), Le.className = "comfygit-panel-overlay";
   const t = document.createElement("div");
   t.className = "comfygit-panel-container", Le.appendChild(t), Le.addEventListener("click", (r) => {
@@ -10335,7 +10332,7 @@ function uh() {
 function bt() {
   Le && (Le.remove(), Le = null);
 }
-function mh(t) {
+function vh(t) {
   it(), $e = document.createElement("div"), $e.className = "comfygit-commit-popover-container";
   const c = t.getBoundingClientRect();
   $e.style.position = "fixed", $e.style.top = `${c.bottom + 8}px`, $e.style.right = `${window.innerWidth - c.right}px`, $e.style.zIndex = "10001";
@@ -10359,16 +10356,16 @@ function mh(t) {
 function it() {
   dt && (dt.unmount(), dt = null), $e && ($e.remove(), $e = null);
 }
-function vh() {
+function fh() {
   lt || (lt = document.createElement("div"), lt.className = "comfygit-download-queue-root", Dt = Ct({
-    render: () => xt(oh)
+    render: () => xt(sh)
   }), Dt.mount(lt), document.body.appendChild(lt), console.log("[ComfyGit] Model download queue mounted"));
 }
 let Ue = null;
 function ct() {
   if (!Ue) return;
   const t = Ue.querySelector(".commit-indicator");
-  t && (t.style.display = ch() ? "block" : "none");
+  t && (t.style.display = uh() ? "block" : "none");
 }
 const Kt = document.createElement("style");
 Kt.textContent = `
@@ -10469,7 +10466,7 @@ Qe.registerExtension({
     const t = document.createElement("div");
     t.className = "comfygit-btn-group";
     const c = document.createElement("button");
-    c.className = "comfyui-button comfyui-menu-mobile-collapse comfygit-panel-btn", c.textContent = "ComfyGit", c.title = "ComfyGit Control Panel", c.onclick = uh, Ue = document.createElement("button"), Ue.className = "comfyui-button comfyui-menu-mobile-collapse comfygit-commit-btn", Ue.innerHTML = 'Commit <span class="commit-indicator"></span>', Ue.title = "Quick Commit", Ue.onclick = () => mh(Ue), t.appendChild(c), t.appendChild(Ue), (y = (f = Qe.menu) == null ? void 0 : f.settingsGroup) != null && y.element && (Qe.menu.settingsGroup.element.before(t), console.log("[ComfyGit] Control Panel buttons added to toolbar")), vh();
+    c.className = "comfyui-button comfyui-menu-mobile-collapse comfygit-panel-btn", c.textContent = "ComfyGit", c.title = "ComfyGit Control Panel", c.onclick = mh, Ue = document.createElement("button"), Ue.className = "comfyui-button comfyui-menu-mobile-collapse comfygit-commit-btn", Ue.innerHTML = 'Commit <span class="commit-indicator"></span>', Ue.title = "Quick Commit", Ue.onclick = () => vh(Ue), t.appendChild(c), t.appendChild(Ue), (y = (f = Qe.menu) == null ? void 0 : f.settingsGroup) != null && y.element && (Qe.menu.settingsGroup.element.before(t), console.log("[ComfyGit] Control Panel buttons added to toolbar")), fh();
     const { loadPendingDownloads: s } = St();
     s(), await gt(), ct(), setInterval(async () => {
       await gt(), ct();
