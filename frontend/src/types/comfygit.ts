@@ -175,11 +175,34 @@ export interface SwitchEnvironmentProgress {
   recovery_command?: string
 }
 
+export interface CreateEnvironmentRequest {
+  name: string
+  python_version?: string
+  comfyui_version?: string
+  torch_backend?: string
+  switch_after?: boolean
+}
+
 export interface CreateEnvironmentResult {
-  status: 'success' | 'error'
+  status: 'started' | 'success' | 'error'
+  task_id?: string
   message?: string
   name?: string
   path?: string
+}
+
+export interface CreateEnvironmentProgress {
+  state: 'idle' | 'creating' | 'complete' | 'error'
+  task_id?: string
+  environment_name?: string
+  message: string
+  error?: string
+}
+
+export interface ComfyUIRelease {
+  tag_name: string
+  name: string
+  published_at: string
 }
 
 export interface SyncEnvironmentResult {

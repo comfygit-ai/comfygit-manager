@@ -10,7 +10,7 @@
           <ActionButton
             variant="ghost"
             size="sm"
-            @click="showCreateForm = true"
+            @click="openCreateForm"
             title="Create new environment"
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -59,12 +59,54 @@
             </ActionButton>
           </div>
           <div class="create-form__body">
-            <TextInput
-              v-model="newEnvironmentName"
-              placeholder="Enter environment name..."
-              @keyup.enter="handleCreate"
-              @keyup.esc="cancelCreate"
-            />
+            <!-- Environment Name -->
+            <div class="form-field">
+              <label class="form-label">Name</label>
+              <TextInput
+                v-model="newEnvironmentName"
+                placeholder="my-environment"
+                @keyup.esc="cancelCreate"
+              />
+            </div>
+
+            <!-- Python Version -->
+            <div class="form-field">
+              <label class="form-label">Python Version</label>
+              <select v-model="selectedPythonVersion" class="form-select">
+                <option v-for="version in PYTHON_VERSIONS" :key="version" :value="version">
+                  {{ version }}
+                </option>
+              </select>
+            </div>
+
+            <!-- ComfyUI Version -->
+            <div class="form-field">
+              <label class="form-label">ComfyUI Version</label>
+              <select v-model="selectedComfyUIVersion" class="form-select" :disabled="loadingReleases">
+                <option v-for="release in comfyUIReleases" :key="release.tag_name" :value="release.tag_name">
+                  {{ release.name }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Torch Backend -->
+            <div class="form-field">
+              <label class="form-label">PyTorch Backend</label>
+              <select v-model="selectedTorchBackend" class="form-select">
+                <option v-for="backend in TORCH_BACKENDS" :key="backend" :value="backend">
+                  {{ backend }}{{ backend === 'auto' ? ' (detect GPU)' : '' }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Switch After Create -->
+            <div class="form-field form-field--checkbox">
+              <label class="form-checkbox">
+                <input type="checkbox" v-model="switchAfterCreate" />
+                <span>Switch to this environment after creation</span>
+              </label>
+            </div>
+
             <div class="create-form__actions">
               <ActionButton
                 variant="primary"
@@ -151,7 +193,7 @@
           <template v-if="!searchQuery" #actions>
             <ActionButton
               variant="primary"
-              @click="showCreateForm = true"
+              @click="openCreateForm"
             >
               Create Environment
             </ActionButton>
@@ -193,7 +235,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
-import type { EnvironmentInfo } from '@/types/comfygit'
+import type { EnvironmentInfo, ComfyUIRelease, CreateEnvironmentRequest } from '@/types/comfygit'
+import { PYTHON_VERSIONS, DEFAULT_PYTHON_VERSION, TORCH_BACKENDS, DEFAULT_TORCH_BACKEND } from '@/constants/environment'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
 import SearchBar from '@/components/base/molecules/SearchBar.vue'
@@ -205,15 +248,16 @@ import EmptyState from '@/components/base/molecules/EmptyState.vue'
 import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
+import SectionGroup from '@/components/base/molecules/SectionGroup.vue'
 
 const emit = defineEmits<{
   switch: [environmentName: string]
-  create: [environmentName: string]
+  create: [request: CreateEnvironmentRequest]
   delete: [environmentName: string]
   viewDetails: [environmentName: string]
 }>()
 
-const { getEnvironments } = useComfyGitService()
+const { getEnvironments, getComfyUIReleases } = useComfyGitService()
 
 const environments = ref<EnvironmentInfo[]>([])
 const loading = ref(false)
@@ -221,7 +265,15 @@ const error = ref<string | null>(null)
 const searchQuery = ref('')
 const showPopover = ref(false)
 const showCreateForm = ref(false)
+
+// Create form state
 const newEnvironmentName = ref('')
+const selectedPythonVersion = ref(DEFAULT_PYTHON_VERSION)
+const selectedComfyUIVersion = ref('latest')
+const selectedTorchBackend = ref(DEFAULT_TORCH_BACKEND)
+const switchAfterCreate = ref(false)
+const comfyUIReleases = ref<ComfyUIRelease[]>([{ tag_name: 'latest', name: 'Latest', published_at: '' }])
+const loadingReleases = ref(false)
 
 const currentEnvironment = computed(() =>
   environments.value.find(e => e.is_current)
@@ -262,14 +314,44 @@ function handleCreate() {
   const name = newEnvironmentName.value.trim()
   if (!name) return
 
-  emit('create', name)
-  newEnvironmentName.value = ''
-  showCreateForm.value = false
+  const request: CreateEnvironmentRequest = {
+    name,
+    python_version: selectedPythonVersion.value,
+    comfyui_version: selectedComfyUIVersion.value,
+    torch_backend: selectedTorchBackend.value,
+    switch_after: switchAfterCreate.value
+  }
+
+  emit('create', request)
+  resetCreateForm()
 }
 
 function cancelCreate() {
+  resetCreateForm()
+}
+
+function resetCreateForm() {
   newEnvironmentName.value = ''
+  selectedPythonVersion.value = DEFAULT_PYTHON_VERSION
+  selectedComfyUIVersion.value = 'latest'
+  selectedTorchBackend.value = DEFAULT_TORCH_BACKEND
+  switchAfterCreate.value = false
   showCreateForm.value = false
+}
+
+async function openCreateForm() {
+  showCreateForm.value = true
+  // Fetch ComfyUI releases when opening form
+  if (comfyUIReleases.value.length <= 1) {
+    loadingReleases.value = true
+    try {
+      comfyUIReleases.value = await getComfyUIReleases()
+    } catch (err) {
+      console.error('Failed to load ComfyUI releases:', err)
+    } finally {
+      loadingReleases.value = false
+    }
+  }
 }
 
 function viewEnvironmentDetails(name: string) {
@@ -295,6 +377,11 @@ async function loadEnvironments() {
 }
 
 onMounted(loadEnvironments)
+
+// Expose methods for parent component
+defineExpose({
+  loadEnvironments
+})
 </script>
 
 <style scoped>
@@ -332,5 +419,64 @@ onMounted(loadEnvironments)
 .create-form__actions {
   display: flex;
   gap: var(--cg-space-2);
+  margin-top: var(--cg-space-2);
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-1);
+}
+
+.form-field--checkbox {
+  flex-direction: row;
+  align-items: center;
+}
+
+.form-label {
+  font-size: var(--cg-font-size-xs);
+  color: var(--cg-color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+}
+
+.form-select {
+  background: var(--cg-color-bg-primary);
+  border: 1px solid var(--cg-color-border-subtle);
+  color: var(--cg-color-text-primary);
+  padding: var(--cg-space-2);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-sm);
+  cursor: pointer;
+}
+
+.form-select:hover {
+  border-color: var(--cg-color-border);
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: var(--cg-color-accent);
+}
+
+.form-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.form-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  cursor: pointer;
+  font-size: var(--cg-font-size-sm);
+  color: var(--cg-color-text-secondary);
+}
+
+.form-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--cg-color-accent);
+  cursor: pointer;
 }
 </style>

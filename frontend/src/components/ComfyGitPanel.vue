@@ -209,6 +209,7 @@
           <!-- Environments View -->
           <EnvironmentsSection
             v-else-if="currentView === 'environments'"
+            ref="environmentsSectionRef"
             @switch="handleEnvironmentSwitch"
             @create="handleEnvironmentCreate"
             @delete="handleEnvironmentDelete"
@@ -298,6 +299,20 @@
       :message="switchProgress.message"
     />
 
+    <!-- Create Environment Progress Modal -->
+    <div v-if="showCreateProgress" class="dialog-overlay">
+      <div class="dialog-content create-progress-dialog">
+        <div class="dialog-header">
+          <h3 class="dialog-title">CREATING ENVIRONMENT</h3>
+        </div>
+        <div class="dialog-body create-progress-body">
+          <div class="create-progress-spinner"></div>
+          <p class="create-progress-message">{{ createProgress.message }}</p>
+          <p class="create-progress-hint">This may take several minutes...</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Environment Selector Modal -->
     <div v-if="showEnvironmentSelector" class="dialog-overlay" @click.self="showEnvironmentSelector = false">
       <div class="dialog-content env-selector-dialog">
@@ -382,7 +397,7 @@ import SwitchProgressModal from './base/molecules/SwitchProgressModal.vue'
 import SyncEnvironmentModal from './base/molecules/SyncEnvironmentModal.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import { useOrchestratorService } from '@/composables/useOrchestratorService'
-import type { ComfyGitStatus, CommitInfo, BranchInfo, EnvironmentInfo } from '@/types/comfygit'
+import type { ComfyGitStatus, CommitInfo, BranchInfo, EnvironmentInfo, CreateEnvironmentRequest } from '@/types/comfygit'
 
 const emit = defineEmits<{
   close: []
@@ -399,6 +414,8 @@ const {
   getEnvironments,
   switchEnvironment,
   getSwitchProgress,
+  createEnvironment,
+  getCreateProgress,
   syncEnvironmentManually
 } = useComfyGitService()
 
@@ -422,6 +439,7 @@ const showEnvironmentSelector = ref(false)
 
 // Ref to child components for triggering reloads
 const workflowsSectionRef = ref<{ loadWorkflows: (forceRefresh?: boolean) => Promise<void> } | null>(null)
+const environmentsSectionRef = ref<{ loadEnvironments: () => Promise<void> } | null>(null)
 
 // Environment switching modals
 const showConfirmSwitch = ref(false)
@@ -430,6 +448,12 @@ const targetEnvironment = ref<string>('')
 const switchProgress = ref({ state: 'idle', progress: 0, message: '' })
 let switchPollInterval: number | null = null
 let progressSimulationInterval: number | null = null
+
+// Environment creation state
+const showCreateProgress = ref(false)
+const createProgress = ref({ state: 'idle', message: '' })
+const pendingCreateRequest = ref<CreateEnvironmentRequest | null>(null)
+let createPollInterval: number | null = null
 
 const currentView = ref<ViewName>('status')
 const currentSection = ref<SectionName>('this-env')
@@ -916,12 +940,72 @@ async function handleSyncConfirm() {
   }
 }
 
-async function handleEnvironmentCreate(envName: string) {
-  const toastId = showToast(`Creating environment "${envName}"...`, 'info', 0)
-  // TODO: Implement environment creation API call
-  removeToast(toastId)
-  showToast(`Environment creation not yet implemented`, 'warning')
-  // After implementation, call: await refresh()
+async function handleEnvironmentCreate(request: CreateEnvironmentRequest) {
+  pendingCreateRequest.value = request
+  showCreateProgress.value = true
+  createProgress.value = { state: 'creating', message: `Creating environment '${request.name}'...` }
+
+  try {
+    const result = await createEnvironment(request)
+
+    if (result.status === 'started') {
+      // Start polling for progress
+      startCreatePolling()
+    } else if (result.status === 'error') {
+      showCreateProgress.value = false
+      showToast(`Failed to create environment: ${result.message}. Check debug logs for details.`, 'error')
+      pendingCreateRequest.value = null
+    }
+  } catch (err) {
+    showCreateProgress.value = false
+    showToast(`Error creating environment: ${err instanceof Error ? err.message : 'Unknown error'}. Check debug logs.`, 'error')
+    pendingCreateRequest.value = null
+  }
+}
+
+function startCreatePolling() {
+  if (createPollInterval) return
+
+  createPollInterval = window.setInterval(async () => {
+    try {
+      const progress = await getCreateProgress()
+      createProgress.value = { state: progress.state, message: progress.message }
+
+      if (progress.state === 'complete') {
+        stopCreatePolling()
+        showCreateProgress.value = false
+        showToast(`✓ Environment '${progress.environment_name}' created`, 'success')
+
+        // Refresh the environments list
+        await refresh()
+        if (environmentsSectionRef.value) {
+          await environmentsSectionRef.value.loadEnvironments()
+        }
+
+        // If switch_after was requested, trigger the switch
+        if (pendingCreateRequest.value?.switch_after && progress.environment_name) {
+          await handleEnvironmentSwitch(progress.environment_name)
+        }
+
+        pendingCreateRequest.value = null
+      } else if (progress.state === 'error') {
+        stopCreatePolling()
+        showCreateProgress.value = false
+        showToast(`Failed to create environment: ${progress.error || progress.message}. Check debug logs.`, 'error')
+        pendingCreateRequest.value = null
+      }
+    } catch (err) {
+      console.error('Failed to poll create progress:', err)
+      // Continue polling - might be transient
+    }
+  }, 2000) // Poll every 2 seconds
+}
+
+function stopCreatePolling() {
+  if (createPollInterval) {
+    clearInterval(createPollInterval)
+    createPollInterval = null
+  }
 }
 
 async function handleEnvironmentDelete(envName: string) {
@@ -1405,5 +1489,41 @@ onMounted(refresh)
 .sidebar::-webkit-scrollbar-thumb:hover,
 .content-area::-webkit-scrollbar-thumb:hover {
   background: var(--cg-color-accent);
+}
+
+/* Create Progress Modal */
+.create-progress-dialog {
+  width: 400px;
+}
+
+.create-progress-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--cg-space-4);
+  padding: var(--cg-space-6) var(--cg-space-4);
+}
+
+.create-progress-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--cg-color-border-subtle);
+  border-top-color: var(--cg-color-accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.create-progress-message {
+  color: var(--cg-color-text-primary);
+  font-size: var(--cg-font-size-sm);
+  text-align: center;
+  margin: 0;
+}
+
+.create-progress-hint {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  text-align: center;
+  margin: 0;
 }
 </style>

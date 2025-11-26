@@ -11,7 +11,10 @@ import type {
   SwitchBranchResult,
   EnvironmentInfo,
   SwitchEnvironmentProgress,
+  CreateEnvironmentRequest,
   CreateEnvironmentResult,
+  CreateEnvironmentProgress,
+  ComfyUIRelease,
   SyncEnvironmentResult,
   WorkflowInfo,
   WorkflowDetails,
@@ -181,17 +184,37 @@ export function useComfyGitService() {
     }
   }
 
-  async function createEnvironment(name: string, pytorchBackend: string, cloneFrom?: string): Promise<CreateEnvironmentResult> {
+  async function createEnvironment(request: CreateEnvironmentRequest): Promise<CreateEnvironmentResult> {
     if (USE_MOCK) {
-      await mockApi.createEnvironment(name, pytorchBackend, cloneFrom)
-      return { status: 'success' }
+      await mockApi.createEnvironment(request.name, request.torch_backend || 'auto')
+      return { status: 'started', task_id: 'mock-task-id', message: 'Creating environment...' }
     }
 
     return fetchApi<CreateEnvironmentResult>('/v2/workspace/environments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, pytorch_backend: pytorchBackend, clone_from: cloneFrom })
+      body: JSON.stringify(request)
     })
+  }
+
+  async function getCreateProgress(): Promise<CreateEnvironmentProgress> {
+    if (USE_MOCK) {
+      return { state: 'idle', message: 'No creation in progress' }
+    }
+
+    return fetchApi<CreateEnvironmentProgress>('/v2/workspace/environments/create_status')
+  }
+
+  async function getComfyUIReleases(limit = 20): Promise<ComfyUIRelease[]> {
+    if (USE_MOCK) {
+      return [
+        { tag_name: 'latest', name: 'Latest', published_at: new Date().toISOString() },
+        { tag_name: 'v0.3.69', name: 'v0.3.69', published_at: '2025-01-15T00:00:00Z' },
+        { tag_name: 'v0.3.68', name: 'v0.3.68', published_at: '2025-01-10T00:00:00Z' },
+      ]
+    }
+
+    return fetchApi<ComfyUIRelease[]>(`/v2/workspace/comfyui_releases?limit=${limit}`)
   }
 
   async function deleteEnvironment(name: string): Promise<{ status: 'success' | 'error', message?: string }> {
@@ -610,6 +633,8 @@ export function useComfyGitService() {
     switchEnvironment,
     getSwitchProgress,
     createEnvironment,
+    getCreateProgress,
+    getComfyUIReleases,
     deleteEnvironment,
     // Workflow Management
     getWorkflows,

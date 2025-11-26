@@ -3,10 +3,11 @@ import os
 import sys
 import json
 import subprocess
+import threading
+import uuid
 from aiohttp import web
 from pathlib import Path
 
-from cgm_core.context import get_workspace_from_request
 from cgm_utils.async_helpers import run_sync
 import orchestrator
 
@@ -15,6 +16,16 @@ routes = web.RouteTableDef()
 # Exit codes for orchestrator
 RESTART_EXIT_CODE = 42
 SWITCH_ENV_EXIT_CODE = 43
+
+# Global state for environment creation task
+_create_task_lock = threading.Lock()
+_create_task_state = {
+    "state": "idle",
+    "task_id": None,
+    "environment_name": None,
+    "message": "No creation in progress",
+    "error": None
+}
 
 
 def spawn_orchestrator(environment, target_env: str) -> None:
@@ -197,7 +208,7 @@ async def switch_environment(request: web.Request) -> web.Response:
             "message": f"Switching to {target_env}..."
         })
 
-    except Exception as e:
+    except Exception:
         # Release lock on error
         lock_file = metadata_dir / ".switch.lock"
         lock_file.unlink(missing_ok=True)
@@ -279,3 +290,199 @@ async def get_switch_status(request: web.Request) -> web.Response:
         "state": "idle",
         "message": "No switch in progress"
     })
+
+
+def _run_create_environment(workspace, name: str, python_version: str, comfyui_version: str, torch_backend: str):
+    """Background thread function to create environment."""
+    global _create_task_state
+
+    try:
+        with _create_task_lock:
+            _create_task_state["state"] = "creating"
+            _create_task_state["message"] = f"Creating environment '{name}'..."
+
+        # Call the core library to create the environment
+        workspace.create_environment(
+            name=name,
+            python_version=python_version,
+            comfyui_version=comfyui_version if comfyui_version != "latest" else None,
+            torch_backend=torch_backend
+        )
+
+        with _create_task_lock:
+            _create_task_state["state"] = "complete"
+            _create_task_state["message"] = f"Environment '{name}' created successfully"
+            _create_task_state["error"] = None
+
+    except Exception as e:
+        with _create_task_lock:
+            _create_task_state["state"] = "error"
+            _create_task_state["message"] = "Failed to create environment"
+            _create_task_state["error"] = str(e)
+        print(f"[ComfyGit] Environment creation failed: {e}")
+
+
+@routes.post("/v2/workspace/environments")
+async def create_environment(request: web.Request) -> web.Response:
+    """
+    Create a new environment.
+
+    Request body:
+        {
+            "name": "my-env",
+            "python_version": "3.12",
+            "comfyui_version": "latest",
+            "torch_backend": "auto",
+            "switch_after": false
+        }
+
+    Returns:
+        {
+            "status": "started",
+            "task_id": "uuid",
+            "message": "Creating environment..."
+        }
+    """
+    global _create_task_state
+
+    is_managed, workspace, _ = orchestrator.detect_environment_type()
+    if not is_managed or not workspace:
+        return web.json_response({
+            "status": "error",
+            "message": "Not in managed workspace"
+        }, status=500)
+
+    # Check if creation already in progress
+    with _create_task_lock:
+        if _create_task_state["state"] == "creating":
+            return web.json_response({
+                "status": "error",
+                "message": "Environment creation already in progress"
+            }, status=409)
+
+    # Parse request
+    try:
+        data = await request.json()
+        name = data.get("name", "").strip()
+        python_version = data.get("python_version", "3.12")
+        comfyui_version = data.get("comfyui_version", "latest")
+        torch_backend = data.get("torch_backend", "auto")
+
+        if not name:
+            return web.json_response({
+                "status": "error",
+                "message": "Environment name is required"
+            }, status=400)
+
+    except Exception:
+        return web.json_response({
+            "status": "error",
+            "message": "Invalid JSON"
+        }, status=400)
+
+    # Check if environment already exists
+    try:
+        existing_envs = await run_sync(workspace.list_environments)
+        if any(env.name == name for env in existing_envs):
+            return web.json_response({
+                "status": "error",
+                "message": f"Environment '{name}' already exists"
+            }, status=409)
+    except Exception as e:
+        return web.json_response({
+            "status": "error",
+            "message": f"Failed to check existing environments: {e}"
+        }, status=500)
+
+    # Initialize task state
+    task_id = str(uuid.uuid4())
+    with _create_task_lock:
+        _create_task_state = {
+            "state": "creating",
+            "task_id": task_id,
+            "environment_name": name,
+            "message": f"Starting creation of '{name}'...",
+            "error": None
+        }
+
+    # Start background thread
+    thread = threading.Thread(
+        target=_run_create_environment,
+        args=(workspace, name, python_version, comfyui_version, torch_backend),
+        daemon=True
+    )
+    thread.start()
+
+    return web.json_response({
+        "status": "started",
+        "task_id": task_id,
+        "message": f"Creating environment '{name}'..."
+    })
+
+
+@routes.get("/v2/workspace/environments/create_status")
+async def get_create_status(request: web.Request) -> web.Response:
+    """
+    Get environment creation status.
+
+    Returns:
+        {
+            "state": "idle|creating|complete|error",
+            "task_id": "uuid",
+            "environment_name": "my-env",
+            "message": "...",
+            "error": "..." (if error)
+        }
+    """
+    with _create_task_lock:
+        return web.json_response(_create_task_state.copy())
+
+
+@routes.get("/v2/workspace/comfyui_releases")
+async def get_comfyui_releases(request: web.Request) -> web.Response:
+    """
+    Get available ComfyUI releases from GitHub.
+
+    Query params:
+        limit: int (default 20)
+
+    Returns:
+        [
+            {"tag_name": "v0.3.69", "name": "v0.3.69", "published_at": "2025-01-15T..."},
+            ...
+        ]
+    """
+    import urllib.request
+    import ssl
+
+    limit = int(request.query.get("limit", "20"))
+
+    try:
+        # Fetch releases from GitHub API
+        url = f"https://api.github.com/repos/comfyanonymous/ComfyUI/releases?per_page={limit}"
+        req = urllib.request.Request(url, headers={"User-Agent": "ComfyGit"})
+
+        # Create SSL context that doesn't verify (for corporate proxies)
+        ctx = ssl.create_default_context()
+
+        with urllib.request.urlopen(req, context=ctx, timeout=10) as response:
+            releases_data = json.loads(response.read().decode())
+
+        # Add "latest" as first option
+        releases = [{"tag_name": "latest", "name": "Latest", "published_at": None}]
+
+        for release in releases_data:
+            releases.append({
+                "tag_name": release.get("tag_name"),
+                "name": release.get("name") or release.get("tag_name"),
+                "published_at": release.get("published_at")
+            })
+
+        return web.json_response(releases)
+
+    except Exception as e:
+        print(f"[ComfyGit] Failed to fetch ComfyUI releases: {e}")
+        # Return fallback with just "latest"
+        return web.json_response([
+            {"tag_name": "latest", "name": "Latest", "published_at": None}
+        ])
