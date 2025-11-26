@@ -307,11 +307,26 @@ export function useComfyGitService() {
     })
   }
 
-  async function updateModelSource(sha256: string, sourceUrl: string): Promise<void> {
-    if (USE_MOCK) return mockApi.updateModelSource(sha256, sourceUrl)
+  async function addModelSource(hash: string, sourceUrl: string): Promise<{ status: string; source_type: string }> {
+    if (USE_MOCK) {
+      await mockApi.updateModelSource(hash, sourceUrl)
+      return { status: 'success', source_type: 'custom' }
+    }
 
-    return fetchApi(`/v2/workspace/models/${sha256}/source`, {
+    return fetchApi(`/v2/workspace/models/${hash}/source`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_url: sourceUrl })
+    })
+  }
+
+  async function removeModelSource(hash: string, sourceUrl: string): Promise<{ status: string }> {
+    if (USE_MOCK) {
+      return { status: 'success' }
+    }
+
+    return fetchApi(`/v2/workspace/models/${hash}/source`, {
+      method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ source_url: sourceUrl })
     })
@@ -595,7 +610,8 @@ export function useComfyGitService() {
     getWorkspaceModels,
     getModelDetails,
     openFileLocation,
-    updateModelSource,
+    addModelSource,
+    removeModelSource,
     deleteModel,
     downloadModel,
     scanWorkspaceModels,

@@ -117,16 +117,19 @@ class TestWorkspaceModelsListEndpoint:
 
 @pytest.mark.integration
 class TestWorkspaceModelSourceEndpoint:
-    """POST /v2/workspace/models/{identifier}/source - Update model download source."""
+    """POST /v2/workspace/models/{identifier}/source - Add source to workspace model index."""
 
     async def test_success_add_source(self, client, mock_environment):
-        """Should successfully add source URL to model."""
-        # Arrange
-        mock_result = Mock()
-        mock_result.success = True
-        mock_result.model_hash = "abc12345"
-        mock_result.source_type = "civitai"
-        mock_environment.add_model_source.return_value = mock_result
+        """Should add source directly to workspace model repository."""
+        # Arrange: Mock workspace.model_repository and model_downloader
+        mock_model_repo = Mock()
+        mock_model_repo.has_model.return_value = True
+        mock_model_repo.add_source.return_value = None
+        mock_environment.workspace.model_repository = mock_model_repo
+
+        mock_downloader = Mock()
+        mock_downloader.detect_url_type.return_value = "civitai"
+        mock_environment.workspace.model_downloader = mock_downloader
 
         # Act
         resp = await client.post(
@@ -138,6 +141,10 @@ class TestWorkspaceModelSourceEndpoint:
         assert resp.status == 200
         data = await resp.json()
         assert data["status"] == "success"
+        assert data["source_type"] == "civitai"
+
+        # Verify workspace.model_repository.add_source was called
+        mock_model_repo.add_source.assert_called_once()
 
     async def test_error_missing_source_url(self, client, mock_environment):
         """Should return 400 when source_url is missing."""
@@ -150,36 +157,19 @@ class TestWorkspaceModelSourceEndpoint:
         data = await resp.json()
         assert "error" in data
 
-    async def test_error_model_not_found(self, client, mock_environment):
-        """Should return 404 when model identifier not found."""
-        mock_result = Mock()
-        mock_result.success = False
-        mock_result.error = "Model not found"  # Contains "not found"
-        mock_environment.add_model_source.return_value = mock_result
+    async def test_error_model_not_in_index(self, client, mock_environment):
+        """Should return 404 when model hash not found in workspace index."""
+        # Setup: Model not in repository
+        mock_model_repo = Mock()
+        mock_model_repo.has_model.return_value = False
+        mock_environment.workspace.model_repository = mock_model_repo
 
         resp = await client.post(
             "/v2/workspace/models/nonexistent/source",
             json={"source_url": "https://example.com/model.safetensors"}
         )
 
-        # Implementation returns 404 if error contains "not found" (case-insensitive)
         assert resp.status == 404
-        data = await resp.json()
-        assert "error" in data
-
-    async def test_error_other_failure(self, client, mock_environment):
-        """Should return 400 for other add_model_source failures."""
-        mock_result = Mock()
-        mock_result.success = False
-        mock_result.error = "Invalid URL format"  # Does NOT contain "not found"
-        mock_environment.add_model_source.return_value = mock_result
-
-        resp = await client.post(
-            "/v2/workspace/models/abc12345/source",
-            json={"source_url": "not-a-url"}
-        )
-
-        assert resp.status == 400
         data = await resp.json()
         assert "error" in data
 

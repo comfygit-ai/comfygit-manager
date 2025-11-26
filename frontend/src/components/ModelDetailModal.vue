@@ -61,6 +61,13 @@
             <div v-for="(src, idx) in details.sources" :key="idx" class="source-item">
               <span class="source-type">{{ src.type }}:</span>
               <a :href="src.url" target="_blank" class="source-url">{{ src.url }}</a>
+              <button
+                class="remove-source-btn"
+                :disabled="removingSourceUrl === src.url"
+                @click="removeSource(src.url)"
+              >
+                {{ removingSourceUrl === src.url ? '...' : '×' }}
+              </button>
             </div>
           </div>
           <div v-else class="empty-state">
@@ -78,7 +85,7 @@
             <button
               class="add-source-btn"
               :disabled="!newSourceUrl.trim() || addingSource"
-              @click="addSource"
+              @click="handleAddSource"
             >
               {{ addingSource ? 'Adding...' : 'Add Source' }}
             </button>
@@ -116,7 +123,7 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const { getModelDetails, updateModelSource, openFileLocation } = useComfyGitService()
+const { getModelDetails, addModelSource, removeModelSource, openFileLocation } = useComfyGitService()
 
 const details = ref<ModelDetails | null>(null)
 const loading = ref(true)
@@ -124,6 +131,7 @@ const error = ref<string | null>(null)
 
 const newSourceUrl = ref('')
 const addingSource = ref(false)
+const removingSourceUrl = ref<string | null>(null)
 const sourceError = ref<string | null>(null)
 const sourceSuccess = ref<string | null>(null)
 
@@ -162,7 +170,7 @@ async function openLocation(path: string) {
   }
 }
 
-async function addSource() {
+async function handleAddSource() {
   if (!newSourceUrl.value.trim() || !details.value) return
 
   addingSource.value = true
@@ -170,8 +178,7 @@ async function addSource() {
   sourceSuccess.value = null
 
   try {
-    // Use the standard hash (custom) which is always computed for every model
-    await updateModelSource(details.value.hash, newSourceUrl.value.trim())
+    await addModelSource(details.value.hash, newSourceUrl.value.trim())
     sourceSuccess.value = 'Source added successfully!'
     newSourceUrl.value = ''
     // Reload details to show updated sources
@@ -180,6 +187,25 @@ async function addSource() {
     sourceError.value = err instanceof Error ? err.message : 'Failed to add source'
   } finally {
     addingSource.value = false
+  }
+}
+
+async function removeSource(url: string) {
+  if (!details.value) return
+
+  removingSourceUrl.value = url
+  sourceError.value = null
+  sourceSuccess.value = null
+
+  try {
+    await removeModelSource(details.value.hash, url)
+    showToast('Source removed')
+    // Reload details to show updated sources
+    await loadDetails()
+  } catch (err) {
+    sourceError.value = err instanceof Error ? err.message : 'Failed to remove source'
+  } finally {
+    removingSourceUrl.value = null
   }
 }
 
@@ -290,18 +316,46 @@ onMounted(loadDetails)
 .source-item {
   display: flex;
   gap: var(--cg-space-2);
-  align-items: baseline;
+  align-items: center;
 }
 
 .source-type {
   color: var(--cg-color-text-muted);
   text-transform: capitalize;
+  flex-shrink: 0;
 }
 
 .source-url {
   color: var(--cg-color-accent);
   word-break: break-all;
   font-size: var(--cg-font-size-sm);
+  flex: 1;
+}
+
+.remove-source-btn {
+  background: transparent;
+  border: 1px solid var(--cg-color-border);
+  color: var(--cg-color-text-muted);
+  width: 20px;
+  height: 20px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove-source-btn:hover:not(:disabled) {
+  background: var(--cg-color-error, #ef4444);
+  border-color: var(--cg-color-error, #ef4444);
+  color: white;
+}
+
+.remove-source-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .empty-state {

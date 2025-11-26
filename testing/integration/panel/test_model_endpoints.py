@@ -230,3 +230,171 @@ class TestEnvironmentModelsEndpoint:
         assert resp.status == 500
         data = await resp.json()
         assert "error" in data
+
+
+@pytest.mark.integration
+class TestWorkspaceModelSourceEndpoint:
+    """POST /v2/workspace/models/{identifier}/source - Add source to workspace model index."""
+
+    async def test_add_source_success(self, client, mock_environment):
+        """Should add source directly to workspace model repository."""
+        # Setup: Mock the model_repository on workspace
+        mock_model_repo = Mock()
+        mock_model_repo.has_model.return_value = True
+        mock_model_repo.add_source.return_value = None
+        mock_environment.workspace.model_repository = mock_model_repo
+
+        # Mock model_downloader for source type detection
+        mock_downloader = Mock()
+        mock_downloader.detect_url_type.return_value = "huggingface"
+        mock_environment.workspace.model_downloader = mock_downloader
+
+        # Execute
+        resp = await client.post(
+            "/v2/workspace/models/abc123def456/source",
+            json={"source_url": "https://huggingface.co/org/model/resolve/main/file.safetensors"}
+        )
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "success"
+        assert data["source_type"] == "huggingface"
+
+        # Should have called workspace.model_repository.add_source directly
+        mock_model_repo.add_source.assert_called_once()
+        call_args = mock_model_repo.add_source.call_args
+        assert call_args[1]["model_hash"] == "abc123def456"
+        assert call_args[1]["source_type"] == "huggingface"
+        assert "huggingface.co" in call_args[1]["source_url"]
+
+    async def test_add_source_model_not_in_index(self, client, mock_environment):
+        """Should return 404 when model hash not found in workspace index."""
+        # Setup: Model not in repository
+        mock_model_repo = Mock()
+        mock_model_repo.has_model.return_value = False
+        mock_environment.workspace.model_repository = mock_model_repo
+
+        # Execute
+        resp = await client.post(
+            "/v2/workspace/models/nonexistent123/source",
+            json={"source_url": "https://civitai.com/api/download/models/12345"}
+        )
+
+        # Verify
+        assert resp.status == 404
+        data = await resp.json()
+        assert "error" in data
+
+    async def test_add_source_missing_url(self, client, mock_environment):
+        """Should return 400 when source_url is missing."""
+        resp = await client.post(
+            "/v2/workspace/models/abc123/source",
+            json={}
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "source_url" in data["error"].lower() or "missing" in data["error"].lower()
+
+    async def test_add_source_detects_civitai_type(self, client, mock_environment):
+        """Should auto-detect CivitAI source type."""
+        mock_model_repo = Mock()
+        mock_model_repo.has_model.return_value = True
+        mock_environment.workspace.model_repository = mock_model_repo
+
+        mock_downloader = Mock()
+        mock_downloader.detect_url_type.return_value = "civitai"
+        mock_environment.workspace.model_downloader = mock_downloader
+
+        resp = await client.post(
+            "/v2/workspace/models/abc123/source",
+            json={"source_url": "https://civitai.com/api/download/models/12345"}
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["source_type"] == "civitai"
+
+    async def test_add_source_error_no_environment(self, client, monkeypatch):
+        """Should return 500 when no environment detected."""
+        monkeypatch.setattr(
+            "comfygit_panel.get_environment_from_cwd",
+            lambda: None
+        )
+
+        resp = await client.post(
+            "/v2/workspace/models/abc123/source",
+            json={"source_url": "https://example.com/model.safetensors"}
+        )
+
+        assert resp.status == 500
+
+
+@pytest.mark.integration
+class TestWorkspaceModelSourceRemoveEndpoint:
+    """DELETE /v2/workspace/models/{identifier}/source - Remove source from workspace model index."""
+
+    async def test_remove_source_success(self, client, mock_environment):
+        """Should remove source from workspace model repository."""
+        # Setup: Mock the model_repository on workspace
+        mock_model_repo = Mock()
+        mock_model_repo.remove_source.return_value = True  # Successfully removed
+        mock_environment.workspace.model_repository = mock_model_repo
+
+        # Execute
+        resp = await client.delete(
+            "/v2/workspace/models/abc123def456/source",
+            json={"source_url": "https://huggingface.co/org/model/resolve/main/file.safetensors"}
+        )
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "success"
+
+        # Should have called workspace.model_repository.remove_source
+        mock_model_repo.remove_source.assert_called_once_with(
+            "abc123def456",
+            "https://huggingface.co/org/model/resolve/main/file.safetensors"
+        )
+
+    async def test_remove_source_not_found(self, client, mock_environment):
+        """Should return 404 when source URL doesn't exist for model."""
+        mock_model_repo = Mock()
+        mock_model_repo.remove_source.return_value = False  # Source not found
+        mock_environment.workspace.model_repository = mock_model_repo
+
+        resp = await client.delete(
+            "/v2/workspace/models/abc123/source",
+            json={"source_url": "https://example.com/nonexistent.safetensors"}
+        )
+
+        assert resp.status == 404
+        data = await resp.json()
+        assert "error" in data
+
+    async def test_remove_source_missing_url(self, client, mock_environment):
+        """Should return 400 when source_url is missing."""
+        resp = await client.delete(
+            "/v2/workspace/models/abc123/source",
+            json={}
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "source_url" in data["error"].lower() or "missing" in data["error"].lower()
+
+    async def test_remove_source_error_no_environment(self, client, monkeypatch):
+        """Should return 500 when no environment detected."""
+        monkeypatch.setattr(
+            "comfygit_panel.get_environment_from_cwd",
+            lambda: None
+        )
+
+        resp = await client.delete(
+            "/v2/workspace/models/abc123/source",
+            json={"source_url": "https://example.com/model.safetensors"}
+        )
+
+        assert resp.status == 500

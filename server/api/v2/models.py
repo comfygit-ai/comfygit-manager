@@ -124,8 +124,13 @@ async def get_workspace_models(request: web.Request, env) -> web.Response:
 
 @routes.post("/v2/workspace/models/{identifier}/source")
 @requires_environment
-async def update_model_source(request: web.Request, env) -> web.Response:
-    """Add or update download source URL for a model."""
+async def add_model_source(request: web.Request, env) -> web.Response:
+    """Add a download source URL to a model in the workspace index.
+
+    This endpoint adds sources directly to the workspace model repository (SQLite),
+    not the environment's pyproject.toml. Use this for managing sources of models
+    in the shared workspace index.
+    """
     identifier = request.match_info["identifier"]
 
     try:
@@ -138,18 +143,65 @@ async def update_model_source(request: web.Request, env) -> web.Response:
         return web.json_response({"error": "Missing 'source_url' field"}, status=400)
 
     try:
-        result = await run_sync(env.add_model_source, identifier, source_url)
+        model_repo = env.workspace.model_repository
 
-        if not result.success:
-            # Distinguish between not found and other errors
-            if "not found" in (result.error or "").lower():
-                return web.json_response({"error": result.error}, status=404)
-            return web.json_response({"error": result.error}, status=400)
+        # Check if model exists in the workspace index
+        if not model_repo.has_model(identifier):
+            return web.json_response(
+                {"error": f"Model not found in workspace index: {identifier}"},
+                status=404
+            )
+
+        # Auto-detect source type
+        source_type = env.workspace.model_downloader.detect_url_type(source_url)
+
+        # Add source to the repository
+        await run_sync(
+            model_repo.add_source,
+            model_hash=identifier,
+            source_type=source_type,
+            source_url=source_url
+        )
 
         return web.json_response({
             "status": "success",
-            "model_hash": result.model_hash,
-            "source_type": result.source_type,
+            "model_hash": identifier,
+            "source_type": source_type,
+        })
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
+@routes.delete("/v2/workspace/models/{identifier}/source")
+@requires_environment
+async def remove_model_source(request: web.Request, env) -> web.Response:
+    """Remove a download source URL from a model in the workspace index."""
+    identifier = request.match_info["identifier"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    source_url = body.get("source_url")
+    if not source_url:
+        return web.json_response({"error": "Missing 'source_url' field"}, status=400)
+
+    try:
+        model_repo = env.workspace.model_repository
+
+        # Remove source from the repository
+        removed = await run_sync(model_repo.remove_source, identifier, source_url)
+
+        if not removed:
+            return web.json_response(
+                {"error": f"Source URL not found for model: {identifier}"},
+                status=404
+            )
+
+        return web.json_response({
+            "status": "success",
+            "model_hash": identifier,
         })
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
