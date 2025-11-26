@@ -198,7 +198,10 @@
           />
 
           <!-- Nodes View -->
-          <NodesSection v-else-if="currentView === 'nodes'" />
+          <NodesSection
+            v-else-if="currentView === 'nodes'"
+            @open-node-manager="handleOpenNodeManager"
+          />
 
           <!-- Debug (Environment) View -->
           <DebugEnvSection v-else-if="currentView === 'debug-env'" />
@@ -448,6 +451,24 @@ function handleNavigate(view: string) {
 
 function handleSwitchBranchClick() {
   selectView('branches', 'this-env')
+}
+
+function handleOpenNodeManager() {
+  // Close the panel first
+  emit('close')
+
+  // Find and click the Manager button in the toolbar
+  // ComfyUI-Manager adds a button with text "Manager" to the menu
+  setTimeout(() => {
+    const buttons = document.querySelectorAll('button.comfyui-button')
+    for (const btn of buttons) {
+      if (btn.textContent?.trim() === 'Manager') {
+        (btn as HTMLButtonElement).click()
+        return
+      }
+    }
+    console.warn('[ComfyGit] Manager button not found in toolbar')
+  }, 100) // Small delay to let panel close first
 }
 
 interface ConfirmDialogConfig {
