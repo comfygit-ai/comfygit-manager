@@ -42,20 +42,26 @@
       <template v-else>
         <!-- Summary at top -->
         <SummaryBar v-if="models.length" variant="compact">
-          Total: {{ models.length }} models • {{ formatSize(totalSize) }} •
-          Used in {{ environmentsWithModels }} environments
+          Total: {{ models.length }} models • {{ formatSize(totalSize) }}
         </SummaryBar>
 
-        <!-- Checkpoints -->
-        <SectionGroup v-if="filteredCheckpoints.length" title="CHECKPOINTS" :count="filteredCheckpoints.length">
+        <!-- Dynamic sections by model type -->
+        <SectionGroup
+          v-for="group in modelGroups"
+          :key="group.type"
+          :title="group.type.toUpperCase()"
+          :count="group.models.length"
+          :collapsible="true"
+          :initially-expanded="false"
+        >
           <ItemCard
-            v-for="model in filteredCheckpoints"
+            v-for="model in group.models"
             :key="model.sha256 || model.filename"
             status="synced"
           >
             <template #icon>📦</template>
             <template #title>{{ model.filename }}</template>
-            <template #subtitle>{{ formatSize((model as any).size_mb || model.size) }}</template>
+            <template #subtitle>{{ formatSize(model.size) }}</template>
             <template #details>
               <DetailRow
                 v-if="model.sha256 || (model as any).sha256_hash"
@@ -64,7 +70,6 @@
                 :mono="true"
                 value-variant="hash"
               />
-              <DetailRow label="Used in:" :value="getUsageText(model)" />
               <DetailRow
                 v-if="model.source_url || (model as any).sources?.[0]"
                 label="Source URL:"
@@ -73,83 +78,6 @@
               <DetailRow v-else label="Source URL:" value-variant="warning">
                 <template #value>(none)</template>
               </DetailRow>
-            </template>
-            <template #actions>
-              <ActionButton variant="secondary" size="xs" @click="editUrl(model)">
-                Edit URL
-              </ActionButton>
-              <ActionButton v-if="model.sha256 || (model as any).sha256_hash" variant="secondary" size="xs" @click="copyHash(model.sha256 || (model as any).sha256_hash)">
-                Copy Hash
-              </ActionButton>
-              <ActionButton variant="destructive" size="xs" @click="deleteModel(model)">
-                Delete
-              </ActionButton>
-            </template>
-          </ItemCard>
-        </SectionGroup>
-
-        <!-- LoRAs -->
-        <SectionGroup v-if="filteredLoras.length" title="LORAS" :count="filteredLoras.length">
-          <ItemCard
-            v-for="model in filteredLoras"
-            :key="model.sha256 || model.filename"
-            status="synced"
-          >
-            <template #icon>📦</template>
-            <template #title>{{ model.filename }}</template>
-            <template #subtitle>{{ formatSize((model as any).size_mb || model.size) }}</template>
-            <template #details>
-              <DetailRow
-                v-if="model.sha256 || (model as any).sha256_hash"
-                label="SHA256:"
-                :value="(model.sha256 || (model as any).sha256_hash).substring(0, 16) + '...'"
-                :mono="true"
-                value-variant="hash"
-              />
-              <DetailRow label="Used in:" :value="getUsageText(model)" />
-              <DetailRow
-                v-if="model.source_url || (model as any).sources?.[0]"
-                label="Source URL:"
-                :value="model.source_url || (model as any).sources?.[0]"
-              />
-              <DetailRow v-else label="Source URL:" value-variant="warning">
-                <template #value>(none)</template>
-              </DetailRow>
-            </template>
-            <template #actions>
-              <ActionButton variant="secondary" size="xs" @click="editUrl(model)">
-                Edit URL
-              </ActionButton>
-              <ActionButton v-if="model.sha256 || (model as any).sha256_hash" variant="secondary" size="xs" @click="copyHash(model.sha256 || (model as any).sha256_hash)">
-                Copy Hash
-              </ActionButton>
-              <ActionButton variant="destructive" size="xs" @click="deleteModel(model)">
-                Delete
-              </ActionButton>
-            </template>
-          </ItemCard>
-        </SectionGroup>
-
-        <!-- Other Models -->
-        <SectionGroup v-if="filteredOther.length" title="OTHER" :count="filteredOther.length">
-          <ItemCard
-            v-for="model in filteredOther"
-            :key="model.sha256 || model.filename"
-            status="synced"
-          >
-            <template #icon>📦</template>
-            <template #title>{{ model.filename }}</template>
-            <template #subtitle>{{ formatSize((model as any).size_mb || model.size) }}</template>
-            <template #details>
-              <DetailRow label="Type:" :value="model.type" />
-              <DetailRow
-                v-if="model.sha256 || (model as any).sha256_hash"
-                label="SHA256:"
-                :value="(model.sha256 || (model as any).sha256_hash).substring(0, 16) + '...'"
-                :mono="true"
-                value-variant="hash"
-              />
-              <DetailRow label="Used in:" :value="getUsageText(model)" />
             </template>
             <template #actions>
               <ActionButton variant="secondary" size="xs" @click="editUrl(model)">
@@ -216,19 +144,8 @@ const searchQuery = ref('')
 const showPopover = ref(false)
 
 const totalSize = computed(() =>
-  models.value.reduce((sum, m) => sum + ((m as any).size_mb || m.size || 0), 0)
+  models.value.reduce((sum, m) => sum + (m.size || 0), 0)
 )
-
-const environmentsWithModels = computed(() => {
-  const envs = new Set<string>()
-  models.value.forEach(m => {
-    const modelAny = m as any
-    if (m.used_in_environments && m.used_in_environments.length > 0) {
-      m.used_in_environments.forEach(env => envs.add(env.env_name))
-    }
-  })
-  return envs.size
-})
 
 // Search filtering
 const filteredModels = computed(() => {
@@ -244,34 +161,40 @@ const filteredModels = computed(() => {
   })
 })
 
-const filteredCheckpoints = computed(() =>
-  filteredModels.value.filter(m => m.type === 'checkpoints')
-)
-
-const filteredLoras = computed(() =>
-  filteredModels.value.filter(m => m.type === 'loras')
-)
-
-const filteredOther = computed(() =>
-  filteredModels.value.filter(m => m.type !== 'checkpoints' && m.type !== 'loras')
-)
-
-function formatSize(mb: number | undefined): string {
-  if (!mb) return 'Unknown'
-  if (mb >= 1024) {
-    return `${(mb / 1024).toFixed(1)} GB`
+// Dynamic grouping by type
+const modelGroups = computed(() => {
+  const groups: Record<string, ModelInfo[]> = {}
+  for (const model of filteredModels.value) {
+    const type = model.type || 'other'
+    if (!groups[type]) groups[type] = []
+    groups[type].push(model)
   }
-  return `${mb.toFixed(0)} MB`
-}
+  // Sort by type name, but put common types first
+  const typeOrder = ['checkpoints', 'loras', 'vae', 'controlnet', 'upscale_models', 'clip', 'embeddings']
+  return Object.entries(groups)
+    .sort(([a], [b]) => {
+      const aIdx = typeOrder.indexOf(a)
+      const bIdx = typeOrder.indexOf(b)
+      if (aIdx >= 0 && bIdx >= 0) return aIdx - bIdx
+      if (aIdx >= 0) return -1
+      if (bIdx >= 0) return 1
+      return a.localeCompare(b)
+    })
+    .map(([type, models]) => ({ type, models }))
+})
 
-function getUsageText(model: ModelInfo): string {
-  const modelAny = model as any
-  // Check both used_in_workflows and used_by (mock data uses used_by)
-  const workflows = model.used_in_workflows || modelAny.used_by || []
-  if (!workflows || workflows.length === 0) {
-    return 'Not used'
+// Format bytes to human-readable size
+function formatSize(bytes: number | undefined): string {
+  if (!bytes) return 'Unknown'
+  const GB = 1024 * 1024 * 1024
+  const MB = 1024 * 1024
+  if (bytes >= GB) {
+    return `${(bytes / GB).toFixed(1)} GB`
   }
-  return `${workflows.length} workflow(s)`
+  if (bytes >= MB) {
+    return `${(bytes / MB).toFixed(0)} MB`
+  }
+  return `${(bytes / 1024).toFixed(0)} KB`
 }
 
 function copyHash(hash: string) {
@@ -287,14 +210,8 @@ function editUrl(model: ModelInfo) {
 }
 
 function deleteModel(model: ModelInfo) {
-  const modelAny = model as any
-  const workflows = model.used_in_workflows || modelAny.used_by || []
-  const usageWarning = workflows && workflows.length > 0
-    ? `\n\n⚠ WARNING: This model is used by ${workflows.length} workflow(s):\n${workflows.join(', ')}\n\nDeleting will break these workflows!`
-    : ''
-
   const confirmed = confirm(
-    `Delete ${model.filename}?${usageWarning}\n\nThis will free ${formatSize(modelAny.size_mb || model.size)} of space.`
+    `Delete ${model.filename}?\n\nThis will free ${formatSize(model.size)} of space.`
   )
   if (confirmed) {
     alert('Model deletion not yet implemented')
@@ -318,10 +235,6 @@ async function loadModels() {
   error.value = null
   try {
     models.value = await getWorkspaceModels()
-    console.log('Loaded models:', models.value)
-    console.log('Filtered checkpoints:', filteredCheckpoints.value)
-    console.log('Filtered loras:', filteredLoras.value)
-    console.log('Filtered other:', filteredOther.value)
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load workspace models'
   } finally {

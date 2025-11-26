@@ -241,8 +241,10 @@ export interface WorkflowResolutionPlan {
 export interface ModelInfo {
   filename: string
   hash: string
+  sha256?: string
   type: string
   size: number
+  relative_path?: string
   status: 'available' | 'missing' | 'downloadable' | 'path_mismatch'
   source_url?: string
   used_in_environments?: Array<{ env_name: string; workflow_count: number }>

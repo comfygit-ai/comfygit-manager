@@ -1,4 +1,11 @@
-"""Model management API."""
+"""Model management API.
+
+Provides two scopes:
+- Environment scope (/v2/comfygit/models/environment): Models used in current env's workflows
+- Workspace scope (/v2/workspace/models): All models in the shared workspace index
+"""
+from pathlib import Path
+
 from aiohttp import web
 
 from cgm_core.decorators import requires_environment
@@ -80,3 +87,114 @@ async def get_environment_models(request: web.Request, env) -> web.Response:
         return web.json_response({
             "error": str(e)
         }, status=500)
+
+
+# =============================================================================
+# Workspace-scoped endpoints (shared model index)
+# =============================================================================
+
+
+@routes.get("/v2/workspace/models")
+@requires_environment
+async def get_workspace_models(request: web.Request, env) -> web.Response:
+    """List all models in the workspace model index."""
+    try:
+        models = await run_sync(env.workspace.list_models)
+
+        result = []
+        for model in models:
+            result.append({
+                "filename": model.filename,
+                "hash": model.hash,
+                "sha256": model.sha256_hash,
+                "type": model.category,
+                "size": model.file_size,
+                "relative_path": model.relative_path,
+                "status": "available",  # All indexed models are available
+            })
+
+        return web.json_response(result)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
+@routes.post("/v2/workspace/models/{identifier}/source")
+@requires_environment
+async def update_model_source(request: web.Request, env) -> web.Response:
+    """Add or update download source URL for a model."""
+    identifier = request.match_info["identifier"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    source_url = body.get("source_url")
+    if not source_url:
+        return web.json_response({"error": "Missing 'source_url' field"}, status=400)
+
+    try:
+        result = await run_sync(env.add_model_source, identifier, source_url)
+
+        if not result.success:
+            # Distinguish between not found and other errors
+            if "not found" in (result.error or "").lower():
+                return web.json_response({"error": result.error}, status=404)
+            return web.json_response({"error": result.error}, status=400)
+
+        return web.json_response({
+            "status": "success",
+            "model_hash": result.model_hash,
+            "source_type": result.source_type,
+        })
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
+@routes.delete("/v2/workspace/models/{identifier}")
+@requires_environment
+async def delete_workspace_model(request: web.Request, env) -> web.Response:
+    """Delete a model from the workspace."""
+    identifier = request.match_info["identifier"]
+
+    try:
+        # Get model details to find file path
+        details = await run_sync(env.workspace.get_model_details, identifier)
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=400)
+    except KeyError as e:
+        return web.json_response({"error": f"Model not found: {identifier}"}, status=404)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+    try:
+        # Get model file path and delete
+        models_dir = env.workspace.workspace_config_manager.get_models_directory()
+        model_path = models_dir / details.model.relative_path
+
+        if model_path.exists():
+            model_path.unlink()
+
+        # Sync model directory to update index
+        await run_sync(env.workspace.sync_model_directory)
+
+        return web.json_response({
+            "status": "success",
+            "deleted": details.model.filename,
+        })
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
+@routes.post("/v2/workspace/models/scan")
+@requires_environment
+async def scan_workspace_models(request: web.Request, env) -> web.Response:
+    """Scan the models directory for new/changed models."""
+    try:
+        changes = await run_sync(env.workspace.sync_model_directory)
+        return web.json_response({
+            "status": "success",
+            "changes": changes,
+        })
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
