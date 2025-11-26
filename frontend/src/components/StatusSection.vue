@@ -200,14 +200,15 @@
           severity="error"
           icon="⚠"
           title="Environment not synced"
-          description="Your environment state does not match the git repository. This may indicate missing installations or configuration issues."
+          :description="syncIssueDescription"
+          :items="syncIssueItems"
         >
           <template #actions>
-            <ActionButton variant="secondary" size="sm" @click="$emit('view-debug')">
-              View Logs
+            <ActionButton variant="secondary" size="sm" @click="handleShowAll">
+              View Details
             </ActionButton>
-            <ActionButton variant="primary" size="sm" @click="$emit('sync-environment')">
-              Sync Now
+            <ActionButton variant="primary" size="sm" @click="$emit('view-nodes')">
+              See Nodes
             </ActionButton>
           </template>
         </IssueCard>
@@ -230,6 +231,7 @@
     :status="status"
     @close="showDetailModal = false"
     @navigate-workflows="handleNavigateWorkflows"
+    @navigate-nodes="handleNavigateNodes"
   />
 </template>
 
@@ -278,6 +280,11 @@ function handleNavigateWorkflows() {
   emit('view-workflows')
 }
 
+function handleNavigateNodes() {
+  showDetailModal.value = false
+  emit('view-nodes')
+}
+
 const emit = defineEmits<{
   'view-workflows': []
   'view-history': []
@@ -286,6 +293,7 @@ const emit = defineEmits<{
   'sync-environment': []
   'switch-branch': []
   'create-branch': []
+  'view-nodes': []
 }>()
 
 const hasWorkflowChanges = computed(() => {
@@ -361,6 +369,51 @@ const uncommittedChangesDescription = computed(() => {
     : 'You have uncommitted changes.'
 
   return `${description} Your work could be lost if you switch branches without committing.`
+})
+
+// Sync issue details for the environment not synced card
+const syncIssueDescription = computed(() => {
+  const issues: string[] = []
+  const comparison = props.status.comparison
+
+  if (comparison.missing_nodes?.length) {
+    issues.push(`${comparison.missing_nodes.length} missing node${comparison.missing_nodes.length === 1 ? '' : 's'}`)
+  }
+  if (comparison.extra_nodes?.length) {
+    issues.push(`${comparison.extra_nodes.length} untracked node${comparison.extra_nodes.length === 1 ? '' : 's'}`)
+  }
+
+  if (issues.length === 0) {
+    return 'Your environment state does not match the manifest.'
+  }
+  return `Environment has ${issues.join(' and ')}.`
+})
+
+const syncIssueItems = computed(() => {
+  const items: string[] = []
+  const comparison = props.status.comparison
+
+  // Show first few untracked nodes
+  if (comparison.extra_nodes?.length) {
+    comparison.extra_nodes.slice(0, 3).forEach(name => {
+      items.push(`Untracked: ${name}`)
+    })
+    if (comparison.extra_nodes.length > 3) {
+      items.push(`...and ${comparison.extra_nodes.length - 3} more untracked`)
+    }
+  }
+
+  // Show first few missing nodes
+  if (comparison.missing_nodes?.length) {
+    comparison.missing_nodes.slice(0, 3).forEach(name => {
+      items.push(`Missing: ${name}`)
+    })
+    if (comparison.missing_nodes.length > 3) {
+      items.push(`...and ${comparison.missing_nodes.length - 3} more missing`)
+    }
+  }
+
+  return items
 })
 </script>
 

@@ -173,7 +173,12 @@
 
           <!-- Environment Drift Section -->
           <div v-if="!status.comparison?.is_synced" class="status-section">
-            <SectionTitle level="4">ENVIRONMENT DRIFT</SectionTitle>
+            <div class="section-header-row">
+              <SectionTitle level="4">ENVIRONMENT DRIFT</SectionTitle>
+              <button class="link-btn" @click="$emit('navigate-nodes')">
+                See Nodes →
+              </button>
+            </div>
             <div class="warning-box">
               <span class="warning-icon">⚠</span>
               <span>Environment needs repair</span>
@@ -294,6 +299,7 @@ const props = defineProps<{
 defineEmits<{
   close: []
   'navigate-workflows': []
+  'navigate-nodes': []
 }>()
 
 const showSynced = ref(false)

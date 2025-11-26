@@ -270,10 +270,11 @@ export interface ConfigSettings {
 export interface NodeInfo {
   name: string
   installed: boolean
-  registry_id?: string
-  repository?: string
+  tracked: boolean  // True if in pyproject.toml manifest
+  registry_id?: string | null
+  repository?: string | null
   version?: string | null
-  source: 'registry' | 'git' | 'development' | 'unknown'
+  source: 'registry' | 'git' | 'development' | 'unknown' | 'untracked'
   download_url?: string | null
   description?: string
   used_in_workflows?: string[]
@@ -284,6 +285,18 @@ export interface NodesResult {
   total_count: number
   installed_count: number
   missing_count: number
+  untracked_count: number
+}
+
+export interface TrackDevResult {
+  status: 'success' | 'error'
+  message?: string
+  node?: {
+    name: string
+    source: string
+    version: string | null
+    registry_id: string | null
+  }
 }
 
 // Debug/Logs Types

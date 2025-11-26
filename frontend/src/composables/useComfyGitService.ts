@@ -382,9 +382,21 @@ export function useComfyGitService() {
         nodes: [],
         total_count: 0,
         installed_count: 0,
-        missing_count: 0
+        missing_count: 0,
+        untracked_count: 0
       }
     }
+  }
+
+  async function trackNodeAsDev(nodeName: string): Promise<{ status: 'success' | 'error', message?: string }> {
+    if (USE_MOCK) {
+      // Mock implementation
+      return { status: 'success', message: `Node '${nodeName}' tracked as development` }
+    }
+
+    return fetchApi(`/v2/comfygit/nodes/${encodeURIComponent(nodeName)}/track-dev`, {
+      method: 'POST'
+    })
   }
 
   async function installNode(nodeName: string): Promise<{ status: 'success' | 'error', message?: string }> {
@@ -554,6 +566,7 @@ export function useComfyGitService() {
     getWorkspaceLogs,
     // Node Management
     getNodes,
+    trackNodeAsDev,
     installNode,
     updateNode,
     uninstallNode,
