@@ -17,4 +17,4 @@ dev = [
 ]
 
 [tool.uv.sources]
-comfygit-core = { path = "../comfygit/packages/core" }
+comfygit-core = { path = "/home/akatzfey/projects/comfyhub/comfygit/packages/core" }

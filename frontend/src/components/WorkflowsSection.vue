@@ -183,12 +183,14 @@
     @close="showResolveModal = false"
     @install="handleInstall"
     @refresh="emit('refresh')"
+    @restart="handleRestart"
   />
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
+import { useOrchestratorService } from '@/composables/useOrchestratorService'
 import WorkflowDetailsModal from './WorkflowDetailsModal.vue'
 import WorkflowResolveModal from './WorkflowResolveModal.vue'
 import type { WorkflowInfo } from '@/types/comfygit'
@@ -207,6 +209,7 @@ const emit = defineEmits<{
 }>()
 
 const { getWorkflows } = useComfyGitService()
+const orchestratorService = useOrchestratorService()
 
 const workflows = ref<WorkflowInfo[]>([])
 const loading = ref(false)
@@ -303,6 +306,14 @@ function handleResolveAll() {
 
 function handleInstall() {
   emit('refresh')
+}
+
+async function handleRestart() {
+  try {
+    await fetch('/v2/manager/reboot')
+  } catch {
+    console.error('Failed to restart:', err)
+  }
 }
 
 function formatWorkflowIssues(wf: WorkflowInfo): string {
