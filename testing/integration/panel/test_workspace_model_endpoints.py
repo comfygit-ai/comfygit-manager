@@ -382,3 +382,82 @@ class TestWorkspaceModelScanEndpoint:
         resp = await client.post("/v2/workspace/models/scan")
 
         assert resp.status == 500
+
+
+@pytest.mark.integration
+class TestWorkspaceModelsDirectoryEndpoint:
+    """GET/POST /v2/workspace/models/directory - Get/set models directory."""
+
+    async def test_get_directory_success(self, client, mock_environment):
+        """Should return current models directory path."""
+        mock_environment.workspace.workspace_config_manager.get_models_directory.return_value = Path("/workspace/models")
+
+        resp = await client.get("/v2/workspace/models/directory")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["path"] == "/workspace/models"
+
+    async def test_get_directory_no_environment(self, client, monkeypatch):
+        """Should return 500 when no environment detected."""
+        monkeypatch.setattr(
+            "comfygit_panel.get_environment_from_cwd",
+            lambda: None
+        )
+
+        resp = await client.get("/v2/workspace/models/directory")
+        assert resp.status == 500
+
+    async def test_set_directory_success(self, client, mock_environment, tmp_path):
+        """Should set new models directory and return scan results."""
+        new_path = tmp_path / "new_models"
+        new_path.mkdir()
+
+        mock_environment.workspace.set_models_directory.return_value = None
+        mock_environment.workspace.sync_model_directory.return_value = 10
+
+        resp = await client.post(
+            "/v2/workspace/models/directory",
+            json={"path": str(new_path)}
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "success"
+        assert data["path"] == str(new_path)
+        assert data["models_indexed"] == 10
+
+    async def test_set_directory_missing_path(self, client, mock_environment):
+        """Should return 400 when path is missing."""
+        resp = await client.post(
+            "/v2/workspace/models/directory",
+            json={}
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "error" in data
+
+    async def test_set_directory_invalid_path(self, client, mock_environment):
+        """Should return 400 when path does not exist."""
+        resp = await client.post(
+            "/v2/workspace/models/directory",
+            json={"path": "/nonexistent/path/to/models"}
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "error" in data
+
+    async def test_set_directory_no_environment(self, client, monkeypatch):
+        """Should return 500 when no environment detected."""
+        monkeypatch.setattr(
+            "comfygit_panel.get_environment_from_cwd",
+            lambda: None
+        )
+
+        resp = await client.post(
+            "/v2/workspace/models/directory",
+            json={"path": "/some/path"}
+        )
+        assert resp.status == 500

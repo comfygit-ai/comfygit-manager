@@ -8,13 +8,18 @@
         @info-click="showPopover = true"
       >
         <template #actions>
-          <ActionButton variant="primary" size="sm" @click="scanForModels">
-            Scan for Models
+          <ActionButton
+            variant="primary"
+            size="sm"
+            :disabled="scanning"
+            @click="scanForModels"
+          >
+            {{ scanning ? 'Scanning...' : 'Scan for Models' }}
           </ActionButton>
-          <ActionButton variant="primary" size="sm" @click="changeDirectory">
+          <ActionButton variant="primary" size="sm" @click="showDirectoryModal = true">
             Change Directory
           </ActionButton>
-          <ActionButton variant="primary" size="sm" @click="downloadNewModel">
+          <ActionButton variant="primary" size="sm" @click="showDownloadModal = true">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
               <path d="M8 12L3 7h3V1h4v6h3L8 12z"/>
               <path d="M14 14H2v-2h12v2z"/>
@@ -26,6 +31,20 @@
     </template>
 
     <template #search>
+      <!-- Progress bar for indexing operations -->
+      <div v-if="indexingProgress" class="indexing-progress">
+        <div class="progress-info">
+          <span class="progress-label">{{ indexingProgress.message }}</span>
+          <span class="progress-count">{{ indexingProgress.current }}/{{ indexingProgress.total }}</span>
+        </div>
+        <div class="progress-bar">
+          <div
+            class="progress-fill"
+            :style="{ width: `${(indexingProgress.current / indexingProgress.total) * 100}%` }"
+          ></div>
+        </div>
+      </div>
+
       <SearchBar
         v-model="searchQuery"
         placeholder="🔍 Search all indexed models..."
@@ -33,8 +52,8 @@
     </template>
 
     <template #content>
-      <template v-if="loading">
-        <LoadingState message="Loading workspace models..." />
+      <template v-if="loading || indexingProgress">
+        <LoadingState :message="indexingProgress ? 'Indexing models...' : 'Loading workspace models...'" />
       </template>
       <template v-else-if="error">
         <ErrorState :message="error" :retry="true" @retry="loadModels" />
@@ -109,11 +128,98 @@
     :identifier="selectedModelId"
     @close="selectedModelId = null"
   />
+
+  <!-- Change Directory Modal -->
+  <Teleport to="body">
+    <div v-if="showDirectoryModal" class="modal-overlay" @click.self="showDirectoryModal = false">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Change Models Directory</h3>
+          <button class="modal-close" @click="showDirectoryModal = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="input-group">
+            <label>Current Directory</label>
+            <code class="current-path">{{ currentDirectory || 'Not set' }}</code>
+          </div>
+          <div class="input-group">
+            <label>New Directory Path</label>
+            <BaseInput
+              v-model="newDirectoryPath"
+              placeholder="/path/to/models"
+            />
+          </div>
+          <p class="modal-note">
+            Note: Changing the directory will scan and index all models in the new location.
+            This may take a few minutes for large collections.
+          </p>
+        </div>
+        <div class="modal-footer">
+          <BaseButton variant="secondary" @click="showDirectoryModal = false">
+            Cancel
+          </BaseButton>
+          <BaseButton
+            variant="primary"
+            :disabled="!newDirectoryPath.trim() || changingDirectory"
+            :loading="changingDirectory"
+            @click="handleChangeDirectory"
+          >
+            {{ changingDirectory ? 'Indexing...' : 'Change Directory' }}
+          </BaseButton>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Download New Model Modal -->
+  <Teleport to="body">
+    <div v-if="showDownloadModal" class="modal-overlay" @click.self="showDownloadModal = false">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Download New Model</h3>
+          <button class="modal-close" @click="showDownloadModal = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="input-group">
+            <label>Download URL</label>
+            <BaseInput
+              v-model="downloadUrl"
+              placeholder="https://civitai.com/api/download/models/..."
+            />
+          </div>
+          <div class="input-group">
+            <label>Target Path (relative to models directory)</label>
+            <BaseInput
+              v-model="downloadTargetPath"
+              placeholder="e.g. checkpoints/model.safetensors"
+            />
+          </div>
+          <p class="modal-note">
+            The model will be queued for download in the background.
+            You can monitor progress in the download queue.
+          </p>
+        </div>
+        <div class="modal-footer">
+          <BaseButton variant="secondary" @click="showDownloadModal = false">
+            Cancel
+          </BaseButton>
+          <BaseButton
+            variant="primary"
+            :disabled="!downloadUrl.trim() || !downloadTargetPath.trim()"
+            @click="handleDownloadModel"
+          >
+            Queue Download
+          </BaseButton>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
+import { useModelDownloadQueue } from '@/composables/useModelDownloadQueue'
 import type { ModelInfo } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
@@ -128,15 +234,44 @@ import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import ModelDetailModal from '@/components/ModelDetailModal.vue'
+import BaseInput from '@/components/base/BaseInput.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
-const { getWorkspaceModels } = useComfyGitService()
+const {
+  getWorkspaceModels,
+  scanWorkspaceModels,
+  getModelsDirectory,
+  setModelsDirectory
+} = useComfyGitService()
 
+const { addToQueue } = useModelDownloadQueue()
+
+const emit = defineEmits<{
+  (e: 'refresh'): void
+}>()
+
+// State
 const models = ref<ModelInfo[]>([])
 const loading = ref(false)
+const scanning = ref(false)
 const error = ref<string | null>(null)
 const searchQuery = ref('')
 const showPopover = ref(false)
 const selectedModelId = ref<string | null>(null)
+
+// Directory modal state
+const showDirectoryModal = ref(false)
+const currentDirectory = ref<string | null>(null)
+const newDirectoryPath = ref('')
+const changingDirectory = ref(false)
+
+// Download modal state
+const showDownloadModal = ref(false)
+const downloadUrl = ref('')
+const downloadTargetPath = ref('')
+
+// Progress state for indexing
+const indexingProgress = ref<{ message: string; current: number; total: number } | null>(null)
 
 const totalSize = computed(() =>
   models.value.reduce((sum, m) => sum + (m.size || 0), 0)
@@ -193,20 +328,66 @@ function formatSize(bytes: number | undefined): string {
 }
 
 function viewDetails(model: ModelInfo) {
-  // Use hash as identifier for the detail lookup
   selectedModelId.value = model.hash || model.filename
 }
 
-function scanForModels() {
-  alert('Scan for models not yet implemented')
+async function scanForModels() {
+  scanning.value = true
+  error.value = null
+  try {
+    const result = await scanWorkspaceModels()
+    // Reload models after scan
+    await loadModels()
+    if (result.changes > 0) {
+      console.log(`Scan complete: ${result.changes} changes detected`)
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to scan models'
+  } finally {
+    scanning.value = false
+  }
 }
 
-function changeDirectory() {
-  alert('Change directory not yet implemented')
+async function handleChangeDirectory() {
+  if (!newDirectoryPath.value.trim()) return
+
+  changingDirectory.value = true
+  error.value = null
+  try {
+    const result = await setModelsDirectory(newDirectoryPath.value.trim())
+    currentDirectory.value = result.path
+    showDirectoryModal.value = false
+    newDirectoryPath.value = ''
+    // Reload models after directory change
+    await loadModels()
+    console.log(`Directory changed: ${result.models_indexed} models indexed`)
+    // Trigger full panel refresh to update workflow statuses
+    emit('refresh')
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to change directory'
+  } finally {
+    changingDirectory.value = false
+  }
 }
 
-function downloadNewModel() {
-  alert('Download new model not yet implemented')
+function handleDownloadModel() {
+  if (!downloadUrl.value.trim() || !downloadTargetPath.value.trim()) return
+
+  // Extract filename from target path
+  const filename = downloadTargetPath.value.split('/').pop() || 'model.safetensors'
+
+  // Add to download queue
+  addToQueue([{
+    workflow: '__manual__',
+    filename,
+    url: downloadUrl.value.trim(),
+    targetPath: downloadTargetPath.value.trim()
+  }])
+
+  // Reset form and close modal
+  downloadUrl.value = ''
+  downloadTargetPath.value = ''
+  showDownloadModal.value = false
 }
 
 async function loadModels() {
@@ -221,9 +402,164 @@ async function loadModels() {
   }
 }
 
-onMounted(loadModels)
+async function loadCurrentDirectory() {
+  try {
+    const result = await getModelsDirectory()
+    currentDirectory.value = result.path
+  } catch {
+    // Ignore errors
+  }
+}
+
+onMounted(() => {
+  loadModels()
+  loadCurrentDirectory()
+})
 </script>
 
 <style scoped>
-/* Minimal to no custom CSS! Everything is in components */
+/* Progress bar styles */
+.indexing-progress {
+  background: var(--cg-color-bg-tertiary);
+  border: 1px solid var(--cg-color-border);
+  border-radius: var(--cg-radius-md);
+  padding: var(--cg-space-2) var(--cg-space-3);
+  margin-bottom: var(--cg-space-2);
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--cg-space-1);
+}
+
+.progress-label {
+  font-size: var(--cg-font-size-sm);
+  color: var(--cg-color-text-secondary);
+}
+
+.progress-count {
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  color: var(--cg-color-text-muted);
+}
+
+.progress-bar {
+  height: 4px;
+  background: var(--cg-color-bg-hover);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--cg-color-accent);
+  transition: width 0.2s ease;
+}
+</style>
+
+<!-- Unscoped modal styles (for Teleport) -->
+<style>
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10010;
+}
+
+.modal-content {
+  width: 90%;
+  max-width: 500px;
+  background: var(--cg-color-bg-primary, #1a1a2e);
+  border: 1px solid var(--cg-color-border, #333);
+  border-radius: var(--cg-radius-lg, 8px);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--cg-color-border, #333);
+  background: var(--cg-color-bg-secondary, #252542);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cg-color-text-primary, #fff);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: var(--cg-color-text-muted, #888);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.modal-close:hover {
+  color: var(--cg-color-text-primary, #fff);
+  background: var(--cg-color-bg-hover, #333);
+}
+
+.modal-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.input-group label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--cg-color-text-secondary, #aaa);
+}
+
+.current-path {
+  font-family: var(--cg-font-mono, monospace);
+  font-size: 13px;
+  padding: 8px 12px;
+  background: var(--cg-color-bg-tertiary, #333);
+  border-radius: 4px;
+  color: var(--cg-color-accent, #7c3aed);
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+
+.modal-note {
+  font-size: 12px;
+  color: var(--cg-color-text-muted, #888);
+  margin: 0;
+  padding: 8px;
+  background: var(--cg-color-bg-secondary, #252542);
+  border-radius: 4px;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 12px 16px;
+  border-top: 1px solid var(--cg-color-border, #333);
+  background: var(--cg-color-bg-secondary, #252542);
+}
 </style>

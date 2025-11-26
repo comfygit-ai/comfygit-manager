@@ -204,6 +204,54 @@ async def scan_workspace_models(request: web.Request, env) -> web.Response:
         return web.json_response({"error": str(e)}, status=500)
 
 
+@routes.get("/v2/workspace/models/directory")
+@requires_environment
+async def get_models_directory(request: web.Request, env) -> web.Response:
+    """Get the current models directory path."""
+    try:
+        models_dir = env.workspace.workspace_config_manager.get_models_directory()
+        return web.json_response({
+            "path": str(models_dir) if models_dir else None,
+        })
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
+@routes.post("/v2/workspace/models/directory")
+@requires_environment
+async def set_models_directory(request: web.Request, env) -> web.Response:
+    """Set a new models directory and scan for models."""
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    new_path = body.get("path")
+    if not new_path:
+        return web.json_response({"error": "Missing 'path' field"}, status=400)
+
+    path = Path(new_path)
+    if not path.exists():
+        return web.json_response({"error": f"Path does not exist: {new_path}"}, status=400)
+    if not path.is_dir():
+        return web.json_response({"error": f"Path is not a directory: {new_path}"}, status=400)
+
+    try:
+        # Set the new models directory
+        await run_sync(env.workspace.set_models_directory, path)
+
+        # Scan the new directory
+        models_indexed = await run_sync(env.workspace.sync_model_directory)
+
+        return web.json_response({
+            "status": "success",
+            "path": str(path),
+            "models_indexed": models_indexed,
+        })
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
 @routes.get("/v2/workspace/models/details/{identifier}")
 @requires_environment
 async def get_workspace_model_details(request: web.Request, env) -> web.Response:

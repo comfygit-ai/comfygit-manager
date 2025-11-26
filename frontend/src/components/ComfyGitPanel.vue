@@ -213,7 +213,7 @@
           />
 
           <!-- Model Index View -->
-          <ModelIndexSection v-else-if="currentView === 'model-index'" />
+          <ModelIndexSection v-else-if="currentView === 'model-index'" @refresh="refresh" />
 
           <!-- Settings View -->
           <WorkspaceSettingsSection v-else-if="currentView === 'settings'" />

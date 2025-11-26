@@ -338,6 +338,36 @@ export function useComfyGitService() {
     })
   }
 
+  async function scanWorkspaceModels(): Promise<{ status: string, changes: number }> {
+    if (USE_MOCK) {
+      return { status: 'success', changes: 0 }
+    }
+
+    return fetchApi('/v2/workspace/models/scan', {
+      method: 'POST'
+    })
+  }
+
+  async function getModelsDirectory(): Promise<{ path: string | null }> {
+    if (USE_MOCK) {
+      return { path: '~/comfygit/models' }
+    }
+
+    return fetchApi('/v2/workspace/models/directory')
+  }
+
+  async function setModelsDirectory(path: string): Promise<{ status: string, path: string, models_indexed: number }> {
+    if (USE_MOCK) {
+      return { status: 'success', path, models_indexed: 10 }
+    }
+
+    return fetchApi('/v2/workspace/models/directory', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path })
+    })
+  }
+
   // Settings
   async function getConfig(): Promise<ConfigSettings> {
     if (USE_MOCK) return mockApi.getConfig()
@@ -568,6 +598,9 @@ export function useComfyGitService() {
     updateModelSource,
     deleteModel,
     downloadModel,
+    scanWorkspaceModels,
+    getModelsDirectory,
+    setModelsDirectory,
     // Settings
     getConfig,
     updateConfig,

@@ -170,6 +170,7 @@ async function addSource() {
   sourceSuccess.value = null
 
   try {
+    // Use the standard hash (custom) which is always computed for every model
     await updateModelSource(details.value.hash, newSourceUrl.value.trim())
     sourceSuccess.value = 'Source added successfully!'
     newSourceUrl.value = ''
