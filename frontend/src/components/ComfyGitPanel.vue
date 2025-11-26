@@ -213,7 +213,6 @@
             @switch="handleEnvironmentSwitch"
             @create="handleEnvironmentCreate"
             @delete="handleEnvironmentDelete"
-            @view-details="handleEnvironmentViewDetails"
           />
 
           <!-- Model Index View -->
@@ -1043,13 +1042,6 @@ async function handleEnvironmentDelete(envName: string) {
       }
     }
   }
-}
-
-function handleEnvironmentViewDetails(envName: string) {
-  // Navigate to models-env view to show details of this environment
-  showToast(`Viewing details for "${envName}"`, 'info')
-  // For now, just switch to the models-env view
-  selectView('models-env', 'this-env')
 }
 
 function getChangeDetails(): string[] {

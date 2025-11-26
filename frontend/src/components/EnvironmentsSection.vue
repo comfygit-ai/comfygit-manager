@@ -8,24 +8,18 @@
       >
         <template #actions>
           <ActionButton
-            variant="ghost"
+            variant="primary"
             size="sm"
             @click="openCreateForm"
-            title="Create new environment"
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" fill="none"/>
-            </svg>
+            Create
           </ActionButton>
           <ActionButton
-            variant="ghost"
+            variant="secondary"
             size="sm"
             @click="loadEnvironments"
-            title="Refresh environments"
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 2a6 6 0 0 1 6 6h-2a4 4 0 0 0-4-4V2zM2 8a6 6 0 0 0 6 6v2a8 8 0 0 1-8-8h2z"/>
-            </svg>
+            Refresh
           </ActionButton>
         </template>
       </PanelHeader>
@@ -143,11 +137,7 @@
             :environment-name="env.name"
             :is-current="env.is_current"
             :current-branch="env.current_branch"
-            :workflow-count="env.workflow_count"
-            :node-count="env.node_count"
-            :model-count="env.model_count"
-            :last-used="formatRelativeTime(env.last_used)"
-            :show-last-used="!!env.last_used"
+            :show-last-used="false"
           >
             <template #actions>
               <ActionButton
@@ -159,26 +149,19 @@
                 Switch
               </ActionButton>
               <ActionButton
-                variant="ghost"
-                size="sm"
-                @click="viewEnvironmentDetails(env.name)"
-                title="View environment details"
+                variant="secondary"
+                size="xs"
+                @click="showEnvironmentDetails(env)"
               >
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>
-                  <path d="M1.5 8a6.5 6.5 0 0 1 13 0 6.5 6.5 0 0 1-13 0zM8 3.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9z"/>
-                </svg>
+                View Details
               </ActionButton>
               <ActionButton
                 v-if="!env.is_current && environments.length > 1"
-                variant="ghost"
+                variant="destructive"
                 size="sm"
                 @click="confirmDelete(env.name)"
-                title="Delete environment"
               >
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="color: var(--cg-color-error)">
-                  <path d="M3 4h10l-1 10H4L3 4zm4-2h2v1H7V2zM5 6v6h1V6H5zm3 0v6h1V6H8zm3 0v6h1V6h-1z"/>
-                </svg>
+                Delete
               </ActionButton>
             </template>
           </EnvironmentListItem>
@@ -230,6 +213,14 @@
       </ActionButton>
     </template>
   </InfoPopover>
+
+  <!-- Environment Details Modal -->
+  <EnvironmentDetailsModal
+    v-if="selectedEnvironment"
+    :environment="selectedEnvironment"
+    @close="selectedEnvironment = null"
+    @switch="handleDetailsSwitch"
+  />
 </template>
 
 <script setup lang="ts">
@@ -249,12 +240,12 @@ import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import SectionGroup from '@/components/base/molecules/SectionGroup.vue'
+import EnvironmentDetailsModal from '@/components/EnvironmentDetailsModal.vue'
 
 const emit = defineEmits<{
   switch: [environmentName: string]
   create: [request: CreateEnvironmentRequest]
   delete: [environmentName: string]
-  viewDetails: [environmentName: string]
 }>()
 
 const { getEnvironments, getComfyUIReleases } = useComfyGitService()
@@ -265,6 +256,7 @@ const error = ref<string | null>(null)
 const searchQuery = ref('')
 const showPopover = ref(false)
 const showCreateForm = ref(false)
+const selectedEnvironment = ref<EnvironmentInfo | null>(null)
 
 // Create form state
 const newEnvironmentName = ref('')
@@ -354,8 +346,13 @@ async function openCreateForm() {
   }
 }
 
-function viewEnvironmentDetails(name: string) {
-  emit('viewDetails', name)
+function showEnvironmentDetails(env: EnvironmentInfo) {
+  selectedEnvironment.value = env
+}
+
+function handleDetailsSwitch(name: string) {
+  selectedEnvironment.value = null
+  emit('switch', name)
 }
 
 function confirmDelete(name: string) {

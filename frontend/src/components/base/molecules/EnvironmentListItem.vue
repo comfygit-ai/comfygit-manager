@@ -15,7 +15,7 @@
         {{ currentBranch }}
       </span>
     </template>
-    <template #details>
+    <template v-if="showDetails" #details>
       <DetailRow label="Workflows:" :value="String(workflowCount)" />
       <DetailRow label="Nodes:" :value="String(nodeCount)" />
       <DetailRow label="Models:" :value="String(modelCount)" />
@@ -77,6 +77,8 @@ interface EnvironmentListItemProps {
   showCurrentLabel?: boolean
   /** Show last used metadata */
   showLastUsed?: boolean
+  /** Show details section (workflow/node/model counts) */
+  showDetails?: boolean
 }
 
 withDefaults(defineProps<EnvironmentListItemProps>(), {
@@ -87,7 +89,8 @@ withDefaults(defineProps<EnvironmentListItemProps>(), {
   modelCount: 0,
   lastUsed: undefined,
   showCurrentLabel: true,
-  showLastUsed: true
+  showLastUsed: true,
+  showDetails: false
 })
 </script>
 
@@ -96,7 +99,7 @@ withDefaults(defineProps<EnvironmentListItemProps>(), {
   display: flex;
   align-items: center;
   gap: var(--cg-space-2);
-  flex-wrap: wrap;
+  width: 100%;
 }
 
 .current-badge {
@@ -109,6 +112,7 @@ withDefaults(defineProps<EnvironmentListItemProps>(), {
   text-transform: uppercase;
   letter-spacing: var(--cg-letter-spacing-wide);
   border-radius: var(--cg-radius-sm);
+  margin-left: auto;
 }
 
 .branch-info {
