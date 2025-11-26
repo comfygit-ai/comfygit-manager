@@ -29,10 +29,17 @@
           Total: {{ models.length }} models • {{ formatSize(totalSize) }} (symlinked from workspace)
         </SummaryBar>
 
-        <!-- Checkpoints -->
-        <SectionGroup v-if="filteredCheckpoints.length" title="CHECKPOINTS" :count="filteredCheckpoints.length">
+        <!-- Dynamic sections by model type -->
+        <SectionGroup
+          v-for="group in modelGroups"
+          :key="group.type"
+          :title="group.type.toUpperCase()"
+          :count="group.models.length"
+          :collapsible="true"
+          :initially-expanded="true"
+        >
           <ItemCard
-            v-for="model in filteredCheckpoints"
+            v-for="model in group.models"
             :key="model.hash || model.filename"
             status="synced"
           >
@@ -41,55 +48,11 @@
             <template #subtitle>{{ formatSize(model.size) }}</template>
             <template #details>
               <DetailRow label="Used by:" :value="(model.used_in_workflows || []).join(', ') || 'Not used'" />
-              <DetailRow label="Source:" value="Workspace index" />
+              <DetailRow label="Path:" :value="model.relative_path || 'Unknown'" :mono="true" />
             </template>
             <template #actions>
-              <ActionButton variant="secondary" size="xs" @click="viewInWorkspace(model.hash)">
-                View in Workspace Index ↗
-              </ActionButton>
-            </template>
-          </ItemCard>
-        </SectionGroup>
-
-        <!-- LoRAs -->
-        <SectionGroup v-if="filteredLoras.length" title="LORAS" :count="filteredLoras.length">
-          <ItemCard
-            v-for="model in filteredLoras"
-            :key="model.hash || model.filename"
-            status="synced"
-          >
-            <template #icon>📦</template>
-            <template #title>{{ model.filename }}</template>
-            <template #subtitle>{{ formatSize(model.size) }}</template>
-            <template #details>
-              <DetailRow label="Used by:" :value="(model.used_in_workflows || []).join(', ') || 'Not used'" />
-              <DetailRow label="Source:" value="Workspace index" />
-            </template>
-            <template #actions>
-              <ActionButton variant="secondary" size="xs" @click="viewInWorkspace(model.hash)">
-                View in Workspace Index ↗
-              </ActionButton>
-            </template>
-          </ItemCard>
-        </SectionGroup>
-
-        <!-- Other Models -->
-        <SectionGroup v-if="filteredOther.length" title="OTHER" :count="filteredOther.length">
-          <ItemCard
-            v-for="model in filteredOther"
-            :key="model.hash || model.filename"
-            status="synced"
-          >
-            <template #icon>📦</template>
-            <template #title>{{ model.filename }}</template>
-            <template #subtitle>{{ formatSize(model.size) }}</template>
-            <template #details>
-              <DetailRow label="Type:" :value="model.type" />
-              <DetailRow label="Used by:" :value="(model.used_in_workflows || []).join(', ') || 'Not used'" />
-            </template>
-            <template #actions>
-              <ActionButton variant="secondary" size="xs" @click="viewInWorkspace(model.hash)">
-                View in Workspace Index ↗
+              <ActionButton variant="secondary" size="xs" @click="viewDetails(model)">
+                View Details
               </ActionButton>
             </template>
           </ItemCard>
@@ -149,6 +112,13 @@
       </ActionButton>
     </template>
   </InfoPopover>
+
+  <!-- Model Detail Modal -->
+  <ModelDetailModal
+    v-if="selectedModelId"
+    :identifier="selectedModelId"
+    @close="selectedModelId = null"
+  />
 </template>
 
 <script setup lang="ts">
@@ -167,6 +137,7 @@ import EmptyState from '@/components/base/molecules/EmptyState.vue'
 import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
+import ModelDetailModal from '@/components/ModelDetailModal.vue'
 
 // No extended interface needed - use ModelInfo directly
 
@@ -188,6 +159,7 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 const searchQuery = ref('')
 const showPopover = ref(false)
+const selectedModelId = ref<string | null>(null)
 
 function navigateToIndex() {
   showPopover.value = false
@@ -212,17 +184,27 @@ const filteredMissing = computed(() => {
   return missingModels.value.filter(m => m.filename.toLowerCase().includes(query))
 })
 
-const filteredCheckpoints = computed(() =>
-  filteredModels.value.filter(m => m.type === 'checkpoints')
-)
-
-const filteredLoras = computed(() =>
-  filteredModels.value.filter(m => m.type === 'loras')
-)
-
-const filteredOther = computed(() =>
-  filteredModels.value.filter(m => m.type !== 'checkpoints' && m.type !== 'loras')
-)
+// Dynamic grouping by type (same logic as ModelIndexSection)
+const modelGroups = computed(() => {
+  const groups: Record<string, ModelInfo[]> = {}
+  for (const model of filteredModels.value) {
+    const type = model.type || 'other'
+    if (!groups[type]) groups[type] = []
+    groups[type].push(model)
+  }
+  // Sort by type name, but put common types first
+  const typeOrder = ['checkpoints', 'loras', 'vae', 'controlnet', 'upscale_models', 'clip', 'embeddings', 'clip_vision', 'diffusion_models', 'text_encoders', 'unet', 'configs', 'diffusers']
+  return Object.entries(groups)
+    .sort(([a], [b]) => {
+      const aIdx = typeOrder.indexOf(a)
+      const bIdx = typeOrder.indexOf(b)
+      if (aIdx >= 0 && bIdx >= 0) return aIdx - bIdx
+      if (aIdx >= 0) return -1
+      if (bIdx >= 0) return 1
+      return a.localeCompare(b)
+    })
+    .map(([type, models]) => ({ type, models }))
+})
 
 function formatSize(bytes: number | undefined): string {
   if (!bytes) return 'Unknown'
@@ -233,9 +215,9 @@ function formatSize(bytes: number | undefined): string {
   return `${mb.toFixed(0)} MB`
 }
 
-function viewInWorkspace(_hash: string) {
-  // TODO: Navigate to model index with hash filter
-  emit('navigate', 'model-index')
+function viewDetails(model: ModelInfo) {
+  // Use hash as identifier for the detail lookup
+  selectedModelId.value = model.hash || model.filename
 }
 
 function searchInWorkspace(_filename: string) {

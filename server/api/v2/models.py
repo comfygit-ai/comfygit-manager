@@ -52,6 +52,7 @@ async def get_environment_models(request: web.Request, env) -> web.Response:
                     # Determine category and status
                     category = model_ref.category if hasattr(model_ref, 'category') else "unknown"
                     model_status = _determine_model_status(resolved_model)
+                    relative_path = model_ref.relative_path if hasattr(model_ref, 'relative_path') else None
 
                     models_map[model_hash] = {
                         "filename": model_ref.filename,
@@ -59,6 +60,7 @@ async def get_environment_models(request: web.Request, env) -> web.Response:
                         "type": category,
                         "size": model_ref.file_size,
                         "status": model_status,
+                        "relative_path": relative_path,
                         "used_in_workflows": []
                     }
 

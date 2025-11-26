@@ -65,17 +65,15 @@
             <template #details>
               <DetailRow
                 label="Hash:"
-                :value="model.hash ? model.hash.substring(0, 16) + '...' : 'N/A'"
+                :value="model.hash ? model.hash.substring(0, 16) : 'N/A'"
                 :mono="true"
                 value-variant="hash"
+                label-min-width="auto"
               />
             </template>
             <template #actions>
               <ActionButton variant="secondary" size="xs" @click="viewDetails(model)">
                 View Details
-              </ActionButton>
-              <ActionButton variant="destructive" size="xs" @click="deleteModel(model)">
-                Delete
               </ActionButton>
             </template>
           </ItemCard>
@@ -100,7 +98,7 @@
     <template #content>
       <p>
         Content-addressable model storage shared across <strong>all environments</strong>.
-        Models are deduplicated by SHA256 hash.
+        Models are deduplicated by hash.
       </p>
     </template>
   </InfoPopover>
@@ -167,7 +165,7 @@ const modelGroups = computed(() => {
     groups[type].push(model)
   }
   // Sort by type name, but put common types first
-  const typeOrder = ['checkpoints', 'loras', 'vae', 'controlnet', 'upscale_models', 'clip', 'embeddings']
+  const typeOrder = ['checkpoints', 'loras', 'vae', 'controlnet', 'upscale_models', 'clip', 'embeddings', 'clip_vision', 'diffusion_models', 'text_encoders', 'unet', 'configs', 'diffusers']
   return Object.entries(groups)
     .sort(([a], [b]) => {
       const aIdx = typeOrder.indexOf(a)
@@ -197,15 +195,6 @@ function formatSize(bytes: number | undefined): string {
 function viewDetails(model: ModelInfo) {
   // Use hash as identifier for the detail lookup
   selectedModelId.value = model.hash || model.filename
-}
-
-function deleteModel(model: ModelInfo) {
-  const confirmed = confirm(
-    `Delete ${model.filename}?\n\nThis will free ${formatSize(model.size)} of space.`
-  )
-  if (confirmed) {
-    alert('Model deletion not yet implemented')
-  }
 }
 
 function scanForModels() {

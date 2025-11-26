@@ -33,6 +33,7 @@ class TestEnvironmentModelsEndpoint:
         mock_resolved_model.filename = "model1.safetensors"
         mock_resolved_model.category = "checkpoints"
         mock_resolved_model.file_size = 1000000
+        mock_resolved_model.relative_path = "checkpoints/model1.safetensors"
 
         mock_model_ref = Mock()
         mock_model_ref.resolved_model = mock_resolved_model
@@ -129,6 +130,7 @@ class TestEnvironmentModelsEndpoint:
         mock_resolved_model.filename = "shared.safetensors"
         mock_resolved_model.category = "checkpoints"
         mock_resolved_model.file_size = 2000000
+        mock_resolved_model.relative_path = "checkpoints/shared.safetensors"
 
         # Workflow 1
         mock_wf1 = Mock()
