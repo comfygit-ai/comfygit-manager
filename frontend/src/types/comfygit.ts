@@ -382,6 +382,63 @@ export interface RemoteSyncStatus {
   last_fetch?: string
 }
 
+// Push/Pull Types
+export interface PullPreview {
+  remote: string
+  branch: string
+  commits_behind: number
+  commits: CommitInfo[]
+  changes: {
+    workflows: {
+      added: string[]
+      modified: string[]
+      deleted: string[]
+    }
+    nodes: {
+      to_install: string[]
+      to_remove: string[]
+    }
+    models: {
+      referenced: string[]
+      count: number
+    }
+  }
+  has_uncommitted_changes: boolean
+  can_pull: boolean
+  block_reason: string | null
+}
+
+export interface PullResult {
+  status: 'success' | 'error'
+  pull_output: string
+  sync_result: {
+    nodes_installed: string[]
+    nodes_removed: string[]
+    models_queued: number
+    errors: string[]
+  }
+  message?: string
+}
+
+export interface PushPreview {
+  remote: string
+  branch: string
+  commits_ahead: number
+  commits: CommitInfo[]
+  has_uncommitted_changes: boolean
+  remote_has_new_commits: boolean
+  can_push: boolean
+  needs_force: boolean
+  block_reason: string | null
+}
+
+export interface PushResult {
+  status: 'success' | 'error'
+  push_output: string
+  commits_pushed: number
+  message?: string
+}
+
 // Interactive Workflow Resolution Types
 export interface ResolvedNode {
   node_type: string

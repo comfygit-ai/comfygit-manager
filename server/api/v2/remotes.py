@@ -206,3 +206,195 @@ async def get_remote_sync_status(request: web.Request, env) -> web.Response:
         "ahead": sync_status["ahead"],
         "behind": sync_status["behind"]
     })
+
+
+@routes.get("/v2/comfygit/remotes/{name}/pull-preview")
+@requires_environment
+async def get_pull_preview(request: web.Request, env) -> web.Response:
+    """Get preview of what would be pulled from remote."""
+    name = request.match_info["name"]
+    branch = request.query.get("branch")
+
+    # Use current branch if not specified
+    if not branch:
+        branch = await run_sync(env.get_current_branch)
+
+    try:
+        # Get sync status (ahead/behind counts)
+        sync_status = await run_sync(env.git_manager.get_sync_status, name, branch)
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=404)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+    # Check for uncommitted changes
+    status = await run_sync(env.status)
+    has_uncommitted = status.git.has_changes
+
+    # Build response
+    can_pull = not has_uncommitted
+    block_reason = "uncommitted_changes" if has_uncommitted else None
+
+    # Simplified changes structure (detailed diff not available without git plumbing)
+    changes = {
+        "workflows": {"added": [], "modified": [], "deleted": []},
+        "nodes": {"to_install": [], "to_remove": []},
+        "models": {"referenced": [], "count": 0}
+    }
+
+    return web.json_response({
+        "remote": name,
+        "branch": branch,
+        "commits_behind": sync_status["behind"],
+        "commits": [],  # Commit details require git plumbing commands
+        "changes": changes,
+        "has_uncommitted_changes": has_uncommitted,
+        "can_pull": can_pull,
+        "block_reason": block_reason
+    })
+
+
+@routes.post("/v2/comfygit/remotes/{name}/pull")
+@requires_environment
+async def pull_from_remote(request: web.Request, env) -> web.Response:
+    """Pull changes from remote and sync environment."""
+    name = request.match_info["name"]
+    json_data = await request.json()
+    branch = json_data.get("branch")
+    model_strategy = json_data.get("model_strategy", "skip")
+    force = json_data.get("force", False)
+
+    # Use current branch if not specified
+    if not branch:
+        branch = await run_sync(env.get_current_branch)
+
+    # Check for uncommitted changes (unless force)
+    if not force:
+        status = await run_sync(env.status)
+        if status.git.has_changes:
+            return web.json_response({
+                "error": "Uncommitted changes exist. Commit or use force=true to discard."
+            }, status=400)
+
+    # If force, discard changes first
+    if force:
+        status = await run_sync(env.status)
+        if status.git.has_changes:
+            await run_sync(env.checkout, "HEAD", strategy=None, force=True)
+
+    try:
+        result = await run_sync(
+            env.pull_and_repair,
+            name,
+            branch,
+            model_strategy
+        )
+
+        # Extract sync result info
+        sync_result = result.get("sync_result")
+        sync_info = {
+            "nodes_installed": getattr(sync_result, "nodes_installed", []),
+            "nodes_removed": getattr(sync_result, "nodes_removed", []),
+            "models_queued": getattr(sync_result, "models_queued", 0),
+            "errors": getattr(sync_result, "errors", [])
+        }
+
+        return web.json_response({
+            "status": "success",
+            "pull_output": result.get("pull_output", ""),
+            "sync_result": sync_info
+        })
+
+    except ValueError as e:
+        error_msg = str(e).lower()
+        if "not found" in error_msg:
+            return web.json_response({"error": str(e)}, status=404)
+        if "conflict" in error_msg:
+            return web.json_response({"error": str(e)}, status=409)
+        return web.json_response({"error": str(e)}, status=500)
+    except OSError as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
+@routes.get("/v2/comfygit/remotes/{name}/push-preview")
+@requires_environment
+async def get_push_preview(request: web.Request, env) -> web.Response:
+    """Get preview of what would be pushed to remote."""
+    name = request.match_info["name"]
+    branch = request.query.get("branch")
+
+    # Use current branch if not specified
+    if not branch:
+        branch = await run_sync(env.get_current_branch)
+
+    try:
+        # Get sync status (ahead/behind counts)
+        sync_status = await run_sync(env.git_manager.get_sync_status, name, branch)
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=404)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+    # Check for uncommitted changes
+    status = await run_sync(env.status)
+    has_uncommitted = status.git.has_changes
+
+    # Determine if force is needed (remote has new commits)
+    remote_has_new = sync_status["behind"] > 0
+    needs_force = remote_has_new
+
+    # Build response
+    can_push = not has_uncommitted
+    block_reason = "uncommitted_changes" if has_uncommitted else None
+
+    return web.json_response({
+        "remote": name,
+        "branch": branch,
+        "commits_ahead": sync_status["ahead"],
+        "commits": [],  # Commit details require git plumbing commands
+        "has_uncommitted_changes": has_uncommitted,
+        "remote_has_new_commits": remote_has_new,
+        "can_push": can_push,
+        "needs_force": needs_force,
+        "block_reason": block_reason
+    })
+
+
+@routes.post("/v2/comfygit/remotes/{name}/push")
+@requires_environment
+async def push_to_remote(request: web.Request, env) -> web.Response:
+    """Push commits to remote."""
+    name = request.match_info["name"]
+    json_data = await request.json()
+    branch = json_data.get("branch")
+    force = json_data.get("force", False)
+
+    # Use current branch if not specified
+    if not branch:
+        branch = await run_sync(env.get_current_branch)
+
+    # Check for uncommitted changes
+    status = await run_sync(env.status)
+    if status.git.has_changes:
+        return web.json_response({
+            "error": "Uncommitted changes exist. Commit your changes first."
+        }, status=400)
+
+    # Get commits ahead count before pushing
+    sync_status = await run_sync(env.git_manager.get_sync_status, name, branch)
+    commits_ahead = sync_status["ahead"]
+
+    try:
+        output = await run_sync(env.push_commits, name, branch, force)
+
+        return web.json_response({
+            "status": "success",
+            "push_output": output,
+            "commits_pushed": commits_ahead
+        })
+
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=404)
+    except OSError as e:
+        # Push rejected - likely remote has new commits
+        return web.json_response({"error": str(e)}, status=409)

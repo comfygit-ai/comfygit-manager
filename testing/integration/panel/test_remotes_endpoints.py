@@ -502,3 +502,447 @@ class TestRemoteSyncStatusEndpoint:
         resp = await client.get("/v2/comfygit/remotes/origin/status")
 
         assert resp.status == 500
+
+
+@pytest.mark.integration
+class TestPullPreviewEndpoint:
+    """GET /v2/comfygit/remotes/{name}/pull-preview - Get pull preview."""
+
+    async def test_success_with_incoming_commits(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return incoming commits and changes preview."""
+        mock_environment.git_manager.get_sync_status = Mock(return_value={
+            "ahead": 0,
+            "behind": 2
+        })
+        mock_environment.get_current_branch.return_value = "main"
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
+
+        resp = await client.get("/v2/comfygit/remotes/origin/pull-preview")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["remote"] == "origin"
+        assert data["branch"] == "main"
+        assert data["commits_behind"] == 2
+        assert data["can_pull"] is True
+        assert data["has_uncommitted_changes"] is False
+
+    async def test_blocked_by_uncommitted_changes(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should indicate blocked when uncommitted changes exist."""
+        mock_environment.git_manager.get_sync_status = Mock(return_value={"ahead": 0, "behind": 1})
+        mock_environment.get_current_branch.return_value = "main"
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=True))
+
+        resp = await client.get("/v2/comfygit/remotes/origin/pull-preview")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["has_uncommitted_changes"] is True
+        assert data["can_pull"] is False
+        assert data["block_reason"] == "uncommitted_changes"
+
+    async def test_with_custom_branch(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should use branch from query param."""
+        mock_environment.git_manager.get_sync_status = Mock(return_value={"ahead": 0, "behind": 0})
+        mock_environment.get_current_branch.return_value = "main"
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
+
+        resp = await client.get("/v2/comfygit/remotes/origin/pull-preview?branch=develop")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["branch"] == "develop"
+
+    async def test_error_remote_not_found(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 404 when remote doesn't exist."""
+        mock_environment.git_manager.get_sync_status = Mock(
+            side_effect=ValueError("Remote 'nonexistent' not found")
+        )
+        mock_environment.get_current_branch.return_value = "main"
+
+        resp = await client.get("/v2/comfygit/remotes/nonexistent/pull-preview")
+
+        assert resp.status == 404
+        data = await resp.json()
+        assert "error" in data
+
+    async def test_error_no_environment(self, client, monkeypatch):
+        """Should return 500 when no environment detected."""
+        monkeypatch.setattr(
+            "comfygit_panel.get_environment_from_cwd",
+            lambda: None
+        )
+
+        resp = await client.get("/v2/comfygit/remotes/origin/pull-preview")
+
+        assert resp.status == 500
+
+
+@pytest.mark.integration
+class TestPullEndpoint:
+    """POST /v2/comfygit/remotes/{name}/pull - Pull from remote."""
+
+    async def test_success_pull(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should pull from remote successfully."""
+        mock_environment.pull_and_repair = Mock(return_value={
+            "pull_output": "Updating abc123..def456\nFast-forward",
+            "sync_result": Mock(
+                nodes_installed=["comfyui-impact-pack"],
+                nodes_removed=[],
+                models_queued=2,
+                errors=[]
+            )
+        })
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
+        mock_environment.get_current_branch.return_value = "main"
+
+        resp = await client.post(
+            "/v2/comfygit/remotes/origin/pull",
+            json={"model_strategy": "skip"}
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "success"
+        assert "pull_output" in data
+        assert data["sync_result"]["nodes_installed"] == ["comfyui-impact-pack"]
+
+    async def test_error_uncommitted_changes(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 400 when uncommitted changes exist."""
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=True))
+        mock_environment.get_current_branch.return_value = "main"
+
+        resp = await client.post(
+            "/v2/comfygit/remotes/origin/pull",
+            json={"model_strategy": "skip"}
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "uncommitted" in data["error"].lower()
+
+    async def test_success_force_pull_with_uncommitted(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should allow force pull even with uncommitted changes."""
+        mock_environment.pull_and_repair = Mock(return_value={
+            "pull_output": "Force pulled",
+            "sync_result": Mock(
+                nodes_installed=[],
+                nodes_removed=[],
+                models_queued=0,
+                errors=[]
+            )
+        })
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=True))
+        mock_environment.get_current_branch.return_value = "main"
+        mock_environment.checkout = Mock()  # Force checkout to discard changes
+
+        resp = await client.post(
+            "/v2/comfygit/remotes/origin/pull",
+            json={"model_strategy": "skip", "force": True}
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "success"
+
+    async def test_error_merge_conflict(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 409 when merge conflict occurs."""
+        mock_environment.pull_and_repair = Mock(
+            side_effect=ValueError("Merge conflict in workflows/test.json")
+        )
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
+        mock_environment.get_current_branch.return_value = "main"
+
+        resp = await client.post(
+            "/v2/comfygit/remotes/origin/pull",
+            json={"model_strategy": "skip"}
+        )
+
+        assert resp.status == 409
+        data = await resp.json()
+        assert "conflict" in data["error"].lower()
+
+    async def test_error_remote_not_found(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 404 when remote doesn't exist."""
+        mock_environment.pull_and_repair = Mock(
+            side_effect=ValueError("Remote 'nonexistent' not found")
+        )
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
+        mock_environment.get_current_branch.return_value = "main"
+
+        resp = await client.post(
+            "/v2/comfygit/remotes/nonexistent/pull",
+            json={"model_strategy": "skip"}
+        )
+
+        assert resp.status == 404
+        data = await resp.json()
+        assert "error" in data
+
+    async def test_error_no_environment(self, client, monkeypatch):
+        """Should return 500 when no environment detected."""
+        monkeypatch.setattr(
+            "comfygit_panel.get_environment_from_cwd",
+            lambda: None
+        )
+
+        resp = await client.post(
+            "/v2/comfygit/remotes/origin/pull",
+            json={"model_strategy": "skip"}
+        )
+
+        assert resp.status == 500
+
+
+@pytest.mark.integration
+class TestPushPreviewEndpoint:
+    """GET /v2/comfygit/remotes/{name}/push-preview - Get push preview."""
+
+    async def test_success_with_outgoing_commits(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return outgoing commits preview."""
+        mock_environment.git_manager.get_sync_status = Mock(return_value={
+            "ahead": 1,
+            "behind": 0
+        })
+        mock_environment.get_current_branch.return_value = "main"
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
+
+        resp = await client.get("/v2/comfygit/remotes/origin/push-preview")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["remote"] == "origin"
+        assert data["branch"] == "main"
+        assert data["commits_ahead"] == 1
+        assert data["can_push"] is True
+        assert data["needs_force"] is False
+
+    async def test_needs_force_when_remote_ahead(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should indicate force needed when remote has new commits."""
+        mock_environment.git_manager.get_sync_status = Mock(return_value={
+            "ahead": 1,
+            "behind": 2
+        })
+        mock_environment.get_current_branch.return_value = "main"
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
+
+        resp = await client.get("/v2/comfygit/remotes/origin/push-preview")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["remote_has_new_commits"] is True
+        assert data["needs_force"] is True
+
+    async def test_blocked_by_uncommitted_changes(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should indicate blocked when uncommitted changes exist."""
+        mock_environment.git_manager.get_sync_status = Mock(return_value={"ahead": 1, "behind": 0})
+        mock_environment.get_current_branch.return_value = "main"
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=True))
+
+        resp = await client.get("/v2/comfygit/remotes/origin/push-preview")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["has_uncommitted_changes"] is True
+        assert data["can_push"] is False
+        assert data["block_reason"] == "uncommitted_changes"
+
+    async def test_error_remote_not_found(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 404 when remote doesn't exist."""
+        mock_environment.git_manager.get_sync_status = Mock(
+            side_effect=ValueError("Remote 'nonexistent' not found")
+        )
+        mock_environment.get_current_branch.return_value = "main"
+
+        resp = await client.get("/v2/comfygit/remotes/nonexistent/push-preview")
+
+        assert resp.status == 404
+        data = await resp.json()
+        assert "error" in data
+
+    async def test_error_no_environment(self, client, monkeypatch):
+        """Should return 500 when no environment detected."""
+        monkeypatch.setattr(
+            "comfygit_panel.get_environment_from_cwd",
+            lambda: None
+        )
+
+        resp = await client.get("/v2/comfygit/remotes/origin/push-preview")
+
+        assert resp.status == 500
+
+
+@pytest.mark.integration
+class TestPushEndpoint:
+    """POST /v2/comfygit/remotes/{name}/push - Push to remote."""
+
+    async def test_success_push(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should push to remote successfully."""
+        mock_environment.push_commits = Mock(return_value="Pushed to origin/main")
+        mock_environment.git_manager.get_sync_status = Mock(return_value={"ahead": 2, "behind": 0})
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
+        mock_environment.get_current_branch.return_value = "main"
+
+        resp = await client.post(
+            "/v2/comfygit/remotes/origin/push",
+            json={}
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "success"
+        assert "push_output" in data
+        assert data["commits_pushed"] == 2
+
+    async def test_error_uncommitted_changes(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 400 when uncommitted changes exist."""
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=True))
+        mock_environment.get_current_branch.return_value = "main"
+
+        resp = await client.post(
+            "/v2/comfygit/remotes/origin/push",
+            json={}
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "uncommitted" in data["error"].lower()
+
+    async def test_success_force_push(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should allow force push when specified."""
+        mock_environment.push_commits = Mock(return_value="Force pushed")
+        mock_environment.git_manager.get_sync_status = Mock(return_value={"ahead": 1, "behind": 2})
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
+        mock_environment.get_current_branch.return_value = "main"
+
+        resp = await client.post(
+            "/v2/comfygit/remotes/origin/push",
+            json={"force": True}
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "success"
+        mock_environment.push_commits.assert_called_once_with("origin", "main", True)
+
+    async def test_error_remote_ahead_without_force(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 409 when remote is ahead and force not specified."""
+        mock_environment.push_commits = Mock(
+            side_effect=OSError("Updates were rejected because remote has newer commits")
+        )
+        mock_environment.git_manager.get_sync_status = Mock(return_value={"ahead": 1, "behind": 0})
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
+        mock_environment.get_current_branch.return_value = "main"
+
+        resp = await client.post(
+            "/v2/comfygit/remotes/origin/push",
+            json={}
+        )
+
+        assert resp.status == 409
+        data = await resp.json()
+        assert "error" in data
+
+    async def test_error_remote_not_found(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 404 when remote doesn't exist."""
+        mock_environment.push_commits = Mock(
+            side_effect=ValueError("Remote 'nonexistent' not found")
+        )
+        mock_environment.git_manager.get_sync_status = Mock(return_value={"ahead": 0, "behind": 0})
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
+        mock_environment.get_current_branch.return_value = "main"
+
+        resp = await client.post(
+            "/v2/comfygit/remotes/nonexistent/push",
+            json={}
+        )
+
+        assert resp.status == 404
+        data = await resp.json()
+        assert "error" in data
+
+    async def test_error_no_environment(self, client, monkeypatch):
+        """Should return 500 when no environment detected."""
+        monkeypatch.setattr(
+            "comfygit_panel.get_environment_from_cwd",
+            lambda: None
+        )
+
+        resp = await client.post(
+            "/v2/comfygit/remotes/origin/push",
+            json={}
+        )
+
+        assert resp.status == 500

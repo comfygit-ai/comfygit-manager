@@ -39,6 +39,22 @@
         Fetch
       </ActionButton>
       <ActionButton
+        :variant="canPull ? 'primary' : 'secondary'"
+        size="xs"
+        :disabled="!syncStatus"
+        @click="$emit('pull', remote.name)"
+      >
+        Pull{{ syncStatus && syncStatus.behind > 0 ? ` ↓${syncStatus.behind}` : '' }}
+      </ActionButton>
+      <ActionButton
+        :variant="canPush ? 'primary' : 'secondary'"
+        size="xs"
+        :disabled="!syncStatus"
+        @click="$emit('push', remote.name)"
+      >
+        Push{{ syncStatus && syncStatus.ahead > 0 ? ` ↑${syncStatus.ahead}` : '' }}
+      </ActionButton>
+      <ActionButton
         variant="secondary"
         size="xs"
         @click="$emit('edit', remote.name)"
@@ -58,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import type { RemoteInfo, RemoteSyncStatus } from '@/types/comfygit'
 import ItemCard from './ItemCard.vue'
 import DetailRow from './DetailRow.vue'
@@ -72,15 +88,19 @@ const props = defineProps<{
   fetchingRemote?: string | null
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   fetch: [remoteName: string]
   edit: [remoteName: string]
   remove: [remoteName: string]
+  pull: [remoteName: string]
+  push: [remoteName: string]
 }>()
 
 const fetchingLocal = computed(() => props.fetchingRemote === props.remote.name)
 const isDefault = computed(() => props.remote.is_default)
 const isTracking = computed(() => !!props.trackingBranch)
+const canPull = computed(() => props.syncStatus && props.syncStatus.behind > 0)
+const canPush = computed(() => props.syncStatus && props.syncStatus.ahead > 0)
 
 function formatLastFetch(isoDate: string): string {
   const date = new Date(isoDate)

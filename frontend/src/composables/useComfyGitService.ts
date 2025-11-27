@@ -28,7 +28,11 @@ import type {
   NodesResult,
   RemotesResult,
   RemoteOperationResult,
-  RemoteSyncStatus
+  RemoteSyncStatus,
+  PullPreview,
+  PullResult,
+  PushPreview,
+  PushResult
 } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
 
@@ -628,6 +632,46 @@ export function useComfyGitService() {
     })
   }
 
+  // Push/Pull Operations
+  async function getPullPreview(remote: string, branch?: string): Promise<PullPreview> {
+    const url = branch
+      ? `/v2/comfygit/remotes/${encodeURIComponent(remote)}/pull-preview?branch=${encodeURIComponent(branch)}`
+      : `/v2/comfygit/remotes/${encodeURIComponent(remote)}/pull-preview`
+    return fetchApi<PullPreview>(url)
+  }
+
+  async function pullFromRemote(
+    remote: string,
+    options: { modelStrategy?: string; force?: boolean } = {}
+  ): Promise<PullResult> {
+    return fetchApi<PullResult>(`/v2/comfygit/remotes/${encodeURIComponent(remote)}/pull`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model_strategy: options.modelStrategy || 'skip',
+        force: options.force || false
+      })
+    })
+  }
+
+  async function getPushPreview(remote: string, branch?: string): Promise<PushPreview> {
+    const url = branch
+      ? `/v2/comfygit/remotes/${encodeURIComponent(remote)}/push-preview?branch=${encodeURIComponent(branch)}`
+      : `/v2/comfygit/remotes/${encodeURIComponent(remote)}/push-preview`
+    return fetchApi<PushPreview>(url)
+  }
+
+  async function pushToRemote(
+    remote: string,
+    options: { force?: boolean } = {}
+  ): Promise<PushResult> {
+    return fetchApi<PushResult>(`/v2/comfygit/remotes/${encodeURIComponent(remote)}/push`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ force: options.force || false })
+    })
+  }
+
   return {
     isLoading,
     error,
@@ -687,6 +731,11 @@ export function useComfyGitService() {
     updateRemoteUrl,
     fetchRemote,
     getRemoteSyncStatus,
+    // Push/Pull
+    getPullPreview,
+    pullFromRemote,
+    getPushPreview,
+    pushToRemote,
     // Environment Sync
     syncEnvironmentManually
   }

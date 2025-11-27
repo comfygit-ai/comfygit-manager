@@ -64,6 +64,8 @@
             @fetch="handleFetch"
             @edit="handleEdit"
             @remove="handleRemove"
+            @pull="handlePullClick"
+            @push="handlePushClick"
           />
         </SectionGroup>
 
@@ -105,12 +107,36 @@
       </ActionButton>
     </template>
   </InfoPopover>
+
+  <!-- Pull Modal -->
+  <PullModal
+    :show="showPullModal"
+    :remote-name="activeRemote || ''"
+    :preview="pullPreview"
+    :loading="loadingPreview"
+    :pulling="pulling"
+    :error="pullError"
+    @close="closePullModal"
+    @pull="handlePull"
+  />
+
+  <!-- Push Modal -->
+  <PushModal
+    :show="showPushModal"
+    :remote-name="activeRemote || ''"
+    :preview="pushPreview"
+    :loading="loadingPreview"
+    :pushing="pushing"
+    @close="closePushModal"
+    @push="handlePush"
+    @pull-first="handlePullFirst"
+  />
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
-import type { RemoteInfo, RemoteSyncStatus } from '@/types/comfygit'
+import type { RemoteInfo, RemoteSyncStatus, PullPreview, PushPreview } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
 import SearchBar from '@/components/base/molecules/SearchBar.vue'
@@ -123,6 +149,8 @@ import EmptyState from '@/components/base/molecules/EmptyState.vue'
 import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
+import PullModal from '@/components/base/molecules/PullModal.vue'
+import PushModal from '@/components/base/molecules/PushModal.vue'
 
 const {
   getRemotes,
@@ -130,7 +158,11 @@ const {
   removeRemote,
   updateRemoteUrl,
   fetchRemote,
-  getRemoteSyncStatus
+  getRemoteSyncStatus,
+  getPullPreview,
+  pullFromRemote,
+  getPushPreview,
+  pushToRemote
 } = useComfyGitService()
 
 const remotes = ref<RemoteInfo[]>([])
@@ -256,6 +288,104 @@ async function handleRemove(remoteName: string) {
 
 function openDocs() {
   window.open('https://git-scm.com/book/en/v2/Git-Basics-Working-with-Remotes', '_blank')
+}
+
+// Push/Pull Modal State
+const showPullModal = ref(false)
+const showPushModal = ref(false)
+const pullPreview = ref<PullPreview | null>(null)
+const pushPreview = ref<PushPreview | null>(null)
+const loadingPreview = ref(false)
+const pulling = ref(false)
+const pushing = ref(false)
+const activeRemote = ref<string | null>(null)
+const pullError = ref<string | null>(null)
+
+async function handlePullClick(remoteName: string) {
+  activeRemote.value = remoteName
+  showPullModal.value = true
+  loadingPreview.value = true
+  pullPreview.value = null
+  pullError.value = null
+
+  try {
+    pullPreview.value = await getPullPreview(remoteName)
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to load pull preview'
+  } finally {
+    loadingPreview.value = false
+  }
+}
+
+async function handlePushClick(remoteName: string) {
+  activeRemote.value = remoteName
+  showPushModal.value = true
+  loadingPreview.value = true
+  pushPreview.value = null
+
+  try {
+    pushPreview.value = await getPushPreview(remoteName)
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to load push preview'
+  } finally {
+    loadingPreview.value = false
+  }
+}
+
+function closePullModal() {
+  showPullModal.value = false
+  pullPreview.value = null
+  pullError.value = null
+  activeRemote.value = null
+}
+
+function closePushModal() {
+  showPushModal.value = false
+  pushPreview.value = null
+  activeRemote.value = null
+}
+
+async function handlePull(options: { modelStrategy: string; force: boolean }) {
+  if (!activeRemote.value) return
+
+  pulling.value = true
+  pullError.value = null  // Clear previous error on retry
+  try {
+    await pullFromRemote(activeRemote.value, options)
+    closePullModal()
+    // Refresh sync status after pull
+    await loadRemotes()
+  } catch (err) {
+    // Show error in modal instead of closing it
+    pullError.value = err instanceof Error ? err.message : 'Pull failed'
+  } finally {
+    pulling.value = false
+  }
+}
+
+async function handlePush(options: { force: boolean }) {
+  if (!activeRemote.value) return
+
+  pushing.value = true
+  try {
+    await pushToRemote(activeRemote.value, options)
+    closePushModal()
+    // Refresh sync status after push
+    await loadRemotes()
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Push failed'
+  } finally {
+    pushing.value = false
+  }
+}
+
+function handlePullFirst() {
+  // Close push modal and open pull modal for the same remote
+  const remote = activeRemote.value
+  closePushModal()
+  if (remote) {
+    handlePullClick(remote)
+  }
 }
 
 onMounted(loadRemotes)
