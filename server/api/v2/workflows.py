@@ -81,6 +81,14 @@ def _serialize_ambiguous_node(options: list[ResolvedNodePackage], workflow_name:
 
 def _serialize_resolved_model(model: ResolvedModel) -> dict:
     """Convert ResolvedModel to frontend format."""
+    # Build full file path for "open file location" functionality
+    file_path = None
+    if model.resolved_model:
+        base_dir = getattr(model.resolved_model, 'base_directory', None)
+        rel_path = getattr(model.resolved_model, 'relative_path', None)
+        if base_dir and rel_path and isinstance(base_dir, str) and isinstance(rel_path, str):
+            file_path = str(Path(base_dir) / rel_path)
+
     return {
         "reference": {
             "workflow": model.workflow,
@@ -107,6 +115,7 @@ def _serialize_resolved_model(model: ResolvedModel) -> dict:
         "has_category_mismatch": getattr(model, 'has_category_mismatch', False) is True,
         "expected_categories": _safe_list(getattr(model, 'expected_categories', None)),
         "actual_category": _safe_str(getattr(model, 'actual_category', None)),
+        "file_path": file_path,
     }
 
 
@@ -683,7 +692,8 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
             "nodes_needing_installation": nodes_needing_installation,  # Node types count
             "packages_needing_installation": packages_needing_installation,  # Unique packages count
             "needs_user_input": needs_user_input,
-            "is_fully_resolved": is_fully_resolved
+            "is_fully_resolved": is_fully_resolved,
+            "models_with_category_mismatch": sum(1 for m in result.models_resolved if getattr(m, 'has_category_mismatch', False))
         }
     }
 

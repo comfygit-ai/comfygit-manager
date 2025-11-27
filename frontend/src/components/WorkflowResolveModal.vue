@@ -69,13 +69,18 @@
                 <div class="stat-items">
                   <div class="stat-item success">
                     <span class="stat-icon">✓</span>
-                    <span class="stat-count">{{ analysisResult.models.resolved.length - analysisResult.stats.download_intents }}</span>
+                    <span class="stat-count">{{ analysisResult.models.resolved.length - analysisResult.stats.download_intents - analysisResult.stats.models_with_category_mismatch }}</span>
                     <span class="stat-label">resolved</span>
                   </div>
                   <div v-if="analysisResult.stats.download_intents > 0" class="stat-item info">
                     <span class="stat-icon">⬇</span>
                     <span class="stat-count">{{ analysisResult.stats.download_intents }}</span>
                     <span class="stat-label">pending download</span>
+                  </div>
+                  <div v-if="hasCategoryMismatch" class="stat-item warning">
+                    <span class="stat-icon">⚠</span>
+                    <span class="stat-count">{{ categoryMismatchModels.length }}</span>
+                    <span class="stat-label">wrong directory</span>
                   </div>
                   <div v-if="analysisResult.models.ambiguous.length > 0" class="stat-item warning">
                     <span class="stat-icon">?</span>
@@ -103,9 +108,34 @@
               <span class="status-icon">⬇</span>
               <span class="status-text">{{ analysisResult.stats.download_intents }} model{{ analysisResult.stats.download_intents > 1 ? 's' : '' }} pending download - click Continue to review</span>
             </div>
+            <!-- Category mismatch warning - shown even when "resolved" -->
+            <div v-else-if="hasCategoryMismatch" class="status-message warning">
+              <span class="status-icon">⚠</span>
+              <span class="status-text">{{ categoryMismatchModels.length }} model{{ categoryMismatchModels.length > 1 ? 's' : '' }} in wrong directory (manual move required)</span>
+            </div>
             <div v-else class="status-message success">
               <span class="status-icon">✓</span>
               <span class="status-text">All dependencies are resolved!</span>
+            </div>
+
+            <!-- Category mismatch details -->
+            <div v-if="hasCategoryMismatch" class="category-mismatch-section">
+              <h4 class="section-subtitle">Move these files manually:</h4>
+              <div class="mismatch-list">
+                <div v-for="model in categoryMismatchModels" :key="model.reference.widget_value" class="mismatch-item">
+                  <code class="mismatch-path">{{ model.actual_category }}/{{ model.model?.filename }}</code>
+                  <span class="mismatch-arrow">→</span>
+                  <code class="mismatch-target">{{ model.expected_categories?.[0] }}/</code>
+                  <BaseButton
+                    v-if="model.file_path"
+                    variant="ghost"
+                    size="sm"
+                    @click="handleOpenFileLocation(model.file_path)"
+                  >
+                    Open File Location
+                  </BaseButton>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -340,6 +370,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useWorkflowResolution } from '@/composables/useWorkflowResolution'
 import { useModelDownloadQueue } from '@/composables/useModelDownloadQueue'
+import { useComfyGitService } from '@/composables/useComfyGitService'
 import type {
   FullResolutionResult,
   NodeChoice,
@@ -365,6 +396,7 @@ const emit = defineEmits<{
 
 const { analyzeWorkflow, applyResolution, installNodes, queueModelDownloads, progress, resetProgress } = useWorkflowResolution()
 const { loadPendingDownloads } = useModelDownloadQueue()
+const { openFileLocation } = useComfyGitService()
 
 // State
 const analysisResult = ref<FullResolutionResult | null>(null)
@@ -446,6 +478,14 @@ const resolvedNodesCount = computed(() => {
   if (!analysisResult.value) return 0
   return analysisResult.value.nodes.resolved.length
 })
+
+// Category mismatch detection (models in wrong directory - blocking issue)
+const categoryMismatchModels = computed(() => {
+  if (!analysisResult.value) return []
+  return analysisResult.value.models.resolved.filter(m => m.has_category_mismatch)
+})
+
+const hasCategoryMismatch = computed(() => categoryMismatchModels.value.length > 0)
 
 // Packages that are resolved but not installed (for review/installation)
 // Deduplicated by package_id since multiple node types can come from one package
@@ -792,6 +832,15 @@ function handleModelClearChoice(filename: string) {
   modelChoices.value.delete(filename)
 }
 
+// Category mismatch handler - open file location in file manager
+async function handleOpenFileLocation(filePath: string) {
+  try {
+    await openFileLocation(filePath)
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to open file location'
+  }
+}
+
 async function handleApply() {
   applying.value = true
   error.value = null
@@ -1031,6 +1080,50 @@ onMounted(loadAnalysis)
 
 .status-icon {
   font-size: var(--cg-font-size-lg);
+}
+
+/* Category Mismatch Section */
+.category-mismatch-section {
+  margin-top: var(--cg-space-3);
+  padding: var(--cg-space-3);
+  background: var(--cg-color-warning-muted);
+  border: 1px solid var(--cg-color-warning);
+  border-radius: var(--cg-radius-md);
+}
+
+.section-subtitle {
+  color: var(--cg-color-warning);
+  font-size: var(--cg-font-size-sm);
+  font-weight: var(--cg-font-weight-semibold);
+  margin: 0 0 var(--cg-space-2) 0;
+}
+
+.mismatch-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-2);
+}
+
+.mismatch-item {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  font-size: var(--cg-font-size-sm);
+  flex-wrap: wrap;
+}
+
+.mismatch-path {
+  font-family: var(--cg-font-mono);
+  color: var(--cg-color-error);
+}
+
+.mismatch-arrow {
+  color: var(--cg-color-text-muted);
+}
+
+.mismatch-target {
+  font-family: var(--cg-font-mono);
+  color: var(--cg-color-success);
 }
 
 /* Review Summary */

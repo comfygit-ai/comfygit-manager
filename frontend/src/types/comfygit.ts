@@ -469,6 +469,7 @@ export interface ResolvedModel {
   has_category_mismatch: boolean
   expected_categories: string[]
   actual_category: string | null
+  file_path: string | null
 }
 
 export interface UnresolvedModel {
@@ -506,6 +507,7 @@ export interface FullResolutionResult {
     packages_needing_installation: number  // Unique packages count
     needs_user_input: boolean
     is_fully_resolved: boolean
+    models_with_category_mismatch: number
   }
 }
 
