@@ -114,16 +114,6 @@
               </span>
               <span class="node-name">{{ node.name }}</span>
               <span v-if="node.version" class="node-version">v{{ node.version }}</span>
-              <BaseButton
-                v-if="node.status === 'missing'"
-                variant="primary"
-                size="sm"
-                :loading="installingNodes[node.name]"
-                @click="handleInstallNode(node.name)"
-                class="node-install-btn"
-              >
-                Install
-              </BaseButton>
             </div>
           </section>
         </template>
@@ -180,14 +170,13 @@ const emit = defineEmits<{
   refresh: []
 }>()
 
-const { getWorkflowDetails, setModelImportance, installWorkflowDeps } = useComfyGitService()
+const { getWorkflowDetails, setModelImportance } = useComfyGitService()
 
 const details = ref<WorkflowDetails | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
 const hasChanges = ref(false)
 const importanceChanges = ref<Record<string, string>>({})
-const installingNodes = ref<Record<string, boolean>>({})
 const showImportanceInfo = ref(false)
 const expandedNodeLists = ref<Set<string>>(new Set())
 
@@ -287,22 +276,6 @@ async function handleSave() {
     error.value = err instanceof Error ? err.message : 'Failed to save changes'
   } finally {
     loading.value = false
-  }
-}
-
-async function handleInstallNode(nodeName: string) {
-  installingNodes.value[nodeName] = true
-  error.value = null
-
-  try {
-    // Install nodes only (not models)
-    await installWorkflowDeps(props.workflowName, true, false)
-    // Reload details to show updated status
-    await loadDetails()
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to install node'
-  } finally {
-    installingNodes.value[nodeName] = false
   }
 }
 
@@ -447,10 +420,6 @@ onMounted(loadDetails)
   background: var(--cg-color-bg-tertiary);
   margin-bottom: 4px;
   font-size: var(--cg-font-size-sm);
-}
-
-.node-install-btn {
-  margin-left: auto;
 }
 
 .node-status {
