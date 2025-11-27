@@ -48,10 +48,10 @@
 
         <!-- Action buttons for ambiguous -->
         <div class="action-buttons">
-          <BaseButton variant="ghost" size="sm" @click="emit('search')">
+          <BaseButton variant="secondary" size="sm" @click="emit('search')">
             Search Registry
           </BaseButton>
-          <BaseButton variant="ghost" size="sm" @click="emit('manual-entry')">
+          <BaseButton variant="secondary" size="sm" @click="emit('manual-entry')">
             Enter Manually
           </BaseButton>
           <BaseButton variant="secondary" size="sm" @click="emit('mark-optional')">
@@ -60,16 +60,50 @@
         </div>
       </div>
 
-      <!-- Unresolved - show action options -->
+      <!-- Unresolved - show search results or loading -->
       <div v-else class="unresolved">
-        <div class="unresolved-message">
+        <!-- Loading state -->
+        <div v-if="isSearching" class="searching-state">
+          <span class="searching-spinner"></span>
+          <span>Searching registry...</span>
+        </div>
+
+        <!-- Search results found -->
+        <template v-else-if="searchResults && searchResults.length > 0">
+          <p class="options-prompt">Potential matches found:</p>
+          <div class="options-list">
+            <label
+              v-for="(result, index) in searchResults.slice(0, 5)"
+              :key="result.package_id"
+              class="option-card"
+              @click="emit('search-result-selected', result)"
+            >
+              <input type="radio" :name="`search-result-${nodeType}`" :value="index" />
+              <div class="option-content">
+                <div class="option-header">
+                  <span class="option-package-id">{{ result.package_id }}</span>
+                  <ConfidenceBadge :confidence="result.match_confidence" size="sm" />
+                </div>
+                <div v-if="result.description" class="option-description">
+                  {{ truncateDescription(result.description) }}
+                </div>
+                <div class="option-meta">
+                  <span v-if="result.is_installed" class="installed-badge">Already Installed</span>
+                </div>
+              </div>
+            </label>
+          </div>
+        </template>
+
+        <!-- No results -->
+        <div v-else class="unresolved-message">
           <span class="warning-icon">⚠</span>
           <span>No matching package found in registry</span>
         </div>
 
         <div class="action-buttons">
-          <BaseButton variant="primary" size="sm" @click="emit('search')">
-            Search Registry
+          <BaseButton variant="secondary" size="sm" @click="emit('search')">
+            {{ searchResults?.length ? 'Refine Search' : 'Search Registry' }}
           </BaseButton>
           <BaseButton variant="secondary" size="sm" @click="emit('manual-entry')">
             Enter Manually
@@ -87,6 +121,8 @@
 import { computed } from 'vue'
 import ConfidenceBadge from '../atoms/ConfidenceBadge.vue'
 import BaseButton from '../BaseButton.vue'
+
+import type { NodeSearchResult } from '@/types/comfygit'
 
 interface NodeOption {
   package_id: string
@@ -128,6 +164,9 @@ const props = defineProps<{
   // Status badge props
   status?: ResolutionStatus
   statusLabel?: string
+  // Inline search results for unresolved nodes
+  searchResults?: NodeSearchResult[]
+  isSearching?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -137,7 +176,13 @@ const emit = defineEmits<{
   (e: 'search'): void
   (e: 'option-selected', index: number): void
   (e: 'clear-choice'): void
+  (e: 'search-result-selected', result: NodeSearchResult): void
 }>()
+
+function truncateDescription(desc: string, maxLength = 80): string {
+  if (desc.length <= maxLength) return desc
+  return desc.slice(0, maxLength - 3) + '...'
+}
 
 // Computed properties for choice state
 const hasChoice = computed(() => !!props.choice)
@@ -359,5 +404,33 @@ function handleOptionClick(index: number) {
 
 .warning-icon {
   font-size: var(--cg-font-size-lg);
+}
+
+.searching-state {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  padding: var(--cg-space-3);
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-sm);
+}
+
+.searching-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--cg-color-border);
+  border-top-color: var(--cg-color-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.option-description {
+  font-size: var(--cg-font-size-xs);
+  color: var(--cg-color-text-muted);
+  margin-top: 2px;
 }
 </style>

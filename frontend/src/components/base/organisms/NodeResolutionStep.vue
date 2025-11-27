@@ -76,12 +76,15 @@
           :choice="nodeChoices?.get(currentNode.node_type)"
           :status="currentNodeStatus"
           :status-label="currentNodeStatusLabel"
+          :search-results="currentNodeSearchResults"
+          :is-searching="isCurrentNodeSearching"
           @mark-optional="handleMarkOptional"
           @skip="handleSkip"
           @manual-entry="handleManualEntry"
           @search="handleSearch"
           @option-selected="handleOptionSelected"
           @clear-choice="handleClearChoice"
+          @search-result-selected="handleSearchResultSelected"
         />
       </div>
     </template>
@@ -93,8 +96,13 @@
 
     <!-- Search Modal -->
     <Teleport to="body">
-      <div v-if="showSearch" class="node-resolution-modal-overlay" @click.self="closeSearch">
-        <div class="node-search-modal">
+      <div
+        v-if="showSearch"
+        class="node-resolution-modal-overlay"
+        @mousedown.self="overlayMouseDown = true"
+        @mouseup.self="handleOverlayClick"
+      >
+        <div class="node-search-modal" @mousedown="overlayMouseDown = false">
           <div class="node-modal-header">
             <h4>Search Node Packages</h4>
             <button class="node-modal-close-btn" @click="closeSearch">✕</button>
@@ -105,24 +113,25 @@
               placeholder="Search by node type, package name..."
               @input="handleSearchInput"
             />
-            <div v-if="searchResults.length > 0" class="node-search-results">
-              <div
-                v-for="result in searchResults"
-                :key="result.package_id"
-                class="node-search-result-item"
-                @click="selectSearchResult(result)"
-              >
-                <div class="node-result-header">
-                  <code class="node-result-package-id">{{ result.package_id }}</code>
-                  <ConfidenceBadge v-if="result.match_confidence" :confidence="result.match_confidence" size="sm" />
+            <div class="node-search-results-container">
+              <div v-if="searchResults.length > 0" class="node-search-results">
+                <div
+                  v-for="result in searchResults"
+                  :key="result.package_id"
+                  class="node-search-result-item"
+                  @click="selectSearchResult(result)"
+                >
+                  <div class="node-result-header">
+                    <code class="node-result-package-id">{{ result.package_id }}</code>
+                    <ConfidenceBadge v-if="result.match_confidence" :confidence="result.match_confidence" size="sm" />
+                  </div>
+                  <div v-if="result.description" class="node-result-description">{{ result.description }}</div>
                 </div>
-                <div v-if="result.description" class="node-result-description">{{ result.description }}</div>
               </div>
+              <div v-else-if="isSearching" class="node-empty-state">Searching...</div>
+              <div v-else-if="searchQuery" class="node-empty-state">No packages found matching "{{ searchQuery }}"</div>
+              <div v-else class="node-empty-state">Enter a search term</div>
             </div>
-            <div v-else-if="searchQuery && !isSearching" class="node-no-results">
-              No packages found matching "{{ searchQuery }}"
-            </div>
-            <div v-if="isSearching" class="node-searching">Searching...</div>
           </div>
         </div>
       </div>
@@ -160,7 +169,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import NodeResolutionItem from '../molecules/NodeResolutionItem.vue'
 import type { ResolutionStatus } from '../molecules/NodeResolutionItem.vue'
 import ItemNavigator from '../molecules/ItemNavigator.vue'
@@ -168,6 +177,7 @@ import ConfidenceBadge from '../atoms/ConfidenceBadge.vue'
 import BaseButton from '../BaseButton.vue'
 import BaseInput from '../BaseInput.vue'
 import type { NodeSearchResult, NodeChoice } from '@/types/comfygit'
+import { useWorkflowResolution } from '@/composables/useWorkflowResolution'
 
 interface NodeOption {
   package_id: string
@@ -206,6 +216,8 @@ const emit = defineEmits<{
   (e: 'package-skip', packageId: string): void
 }>()
 
+const { searchNodes } = useWorkflowResolution()
+
 // Local state
 const currentIndex = ref(0)
 const showSearch = ref(false)
@@ -215,12 +227,65 @@ const manualPackageInput = ref('')
 const searchResults = ref<NodeSearchResult[]>([])
 const isSearching = ref(false)
 
+// Cache of inline search results per node type
+const inlineSearchCache = ref<Map<string, NodeSearchResult[]>>(new Map())
+const inlineSearchLoading = ref<Set<string>>(new Set())
+
+// Track if mousedown started on overlay (for proper click-outside detection)
+const overlayMouseDown = ref(false)
+
+function handleOverlayClick() {
+  // Only close if mousedown also happened on overlay (not inside modal)
+  if (overlayMouseDown.value) {
+    closeSearch()
+  }
+  overlayMouseDown.value = false
+}
+
 // Computed
 const currentNode = computed(() => props.nodes[currentIndex.value])
 
 const resolvedCount = computed(() => {
   return props.nodes.filter(n => props.nodeChoices.has(n.node_type)).length
 })
+
+// Get cached search results for current node
+const currentNodeSearchResults = computed(() => {
+  if (!currentNode.value) return []
+  return inlineSearchCache.value.get(currentNode.value.node_type) || []
+})
+
+const isCurrentNodeSearching = computed(() => {
+  if (!currentNode.value) return false
+  return inlineSearchLoading.value.has(currentNode.value.node_type)
+})
+
+// Auto-search for unresolved nodes (no options) when they become current
+watch(currentNode, async (node) => {
+  if (!node) return
+  // Only auto-search for unresolved nodes (no options array)
+  if (node.options?.length) return
+  // Skip if already searched or currently searching
+  if (inlineSearchCache.value.has(node.node_type)) return
+  if (inlineSearchLoading.value.has(node.node_type)) return
+  // Skip if user already made a choice
+  if (props.nodeChoices.has(node.node_type)) return
+
+  await runInlineSearch(node.node_type)
+}, { immediate: true })
+
+async function runInlineSearch(nodeType: string) {
+  inlineSearchLoading.value.add(nodeType)
+  try {
+    const results = await searchNodes(nodeType, 5)
+    inlineSearchCache.value.set(nodeType, results)
+  } catch {
+    // Silently fail - user can still manually search
+    inlineSearchCache.value.set(nodeType, [])
+  } finally {
+    inlineSearchLoading.value.delete(nodeType)
+  }
+}
 
 // Auto-resolved packages helpers
 const packagesToInstallCount = computed(() => {
@@ -305,7 +370,10 @@ function handleClearChoice() {
 function handleSearch() {
   if (!currentNode.value) return
   searchQuery.value = currentNode.value.node_type
+  searchResults.value = currentNodeSearchResults.value // Pre-populate with cached results
   showSearch.value = true
+  // Auto-search on modal open
+  doModalSearch(searchQuery.value)
 }
 
 function handleManualEntry() {
@@ -324,18 +392,40 @@ function closeManualEntry() {
   manualPackageInput.value = ''
 }
 
+// Debounced search for modal
+let searchTimeout: ReturnType<typeof setTimeout> | null = null
 function handleSearchInput() {
-  // TODO: Connect to actual search API via composable
-  isSearching.value = true
-  setTimeout(() => {
-    isSearching.value = false
+  if (searchTimeout) clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => {
+    doModalSearch(searchQuery.value)
   }, 300)
+}
+
+async function doModalSearch(query: string) {
+  if (!query.trim()) {
+    searchResults.value = []
+    return
+  }
+  isSearching.value = true
+  try {
+    searchResults.value = await searchNodes(query, 10)
+  } catch {
+    searchResults.value = []
+  } finally {
+    isSearching.value = false
+  }
 }
 
 function selectSearchResult(result: NodeSearchResult) {
   if (!currentNode.value) return
   emit('manual-entry', currentNode.value.node_type, result.package_id)
   closeSearch()
+}
+
+// Handler for inline search result selection
+function handleSearchResultSelected(result: NodeSearchResult) {
+  if (!currentNode.value) return
+  emit('manual-entry', currentNode.value.node_type, result.package_id)
 }
 
 function submitManualEntry() {
@@ -530,11 +620,22 @@ function submitManualEntry() {
   z-index: 10010;
 }
 
-.node-search-modal,
+.node-search-modal {
+  width: 90%;
+  max-width: 500px;
+  height: 75vh;
+  background: var(--cg-color-bg-primary, #1a1a2e);
+  border: 1px solid var(--cg-color-border, #333);
+  border-radius: var(--cg-radius-lg, 8px);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .node-manual-entry-modal {
   width: 90%;
   max-width: 500px;
-  max-height: 80vh;
   background: var(--cg-color-bg-primary, #1a1a2e);
   border: 1px solid var(--cg-color-border, #333);
   border-radius: var(--cg-radius-lg, 8px);
@@ -578,11 +679,12 @@ function submitManualEntry() {
 
 .node-modal-body {
   padding: 16px;
-  overflow-y: auto;
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .node-modal-actions {
@@ -590,12 +692,6 @@ function submitManualEntry() {
   gap: 8px;
   justify-content: flex-end;
   margin-top: 8px;
-}
-
-.node-search-results {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 .node-search-result-item {
@@ -631,10 +727,27 @@ function submitManualEntry() {
   color: var(--cg-color-text-muted, #888);
 }
 
-.node-no-results,
-.node-searching {
-  padding: 16px;
-  text-align: center;
+.node-search-results-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.node-search-results {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.node-empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--cg-color-text-muted, #888);
   font-size: 13px;
 }
