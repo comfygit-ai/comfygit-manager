@@ -114,12 +114,12 @@
     :remote-name="activeRemote || ''"
     :preview="pullPreview"
     :loading="loadingPreview"
-    :pulling="pulling"
+    :pulling="flowState === 'executing'"
     :error="pullError"
-    :conflict-resolutions="conflictResolutions"
+    :conflict-resolutions="workflowResolutions"
     @close="closePullModal"
     @pull="handlePull"
-    @open-conflict-resolution="openConflictResolution"
+    @open-conflict-resolution="openWorkflowResolution"
   />
 
   <!-- Push Modal -->
@@ -134,24 +134,45 @@
     @pull-first="handlePullFirst"
   />
 
-  <!-- Conflict Resolution Modal -->
-  <ConflictResolutionModal
-    v-if="showConflictResolutionModal && pullPreviewWithConflicts"
-    :conflicts="pullPreviewWithConflicts.conflicts"
-    :resolutions="conflictResolutions"
+  <!-- Workflow Resolution Modal (V2) -->
+  <WorkflowResolutionModal
+    v-if="showWorkflowResolutionModal && pullPreviewWithConflicts"
+    :workflow-conflicts="pullPreviewWithConflicts.workflow_conflicts"
+    :resolutions="workflowResolutions"
     :operation-type="'pull'"
-    :applying="pulling"
-    @close="handleConflictResolutionClose"
-    @resolve="handleConflictResolve"
-    @apply="handleConflictResolutionApply"
+    :validating="flowState === 'validating'"
+    :error="validationError"
+    @close="handleWorkflowResolutionClose"
+    @resolve="handleWorkflowResolve"
+    @apply="handleApplyResolutions"
+  />
+
+  <!-- Validation Results Modal (V2) -->
+  <ValidationResultsModal
+    v-if="showValidationModal && validationResult"
+    :validation="validationResult"
+    :operation-type="'pull'"
+    :executing="flowState === 'executing'"
+    @proceed="handleProceedWithMerge"
+    @go-back="handleGoBackToResolution"
+    @cancel="handleCancelMerge"
   />
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
-import type { RemoteInfo, RemoteSyncStatus, PullPreview, PushPreview, PullPreviewWithConflicts, AnyConflict, ConflictResolution } from '@/types/comfygit'
-import { hasConflicts } from '@/types/comfygit'
+import type {
+  RemoteInfo,
+  RemoteSyncStatus,
+  PullPreview,
+  PushPreview,
+  PullPreviewWithConflicts,
+  WorkflowConflict,
+  WorkflowResolution,
+  MergeValidation
+} from '@/types/comfygit'
+import { hasWorkflowConflicts } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
 import SearchBar from '@/components/base/molecules/SearchBar.vue'
@@ -166,7 +187,8 @@ import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import PullModal from '@/components/base/molecules/PullModal.vue'
 import PushModal from '@/components/base/molecules/PushModal.vue'
-import ConflictResolutionModal from '@/components/ConflictResolutionModal.vue'
+import WorkflowResolutionModal from '@/components/WorkflowResolutionModal.vue'
+import ValidationResultsModal from '@/components/ValidationResultsModal.vue'
 
 const {
   getRemotes,
@@ -178,7 +200,8 @@ const {
   getPullPreview,
   pullFromRemote,
   getPushPreview,
-  pushToRemote
+  pushToRemote,
+  validateMerge
 } = useComfyGitService()
 
 const remotes = ref<RemoteInfo[]>([])
@@ -306,32 +329,55 @@ function openDocs() {
   window.open('https://git-scm.com/book/en/v2/Git-Basics-Working-with-Remotes', '_blank')
 }
 
-// Push/Pull Modal State
-const showPullModal = ref(false)
+// =============================================================================
+// V2 State Machine for Pull/Merge Flow
+// =============================================================================
+
+type FlowState = 'idle' | 'pull_preview' | 'resolving' | 'validating' | 'validation_review' | 'executing'
+const flowState = ref<FlowState>('idle')
+
+// Derived modal visibility from flowState
+const showPullModal = computed(() => flowState.value === 'pull_preview')
+const showWorkflowResolutionModal = computed(() =>
+  flowState.value === 'resolving' || flowState.value === 'validating'
+)
+const showValidationModal = computed(() =>
+  flowState.value === 'validation_review' || flowState.value === 'executing'
+)
+
+// Push modal (separate flow)
 const showPushModal = ref(false)
-const pullPreview = ref<PullPreview | PullPreviewWithConflicts | null>(null)
 const pushPreview = ref<PushPreview | null>(null)
-const loadingPreview = ref(false)
-const pulling = ref(false)
 const pushing = ref(false)
+
+// Shared state
 const activeRemote = ref<string | null>(null)
+const loadingPreview = ref(false)
+
+// Pull-specific state
+const pullPreview = ref<PullPreview | PullPreviewWithConflicts | null>(null)
 const pullError = ref<string | null>(null)
 
-// Conflict Resolution State (persists across modal open/close)
-const showConflictResolutionModal = ref(false)
-const conflictResolutions = ref<Map<string, ConflictResolution>>(new Map())
+// V2: Workflow resolution state
+const workflowResolutions = ref<Map<string, WorkflowResolution>>(new Map())
+const validationResult = ref<MergeValidation | null>(null)
+const validationError = ref<string | null>(null)
 
 // Computed: Get pull preview as conflicts version if applicable
 const pullPreviewWithConflicts = computed(() => {
-  if (pullPreview.value && hasConflicts(pullPreview.value)) {
+  if (pullPreview.value && hasWorkflowConflicts(pullPreview.value)) {
     return pullPreview.value as PullPreviewWithConflicts
   }
   return null
 })
 
+// =============================================================================
+// Pull Flow Handlers
+// =============================================================================
+
 async function handlePullClick(remoteName: string) {
   activeRemote.value = remoteName
-  showPullModal.value = true
+  flowState.value = 'pull_preview'
   loadingPreview.value = true
   pullPreview.value = null
   pullError.value = null
@@ -339,11 +385,132 @@ async function handlePullClick(remoteName: string) {
   try {
     pullPreview.value = await getPullPreview(remoteName)
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load pull preview'
+    pullError.value = err instanceof Error ? err.message : 'Failed to load pull preview'
   } finally {
     loadingPreview.value = false
   }
 }
+
+function closePullModal() {
+  flowState.value = 'idle'
+  pullPreview.value = null
+  pullError.value = null
+  activeRemote.value = null
+}
+
+async function handlePull(options: { modelStrategy: string; force: boolean; resolutions?: WorkflowResolution[] }) {
+  if (!activeRemote.value) return
+
+  flowState.value = 'executing'
+  pullError.value = null
+
+  try {
+    const result = await pullFromRemote(activeRemote.value, options)
+
+    // Check for rollback
+    if (result.rolled_back) {
+      pullError.value = `Pull failed and was rolled back: ${result.error || 'Unknown error'}`
+      flowState.value = 'pull_preview'
+      return
+    }
+
+    // Success - reset everything
+    resetConflictState()
+    flowState.value = 'idle'
+    await loadRemotes()
+  } catch (err) {
+    pullError.value = err instanceof Error ? err.message : 'Pull failed'
+    flowState.value = 'pull_preview'
+  }
+}
+
+// =============================================================================
+// Workflow Resolution Flow (V2)
+// =============================================================================
+
+function openWorkflowResolution() {
+  if (!pullPreviewWithConflicts.value) return
+  flowState.value = 'resolving'
+  validationError.value = null
+}
+
+function handleWorkflowResolve(name: string, resolution: 'take_base' | 'take_target') {
+  workflowResolutions.value.set(name, { name, resolution })
+}
+
+function handleWorkflowResolutionClose() {
+  flowState.value = 'pull_preview'
+  // Keep resolutions intact - they persist when going back
+}
+
+async function handleApplyResolutions() {
+  flowState.value = 'validating'
+  validationError.value = null
+
+  try {
+    const resolutions = Array.from(workflowResolutions.value.values())
+    validationResult.value = await validateMerge(activeRemote.value!, resolutions)
+    flowState.value = 'validation_review'
+  } catch (err) {
+    validationError.value = err instanceof Error ? err.message : 'Validation failed'
+    flowState.value = 'resolving'
+  }
+}
+
+// =============================================================================
+// Validation Flow (V2)
+// =============================================================================
+
+async function handleProceedWithMerge() {
+  flowState.value = 'executing'
+
+  try {
+    const resolutions = Array.from(workflowResolutions.value.values())
+    const result = await pullFromRemote(activeRemote.value!, {
+      modelStrategy: localStorage.getItem('comfygit.pullModelStrategy') || 'skip',
+      force: false,
+      resolutions
+    })
+
+    // Check for rollback
+    if (result.rolled_back) {
+      pullError.value = `Pull failed and was rolled back: ${result.error || 'Unknown error'}`
+      flowState.value = 'pull_preview'
+      return
+    }
+
+    // Success - reset everything
+    resetConflictState()
+    flowState.value = 'idle'
+    await loadRemotes()
+  } catch (err) {
+    pullError.value = err instanceof Error ? err.message : 'Pull failed'
+    flowState.value = 'validation_review'
+  }
+}
+
+function handleGoBackToResolution() {
+  flowState.value = 'resolving'
+  // Keep resolutions intact so user can modify
+}
+
+function handleCancelMerge() {
+  resetConflictState()
+  flowState.value = 'idle'
+}
+
+function resetConflictState() {
+  workflowResolutions.value.clear()
+  validationResult.value = null
+  validationError.value = null
+  pullError.value = null
+  pullPreview.value = null
+  activeRemote.value = null
+}
+
+// =============================================================================
+// Push Flow
+// =============================================================================
 
 async function handlePushClick(remoteName: string) {
   activeRemote.value = remoteName
@@ -360,37 +527,10 @@ async function handlePushClick(remoteName: string) {
   }
 }
 
-function closePullModal() {
-  showPullModal.value = false
-  pullPreview.value = null
-  pullError.value = null
-  activeRemote.value = null
-}
-
 function closePushModal() {
   showPushModal.value = false
   pushPreview.value = null
   activeRemote.value = null
-}
-
-async function handlePull(options: { modelStrategy: string; force: boolean; resolutions?: ConflictResolution[] }) {
-  if (!activeRemote.value) return
-
-  pulling.value = true
-  pullError.value = null  // Clear previous error on retry
-  try {
-    await pullFromRemote(activeRemote.value, options)
-    closePullModal()
-    // Clear conflict resolutions on successful pull
-    conflictResolutions.value.clear()
-    // Refresh sync status after pull
-    await loadRemotes()
-  } catch (err) {
-    // Show error in modal instead of closing it
-    pullError.value = err instanceof Error ? err.message : 'Pull failed'
-  } finally {
-    pulling.value = false
-  }
 }
 
 async function handlePush(options: { force: boolean }) {
@@ -400,7 +540,6 @@ async function handlePush(options: { force: boolean }) {
   try {
     await pushToRemote(activeRemote.value, options)
     closePushModal()
-    // Refresh sync status after push
     await loadRemotes()
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Push failed'
@@ -410,50 +549,11 @@ async function handlePush(options: { force: boolean }) {
 }
 
 function handlePullFirst() {
-  // Close push modal and open pull modal for the same remote
   const remote = activeRemote.value
   closePushModal()
   if (remote) {
     handlePullClick(remote)
   }
-}
-
-// Conflict Resolution Methods
-function openConflictResolution() {
-  if (!pullPreviewWithConflicts.value) return
-  // Close PullModal and open ConflictResolutionModal
-  showPullModal.value = false
-  showConflictResolutionModal.value = true
-}
-
-function handleConflictResolve(conflict: AnyConflict, resolution: 'take_base' | 'take_target') {
-  conflictResolutions.value.set(conflict.identifier, {
-    identifier: conflict.identifier,
-    category: conflict.category,
-    resolution
-  })
-}
-
-function handleConflictResolutionClose() {
-  showConflictResolutionModal.value = false
-  // Reopen PullModal so user can see their progress
-  showPullModal.value = true
-  // NOTE: We do NOT clear resolutions here - they persist!
-}
-
-async function handleConflictResolutionApply() {
-  // Close the resolution modal
-  showConflictResolutionModal.value = false
-
-  // Convert Map to array for API call
-  const resolutions = Array.from(conflictResolutions.value.values())
-
-  // Trigger pull with resolutions
-  await handlePull({
-    modelStrategy: localStorage.getItem('comfygit.pullModelStrategy') || 'skip',
-    force: false,
-    resolutions
-  })
 }
 
 onMounted(loadRemotes)

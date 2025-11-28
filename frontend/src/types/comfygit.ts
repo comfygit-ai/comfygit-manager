@@ -651,57 +651,64 @@ export interface DownloadQueue {
 }
 
 // =============================================================================
-// Conflict Resolution Types (RefDiff Integration)
+// Workflow Resolution Types (V2 - Simplified, workflows only)
 // =============================================================================
 
-/** Base conflict interface matching backend RefDiff model */
-export interface Conflict {
-  category: 'workflow' | 'node' | 'dependency'
-  identifier: string
+/** Workflow file conflict requiring user resolution */
+export interface WorkflowConflict {
+  name: string  // Workflow filename without .json extension
   conflict_type: 'both_modified' | 'delete_modify'
-  resolution: 'take_base' | 'take_target' | 'unresolved'
+  base_hash: string | null  // Hash of local version
+  target_hash: string | null  // Hash of incoming version
 }
 
-/** Workflow file conflict - both branches modified the same workflow */
-export interface WorkflowConflict extends Conflict {
-  category: 'workflow'
-  base_hash: string | null
-  target_hash: string | null
-}
-
-/** Node package conflict - version differs between branches */
-export interface NodeConflict extends Conflict {
-  category: 'node'
-  base_version: string | null
-  target_version: string | null
-  base_deleted: boolean
-  target_deleted: boolean
-}
-
-/** Python dependency conflict - spec differs between branches */
-export interface DependencyConflict extends Conflict {
-  category: 'dependency'
-  base_spec: string | null
-  target_spec: string | null
-}
-
-/** Union type for all conflict types */
-export type AnyConflict = WorkflowConflict | NodeConflict | DependencyConflict
-
-/** User's resolution choice for a conflict */
-export interface ConflictResolution {
-  identifier: string
-  category: 'workflow' | 'node' | 'dependency'
+/** User's resolution choice for a workflow conflict */
+export interface WorkflowResolution {
+  name: string
   resolution: 'take_base' | 'take_target'
 }
 
-/** Extended PullPreview with conflict information */
-export interface PullPreviewWithConflicts extends PullPreview {
-  has_conflicts: boolean
-  conflicts: AnyConflict[]
+// =============================================================================
+// Validation Types (Post-resolution, read-only display)
+// =============================================================================
+
+/** Node version conflict detected after workflow resolution */
+export interface NodeVersionConflict {
+  node_id: string
+  node_name: string
+  base_version: string  // Version in our branch
+  target_version: string  // Version in their branch
+  chosen_version: string  // Version that will be used
+  chosen_reason: string  // Explanation: "Required by workflow-b (theirs)"
+  affected_workflows: AffectedWorkflow[]
 }
 
-/** Type guard to check if preview has conflicts */
-export function hasConflicts(preview: PullPreview): preview is PullPreviewWithConflicts {
-  return 'has_conflicts' in preview && (preview as PullPreviewWithConflicts).has_conflicts === true
+export interface AffectedWorkflow {
+  name: string
+  source: 'base' | 'target'  // Which branch this workflow came from
+  required_version: string
+}
+
+/** Result of merge validation after workflow resolutions */
+export interface MergeValidation {
+  is_compatible: boolean
+  node_conflicts: NodeVersionConflict[]
+  warnings: string[]  // Non-blocking warnings
+}
+
+// =============================================================================
+// Pull/Merge Preview Types (V2)
+// =============================================================================
+
+/** Extended PullPreview with workflow conflicts only */
+export interface PullPreviewWithConflicts extends PullPreview {
+  has_conflicts: boolean
+  workflow_conflicts: WorkflowConflict[]  // ONLY workflows, not nodes/deps
+}
+
+/** Type guard for preview with workflow conflicts */
+export function hasWorkflowConflicts(preview: PullPreview): preview is PullPreviewWithConflicts {
+  return 'has_conflicts' in preview &&
+         (preview as PullPreviewWithConflicts).has_conflicts === true &&
+         Array.isArray((preview as PullPreviewWithConflicts).workflow_conflicts)
 }

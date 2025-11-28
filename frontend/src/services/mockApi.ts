@@ -1054,13 +1054,13 @@ export const mockApi = {
   },
 
   /**
-   * Get Pull Preview - Returns preview with optional conflicts
+   * Get Pull Preview - Returns preview with optional workflow conflicts (V2)
    * GET /v2/comfygit/remotes/{name}/pull-preview
    *
    * Test scenarios by remote name:
-   * - "origin" - Returns preview WITH conflicts (default for testing)
+   * - "origin" - Returns preview WITH workflow conflicts (default for testing)
    * - "upstream" - Returns preview WITHOUT conflicts (clean pull)
-   * - Any other - Returns preview with conflicts
+   * - Any other - Returns preview with workflow conflicts
    */
   getPullPreview: async (remote: string): Promise<any> => {
     await delay(500)
@@ -1077,7 +1077,7 @@ export const mockApi = {
       changes: {
         workflows: {
           added: ['new-workflow.json'],
-          modified: ['flux-schnell.json', 'sdxl-lightning.json'],
+          modified: ['flux-schnell.json', 'sdxl-turbo.json'],
           deleted: []
         },
         nodes: {
@@ -1094,37 +1094,23 @@ export const mockApi = {
       block_reason: null
     }
 
-    // Return preview WITH conflicts for "origin" or other remotes (for testing)
+    // Return preview WITH workflow conflicts for "origin" or other remotes (V2 format)
     if (remote !== 'upstream') {
       return {
         ...basePreview,
         has_conflicts: true,
-        conflicts: [
+        workflow_conflicts: [
           {
-            category: 'workflow',
-            identifier: 'flux-schnell.json',
+            name: 'flux-schnell',
             conflict_type: 'both_modified',
-            resolution: 'unresolved',
             base_hash: 'abc12345',
             target_hash: 'def67890'
           },
           {
-            category: 'node',
-            identifier: 'comfyui-animatediff',
+            name: 'sdxl-turbo',
             conflict_type: 'both_modified',
-            resolution: 'unresolved',
-            base_version: 'v1.2.0',
-            target_version: 'v1.5.0',
-            base_deleted: false,
-            target_deleted: false
-          },
-          {
-            category: 'dependency',
-            identifier: 'torch',
-            conflict_type: 'both_modified',
-            resolution: 'unresolved',
-            base_spec: 'torch>=2.0.0',
-            target_spec: 'torch>=2.1.0'
+            base_hash: '11111111',
+            target_hash: '22222222'
           }
         ]
       }
@@ -1134,17 +1120,70 @@ export const mockApi = {
     return {
       ...basePreview,
       has_conflicts: false,
-      conflicts: []
+      workflow_conflicts: []
     }
   },
 
   /**
-   * Pull from Remote - Execute pull with optional conflict resolutions
+   * Validate Merge - Check node version compatibility after workflow resolutions (V2)
+   * POST /v2/comfygit/remotes/{name}/validate-merge
+   */
+  validateMerge: async (_remote: string, resolutions: Array<{ name: string; resolution: string }>): Promise<any> => {
+    await delay(400)
+
+    // Simulate: if user chose mixed resolutions, show node conflict
+    const hasBase = resolutions.some(r => r.resolution === 'take_base')
+    const hasTarget = resolutions.some(r => r.resolution === 'take_target')
+    const hasMixed = hasBase && hasTarget
+
+    if (hasMixed) {
+      return {
+        is_compatible: false,
+        node_conflicts: [
+          {
+            node_id: 'rgthree-comfy',
+            node_name: "rgthree's ComfyUI Nodes",
+            base_version: '2.0.0',
+            target_version: '1.5.0',
+            chosen_version: '1.5.0',
+            chosen_reason: 'Required by sdxl-turbo (theirs)',
+            affected_workflows: [
+              { name: 'flux-schnell', source: 'base', required_version: '2.0.0' },
+              { name: 'sdxl-turbo', source: 'target', required_version: '1.5.0' }
+            ]
+          }
+        ],
+        warnings: []
+      }
+    }
+
+    // All same side - compatible
+    return {
+      is_compatible: true,
+      node_conflicts: [],
+      warnings: hasTarget ? ["Model 'flux-dev.safetensors' has no download source"] : []
+    }
+  },
+
+  /**
+   * Pull from Remote - Execute pull with optional conflict resolutions (V2)
    * POST /v2/comfygit/remotes/{name}/pull
    */
   pullFromRemote: async (remote: string, options: any): Promise<any> => {
     await delay(1500)
     console.log(`[MOCK] Pulling from ${remote} with options:`, options)
+
+    // Simulate occasional rollback for testing (10% chance)
+    if (options.resolutions && Math.random() < 0.1) {
+      return {
+        status: 'error',
+        pull_output: '',
+        sync_result: { nodes_installed: [], nodes_removed: [], models_queued: 0, errors: [] },
+        rolled_back: true,
+        error: 'Simulated sync failure - merge rolled back'
+      }
+    }
+
     return {
       status: 'success',
       pull_output: 'Already up to date.',
@@ -1154,6 +1193,7 @@ export const mockApi = {
         models_queued: 0,
         errors: []
       },
+      rolled_back: false,
       message: 'Pull completed successfully'
     }
   },

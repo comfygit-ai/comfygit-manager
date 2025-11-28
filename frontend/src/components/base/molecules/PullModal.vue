@@ -205,8 +205,8 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { PullPreview, PullPreviewWithConflicts, ConflictResolution } from '@/types/comfygit'
-import { hasConflicts } from '@/types/comfygit'
+import type { PullPreview, PullPreviewWithConflicts, WorkflowResolution } from '@/types/comfygit'
+import { hasWorkflowConflicts } from '@/types/comfygit'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
 import ConflictSummaryBox from './ConflictSummaryBox.vue'
 
@@ -219,12 +219,12 @@ const props = defineProps<{
   loading: boolean
   pulling: boolean
   error: string | null
-  conflictResolutions?: Map<string, ConflictResolution>
+  conflictResolutions?: Map<string, WorkflowResolution>
 }>()
 
 const emit = defineEmits<{
   close: []
-  pull: [options: { modelStrategy: string; force: boolean; resolutions?: ConflictResolution[] }]
+  pull: [options: { modelStrategy: string; force: boolean; resolutions?: WorkflowResolution[] }]
   openConflictResolution: []
 }>()
 
@@ -256,15 +256,15 @@ const hasChanges = computed(() => {
   return workflowChangesCount.value > 0 || nodeChangesCount.value > 0 || (props.preview?.changes.models.count || 0) > 0
 })
 
-// Conflict-related computed properties
+// Conflict-related computed properties (V2: workflow_conflicts only)
 const previewWithConflicts = computed(() => {
-  if (props.preview && hasConflicts(props.preview)) {
+  if (props.preview && hasWorkflowConflicts(props.preview)) {
     return props.preview as PullPreviewWithConflicts
   }
   return null
 })
 
-const conflictCount = computed(() => previewWithConflicts.value?.conflicts.length ?? 0)
+const conflictCount = computed(() => previewWithConflicts.value?.workflow_conflicts.length ?? 0)
 
 const resolvedConflictCount = computed(() => props.conflictResolutions?.size ?? 0)
 
@@ -279,9 +279,11 @@ const canPull = computed(() => {
   return true
 })
 
-function itemHasConflict(identifier: string): boolean {
+function itemHasConflict(filename: string): boolean {
   if (!previewWithConflicts.value) return false
-  return previewWithConflicts.value.conflicts.some(c => c.identifier === identifier)
+  // V2: workflow_conflicts use 'name' (without .json extension)
+  const name = filename.replace(/\.json$/, '')
+  return previewWithConflicts.value.workflow_conflicts.some(c => c.name === name)
 }
 
 function handlePull(force: boolean) {

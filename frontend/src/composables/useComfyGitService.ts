@@ -677,6 +677,19 @@ export function useComfyGitService() {
     })
   }
 
+  // V2: Validate merge before executing
+  async function validateMerge(
+    remote: string,
+    resolutions: Array<{ name: string; resolution: string }>
+  ): Promise<{ is_compatible: boolean; node_conflicts: any[]; warnings: string[] }> {
+    if (USE_MOCK) return mockApi.validateMerge(remote, resolutions)
+    return fetchApi(`/v2/comfygit/remotes/${encodeURIComponent(remote)}/validate-merge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resolutions })
+    })
+  }
+
   return {
     isLoading,
     error,
@@ -741,6 +754,7 @@ export function useComfyGitService() {
     pullFromRemote,
     getPushPreview,
     pushToRemote,
+    validateMerge,
     // Environment Sync
     syncEnvironmentManually
   }
