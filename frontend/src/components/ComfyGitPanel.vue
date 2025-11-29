@@ -1029,6 +1029,12 @@ function stopSwitchPolling() {
 function cancelEnvironmentSwitch() {
   showConfirmSwitch.value = false
   targetEnvironment.value = ''
+  // If still in non-managed state, ensure wizard stays open with correct step
+  if (setupStatus.value?.state && setupStatus.value.state !== 'managed') {
+    // Update initial step based on current state (workspace may have been created)
+    wizardInitialStep.value = setupStatus.value.state === 'no_workspace' ? 1 : 2
+    showSetupWizard.value = true
+  }
 }
 
 // Commit and Sync handlers

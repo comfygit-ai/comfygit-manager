@@ -520,10 +520,13 @@ async function handleStep2Create() {
 
           if (progress.state === 'complete') {
             clearInterval(poll)
+            isCreatingEnvironment.value = false
             const envName = progress.environment_name || request.name
             if (switchAfter.value) {
               emit('complete', envName)
             } else {
+              // Return to environment selection view with new env in list
+              showCreateForm.value = false
               emit('environment-created-no-switch', envName)
             }
           } else if (progress.state === 'error') {
