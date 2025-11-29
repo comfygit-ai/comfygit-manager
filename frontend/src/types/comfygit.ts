@@ -712,3 +712,49 @@ export function hasWorkflowConflicts(preview: PullPreview): preview is PullPrevi
          (preview as PullPreviewWithConflicts).has_conflicts === true &&
          Array.isArray((preview as PullPreviewWithConflicts).workflow_conflicts)
 }
+
+// =============================================================================
+// Import Types
+// =============================================================================
+
+/** Model info from import analysis (from core library) */
+export interface ImportModelInfo {
+  filename?: string
+  hash?: string
+  relative_path?: string
+  [key: string]: unknown  // Core library may have additional fields
+}
+
+/** Node info from import analysis (from core library) */
+export interface ImportNodeInfo {
+  name?: string
+  package_id?: string
+  source?: string
+  [key: string]: unknown  // Core library may have additional fields
+}
+
+/** Workflow info from import analysis */
+export interface ImportWorkflowInfo {
+  name: string
+}
+
+/** Import analysis result from preview endpoint (matches core library structure) */
+export interface ImportAnalysis {
+  environment_name: string
+  comfyui_version: string | null
+  python_version: string
+  total_nodes: number
+  nodes: ImportNodeInfo[]
+  total_workflows: number
+  workflows: ImportWorkflowInfo[]
+  total_models: number
+  models: ImportModelInfo[]
+  dependencies: Record<string, string[]>
+}
+
+/** Environment name validation result */
+export interface ValidateNameResult {
+  valid: boolean
+  name?: string
+  error?: string
+}

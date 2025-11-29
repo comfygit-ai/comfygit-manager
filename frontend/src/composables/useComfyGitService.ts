@@ -32,7 +32,9 @@ import type {
   PullPreview,
   PullResult,
   PushPreview,
-  PushResult
+  PushResult,
+  ImportAnalysis,
+  ValidateNameResult
 } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
 
@@ -715,6 +717,72 @@ export function useComfyGitService() {
     return results
   }
 
+  // Import Operations
+  async function previewTarballImport(file: File): Promise<ImportAnalysis> {
+    if (USE_MOCK) {
+      // Return mock data for development
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return {
+        comfyui_version: 'v0.3.8',
+        comfyui_version_type: 'release',
+        total_models: 3,
+        models_locally_available: 1,
+        models_needing_download: 1,
+        models_without_sources: 1,
+        models: [],
+        total_nodes: 5,
+        registry_nodes: 4,
+        dev_nodes: 1,
+        git_nodes: 0,
+        nodes: [],
+        total_workflows: 2,
+        workflows: [],
+        needs_model_downloads: true,
+        needs_node_installs: true,
+        download_strategy_recommendation: 'required'
+      }
+    }
+
+    // Use FormData to upload the file
+    const formData = new FormData()
+    formData.append('file', file)
+
+    if (!window.app?.api) {
+      throw new Error('ComfyUI API not available')
+    }
+
+    const response = await window.app.api.fetchApi('/v2/workspace/import/preview', {
+      method: 'POST',
+      body: formData
+      // Don't set Content-Type - browser will set multipart boundary automatically
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.error || `Preview failed: ${response.status}`)
+    }
+
+    return response.json()
+  }
+
+  async function validateEnvironmentName(name: string): Promise<ValidateNameResult> {
+    if (USE_MOCK) {
+      await new Promise(resolve => setTimeout(resolve, 200))
+      // Simulate name validation
+      if (name === 'existing-env') {
+        return { valid: false, error: "Environment 'existing-env' already exists" }
+      }
+      if (name.includes('/') || name.includes(' ')) {
+        return { valid: false, error: 'Name contains invalid characters' }
+      }
+      return { valid: true, name }
+    }
+
+    return fetchApi<ValidateNameResult>(
+      `/v2/workspace/environments/validate?name=${encodeURIComponent(name)}`
+    )
+  }
+
   return {
     isLoading,
     error,
@@ -783,6 +851,9 @@ export function useComfyGitService() {
     // Environment Sync
     syncEnvironmentManually,
     // Workflow Repair
-    repairWorkflowModels
+    repairWorkflowModels,
+    // Import Operations
+    previewTarballImport,
+    validateEnvironmentName
   }
 }

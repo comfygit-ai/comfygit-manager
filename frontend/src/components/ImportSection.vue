@@ -40,8 +40,23 @@
           </ActionButton>
         </div>
 
-        <!-- Preview (mock data for now) -->
+        <!-- Loading Preview -->
+        <div v-if="isLoadingPreview" class="preview-loading">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">Analyzing import file...</div>
+        </div>
+
+        <!-- Preview Error -->
+        <IssueCard
+          v-else-if="previewError"
+          type="error"
+          title="Failed to Analyze File"
+          :details="[previewError]"
+        />
+
+        <!-- Preview (from API) -->
         <ImportPreview
+          v-else-if="importAnalysis"
           :source-environment="previewData.sourceEnvironment"
           :workflows="previewData.workflows"
           :models="previewData.models"
@@ -194,6 +209,10 @@ import ImportOptions from '@/components/base/molecules/ImportOptions.vue'
 import IssueCard from '@/components/base/molecules/IssueCard.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
+import { useComfyGitService } from '@/composables/useComfyGitService'
+import type { ImportAnalysis } from '@/types/comfygit'
+
+const { previewTarballImport } = useComfyGitService()
 
 // State
 const showInfoPopover = ref(false)
@@ -202,6 +221,11 @@ const isImporting = ref(false)
 const importComplete = ref(false)
 const importSuccess = ref(false)
 const importResultMessage = ref('')
+const isLoadingPreview = ref(false)
+const previewError = ref<string | null>(null)
+
+// Import analysis from API
+const importAnalysis = ref<ImportAnalysis | null>(null)
 
 // Import options
 const importOptions = ref({
@@ -219,41 +243,66 @@ const importProgress = ref({
   percent: 0
 })
 
-// Mock preview data (in real implementation, this would come from analyzing the file)
-const previewData = ref({
-  sourceEnvironment: 'production-env',
-  workflows: [
-    'workflow-1.json',
-    'workflow-2.json',
-    'complex-workflow.json'
-  ],
-  models: [
-    { filename: 'sd_xl_base_1.0.safetensors', size: 6938025472, type: 'Stable-diffusion' },
-    { filename: 'controlnet_canny.safetensors', size: 1445075712, type: 'ControlNet' },
-    { filename: 'vae.safetensors', size: 334643200, type: 'VAE' }
-  ],
-  nodes: [
-    'comfyui-impact-pack',
-    'comfyui-controlnet-aux',
-    'comfyui-custom-scripts'
-  ],
-  gitBranch: 'main',
-  gitCommit: 'a1b2c3d'
+// Transform ImportAnalysis to the format ImportPreview expects
+const previewData = computed(() => {
+  if (!importAnalysis.value) {
+    return {
+      sourceEnvironment: '',
+      workflows: [] as string[],
+      models: [] as Array<{ filename: string; size: number; type: string }>,
+      nodes: [] as string[],
+      gitBranch: undefined,
+      gitCommit: undefined
+    }
+  }
+
+  const analysis = importAnalysis.value
+  return {
+    sourceEnvironment: analysis.environment_name ||
+      (analysis.comfyui_version ? `ComfyUI ${analysis.comfyui_version}` : 'Unknown'),
+    workflows: (analysis.workflows || []).map(w =>
+      typeof w === 'string' ? w : (w.name || 'unknown')
+    ),
+    models: (analysis.models || []).map(m => ({
+      filename: m.filename || 'unknown',
+      size: 0,
+      type: m.relative_path?.split('/')[0] || 'model'
+    })),
+    nodes: (analysis.nodes || []).map(n =>
+      typeof n === 'string' ? n : (n.name || n.package_id || 'unknown')
+    ),
+    gitBranch: undefined,
+    gitCommit: undefined
+  }
 })
 
 const canImport = computed(() => {
-  return importOptions.value.includeWorkflows ||
-         importOptions.value.includeModels ||
-         importOptions.value.includeNodes ||
-         importOptions.value.includeGitHistory
+  return !isLoadingPreview.value &&
+         !previewError.value &&
+         importAnalysis.value && (
+    importOptions.value.includeWorkflows ||
+    importOptions.value.includeModels ||
+    importOptions.value.includeNodes ||
+    importOptions.value.includeGitHistory
+  )
 })
 
 // Handlers
-function handleFileSelected(file: File) {
+async function handleFileSelected(file: File) {
   selectedFile.value = file
+  isLoadingPreview.value = true
+  previewError.value = null
+  importAnalysis.value = null
 
-  // TODO: In real implementation, analyze the file to populate previewData
-  // For now, we're using mock data defined above
+  try {
+    const analysis = await previewTarballImport(file)
+    importAnalysis.value = analysis
+  } catch (err) {
+    previewError.value = err instanceof Error ? err.message : 'Failed to analyze file'
+    console.error('Preview error:', err)
+  } finally {
+    isLoadingPreview.value = false
+  }
 }
 
 function handleClearFile() {
@@ -261,11 +310,14 @@ function handleClearFile() {
   importComplete.value = false
   importSuccess.value = false
   importResultMessage.value = ''
+  importAnalysis.value = null
+  previewError.value = null
 }
 
 function handleReset() {
   handleClearFile()
   isImporting.value = false
+  isLoadingPreview.value = false
   importProgress.value = {
     message: 'Preparing import...',
     detail: '',
@@ -545,5 +597,30 @@ function formatFileSize(bytes: number): string {
   display: flex;
   gap: var(--cg-space-3);
   margin-top: var(--cg-space-2);
+}
+
+/* Loading Preview State */
+.preview-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--cg-space-3);
+  padding: var(--cg-space-6);
+  background: var(--cg-color-bg-tertiary);
+  border: 1px solid var(--cg-color-border-subtle);
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--cg-color-border);
+  border-top-color: var(--cg-color-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.loading-text {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-sm);
 }
 </style>

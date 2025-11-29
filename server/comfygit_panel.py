@@ -27,7 +27,7 @@ except Exception as e:
 from api.middleware.error_handler import error_handler_middleware
 
 # Import all endpoint modules
-from api.v2 import status, git, workflows, operations, environments, debug, models, config, nodes, remotes
+from api.v2 import status, git, workflows, operations, environments, debug, models, config, nodes, remotes, import_ops
 
 # Get routes object from ComfyUI
 routes = PromptServer.instance.routes
@@ -40,7 +40,7 @@ PromptServer.instance.app['get_environment'] = get_environment_from_cwd
 PromptServer.instance.app['workspace'] = _workspace
 
 # Register all routes (iterate since PromptServer routes don't have add_routes)
-for route_def in [status.routes, git.routes, workflows.routes, operations.routes, environments.routes, debug.routes, models.routes, config.routes, nodes.routes, remotes.routes]:
+for route_def in [status.routes, git.routes, workflows.routes, operations.routes, environments.routes, debug.routes, models.routes, config.routes, nodes.routes, remotes.routes, import_ops.routes]:
     for route in route_def:
         # Route is a tuple-like (method, path, handler)
         method = route.method

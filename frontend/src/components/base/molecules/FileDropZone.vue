@@ -92,6 +92,8 @@ const fileSize = computed(() => {
 })
 
 function handleDragEnter(event: DragEvent) {
+  // Stop propagation to prevent ComfyUI from intercepting
+  event.stopPropagation()
   dragCounter.value++
   if (event.dataTransfer?.types.includes('Files')) {
     isDragging.value = true
@@ -99,12 +101,16 @@ function handleDragEnter(event: DragEvent) {
 }
 
 function handleDragOver(event: DragEvent) {
+  // Stop propagation to prevent ComfyUI from intercepting
+  event.stopPropagation()
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = 'copy'
   }
 }
 
-function handleDragLeave() {
+function handleDragLeave(event: DragEvent) {
+  // Stop propagation to prevent ComfyUI from intercepting
+  event.stopPropagation()
   dragCounter.value--
   if (dragCounter.value === 0) {
     isDragging.value = false
@@ -112,6 +118,8 @@ function handleDragLeave() {
 }
 
 function handleDrop(event: DragEvent) {
+  // Stop propagation to prevent ComfyUI from intercepting
+  event.stopPropagation()
   dragCounter.value = 0
   isDragging.value = false
 
