@@ -178,6 +178,7 @@
             @view-debug="selectView('debug-env', 'this-env')"
             @start-setup="showSetupWizard = true"
             @view-environments="selectView('environments', 'all-envs')"
+            @create-environment="handleCreateEnvironmentFromStatus"
           />
 
           <!-- Workflows View -->
@@ -472,7 +473,7 @@ const showEnvironmentSelector = ref(false)
 
 // Ref to child components for triggering reloads
 const workflowsSectionRef = ref<{ loadWorkflows: (forceRefresh?: boolean) => Promise<void> } | null>(null)
-const environmentsSectionRef = ref<{ loadEnvironments: () => Promise<void> } | null>(null)
+const environmentsSectionRef = ref<{ loadEnvironments: () => Promise<void>; openCreateModal: () => void } | null>(null)
 
 // Environment switching modals
 const showConfirmSwitch = ref(false)
@@ -1200,6 +1201,15 @@ async function handleSetupComplete(environmentName: string) {
 
   // Trigger environment switch
   await handleEnvironmentSwitch(environmentName)
+}
+
+function handleCreateEnvironmentFromStatus() {
+  // Navigate to environments section and trigger create modal
+  selectView('environments', 'all-envs')
+  // Give time for section to mount, then open create modal
+  setTimeout(() => {
+    environmentsSectionRef.value?.openCreateModal()
+  }, 100)
 }
 
 function getChangeDetails(): string[] {

@@ -34,6 +34,20 @@
         </template>
       </IssueCard>
 
+      <IssueCard
+        v-else-if="props.setupState === 'empty_workspace'"
+        severity="info"
+        icon="🏗"
+        title="Workspace ready - create your first environment"
+        description="Your workspace is set up. Create a managed environment to start using ComfyGit."
+      >
+        <template #actions>
+          <ActionButton variant="primary" size="sm" @click="$emit('create-environment')">
+            Create Environment
+          </ActionButton>
+        </template>
+      </IssueCard>
+
       <!-- Environment Health Section -->
       <div class="health-section-wrapper" @mouseenter="showHealthActions = true" @mouseleave="showHealthActions = false">
         <div class="health-section-header">
@@ -299,6 +313,7 @@ const emit = defineEmits<{
   'view-nodes': []
   'start-setup': []
   'view-environments': []
+  'create-environment': []
 }>()
 
 const hasWorkflowChanges = computed(() => {

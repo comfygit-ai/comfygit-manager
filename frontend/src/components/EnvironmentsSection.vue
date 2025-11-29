@@ -223,7 +223,8 @@ onMounted(loadEnvironments)
 
 // Expose methods for parent component
 defineExpose({
-  loadEnvironments
+  loadEnvironments,
+  openCreateModal
 })
 </script>
 
