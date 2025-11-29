@@ -690,6 +690,31 @@ export function useComfyGitService() {
     })
   }
 
+  // Repair missing model references by re-resolving workflows
+  async function repairWorkflowModels(workflowNames: string[]): Promise<{
+    success: number
+    failed: Array<{ name: string; error: string }>
+  }> {
+    const results = {
+      success: 0,
+      failed: [] as Array<{ name: string; error: string }>
+    }
+
+    for (const name of workflowNames) {
+      try {
+        await resolveWorkflow(name)
+        results.success++
+      } catch (err) {
+        results.failed.push({
+          name,
+          error: err instanceof Error ? err.message : 'Unknown error'
+        })
+      }
+    }
+
+    return results
+  }
+
   return {
     isLoading,
     error,
@@ -756,6 +781,8 @@ export function useComfyGitService() {
     pushToRemote,
     validateMerge,
     // Environment Sync
-    syncEnvironmentManually
+    syncEnvironmentManually,
+    // Workflow Repair
+    repairWorkflowModels
   }
 }

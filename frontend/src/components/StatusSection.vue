@@ -173,10 +173,18 @@
             severity="warning"
             icon="⚠"
             :title="`${status.missing_models_count} missing model${status.missing_models_count === 1 ? '' : 's'}`"
-            description="Some workflows reference models that are not found in the workspace index."
+            description="Some workflows reference models that are not found in the workspace index. This can happen after updating the model index."
           >
             <template #actions>
-              <ActionButton variant="primary" size="sm" @click="$emit('view-workflows')">
+              <ActionButton
+                variant="primary"
+                size="sm"
+                :disabled="isRepairing"
+                @click="handleRepairMissingModels"
+              >
+                {{ isRepairing ? 'Repairing...' : 'Repair' }}
+              </ActionButton>
+              <ActionButton variant="secondary" size="sm" @click="$emit('view-workflows')">
                 See Workflows
               </ActionButton>
             </template>
@@ -268,7 +276,38 @@ const emit = defineEmits<{
   'sync-environment': []
   'create-branch': []
   'view-nodes': []
+  'repair-missing-models': [workflowNames: string[]]
 }>()
+
+const isRepairing = ref(false)
+
+// Workflows with unresolved or ambiguous models
+const workflowsWithMissingModels = computed(() => {
+  const analyzed = props.status.workflows.analyzed || []
+  // Filter workflows that have missing model issues
+  const filtered = analyzed.filter(w =>
+    w.unresolved_models_count > 0 || w.ambiguous_models_count > 0
+  )
+  // If no specific workflows found but missing_models_count > 0, return all synced workflows
+  // (the backend resolve endpoint will re-resolve and fix any mismatched hashes)
+  if (filtered.length === 0 && props.status.missing_models_count > 0) {
+    return analyzed.filter(w => w.sync_state === 'synced')
+  }
+  return filtered
+})
+
+function handleRepairMissingModels() {
+  const workflows = workflowsWithMissingModels.value
+  if (workflows.length === 0) return
+  isRepairing.value = true
+  emit('repair-missing-models', workflows.map(w => w.name))
+}
+
+function resetRepairingState() {
+  isRepairing.value = false
+}
+
+defineExpose({ resetRepairingState })
 
 const hasWorkflowChanges = computed(() => {
   return props.status.workflows.new.length > 0 ||

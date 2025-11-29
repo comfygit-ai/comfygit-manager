@@ -168,6 +168,7 @@
           <!-- Status View -->
           <StatusSection
             v-if="currentView === 'status'"
+            ref="statusSectionRef"
             :status="status!"
             @switch-branch="handleSwitchBranchClick"
             @commit-changes="showCommitModal = true"
@@ -175,6 +176,7 @@
             @view-workflows="selectView('workflows', 'this-env')"
             @view-history="selectView('history', 'this-env')"
             @view-debug="selectView('debug-env', 'this-env')"
+            @repair-missing-models="handleRepairMissingModels"
           />
 
           <!-- Workflows View -->
@@ -428,7 +430,8 @@ const {
   createEnvironment,
   getCreateProgress,
   deleteEnvironment,
-  syncEnvironmentManually
+  syncEnvironmentManually,
+  repairWorkflowModels
 } = useComfyGitService()
 
 const orchestratorService = useOrchestratorService()
@@ -452,6 +455,7 @@ const showEnvironmentSelector = ref(false)
 // Ref to child components for triggering reloads
 const workflowsSectionRef = ref<{ loadWorkflows: (forceRefresh?: boolean) => Promise<void> } | null>(null)
 const environmentsSectionRef = ref<{ loadEnvironments: () => Promise<void> } | null>(null)
+const statusSectionRef = ref<{ resetRepairingState: () => void } | null>(null)
 
 // Environment switching modals
 const showConfirmSwitch = ref(false)
@@ -1060,6 +1064,24 @@ async function handleSyncConfirm() {
   } catch (err) {
     removeToast(toastId)
     showToast(`Sync error: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
+  }
+}
+
+async function handleRepairMissingModels(workflowNames: string[]) {
+  try {
+    const result = await repairWorkflowModels(workflowNames)
+
+    if (result.failed.length === 0) {
+      showToast(`✓ Repaired ${result.success} workflow${result.success === 1 ? '' : 's'}`, 'success')
+    } else {
+      showToast(`Repaired ${result.success}, failed: ${result.failed.length}`, 'warning')
+    }
+
+    await refresh()
+  } catch (err) {
+    showToast(`Repair failed: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
+  } finally {
+    statusSectionRef.value?.resetRepairingState()
   }
 }
 
