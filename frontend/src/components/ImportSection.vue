@@ -1,7 +1,11 @@
 <template>
   <PanelLayout>
     <template #header>
-      <PanelHeader title="IMPORT ENVIRONMENT" />
+      <PanelHeader
+        title="IMPORT ENVIRONMENT"
+        :show-info="true"
+        @info-click="showInfoPopover = true"
+      />
     </template>
 
     <template #content>
@@ -14,48 +18,6 @@
           button-text="Select Export File"
           @file-selected="handleFileSelected"
         />
-
-        <div class="import-help">
-          <SectionTitle>How to Import</SectionTitle>
-          <div class="help-content">
-            <div class="help-item">
-              <span class="help-number">1</span>
-              <div class="help-text">
-                <div class="help-title">Select Export File</div>
-                <div class="help-description">
-                  Choose a ComfyGit environment export file created with the EXPORT feature
-                </div>
-              </div>
-            </div>
-            <div class="help-item">
-              <span class="help-number">2</span>
-              <div class="help-text">
-                <div class="help-title">Review Preview</div>
-                <div class="help-description">
-                  Check what workflows, models, and nodes will be imported
-                </div>
-              </div>
-            </div>
-            <div class="help-item">
-              <span class="help-number">3</span>
-              <div class="help-text">
-                <div class="help-title">Configure Options</div>
-                <div class="help-description">
-                  Choose how to handle conflicts and which components to import
-                </div>
-              </div>
-            </div>
-            <div class="help-item">
-              <span class="help-number">4</span>
-              <div class="help-text">
-                <div class="help-title">Import</div>
-                <div class="help-description">
-                  Start the import process and wait for completion
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       <!-- File Selected: Show preview and options -->
@@ -180,6 +142,46 @@
       </div>
     </template>
   </PanelLayout>
+
+  <!-- Info Popover -->
+  <InfoPopover
+    :show="showInfoPopover"
+    title="How to Import"
+    @close="showInfoPopover = false"
+  >
+    <template #content>
+      <div class="help-steps">
+        <div class="help-step">
+          <span class="step-number">1</span>
+          <div class="step-content">
+            <strong>Select Export File</strong>
+            <p>Choose a ComfyGit environment export file created with the EXPORT feature</p>
+          </div>
+        </div>
+        <div class="help-step">
+          <span class="step-number">2</span>
+          <div class="step-content">
+            <strong>Review Preview</strong>
+            <p>Check what workflows, models, and nodes will be imported</p>
+          </div>
+        </div>
+        <div class="help-step">
+          <span class="step-number">3</span>
+          <div class="step-content">
+            <strong>Configure Options</strong>
+            <p>Choose how to handle conflicts and which components to import</p>
+          </div>
+        </div>
+        <div class="help-step">
+          <span class="step-number">4</span>
+          <div class="step-content">
+            <strong>Import</strong>
+            <p>Start the import process and wait for completion</p>
+          </div>
+        </div>
+      </div>
+    </template>
+  </InfoPopover>
 </template>
 
 <script setup lang="ts">
@@ -191,9 +193,10 @@ import ImportPreview from '@/components/base/molecules/ImportPreview.vue'
 import ImportOptions from '@/components/base/molecules/ImportOptions.vue'
 import IssueCard from '@/components/base/molecules/IssueCard.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
-import SectionTitle from '@/components/base/atoms/SectionTitle.vue'
+import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 
 // State
+const showInfoPopover = ref(false)
 const selectedFile = ref<File | null>(null)
 const isImporting = ref(false)
 const importComplete = ref(false)
@@ -326,53 +329,48 @@ function formatFileSize(bytes: number): string {
   gap: var(--cg-space-6);
 }
 
-.import-help {
-  background: var(--cg-color-bg-tertiary);
-  border: 1px solid var(--cg-color-border-subtle);
-  padding: var(--cg-space-4);
-}
-
-.help-content {
+/* Info Popover Steps */
+.help-steps {
   display: flex;
   flex-direction: column;
   gap: var(--cg-space-3);
-  margin-top: var(--cg-space-3);
 }
 
-.help-item {
+.help-step {
   display: flex;
   gap: var(--cg-space-3);
   align-items: flex-start;
 }
 
-.help-number {
+.step-number {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   background: var(--cg-color-accent-muted);
   color: var(--cg-color-accent);
   border: 1px solid var(--cg-color-accent);
-  font-size: var(--cg-font-size-base);
+  font-size: var(--cg-font-size-sm);
   font-weight: var(--cg-font-weight-bold);
   flex-shrink: 0;
 }
 
-.help-text {
+.step-content {
   flex: 1;
 }
 
-.help-title {
+.step-content strong {
   color: var(--cg-color-text-primary);
-  font-size: var(--cg-font-size-base);
-  font-weight: var(--cg-font-weight-semibold);
+  font-size: var(--cg-font-size-sm);
+  display: block;
   margin-bottom: var(--cg-space-1);
 }
 
-.help-description {
+.step-content p {
   color: var(--cg-color-text-secondary);
-  font-size: var(--cg-font-size-sm);
+  font-size: var(--cg-font-size-xs);
+  margin: 0;
 }
 
 /* Configure State */

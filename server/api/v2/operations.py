@@ -48,6 +48,35 @@ async def export_environment(request: web.Request, env) -> web.Response:
         }, status=500)
 
 
+@routes.get("/v2/comfygit/download")
+async def download_file(request: web.Request) -> web.Response:
+    """Download a file from the server (used for export downloads)."""
+    file_path = request.query.get("path")
+
+    if not file_path:
+        return web.json_response({"error": "path parameter required"}, status=400)
+
+    path = Path(file_path)
+
+    if not path.exists():
+        return web.json_response({"error": "File not found"}, status=404)
+
+    if not path.is_file():
+        return web.json_response({"error": "Path is not a file"}, status=400)
+
+    # Security: only allow downloading .tar.gz files from expected locations
+    if not path.suffix == ".gz" or not str(path).endswith(".tar.gz"):
+        return web.json_response({"error": "Only .tar.gz files can be downloaded"}, status=403)
+
+    # Stream the file
+    return web.FileResponse(
+        path,
+        headers={
+            "Content-Disposition": f'attachment; filename="{path.name}"'
+        }
+    )
+
+
 @routes.post("/v2/comfygit/sync")
 @requires_environment
 async def sync_environment(request: web.Request, env) -> web.Response:
