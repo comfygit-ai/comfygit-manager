@@ -4,6 +4,7 @@ import ComfyGitPanel from '@/components/ComfyGitPanel.vue'
 import CommitPopover from '@/components/CommitPopover.vue'
 import ModelDownloadQueue from '@/components/ModelDownloadQueue.vue'
 import { useModelDownloadQueue } from '@/composables/useModelDownloadQueue'
+import { isMockApi } from '@/services/mockApi'
 import type { ComfyGitStatus } from '@/types/comfygit'
 import { getInitialTheme, applyTheme } from '@/themes'
 
@@ -61,6 +62,12 @@ async function fetchStatus() {
 
 // Fetch setup status to determine if in managed environment
 async function fetchSetupStatus() {
+  // Mock mode: always return no_workspace to test disabled state
+  if (isMockApi()) {
+    currentSetupState = 'no_workspace'
+    return
+  }
+
   if (!app?.api) return
   try {
     const response = await app.api.fetchApi('/v2/setup/status')

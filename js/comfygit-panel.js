@@ -1,5 +1,5 @@
-import { app as mt } from "../../scripts/app.js";
-import { defineComponent as X, createElementBlock as o, openBlock as s, createCommentVNode as c, createElementVNode as e, renderSlot as ge, createBlock as S, resolveDynamicComponent as ls, normalizeClass as le, withCtx as i, toDisplayString as n, createVNode as g, createTextVNode as w, computed as U, Fragment as G, renderList as se, normalizeStyle as Xe, ref as _, onMounted as De, watch as qt, Teleport as Pe, withModifiers as ze, Transition as qs, createSlots as Yt, withKeys as vt, onUnmounted as Ys, reactive as ys, readonly as Xs, unref as pe, withDirectives as Fe, vModelText as Ut, nextTick as Qs, vModelSelect as $t, vModelCheckbox as ts, TransitionGroup as Zs, createApp as is, h as rs } from "vue";
+import { app as _t } from "../../scripts/app.js";
+import { defineComponent as X, createElementBlock as o, openBlock as s, createCommentVNode as c, createElementVNode as e, renderSlot as ge, createBlock as S, resolveDynamicComponent as ls, normalizeClass as le, withCtx as i, toDisplayString as n, createVNode as g, createTextVNode as w, computed as U, Fragment as G, renderList as se, normalizeStyle as Xe, ref as _, onMounted as De, watch as qt, Teleport as Pe, withModifiers as ze, Transition as qs, createSlots as Yt, withKeys as mt, onUnmounted as Ys, reactive as ys, readonly as Xs, unref as pe, withDirectives as Fe, vModelText as Ut, nextTick as Qs, vModelSelect as $t, vModelCheckbox as ts, TransitionGroup as Zs, createApp as is, h as rs } from "vue";
 const Js = { class: "panel-layout" }, eo = {
   key: 0,
   class: "panel-layout-header"
@@ -1241,8 +1241,8 @@ const Js = { class: "panel-layout" }, eo = {
       class: le(["text-input", { error: t.hasError, monospace: t.monospace }]),
       onInput: y,
       onKeyup: [
-        l[0] || (l[0] = vt((u) => m.$emit("enter"), ["enter"])),
-        l[1] || (l[1] = vt((u) => m.$emit("escape"), ["escape"]))
+        l[0] || (l[0] = mt((u) => m.$emit("enter"), ["enter"])),
+        l[1] || (l[1] = mt((u) => m.$emit("escape"), ["escape"]))
       ],
       onFocus: l[2] || (l[2] = (u) => m.$emit("focus")),
       onBlur: l[3] || (l[3] = (u) => m.$emit("blur"))
@@ -3171,13 +3171,13 @@ function tl() {
 function Te() {
   const t = _(!1), r = _(null);
   async function a(H, we) {
-    var bt;
-    if (!((bt = window.app) != null && bt.api))
+    var kt;
+    if (!((kt = window.app) != null && kt.api))
       throw new Error("ComfyUI API not available");
     const xe = await window.app.api.fetchApi(H, we);
     if (!xe.ok) {
-      const gt = await xe.json().catch(() => ({}));
-      throw new Error(gt.error || gt.message || `Request failed: ${xe.status}`);
+      const ft = await xe.json().catch(() => ({}));
+      throw new Error(ft.error || ft.message || `Request failed: ${xe.status}`);
     }
     return xe.json();
   }
@@ -3346,7 +3346,7 @@ function Te() {
   async function ie() {
     return ye.getRemotes();
   }
-  async function ft(H, we) {
+  async function vt(H, we) {
     return await ye.addRemote(H, we), { status: "success", remote_name: H };
   }
   async function It(H) {
@@ -3460,7 +3460,7 @@ function Te() {
     uninstallNode: be,
     // Git Remotes
     getRemotes: ie,
-    addRemote: ft,
+    addRemote: vt,
     removeRemote: It,
     updateRemoteUrl: Et,
     fetchRemote: _e,
@@ -4069,7 +4069,7 @@ function $s() {
 function Zt(t) {
   return ke.items.find((r) => r.id === t);
 }
-async function _t() {
+async function bt() {
   if (ke.status === "downloading") return;
   const t = ke.items.find((r) => r.status === "queued");
   if (!t) {
@@ -4082,7 +4082,7 @@ async function _t() {
   } catch (r) {
     t.status = "failed", t.error = r instanceof Error ? r.message : "Download failed", t.retries++;
   } finally {
-    ke.status = "idle", _t();
+    ke.status = "idle", bt();
   }
 }
 async function Kl(t) {
@@ -4184,7 +4184,7 @@ function Ft() {
       };
       ke.items.push(I);
     }
-    ke.status === "idle" && _t();
+    ke.status === "idle" && bt();
   }
   async function r(f) {
     const R = Zt(f);
@@ -4196,7 +4196,7 @@ function Ft() {
           });
         } catch {
         }
-        tt && (tt.close(), tt = null), R.status = "failed", R.error = "Cancelled by user", ke.status = "idle", _t();
+        tt && (tt.close(), tt = null), R.status = "failed", R.error = "Cancelled by user", ke.status = "idle", bt();
       } else if (R.status === "queued") {
         const O = ke.items.findIndex((I) => I.id === f);
         O >= 0 && ke.items.splice(O, 1);
@@ -4205,17 +4205,17 @@ function Ft() {
   }
   function a(f) {
     const R = Zt(f);
-    !R || R.status !== "failed" || (R.status = "queued", R.error = void 0, R.progress = 0, R.downloaded = 0, ke.status === "idle" && _t());
+    !R || R.status !== "failed" || (R.status = "queued", R.error = void 0, R.progress = 0, R.downloaded = 0, ke.status === "idle" && bt());
   }
   function d(f) {
     const R = Zt(f);
-    !R || R.status !== "paused" || (R.status = "queued", ke.status === "idle" && _t());
+    !R || R.status !== "paused" || (R.status = "queued", ke.status === "idle" && bt());
   }
   function p() {
     const f = ke.items.filter((R) => R.status === "paused");
     for (const R of f)
       R.status = "queued";
-    ke.status === "idle" && _t();
+    ke.status === "idle" && bt();
   }
   function v(f) {
     const R = ke.items.findIndex((O) => O.id === f);
@@ -4815,8 +4815,8 @@ const Yl = { class: "resolution-stepper" }, Xl = { class: "stepper-header" }, Ql
         class: le(["base-input", { error: !!t.error }]),
         onInput: a[0] || (a[0] = (d) => r.$emit("update:modelValue", d.target.value)),
         onKeyup: [
-          a[1] || (a[1] = vt((d) => r.$emit("enter"), ["enter"])),
-          a[2] || (a[2] = vt((d) => r.$emit("escape"), ["escape"]))
+          a[1] || (a[1] = mt((d) => r.$emit("enter"), ["enter"])),
+          a[2] || (a[2] = mt((d) => r.$emit("escape"), ["escape"]))
         ]
       }, null, 42, ji),
       t.error ? (s(), o("span", Hi, n(t.error), 1)) : c("", !0)
@@ -5001,7 +5001,7 @@ const Yl = { class: "resolution-stepper" }, Xl = { class: "stepper-header" }, Ql
                 F(ie.package_id) ? (s(), o("span", ar, " SKIPPED ")) : (s(), o("span", or, " WILL INSTALL ")),
                 e("button", {
                   class: "toggle-skip-btn",
-                  onClick: (ft) => N(ie.package_id)
+                  onClick: (vt) => N(ie.package_id)
                 }, n(F(ie.package_id) ? "Include" : "Skip"), 9, nr)
               ])
             ]))), 128))
@@ -5077,7 +5077,7 @@ const Yl = { class: "resolution-stepper" }, Xl = { class: "stepper-header" }, Ql
                     (s(!0), o(G, null, se(b.value, (ie) => (s(), o("div", {
                       key: ie.package_id,
                       class: "node-search-result-item",
-                      onClick: (ft) => $e(ie)
+                      onClick: (vt) => $e(ie)
                     }, [
                       e("div", gr, [
                         e("code", pr, n(ie.package_id), 1),
@@ -6028,7 +6028,7 @@ const Yl = { class: "resolution-stepper" }, Xl = { class: "stepper-header" }, Ql
         C.value = !1;
       }
     }
-    function ft() {
+    function vt() {
       R.value.includes("analysis") || R.value.push("analysis"), N.value || z.value ? f.value = "nodes" : D.value || x.value ? f.value = "models" : f.value = "review";
     }
     function It(j) {
@@ -6088,7 +6088,7 @@ const Yl = { class: "resolution-stepper" }, Xl = { class: "stepper-header" }, Ql
         $.value = T instanceof Error ? T.message : "Failed to open file location";
       }
     }
-    async function bt() {
+    async function kt() {
       var j;
       L.value = !0, $.value = null, u(), l.phase = "resolving", f.value = "applying";
       try {
@@ -6109,7 +6109,7 @@ const Yl = { class: "resolution-stepper" }, Xl = { class: "stepper-header" }, Ql
         L.value = !1;
       }
     }
-    function gt() {
+    function ft() {
       d("refresh"), d("restart"), d("close");
     }
     async function Xt() {
@@ -6339,7 +6339,7 @@ const Yl = { class: "resolution-stepper" }, Xl = { class: "stepper-header" }, Ql
                 e("h4", mu, "Models (" + n(q.value.length) + ")", 1),
                 e("div", vu, [
                   (s(!0), o(G, null, se(q.value, (K) => {
-                    var ve, Re, ut, Je, Vt, pt, ht;
+                    var ve, Re, ut, Je, Vt, gt, pt;
                     return s(), o("div", {
                       key: K.filename,
                       class: "review-item"
@@ -6347,7 +6347,7 @@ const Yl = { class: "resolution-stepper" }, Xl = { class: "stepper-header" }, Ql
                       e("code", fu, n(K.filename), 1),
                       e("div", gu, [
                         I.value.has(K.filename) ? (s(), o(G, { key: 0 }, [
-                          ((ve = I.value.get(K.filename)) == null ? void 0 : ve.action) === "select" ? (s(), o("span", pu, n((ut = (Re = I.value.get(K.filename)) == null ? void 0 : Re.selected_model) == null ? void 0 : ut.filename), 1)) : ((Je = I.value.get(K.filename)) == null ? void 0 : Je.action) === "download" ? (s(), o("span", hu, " Download ")) : ((Vt = I.value.get(K.filename)) == null ? void 0 : Vt.action) === "optional" ? (s(), o("span", yu, " Optional ")) : ((pt = I.value.get(K.filename)) == null ? void 0 : pt.action) === "skip" ? (s(), o("span", wu, " Skip ")) : ((ht = I.value.get(K.filename)) == null ? void 0 : ht.action) === "cancel_download" ? (s(), o("span", ku, " Cancel Download ")) : c("", !0)
+                          ((ve = I.value.get(K.filename)) == null ? void 0 : ve.action) === "select" ? (s(), o("span", pu, n((ut = (Re = I.value.get(K.filename)) == null ? void 0 : Re.selected_model) == null ? void 0 : ut.filename), 1)) : ((Je = I.value.get(K.filename)) == null ? void 0 : Je.action) === "download" ? (s(), o("span", hu, " Download ")) : ((Vt = I.value.get(K.filename)) == null ? void 0 : Vt.action) === "optional" ? (s(), o("span", yu, " Optional ")) : ((gt = I.value.get(K.filename)) == null ? void 0 : gt.action) === "skip" ? (s(), o("span", wu, " Skip ")) : ((pt = I.value.get(K.filename)) == null ? void 0 : pt.action) === "cancel_download" ? (s(), o("span", ku, " Cancel Download ")) : c("", !0)
                         ], 64)) : K.is_download_intent ? (s(), o("span", bu, " Pending Download ")) : (s(), o("span", _u, " No action (skipped) "))
                       ])
                     ]);
@@ -6360,7 +6360,7 @@ const Yl = { class: "resolution-stepper" }, Xl = { class: "stepper-header" }, Ql
           f.value === "applying" ? (s(), S(Yd, {
             key: 4,
             progress: pe(l),
-            onRestart: gt,
+            onRestart: ft,
             onRetryFailed: Xt
           }, null, 8, ["progress"])) : c("", !0)
         ])) : c("", !0)
@@ -6392,7 +6392,7 @@ const Yl = { class: "resolution-stepper" }, Xl = { class: "stepper-header" }, Ql
           key: 2,
           variant: "primary",
           disabled: C.value,
-          onClick: ft
+          onClick: vt
         }, {
           default: i(() => [...T[38] || (T[38] = [
             w(" Continue ", -1)
@@ -6424,7 +6424,7 @@ const Yl = { class: "resolution-stepper" }, Xl = { class: "stepper-header" }, Ql
           variant: "primary",
           disabled: L.value,
           loading: L.value,
-          onClick: bt
+          onClick: kt
         }, {
           default: i(() => [...T[40] || (T[40] = [
             w(" Apply Resolution ", -1)
@@ -6469,7 +6469,7 @@ const Yl = { class: "resolution-stepper" }, Xl = { class: "stepper-header" }, Ql
         placeholder: t.placeholder,
         class: "search-input",
         onInput: y,
-        onKeyup: vt(m, ["escape"])
+        onKeyup: mt(m, ["escape"])
       }, null, 40, Iu),
       t.clearable && t.modelValue ? (s(), o("button", {
         key: 0,
@@ -8844,7 +8844,7 @@ This will download and install the node.`))
       a[1] || (a[1] = e("span", { class: "toggle-slider" }, null, -1))
     ]));
   }
-}), kt = /* @__PURE__ */ Q(nf, [["__scopeId", "data-v-71c0f550"]]), lf = { class: "settings-section" }, rf = { class: "path-setting" }, df = { class: "path-value" }, cf = { class: "path-setting" }, uf = { class: "path-value" }, mf = { class: "settings-section" }, vf = { class: "settings-section" }, ff = { class: "settings-section" }, gf = /* @__PURE__ */ X({
+}), wt = /* @__PURE__ */ Q(nf, [["__scopeId", "data-v-71c0f550"]]), lf = { class: "settings-section" }, rf = { class: "path-setting" }, df = { class: "path-value" }, cf = { class: "path-setting" }, uf = { class: "path-value" }, mf = { class: "settings-section" }, vf = { class: "settings-section" }, ff = { class: "settings-section" }, gf = /* @__PURE__ */ X({
   __name: "WorkspaceSettingsSection",
   setup(t) {
     const { getConfig: r, updateConfig: a } = Te(), d = _(!1), p = _(null), v = _(null), y = _(null), m = _(null), l = _(""), u = _(""), b = _(!0), h = _(!0), k = _(!1), C = U(() => m.value ? l.value !== (m.value.civitai_api_key || "") : !1);
@@ -8988,7 +8988,7 @@ This will download and install the node.`))
                   description: "Automatically refresh the page after branch switches and checkouts. If disabled, shows a notification with a refresh button."
                 }, {
                   default: i(() => [
-                    g(kt, {
+                    g(wt, {
                       modelValue: k.value,
                       "onUpdate:modelValue": [
                         I[2] || (I[2] = (B) => k.value = B),
@@ -9011,7 +9011,7 @@ This will download and install the node.`))
                   disabled: !0
                 }, {
                   default: i(() => [
-                    g(kt, {
+                    g(wt, {
                       modelValue: b.value,
                       "onUpdate:modelValue": I[3] || (I[3] = (B) => b.value = B),
                       disabled: ""
@@ -9025,7 +9025,7 @@ This will download and install the node.`))
                   disabled: !0
                 }, {
                   default: i(() => [
-                    g(kt, {
+                    g(wt, {
                       modelValue: h.value,
                       "onUpdate:modelValue": I[4] || (I[4] = (B) => h.value = B),
                       disabled: ""
@@ -9563,7 +9563,7 @@ This will download and install the node.`))
               type: "text",
               class: "form-input",
               placeholder: "my-environment",
-              onKeyup: vt(k, ["enter"])
+              onKeyup: mt(k, ["enter"])
             }, null, 544), [
               [Ut, p.value]
             ])
@@ -10554,7 +10554,7 @@ This will download and install the node.`))
               description: "Import workflow JSON files"
             }, {
               default: i(() => [
-                g(kt, {
+                g(wt, {
                   "model-value": t.includeWorkflows,
                   "onUpdate:modelValue": v[0] || (v[0] = (y) => a("update:includeWorkflows", y))
                 }, null, 8, ["model-value"])
@@ -10566,7 +10566,7 @@ This will download and install the node.`))
               description: "Import model files (may be large)"
             }, {
               default: i(() => [
-                g(kt, {
+                g(wt, {
                   "model-value": t.includeModels,
                   "onUpdate:modelValue": v[1] || (v[1] = (y) => a("update:includeModels", y))
                 }, null, 8, ["model-value"])
@@ -10578,7 +10578,7 @@ This will download and install the node.`))
               description: "Install custom node dependencies"
             }, {
               default: i(() => [
-                g(kt, {
+                g(wt, {
                   "model-value": t.includeNodes,
                   "onUpdate:modelValue": v[2] || (v[2] = (y) => a("update:includeNodes", y))
                 }, null, 8, ["model-value"])
@@ -10590,7 +10590,7 @@ This will download and install the node.`))
               description: "Import git commits and branches"
             }, {
               default: i(() => [
-                g(kt, {
+                g(wt, {
                   "model-value": t.includeGitHistory,
                   "onUpdate:modelValue": v[3] || (v[3] = (y) => a("update:includeGitHistory", y))
                 }, null, 8, ["model-value"])
@@ -11138,8 +11138,8 @@ This will download and install the node.`))
         class: "base-textarea",
         onInput: a[0] || (a[0] = (d) => r.$emit("update:modelValue", d.target.value)),
         onKeydown: [
-          a[1] || (a[1] = vt(ze((d) => r.$emit("ctrlEnter"), ["ctrl"]), ["enter"])),
-          a[2] || (a[2] = vt(ze((d) => r.$emit("ctrlEnter"), ["meta"]), ["enter"]))
+          a[1] || (a[1] = mt(ze((d) => r.$emit("ctrlEnter"), ["ctrl"]), ["enter"])),
+          a[2] || (a[2] = mt(ze((d) => r.$emit("ctrlEnter"), ["meta"]), ["enter"]))
         ]
       }, null, 40, gh),
       t.showCharCount && t.maxLength ? (s(), o("div", ph, n(t.modelValue.length) + " / " + n(t.maxLength), 1)) : c("", !0)
@@ -12140,7 +12140,7 @@ This will download and install the node.`))
     function ie(V, M) {
       Z.value = V, be.value = M;
     }
-    function ft(V) {
+    function vt(V) {
       const ce = {
         "model-index": { view: "model-index", section: "all-envs" }
       }[V];
@@ -12206,10 +12206,10 @@ This will download and install the node.`))
         ee.value = !1;
       }
     }
-    function bt(V) {
+    function kt(V) {
       ae.value = V;
     }
-    async function gt(V) {
+    async function ft(V) {
       var ce;
       ae.value = null;
       const M = I.value && (I.value.workflows.new.length > 0 || I.value.workflows.modified.length > 0 || I.value.workflows.deleted.length > 0 || I.value.has_changes);
@@ -12342,43 +12342,43 @@ This will download and install the node.`))
     async function Vt() {
       P.value = !1, E.value = !0, ve(), q.value = {
         progress: 10,
-        state: pt(10),
-        message: ht(10)
+        state: gt(10),
+        message: pt(10)
       };
       try {
         await h(ne.value), Ps(), Bs();
       } catch (V) {
-        yt(), E.value = !1, fe(`Failed to initiate switch: ${V instanceof Error ? V.message : "Unknown error"}`, "error"), q.value = { state: "idle", progress: 0, message: "" };
+        ht(), E.value = !1, fe(`Failed to initiate switch: ${V instanceof Error ? V.message : "Unknown error"}`, "error"), q.value = { state: "idle", progress: 0, message: "" };
       }
     }
-    function pt(V) {
+    function gt(V) {
       return V >= 100 ? "complete" : V >= 80 ? "validating" : V >= 60 ? "starting" : V >= 30 ? "syncing" : "preparing";
     }
-    function ht(V) {
+    function pt(V) {
       return {
         preparing: "Stopping current environment...",
         syncing: "Preparing target environment...",
         starting: "Starting new environment...",
         validating: "Waiting for server to be ready...",
         complete: "Switch complete!"
-      }[pt(V)] || "";
+      }[gt(V)] || "";
     }
     function Ps() {
       if ($e) return;
       let V = 10;
       const M = 60, ce = 5e3, Ie = 100, Be = (M - V) / (ce / Ie);
       $e = window.setInterval(() => {
-        if (V += Be, V >= M && (V = M, yt()), q.value.progress < M) {
+        if (V += Be, V >= M && (V = M, ht()), q.value.progress < M) {
           const Oe = Math.floor(V);
           q.value = {
             progress: Oe,
-            state: pt(Oe),
-            message: ht(Oe)
+            state: gt(Oe),
+            message: pt(Oe)
           };
         }
       }, Ie);
     }
-    function yt() {
+    function ht() {
       $e && (clearInterval($e), $e = null);
     }
     function Bs() {
@@ -12388,20 +12388,20 @@ This will download and install the node.`))
           if ((!V || V.state === "idle") && (V = await k()), !V)
             return;
           const M = V.progress || 0;
-          M >= 60 && yt();
-          const ce = Math.max(M, q.value.progress), Ie = V.state && V.state !== "idle" && V.state !== "unknown", Be = Ie ? V.state : pt(ce), Oe = Ie && V.message || ht(ce);
+          M >= 60 && ht();
+          const ce = Math.max(M, q.value.progress), Ie = V.state && V.state !== "idle" && V.state !== "unknown", Be = Ie ? V.state : gt(ce), Oe = Ie && V.message || pt(ce);
           q.value = {
             state: Be,
             progress: ce,
             message: Oe
-          }, V.state === "complete" ? (yt(), Qt(), E.value = !1, fe(`✓ Switched to ${ne.value}`, "success"), await xe(), ne.value = "") : V.state === "rolled_back" ? (yt(), Qt(), E.value = !1, fe("Switch failed, restored previous environment", "warning"), ne.value = "") : V.state === "critical_failure" && (yt(), Qt(), E.value = !1, fe(`Critical error during switch: ${V.message}`, "error"), ne.value = "");
+          }, V.state === "complete" ? (ht(), Qt(), E.value = !1, fe(`✓ Switched to ${ne.value}`, "success"), await xe(), ne.value = "") : V.state === "rolled_back" ? (ht(), Qt(), E.value = !1, fe("Switch failed, restored previous environment", "warning"), ne.value = "") : V.state === "critical_failure" && (ht(), Qt(), E.value = !1, fe(`Critical error during switch: ${V.message}`, "error"), ne.value = "");
         } catch (V) {
           console.error("Failed to poll switch progress:", V);
         }
       }, 1e3));
     }
     function Qt() {
-      yt(), Ee && (clearInterval(Ee), Ee = null);
+      ht(), Ee && (clearInterval(Ee), Ee = null);
     }
     function Os() {
       P.value = !1, ne.value = "";
@@ -12664,7 +12664,7 @@ This will download and install the node.`))
                 onRefresh: xe
               }, null, 512)) : Z.value === "models-env" ? (s(), S(Dm, {
                 key: 2,
-                onNavigate: ft
+                onNavigate: vt
               })) : Z.value === "branches" ? (s(), S(On, {
                 key: 3,
                 branches: W.value,
@@ -12675,8 +12675,8 @@ This will download and install the node.`))
               }, null, 8, ["branches", "current"])) : Z.value === "history" ? (s(), S(Xn, {
                 key: 4,
                 commits: B.value,
-                onSelect: bt,
-                onCheckout: gt
+                onSelect: kt,
+                onCheckout: ft
               }, null, 8, ["commits"])) : Z.value === "nodes" ? (s(), S(kv, {
                 key: 5,
                 onOpenNodeManager: Et
@@ -12698,7 +12698,7 @@ This will download and install the node.`))
           key: 0,
           commit: ae.value,
           onClose: M[23] || (M[23] = (ue) => ae.value = null),
-          onCheckout: gt,
+          onCheckout: ft,
           onCreateBranch: K
         }, null, 8, ["commit"])) : c("", !0),
         _e.value ? (s(), S(vh, {
@@ -13108,7 +13108,7 @@ This will download and install the node.`))
   comfy: Hw,
   phosphor: Kw
 }, ds = "comfy", Ds = "comfygit-theme";
-let wt = null, Rs = ds;
+let yt = null, Rs = ds;
 function Yw() {
   try {
     const t = localStorage.getItem(Ds);
@@ -13119,7 +13119,7 @@ function Yw() {
   return ds;
 }
 function Ts(t = ds) {
-  wt && wt.remove(), wt = document.createElement("style"), wt.id = "comfygit-theme-styles", wt.setAttribute("data-theme", t), wt.textContent = qw[t], document.head.appendChild(wt), document.body.setAttribute("data-comfygit-theme", t), Rs = t;
+  yt && yt.remove(), yt = document.createElement("style"), yt.id = "comfygit-theme-styles", yt.setAttribute("data-theme", t), yt.textContent = qw[t], document.head.appendChild(yt), document.body.setAttribute("data-comfygit-theme", t), Rs = t;
   try {
     localStorage.setItem(Ds, t);
   } catch {
@@ -13152,21 +13152,18 @@ const Ct = _(null);
 let Ns = "managed";
 async function jt() {
   var t;
-  if (!((t = mt) != null && t.api)) return null;
+  if (!((t = _t) != null && t.api)) return null;
   try {
-    const r = await mt.api.fetchApi("/v2/comfygit/status");
+    const r = await _t.api.fetchApi("/v2/comfygit/status");
     r.ok && (Ct.value = await r.json());
   } catch {
   }
 }
 async function as() {
-  var t;
-  if ((t = mt) != null && t.api)
-    try {
-      const r = await mt.api.fetchApi("/v2/setup/status");
-      r.ok && (Ns = (await r.json()).state);
-    } catch {
-    }
+  {
+    Ns = "no_workspace";
+    return;
+  }
 }
 function Jw() {
   if (!Ct.value) return !1;
@@ -13331,19 +13328,19 @@ Us.textContent = `
   }
 `;
 document.head.appendChild(Us);
-mt.registerExtension({
+_t.registerExtension({
   name: "Comfy.ComfyGitPanel",
   async setup() {
     var p, v;
     const t = document.createElement("div");
     t.className = "comfygit-btn-group";
     const r = document.createElement("button");
-    r.className = "comfyui-button comfyui-menu-mobile-collapse comfygit-panel-btn", r.textContent = "ComfyGit", r.title = "ComfyGit Control Panel", r.onclick = e0, He = document.createElement("button"), He.className = "comfyui-button comfyui-menu-mobile-collapse comfygit-commit-btn", He.innerHTML = 'Commit <span class="commit-indicator"></span>', He.title = "Quick Commit", He.onclick = () => t0(He), t.appendChild(r), t.appendChild(He), (v = (p = mt.menu) == null ? void 0 : p.settingsGroup) != null && v.element && (mt.menu.settingsGroup.element.before(t), console.log("[ComfyGit] Control Panel buttons added to toolbar")), s0();
+    r.className = "comfyui-button comfyui-menu-mobile-collapse comfygit-panel-btn", r.textContent = "ComfyGit", r.title = "ComfyGit Control Panel", r.onclick = e0, He = document.createElement("button"), He.className = "comfyui-button comfyui-menu-mobile-collapse comfygit-commit-btn", He.innerHTML = 'Commit <span class="commit-indicator"></span>', He.title = "Quick Commit", He.onclick = () => t0(He), t.appendChild(r), t.appendChild(He), (v = (p = _t.menu) == null ? void 0 : p.settingsGroup) != null && v.element && (_t.menu.settingsGroup.element.before(t), console.log("[ComfyGit] Control Panel buttons added to toolbar")), s0();
     const { loadPendingDownloads: a } = Ft();
     a(), await Promise.all([jt(), as()]), Ot(), ns(), setInterval(async () => {
       await Promise.all([jt(), as()]), Ot(), ns();
     }, 3e4);
-    const d = mt.api;
+    const d = _t.api;
     if (d) {
       let y = function() {
         localStorage.removeItem("workflow"), localStorage.removeItem("Comfy.PreviousWorkflow"), localStorage.removeItem("Comfy.OpenWorkflowsPaths"), localStorage.removeItem("Comfy.ActiveWorkflowIndex"), Object.keys(sessionStorage).forEach((u) => {
