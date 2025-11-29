@@ -219,6 +219,15 @@ const isCreatingEnvironment = ref(false)
 const initProgress = ref({ progress: 0, message: '' })
 const createProgress = ref({ progress: 0, message: '' })
 
+// Polling safeguards
+const MAX_FAILURES = 10
+const STEP1_TIMEOUT_MS = 10 * 60 * 1000  // 10 minutes
+const STEP2_TIMEOUT_MS = 30 * 60 * 1000  // 30 minutes (env creation can be slow)
+const step1FailureCount = ref(0)
+const step1StartTime = ref<number | null>(null)
+const step2FailureCount = ref(0)
+const step2StartTime = ref<number | null>(null)
+
 // Validation
 const canProceedStep1 = computed(() => {
   const hasPath = workspacePath.value?.trim()
@@ -277,8 +286,20 @@ async function validateModelsPath() {
 
 // Step handlers
 async function handleStep1Next() {
-  isCreatingWorkspace.value = true
+  // Clear any existing errors
   workspaceError.value = null
+  modelsError.value = null
+
+  // Pre-submit validation
+  await validateWorkspacePath()
+  if (workspaceError.value) return
+
+  if (hasExistingModels.value && modelsPath.value?.trim()) {
+    await validateModelsPath()
+    if (modelsError.value) return
+  }
+
+  isCreatingWorkspace.value = true
 
   try {
     await initializeWorkspace({
@@ -286,25 +307,53 @@ async function handleStep1Next() {
       models_directory: hasExistingModels.value ? (modelsPath.value?.trim() || null) : null
     })
 
-    // Poll for progress
+    // Initialize polling safeguards
+    step1FailureCount.value = 0
+    step1StartTime.value = Date.now()
+
+    // Poll for progress with safeguards
     const poll = setInterval(async () => {
+      // Check overall timeout
+      if (step1StartTime.value && Date.now() - step1StartTime.value > STEP1_TIMEOUT_MS) {
+        clearInterval(poll)
+        isCreatingWorkspace.value = false
+        workspaceError.value = 'Workspace creation timed out. Please try again or check server logs.'
+        return
+      }
+
       try {
         const progress = await getInitializeProgress()
+        step1FailureCount.value = 0  // Reset on success
+
+        // Detect unexpected idle state (backend restarted)
+        if (progress.state === 'idle' && isCreatingWorkspace.value) {
+          clearInterval(poll)
+          isCreatingWorkspace.value = false
+          workspaceError.value = 'Workspace creation was interrupted. Please try again.'
+          return
+        }
+
         initProgress.value = { progress: progress.progress, message: progress.message }
 
         if (progress.state === 'complete') {
           clearInterval(poll)
           isCreatingWorkspace.value = false
           currentStep.value = 2
-          // Load releases for step 2
           loadReleases()
         } else if (progress.state === 'error') {
           clearInterval(poll)
           isCreatingWorkspace.value = false
           workspaceError.value = progress.error || 'Workspace creation failed'
         }
-      } catch {
-        // Continue polling
+      } catch (err) {
+        step1FailureCount.value++
+        console.warn(`Polling failure ${step1FailureCount.value}/${MAX_FAILURES}:`, err)
+
+        if (step1FailureCount.value >= MAX_FAILURES) {
+          clearInterval(poll)
+          isCreatingWorkspace.value = false
+          workspaceError.value = 'Lost connection to server. Please refresh the page and try again.'
+        }
       }
     }, 500)
 
@@ -330,10 +379,32 @@ async function handleStep2Create() {
     const result = await createEnvironment(request)
 
     if (result.status === 'started') {
-      // Poll for progress
+      // Initialize polling safeguards
+      step2FailureCount.value = 0
+      step2StartTime.value = Date.now()
+
+      // Poll for progress with safeguards
       const poll = setInterval(async () => {
+        // Check overall timeout
+        if (step2StartTime.value && Date.now() - step2StartTime.value > STEP2_TIMEOUT_MS) {
+          clearInterval(poll)
+          isCreatingEnvironment.value = false
+          envCreateError.value = 'Environment creation timed out. Check server logs for details.'
+          return
+        }
+
         try {
           const progress = await getCreateProgress()
+          step2FailureCount.value = 0  // Reset on success
+
+          // Detect unexpected idle state
+          if (progress.state === 'idle' && isCreatingEnvironment.value) {
+            clearInterval(poll)
+            isCreatingEnvironment.value = false
+            envCreateError.value = 'Environment creation was interrupted. Please try again.'
+            return
+          }
+
           createProgress.value = {
             progress: progress.state === 'creating' ? 50 : progress.state === 'complete' ? 100 : 0,
             message: progress.message
@@ -347,8 +418,15 @@ async function handleStep2Create() {
             isCreatingEnvironment.value = false
             envCreateError.value = progress.error || 'Environment creation failed'
           }
-        } catch {
-          // Continue polling
+        } catch (err) {
+          step2FailureCount.value++
+          console.warn(`Polling failure ${step2FailureCount.value}/${MAX_FAILURES}:`, err)
+
+          if (step2FailureCount.value >= MAX_FAILURES) {
+            clearInterval(poll)
+            isCreatingEnvironment.value = false
+            envCreateError.value = 'Lost connection to server. Please refresh and try again.'
+          }
         }
       }, 2000)
     }

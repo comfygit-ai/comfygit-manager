@@ -320,3 +320,27 @@ async def get_initialize_status(request: web.Request) -> web.Response:
     """Get workspace initialization status."""
     with _init_task_lock:
         return web.json_response(_init_task_state.copy())
+
+
+@routes.post("/v2/setup/reset")
+async def reset_initialization(request: web.Request) -> web.Response:
+    """Reset initialization state. Use if user got stuck during setup."""
+    global _init_task_state
+
+    with _init_task_lock:
+        # Only reset if stuck in a non-terminal state
+        if _init_task_state["state"] in ("creating_workspace", "setting_models_dir", "scanning_models"):
+            _init_task_state = {
+                "state": "idle",
+                "task_id": None,
+                "progress": 0,
+                "message": "Initialization reset by user",
+                "models_found": None,
+                "error": None
+            }
+            return web.json_response({"status": "reset"})
+        else:
+            return web.json_response({
+                "status": "no_action",
+                "message": f"Cannot reset from state: {_init_task_state['state']}"
+            })

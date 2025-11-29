@@ -456,3 +456,146 @@ class TestInitializeStatusEndpoint:
         data = await resp.json()
         assert data["state"] == "error"
         assert data["error"] == "Permission denied: /home/user/comfygit"
+
+
+@pytest.mark.integration
+class TestResetInitializationEndpoint:
+    """POST /v2/setup/reset - Reset stuck initialization state."""
+
+    async def test_reset_from_stuck_state(self, client, monkeypatch):
+        """Should reset initialization state when stuck in non-terminal state."""
+        import api.v2.setup as setup_module
+
+        # Simulate stuck state
+        monkeypatch.setattr(
+            setup_module, "_init_task_state",
+            {
+                "state": "scanning_models",
+                "task_id": "stuck-task-id",
+                "progress": 50,
+                "message": "Scanning models...",
+                "models_found": None,
+                "error": None
+            }
+        )
+
+        resp = await client.post("/v2/setup/reset")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "reset"
+
+        # Verify state was actually reset
+        status_resp = await client.get("/v2/setup/initialize_status")
+        status_data = await status_resp.json()
+        assert status_data["state"] == "idle"
+
+    async def test_reset_from_creating_workspace(self, client, monkeypatch):
+        """Should reset when stuck in creating_workspace state."""
+        import api.v2.setup as setup_module
+
+        monkeypatch.setattr(
+            setup_module, "_init_task_state",
+            {
+                "state": "creating_workspace",
+                "task_id": "stuck-task-id",
+                "progress": 10,
+                "message": "Creating...",
+                "models_found": None,
+                "error": None
+            }
+        )
+
+        resp = await client.post("/v2/setup/reset")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "reset"
+
+    async def test_reset_from_setting_models_dir(self, client, monkeypatch):
+        """Should reset when stuck in setting_models_dir state."""
+        import api.v2.setup as setup_module
+
+        monkeypatch.setattr(
+            setup_module, "_init_task_state",
+            {
+                "state": "setting_models_dir",
+                "task_id": "stuck-task-id",
+                "progress": 25,
+                "message": "Setting models dir...",
+                "models_found": None,
+                "error": None
+            }
+        )
+
+        resp = await client.post("/v2/setup/reset")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "reset"
+
+    async def test_no_reset_from_idle(self, client, monkeypatch):
+        """Should not reset from idle state - no action needed."""
+        import api.v2.setup as setup_module
+
+        monkeypatch.setattr(
+            setup_module, "_init_task_state",
+            {
+                "state": "idle",
+                "task_id": None,
+                "progress": 0,
+                "message": "No initialization in progress",
+                "models_found": None,
+                "error": None
+            }
+        )
+
+        resp = await client.post("/v2/setup/reset")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "no_action"
+
+    async def test_no_reset_from_complete(self, client, monkeypatch):
+        """Should not reset from complete state - no action needed."""
+        import api.v2.setup as setup_module
+
+        monkeypatch.setattr(
+            setup_module, "_init_task_state",
+            {
+                "state": "complete",
+                "task_id": "completed-task-id",
+                "progress": 100,
+                "message": "Complete!",
+                "models_found": 50,
+                "error": None
+            }
+        )
+
+        resp = await client.post("/v2/setup/reset")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "no_action"
+
+    async def test_no_reset_from_error(self, client, monkeypatch):
+        """Should not reset from error state - already terminal."""
+        import api.v2.setup as setup_module
+
+        monkeypatch.setattr(
+            setup_module, "_init_task_state",
+            {
+                "state": "error",
+                "task_id": "failed-task-id",
+                "progress": 15,
+                "message": "Failed",
+                "models_found": None,
+                "error": "Some error"
+            }
+        )
+
+        resp = await client.post("/v2/setup/reset")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "no_action"

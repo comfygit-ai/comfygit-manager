@@ -61,7 +61,7 @@ function handleOverlayClick() {
 }
 
 function handleKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') {
+  if (e.key === 'Escape' && props.showCloseButton) {
     emit('close')
   }
 }
