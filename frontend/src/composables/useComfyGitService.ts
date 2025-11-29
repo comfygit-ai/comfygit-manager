@@ -34,7 +34,9 @@ import type {
   PushPreview,
   PushResult,
   ImportAnalysis,
-  ValidateNameResult
+  ValidateNameResult,
+  ImportResult,
+  ImportProgress
 } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
 
@@ -783,6 +785,48 @@ export function useComfyGitService() {
     )
   }
 
+  async function executeImport(
+    file: File,
+    name: string,
+    modelStrategy: 'all' | 'required' | 'skip',
+    torchBackend: string
+  ): Promise<ImportResult> {
+    if (USE_MOCK) {
+      await new Promise(resolve => setTimeout(resolve, 300))
+      return { status: 'started', message: `Importing environment '${name}'...` }
+    }
+
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('name', name)
+    formData.append('model_strategy', modelStrategy)
+    formData.append('torch_backend', torchBackend)
+
+    if (!window.app?.api) {
+      throw new Error('ComfyUI API not available')
+    }
+
+    const response = await window.app.api.fetchApi('/v2/workspace/import', {
+      method: 'POST',
+      body: formData
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.message || errorData.error || `Import failed: ${response.status}`)
+    }
+
+    return response.json()
+  }
+
+  async function getImportProgress(): Promise<ImportProgress> {
+    if (USE_MOCK) {
+      return { state: 'idle', message: 'No import in progress' }
+    }
+
+    return fetchApi<ImportProgress>('/v2/workspace/import/status')
+  }
+
   return {
     isLoading,
     error,
@@ -854,6 +898,8 @@ export function useComfyGitService() {
     repairWorkflowModels,
     // Import Operations
     previewTarballImport,
-    validateEnvironmentName
+    validateEnvironmentName,
+    executeImport,
+    getImportProgress
   }
 }

@@ -1,10 +1,10 @@
 """Import operations API - Preview and execute environment imports."""
-import json
 import re
 import shutil
 import tempfile
+import threading
+from dataclasses import asdict
 from pathlib import Path
-from typing import Any
 
 from aiohttp import web
 
@@ -16,43 +16,14 @@ routes = web.RouteTableDef()
 # Valid environment name pattern: alphanumeric, hyphens, underscores
 ENV_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_-]*$')
 
-
-def _serialize_import_analysis(analysis: Any) -> dict:
-    """Serialize ImportAnalysis object to dict.
-
-    The core library's ImportAnalysis has:
-    - environment_name: str
-    - comfyui_version: str | None
-    - python_version: str
-    - nodes: list[dict]
-    - workflows: list[str]
-    - models: list[dict]
-    - dependencies: dict[str, list[str]]
-    """
-    # Handle both object attributes and dict-like access
-    def get_attr(obj: Any, name: str, default: Any = None) -> Any:
-        if hasattr(obj, name):
-            return getattr(obj, name)
-        if isinstance(obj, dict):
-            return obj.get(name, default)
-        return default
-
-    nodes = get_attr(analysis, 'nodes', [])
-    models = get_attr(analysis, 'models', [])
-    workflows = get_attr(analysis, 'workflows', [])
-
-    return {
-        "environment_name": get_attr(analysis, 'environment_name', ''),
-        "comfyui_version": get_attr(analysis, 'comfyui_version'),
-        "python_version": get_attr(analysis, 'python_version', ''),
-        "total_nodes": len(nodes) if nodes else 0,
-        "nodes": nodes if nodes else [],
-        "total_workflows": len(workflows) if workflows else 0,
-        "workflows": [{"name": w} if isinstance(w, str) else w for w in (workflows or [])],
-        "total_models": len(models) if models else 0,
-        "models": models if models else [],
-        "dependencies": get_attr(analysis, 'dependencies', {}),
-    }
+# Import task state (similar to create environment pattern)
+_import_task_lock = threading.Lock()
+_import_task_state = {
+    "state": "idle",  # idle, importing, complete, error
+    "message": "",
+    "environment_name": None,
+    "error": None
+}
 
 
 def _validate_env_name(name: str) -> tuple[bool, str | None]:
@@ -67,6 +38,43 @@ def _validate_env_name(name: str) -> tuple[bool, str | None]:
     if not ENV_NAME_PATTERN.match(name):
         return False, "Name contains invalid characters. Use only letters, numbers, hyphens, and underscores."
     return True, None
+
+
+def _run_import_environment(workspace, tarball_path: Path, name: str, model_strategy: str, torch_backend: str):
+    """Background thread function to import environment."""
+    global _import_task_state
+
+    try:
+        with _import_task_lock:
+            _import_task_state["state"] = "importing"
+            _import_task_state["message"] = f"Importing environment '{name}'..."
+            _import_task_state["environment_name"] = None
+            _import_task_state["error"] = None
+
+        # Call the core library to import the environment
+        env = workspace.import_environment(
+            tarball_path=tarball_path,
+            name=name,
+            model_strategy=model_strategy,
+            callbacks=None,  # No callbacks for polling approach
+            torch_backend=torch_backend
+        )
+
+        with _import_task_lock:
+            _import_task_state["state"] = "complete"
+            _import_task_state["message"] = f"Environment '{name}' imported successfully"
+            _import_task_state["environment_name"] = env.name
+            _import_task_state["error"] = None
+
+    except Exception as e:
+        with _import_task_lock:
+            _import_task_state["state"] = "error"
+            _import_task_state["message"] = "Failed to import environment"
+            _import_task_state["error"] = str(e)
+        print(f"[ComfyGit] Environment import failed: {e}")
+    finally:
+        # Clean up temp file
+        shutil.rmtree(tarball_path.parent, ignore_errors=True)
 
 
 @routes.post("/v2/workspace/import/preview")
@@ -103,7 +111,7 @@ async def preview_import(request: web.Request) -> web.Response:
 
         # Call workspace.preview_import
         analysis = await run_sync(workspace.preview_import, temp_file)
-        return web.json_response(_serialize_import_analysis(analysis))
+        return web.json_response(asdict(analysis))
 
     except Exception as e:
         return web.json_response({"error": str(e)}, status=400)
@@ -140,7 +148,7 @@ async def preview_git_import(request: web.Request) -> web.Response:
 
     try:
         analysis = await run_sync(workspace.preview_git_import, git_url, branch)
-        return web.json_response(_serialize_import_analysis(analysis))
+        return web.json_response(asdict(analysis))
     except Exception as e:
         return web.json_response({"error": str(e)}, status=400)
 
@@ -185,8 +193,8 @@ async def validate_environment_name(request: web.Request) -> web.Response:
 
 
 @routes.post("/v2/workspace/import")
-async def import_environment(request: web.Request) -> web.StreamResponse:
-    """Import environment from tarball with SSE progress.
+async def import_environment(request: web.Request) -> web.Response:
+    """Import environment from tarball (starts background task).
 
     Request: multipart/form-data with fields:
         - file: The tarball file
@@ -194,11 +202,22 @@ async def import_environment(request: web.Request) -> web.StreamResponse:
         - model_strategy: "all" | "required" | "skip" (default: "all")
         - torch_backend: PyTorch backend (default: "auto")
 
-    Response: Server-Sent Events stream with progress updates
+    Response:
+        {"status": "started", "message": "Importing environment..."}
     """
+    global _import_task_state
+
     is_managed, workspace, _ = orchestrator.detect_environment_type()
     if not workspace:
         return web.json_response({"error": "Not in workspace"}, status=500)
+
+    # Check if import already in progress
+    with _import_task_lock:
+        if _import_task_state["state"] == "importing":
+            return web.json_response({
+                "status": "error",
+                "message": "Another import is already in progress"
+            }, status=409)
 
     # Parse multipart
     try:
@@ -229,184 +248,61 @@ async def import_environment(request: web.Request) -> web.StreamResponse:
     if not name:
         if temp_file:
             shutil.rmtree(temp_file.parent, ignore_errors=True)
-        return web.json_response({"error": "name is required"}, status=400)
+        return web.json_response({"status": "error", "message": "name is required"}, status=400)
 
     if not temp_file:
-        return web.json_response({"error": "file is required"}, status=400)
+        return web.json_response({"status": "error", "message": "file is required"}, status=400)
 
-    # Setup SSE response
-    response = web.StreamResponse(
-        status=200,
-        headers={
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-        }
-    )
-    await response.prepare(request)
+    # Validate name
+    is_valid, error = _validate_env_name(name)
+    if not is_valid:
+        shutil.rmtree(temp_file.parent, ignore_errors=True)
+        return web.json_response({"status": "error", "message": error}, status=400)
 
-    async def send_event(event: str, data: dict):
-        """Send an SSE event."""
-        msg = f"event: {event}\ndata: {json.dumps(data)}\n\n"
-        await response.write(msg.encode())
-
-    # Create callbacks that emit SSE events
-    class SSEImportCallbacks:
-        def on_phase(self, phase: str, description: str):
-            import asyncio
-            asyncio.create_task(send_event("phase", {"phase": phase, "description": description}))
-
-        def on_node_installed(self, node_name: str):
-            import asyncio
-            asyncio.create_task(send_event("node_installed", {"node_name": node_name}))
-
-        def on_download_batch_start(self, count: int):
-            import asyncio
-            asyncio.create_task(send_event("download_batch_start", {"count": count}))
-
-        def on_download_file_start(self, name: str, index: int, total: int):
-            import asyncio
-            asyncio.create_task(send_event("download_file_start", {"name": name, "index": index, "total": total}))
-
-        def on_download_file_progress(self, downloaded: int, total: int | None):
-            import asyncio
-            asyncio.create_task(send_event("download_file_progress", {"downloaded": downloaded, "total": total}))
-
-        def on_download_file_complete(self, name: str, success: bool):
-            import asyncio
-            asyncio.create_task(send_event("download_file_complete", {"name": name, "success": success}))
-
-        def on_dependency_group_start(self, group_name: str, is_optional: bool):
-            import asyncio
-            asyncio.create_task(send_event("dependency_group_start", {"group_name": group_name, "is_optional": is_optional}))
-
-        def on_dependency_group_complete(self, group_name: str, success: bool):
-            import asyncio
-            asyncio.create_task(send_event("dependency_group_complete", {"group_name": group_name, "success": success}))
-
-    callbacks = SSEImportCallbacks()
-
+    # Check if environment already exists
     try:
-        env = await run_sync(
-            workspace.import_environment,
-            temp_file,
-            name,
-            model_strategy,
-            callbacks,
-            torch_backend
-        )
-        await send_event("complete", {"environment_name": env.name, "path": str(env.path)})
-    except Exception as e:
-        await send_event("error", {"error": str(e), "recoverable": False})
-    finally:
-        if temp_file:
+        existing_envs = await run_sync(workspace.list_environments)
+        if any(env.name == name for env in existing_envs):
             shutil.rmtree(temp_file.parent, ignore_errors=True)
-
-    await response.write_eof()
-    return response
-
-
-@routes.post("/v2/workspace/import/git")
-async def import_from_git(request: web.Request) -> web.StreamResponse:
-    """Import environment from git repository with SSE progress.
-
-    Request JSON:
-        {
-            "git_url": "https://github.com/user/repo.git",
-            "name": "my-new-env",
-            "branch": "main",  // optional
-            "model_strategy": "required",  // optional, default "all"
-            "torch_backend": "auto"  // optional
-        }
-
-    Response: Server-Sent Events stream with progress updates
-    """
-    is_managed, workspace, _ = orchestrator.detect_environment_type()
-    if not workspace:
-        return web.json_response({"error": "Not in workspace"}, status=500)
-
-    try:
-        data = await request.json()
-    except Exception:
-        return web.json_response({"error": "Invalid JSON"}, status=400)
-
-    git_url = data.get("git_url")
-    if not git_url:
-        return web.json_response({"error": "git_url is required"}, status=400)
-
-    name = data.get("name", "").strip()
-    if not name:
-        return web.json_response({"error": "name is required"}, status=400)
-
-    branch = data.get("branch")
-    model_strategy = data.get("model_strategy", "all")
-    torch_backend = data.get("torch_backend", "auto")
-
-    # Setup SSE response
-    response = web.StreamResponse(
-        status=200,
-        headers={
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-        }
-    )
-    await response.prepare(request)
-
-    async def send_event(event: str, data_dict: dict):
-        """Send an SSE event."""
-        msg = f"event: {event}\ndata: {json.dumps(data_dict)}\n\n"
-        await response.write(msg.encode())
-
-    # Create callbacks that emit SSE events
-    class SSEImportCallbacks:
-        def on_phase(self, phase: str, description: str):
-            import asyncio
-            asyncio.create_task(send_event("phase", {"phase": phase, "description": description}))
-
-        def on_node_installed(self, node_name: str):
-            import asyncio
-            asyncio.create_task(send_event("node_installed", {"node_name": node_name}))
-
-        def on_download_batch_start(self, count: int):
-            import asyncio
-            asyncio.create_task(send_event("download_batch_start", {"count": count}))
-
-        def on_download_file_start(self, name: str, index: int, total: int):
-            import asyncio
-            asyncio.create_task(send_event("download_file_start", {"name": name, "index": index, "total": total}))
-
-        def on_download_file_progress(self, downloaded: int, total: int | None):
-            import asyncio
-            asyncio.create_task(send_event("download_file_progress", {"downloaded": downloaded, "total": total}))
-
-        def on_download_file_complete(self, name: str, success: bool):
-            import asyncio
-            asyncio.create_task(send_event("download_file_complete", {"name": name, "success": success}))
-
-        def on_dependency_group_start(self, group_name: str, is_optional: bool):
-            import asyncio
-            asyncio.create_task(send_event("dependency_group_start", {"group_name": group_name, "is_optional": is_optional}))
-
-        def on_dependency_group_complete(self, group_name: str, success: bool):
-            import asyncio
-            asyncio.create_task(send_event("dependency_group_complete", {"group_name": group_name, "success": success}))
-
-    callbacks = SSEImportCallbacks()
-
-    try:
-        env = await run_sync(
-            workspace.import_from_git,
-            git_url,
-            name,
-            model_strategy,
-            branch,
-            callbacks,
-            torch_backend
-        )
-        await send_event("complete", {"environment_name": env.name, "path": str(env.path)})
+            return web.json_response({
+                "status": "error",
+                "message": f"Environment '{name}' already exists"
+            }, status=400)
     except Exception as e:
-        await send_event("error", {"error": str(e), "recoverable": False})
+        shutil.rmtree(temp_file.parent, ignore_errors=True)
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
 
-    await response.write_eof()
-    return response
+    # Start import in background thread
+    thread = threading.Thread(
+        target=_run_import_environment,
+        args=(workspace, temp_file, name, model_strategy, torch_backend),
+        daemon=True
+    )
+    thread.start()
+
+    return web.json_response({
+        "status": "started",
+        "message": f"Importing environment '{name}'..."
+    })
+
+
+@routes.get("/v2/workspace/import/status")
+async def get_import_status(request: web.Request) -> web.Response:
+    """Get current import task status.
+
+    Response:
+        {"state": "idle", "message": "No import in progress"}
+        or
+        {"state": "importing", "message": "Importing environment 'foo'..."}
+        or
+        {"state": "complete", "message": "Environment imported", "environment_name": "foo"}
+        or
+        {"state": "error", "message": "Failed", "error": "details"}
+    """
+    with _import_task_lock:
+        return web.json_response({
+            "state": _import_task_state["state"],
+            "message": _import_task_state["message"],
+            "environment_name": _import_task_state["environment_name"],
+            "error": _import_task_state["error"]
+        })

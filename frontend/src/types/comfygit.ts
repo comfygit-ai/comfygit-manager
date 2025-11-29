@@ -714,42 +714,62 @@ export function hasWorkflowConflicts(preview: PullPreview): preview is PullPrevi
 }
 
 // =============================================================================
-// Import Types
+// Import Types (matches core library dataclasses)
 // =============================================================================
 
-/** Model info from import analysis (from core library) */
-export interface ImportModelInfo {
-  filename?: string
-  hash?: string
-  relative_path?: string
-  [key: string]: unknown  // Core library may have additional fields
+/** Model analysis from import preview */
+export interface ModelAnalysis {
+  filename: string
+  hash: string | null
+  sources: string[]
+  relative_path: string
+  locally_available: boolean
+  needs_download: boolean
+  workflows: string[]
 }
 
-/** Node info from import analysis (from core library) */
-export interface ImportNodeInfo {
-  name?: string
-  package_id?: string
-  source?: string
-  [key: string]: unknown  // Core library may have additional fields
-}
-
-/** Workflow info from import analysis */
-export interface ImportWorkflowInfo {
+/** Node analysis from import preview */
+export interface NodeAnalysis {
   name: string
+  source: string  // "registry" | "development" | "git"
+  install_spec: string | null
+  is_dev_node: boolean
 }
 
-/** Import analysis result from preview endpoint (matches core library structure) */
+/** Workflow analysis from import preview */
+export interface WorkflowAnalysis {
+  name: string
+  models_required: number
+  models_optional: number
+}
+
+/** Import analysis result from preview endpoint (matches core library ImportAnalysis dataclass) */
 export interface ImportAnalysis {
-  environment_name: string
+  // ComfyUI version
   comfyui_version: string | null
-  python_version: string
-  total_nodes: number
-  nodes: ImportNodeInfo[]
-  total_workflows: number
-  workflows: ImportWorkflowInfo[]
+  comfyui_version_type: string | null
+
+  // Models breakdown
+  models: ModelAnalysis[]
   total_models: number
-  models: ImportModelInfo[]
-  dependencies: Record<string, string[]>
+  models_locally_available: number
+  models_needing_download: number
+  models_without_sources: number
+
+  // Nodes breakdown
+  nodes: NodeAnalysis[]
+  total_nodes: number
+  registry_nodes: number
+  dev_nodes: number
+  git_nodes: number
+
+  // Workflows
+  workflows: WorkflowAnalysis[]
+  total_workflows: number
+
+  // Summary flags
+  needs_model_downloads: boolean
+  needs_node_installs: boolean
 }
 
 /** Environment name validation result */
@@ -757,4 +777,18 @@ export interface ValidateNameResult {
   valid: boolean
   name?: string
   error?: string
+}
+
+/** Import start result */
+export interface ImportResult {
+  status: 'started' | 'error'
+  message: string
+}
+
+/** Import progress (polling response) */
+export interface ImportProgress {
+  state: 'idle' | 'importing' | 'complete' | 'error'
+  message: string
+  environment_name?: string | null
+  error?: string | null
 }
