@@ -829,6 +829,8 @@ export interface ImportResult {
 /** Import progress (polling response) */
 export interface ImportProgress {
   state: 'idle' | 'importing' | 'complete' | 'error'
+  phase?: string | null
+  progress?: number
   message: string
   environment_name?: string | null
   error?: string | null

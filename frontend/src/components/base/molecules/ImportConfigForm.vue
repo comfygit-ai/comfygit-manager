@@ -47,6 +47,18 @@
         </div>
       </div>
 
+      <!-- Switch After Import -->
+      <div class="config-field switch-field">
+        <label class="switch-label">
+          <input
+            type="checkbox"
+            :checked="switchAfterImport"
+            @change="emit('update:switchAfterImport', ($event.target as HTMLInputElement).checked)"
+          />
+          <span>Switch to this environment after import</span>
+        </label>
+      </div>
+
       <!-- Advanced Options -->
       <details class="advanced-section">
         <summary class="advanced-toggle">Advanced Options</summary>
@@ -79,6 +91,7 @@ const props = defineProps<{
   name: string
   modelStrategy: 'all' | 'required' | 'skip'
   torchBackend: string
+  switchAfterImport: boolean
   nameError: string | null
 }>()
 
@@ -86,6 +99,7 @@ const emit = defineEmits<{
   'update:name': [value: string]
   'update:modelStrategy': [value: 'all' | 'required' | 'skip']
   'update:torchBackend': [value: string]
+  'update:switchAfterImport': [value: boolean]
   'validate-name': [name: string]
 }>()
 
@@ -300,5 +314,26 @@ function validateName() {
 .backend-select:focus {
   outline: none;
   border-color: var(--cg-color-accent);
+}
+
+/* Switch Field */
+.switch-field {
+  padding-top: var(--cg-space-2);
+}
+
+.switch-label {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  cursor: pointer;
+  color: var(--cg-color-text-primary);
+  font-size: var(--cg-font-size-sm);
+}
+
+.switch-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--cg-color-accent);
 }
 </style>

@@ -20,10 +20,90 @@ ENV_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_-]*$')
 _import_task_lock = threading.Lock()
 _import_task_state = {
     "state": "idle",  # idle, importing, complete, error
+    "phase": None,  # Current phase ID
+    "progress": 0,  # 0-100 percentage
     "message": "",
     "environment_name": None,
     "error": None
 }
+
+
+class ServerImportProgress:
+    """Implements ImportCallbacks protocol for API state updates."""
+
+    # Phase to progress mapping
+    PHASE_PROGRESS = {
+        "restore_comfyui": 10,
+        "clone_comfyui": 10,
+        "extract_builtins": 20,
+        "configure_pytorch": 30,
+        "create_venv": 35,
+        "install_pytorch": 50,
+        "install_dependencies": 60,
+        "sync_nodes": 70,
+        "copy_workflows": 80,
+        "resolve_models": 85,
+        "download_models": 90,
+        "finalize": 95,
+        "complete": 100,
+    }
+
+    def on_phase(self, phase: str, description: str) -> None:
+        with _import_task_lock:
+            _import_task_state["phase"] = phase
+            _import_task_state["progress"] = self.PHASE_PROGRESS.get(phase, 50)
+            _import_task_state["message"] = description
+
+    def on_dependency_group_start(self, group_name: str, is_optional: bool) -> None:
+        with _import_task_lock:
+            _import_task_state["message"] = f"Installing {group_name}..."
+
+    def on_dependency_group_complete(self, group_name: str, success: bool, error: str | None = None) -> None:
+        if not success:
+            with _import_task_lock:
+                _import_task_state["error"] = error
+
+    def on_workflow_copied(self, workflow_name: str) -> None:
+        with _import_task_lock:
+            _import_task_state["message"] = f"Copying workflow: {workflow_name}"
+
+    def on_node_installed(self, node_name: str) -> None:
+        with _import_task_lock:
+            _import_task_state["message"] = f"Installing node: {node_name}"
+
+    def on_workflow_resolved(self, workflow_name: str, downloads: int) -> None:
+        with _import_task_lock:
+            _import_task_state["message"] = f"Resolved {workflow_name} ({downloads} models)"
+
+    def on_error(self, error: str) -> None:
+        # Non-fatal errors - just log
+        print(f"[ComfyGit] Import warning: {error}")
+
+    def on_download_failures(self, failures: list[tuple[str, str]]) -> None:
+        # Track but don't fail
+        print(f"[ComfyGit] Model download failures: {len(failures)}")
+
+    def on_download_batch_start(self, count: int) -> None:
+        with _import_task_lock:
+            _import_task_state["phase"] = "download_models"
+            _import_task_state["progress"] = 90
+            _import_task_state["message"] = f"Downloading {count} model(s)..."
+
+    def on_download_file_start(self, name: str, idx: int, total: int) -> None:
+        with _import_task_lock:
+            _import_task_state["message"] = f"Downloading {name} ({idx}/{total})"
+
+    def on_download_file_progress(self, downloaded: int, total: int | None) -> None:
+        # Could add more granular progress here if needed
+        pass
+
+    def on_download_file_complete(self, name: str, success: bool, error: str | None) -> None:
+        if not success:
+            print(f"[ComfyGit] Model download failed: {name} - {error}")
+
+    def on_download_batch_complete(self, success: int, total: int) -> None:
+        with _import_task_lock:
+            _import_task_state["message"] = f"Downloaded {success}/{total} models"
 
 
 def _validate_env_name(name: str) -> tuple[bool, str | None]:
@@ -47,21 +127,28 @@ def _run_import_environment(workspace, tarball_path: Path, name: str, model_stra
     try:
         with _import_task_lock:
             _import_task_state["state"] = "importing"
+            _import_task_state["phase"] = None
+            _import_task_state["progress"] = 0
             _import_task_state["message"] = f"Importing environment '{name}'..."
             _import_task_state["environment_name"] = None
             _import_task_state["error"] = None
+
+        # Create progress callbacks
+        progress = ServerImportProgress()
 
         # Call the core library to import the environment
         env = workspace.import_environment(
             tarball_path=tarball_path,
             name=name,
             model_strategy=model_strategy,
-            callbacks=None,  # No callbacks for polling approach
+            callbacks=progress,
             torch_backend=torch_backend
         )
 
         with _import_task_lock:
             _import_task_state["state"] = "complete"
+            _import_task_state["phase"] = "complete"
+            _import_task_state["progress"] = 100
             _import_task_state["message"] = f"Environment '{name}' imported successfully"
             _import_task_state["environment_name"] = env.name
             _import_task_state["error"] = None
@@ -291,17 +378,19 @@ async def get_import_status(request: web.Request) -> web.Response:
     """Get current import task status.
 
     Response:
-        {"state": "idle", "message": "No import in progress"}
+        {"state": "idle", "phase": null, "progress": 0, "message": "", ...}
         or
-        {"state": "importing", "message": "Importing environment 'foo'..."}
+        {"state": "importing", "phase": "extract_builtins", "progress": 20, ...}
         or
-        {"state": "complete", "message": "Environment imported", "environment_name": "foo"}
+        {"state": "complete", "phase": "complete", "progress": 100, ...}
         or
         {"state": "error", "message": "Failed", "error": "details"}
     """
     with _import_task_lock:
         return web.json_response({
             "state": _import_task_state["state"],
+            "phase": _import_task_state["phase"],
+            "progress": _import_task_state["progress"],
             "message": _import_task_state["message"],
             "environment_name": _import_task_state["environment_name"],
             "error": _import_task_state["error"]

@@ -390,20 +390,107 @@ class TestImportEndpoint:
 class TestImportStatusEndpoint:
     """GET /v2/workspace/import/status - Poll import progress."""
 
-    @pytest.mark.skip(reason="Test isolation issue with global state - endpoint works in practice")
-    async def test_returns_status_response(self, client):
-        """Should return status with expected fields."""
+    async def test_returns_status_with_progress_fields(self, client, monkeypatch):
+        """Should return status with phase and progress fields for rich progress tracking."""
+        # Reset import state first
+        import api.v2.import_ops as import_ops
+        with import_ops._import_task_lock:
+            import_ops._import_task_state["state"] = "idle"
+            import_ops._import_task_state["phase"] = None
+            import_ops._import_task_state["progress"] = 0
+            import_ops._import_task_state["message"] = ""
+            import_ops._import_task_state["environment_name"] = None
+            import_ops._import_task_state["error"] = None
+
         resp = await client.get("/v2/workspace/import/status")
 
         assert resp.status == 200
         data = await resp.json()
-        # Should have all expected fields
+        # Should have all expected fields including new progress fields
         assert "state" in data
+        assert "phase" in data  # NEW: Phase identifier
+        assert "progress" in data  # NEW: 0-100 percentage
         assert "message" in data
         assert "environment_name" in data
         assert "error" in data
         # State should be one of valid values
         assert data["state"] in ["idle", "importing", "complete", "error"]
+        # Progress should be a number between 0 and 100
+        assert isinstance(data["progress"], (int, float))
+        assert 0 <= data["progress"] <= 100
+
+
+@pytest.mark.integration
+class TestServerImportProgressCallbacks:
+    """Test that import progress callbacks update state correctly."""
+
+    def test_on_phase_updates_state(self):
+        """ServerImportProgress.on_phase should update phase and progress."""
+        import api.v2.import_ops as import_ops
+
+        # Reset state
+        with import_ops._import_task_lock:
+            import_ops._import_task_state["state"] = "importing"
+            import_ops._import_task_state["phase"] = None
+            import_ops._import_task_state["progress"] = 0
+            import_ops._import_task_state["message"] = ""
+
+        # Create progress handler and call on_phase
+        progress = import_ops.ServerImportProgress()
+        progress.on_phase("extract_builtins", "Extracting builtin nodes...")
+
+        # Verify state was updated
+        with import_ops._import_task_lock:
+            assert import_ops._import_task_state["phase"] == "extract_builtins"
+            assert import_ops._import_task_state["progress"] == 20  # From PHASE_PROGRESS mapping
+            assert import_ops._import_task_state["message"] == "Extracting builtin nodes..."
+
+    def test_on_node_installed_updates_message(self):
+        """ServerImportProgress.on_node_installed should update message."""
+        import api.v2.import_ops as import_ops
+
+        progress = import_ops.ServerImportProgress()
+        progress.on_node_installed("comfyui-impact-pack")
+
+        with import_ops._import_task_lock:
+            assert "comfyui-impact-pack" in import_ops._import_task_state["message"]
+
+    def test_on_download_batch_start_updates_phase(self):
+        """ServerImportProgress.on_download_batch_start should update to download phase."""
+        import api.v2.import_ops as import_ops
+
+        progress = import_ops.ServerImportProgress()
+        progress.on_download_batch_start(5)
+
+        with import_ops._import_task_lock:
+            assert import_ops._import_task_state["phase"] == "download_models"
+            assert import_ops._import_task_state["progress"] == 90
+            assert "5" in import_ops._import_task_state["message"]
+
+    def test_on_download_file_start_updates_message(self):
+        """ServerImportProgress.on_download_file_start should show file progress."""
+        import api.v2.import_ops as import_ops
+
+        progress = import_ops.ServerImportProgress()
+        progress.on_download_file_start("model.safetensors", 2, 5)
+
+        with import_ops._import_task_lock:
+            assert "model.safetensors" in import_ops._import_task_state["message"]
+            assert "2" in import_ops._import_task_state["message"]
+            assert "5" in import_ops._import_task_state["message"]
+
+    def test_phase_progress_mapping_exists(self):
+        """ServerImportProgress should have PHASE_PROGRESS mapping."""
+        import api.v2.import_ops as import_ops
+
+        progress = import_ops.ServerImportProgress()
+        assert hasattr(progress, 'PHASE_PROGRESS')
+        # Verify key phases are mapped
+        assert "clone_comfyui" in progress.PHASE_PROGRESS or "restore_comfyui" in progress.PHASE_PROGRESS
+        assert "extract_builtins" in progress.PHASE_PROGRESS
+        assert "configure_pytorch" in progress.PHASE_PROGRESS
+        assert "download_models" in progress.PHASE_PROGRESS
+        assert "complete" in progress.PHASE_PROGRESS
 
 
 # Note: Git import endpoint (/v2/workspace/import/git) was removed from the polling version.

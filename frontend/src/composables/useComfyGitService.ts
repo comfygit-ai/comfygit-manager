@@ -187,6 +187,70 @@ function updateMockCreateEnvProgress(): void {
   }
 }
 
+// ============================================================================
+// MOCK IMPORT STATE
+// ============================================================================
+
+interface MockImportState {
+  state: 'idle' | 'importing' | 'complete' | 'error'
+  phase: string | null
+  progress: number
+  message: string
+  startTime: number | null
+  envName: string | null
+}
+
+const mockImportState: MockImportState = {
+  state: 'idle',
+  phase: null,
+  progress: 0,
+  message: '',
+  startTime: null,
+  envName: null
+}
+
+// Import phases with timing (matches core library phases)
+const MOCK_IMPORT_PHASES = [
+  { id: 'clone_comfyui', endTime: 2000, progress: 15, message: 'Cloning/restoring ComfyUI...' },
+  { id: 'extract_builtins', endTime: 2500, progress: 20, message: 'Extracting builtin nodes...' },
+  { id: 'configure_pytorch', endTime: 3500, progress: 35, message: 'Configuring PyTorch backend...' },
+  { id: 'install_dependencies', endTime: 6000, progress: 60, message: 'Installing dependencies...' },
+  { id: 'sync_nodes', endTime: 7000, progress: 70, message: 'Syncing custom nodes...' },
+  { id: 'copy_workflows', endTime: 7500, progress: 80, message: 'Copying workflows...' },
+  { id: 'resolve_models', endTime: 8000, progress: 85, message: 'Resolving models...' },
+  { id: 'download_models', endTime: 9500, progress: 95, message: 'Downloading models...' },
+  { id: 'finalize', endTime: 10000, progress: 100, message: 'Finalizing environment...' },
+]
+
+function updateMockImportProgress(): void {
+  if (mockImportState.state !== 'importing' || !mockImportState.startTime) return
+
+  const elapsed = Date.now() - mockImportState.startTime
+
+  // Find current phase based on elapsed time
+  for (const phase of MOCK_IMPORT_PHASES) {
+    if (elapsed < phase.endTime) {
+      mockImportState.phase = phase.id
+      mockImportState.message = phase.message
+      // Interpolate progress within phase
+      const prevPhaseIdx = MOCK_IMPORT_PHASES.indexOf(phase) - 1
+      const prevEndTime = prevPhaseIdx >= 0 ? MOCK_IMPORT_PHASES[prevPhaseIdx].endTime : 0
+      const prevProgress = prevPhaseIdx >= 0 ? MOCK_IMPORT_PHASES[prevPhaseIdx].progress : 0
+      const phaseDuration = phase.endTime - prevEndTime
+      const phaseElapsed = elapsed - prevEndTime
+      mockImportState.progress = Math.floor(prevProgress + (phase.progress - prevProgress) * (phaseElapsed / phaseDuration))
+      return
+    }
+  }
+
+  // Past all phases - complete
+  mockImportState.state = 'complete'
+  mockImportState.phase = 'complete'
+  mockImportState.progress = 100
+  mockImportState.message = `Environment '${mockImportState.envName}' imported successfully`
+  mockImportState.startTime = null
+}
+
 export function useComfyGitService() {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
@@ -963,6 +1027,13 @@ export function useComfyGitService() {
   ): Promise<ImportResult> {
     if (USE_MOCK) {
       await new Promise(resolve => setTimeout(resolve, 300))
+      // Start mock import progress simulation
+      mockImportState.state = 'importing'
+      mockImportState.phase = null
+      mockImportState.progress = 0
+      mockImportState.message = `Importing environment '${name}'...`
+      mockImportState.startTime = Date.now()
+      mockImportState.envName = name
       return { status: 'started', message: `Importing environment '${name}'...` }
     }
 
@@ -991,7 +1062,15 @@ export function useComfyGitService() {
 
   async function getImportProgress(): Promise<ImportProgress> {
     if (USE_MOCK) {
-      return { state: 'idle', message: 'No import in progress' }
+      // Update mock progress based on elapsed time
+      updateMockImportProgress()
+      return {
+        state: mockImportState.state,
+        phase: mockImportState.phase,
+        progress: mockImportState.progress,
+        message: mockImportState.message,
+        environment_name: mockImportState.envName
+      }
     }
 
     return fetchApi<ImportProgress>('/v2/workspace/import/status')

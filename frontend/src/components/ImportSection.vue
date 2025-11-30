@@ -71,6 +71,7 @@
           v-model:name="importConfig.name"
           v-model:model-strategy="importConfig.modelStrategy"
           v-model:torch-backend="importConfig.torchBackend"
+          v-model:switch-after-import="importConfig.switchAfterImport"
           :name-error="nameError"
           @validate-name="handleValidateName"
         />
@@ -111,22 +112,25 @@
 
       <!-- Importing: Show progress -->
       <div v-else-if="isImporting" class="import-progress">
-        <div class="progress-content">
-          <div class="progress-icon">
-            <div class="spinner"></div>
-          </div>
-          <div class="progress-info">
-            <div class="progress-title">{{ importProgress.message }}</div>
-            <div class="progress-detail">{{ importProgress.detail }}</div>
-          </div>
-        </div>
+        <p class="creating-intro">
+          Importing environment <strong>{{ importConfig.name }}</strong>...
+        </p>
 
-        <div class="progress-bar">
-          <div class="progress-bar-fill" :style="{ width: `${importProgress.percent}%` }"></div>
-        </div>
+        <TaskProgressDisplay
+          :progress="importProgress.progress"
+          :message="importProgress.message"
+          :current-phase="importProgress.phase"
+          :variant="importProgress.error ? 'error' : 'default'"
+          :show-steps="true"
+          :steps="importSteps"
+        />
 
-        <div class="progress-status">
-          {{ importProgress.percent }}% complete
+        <p v-if="!importProgress.error" class="progress-warning">
+          This may take several minutes. Please wait...
+        </p>
+
+        <div v-if="importProgress.error" class="import-error">
+          <p class="error-message">{{ importProgress.error }}</p>
         </div>
       </div>
 
@@ -208,10 +212,16 @@ import ImportConfigForm from '@/components/base/molecules/ImportConfigForm.vue'
 import IssueCard from '@/components/base/molecules/IssueCard.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
+import TaskProgressDisplay from '@/components/base/molecules/TaskProgressDisplay.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import type { ImportAnalysis } from '@/types/comfygit'
 
 const { previewTarballImport, validateEnvironmentName, executeImport, getImportProgress } = useComfyGitService()
+
+// Emit for parent component communication
+const emit = defineEmits<{
+  'import-complete-switch': [environmentName: string]
+}>()
 
 // Polling interval for import progress
 let importPollInterval: ReturnType<typeof setInterval> | null = null
@@ -233,16 +243,31 @@ const importAnalysis = ref<ImportAnalysis | null>(null)
 const importConfig = ref({
   name: '',
   modelStrategy: 'required' as 'all' | 'required' | 'skip',
-  torchBackend: 'auto'
+  torchBackend: 'auto',
+  switchAfterImport: true
 })
 const nameError = ref<string | null>(null)
 
 // Import progress
 const importProgress = ref({
   message: 'Preparing import...',
-  detail: '',
-  percent: 0
+  phase: '',
+  progress: 0,
+  error: null as string | null
 })
+
+// Import steps (matches core library phases)
+const importSteps = [
+  { id: 'clone_comfyui', label: 'Clone/restore ComfyUI', progressThreshold: 15 },
+  { id: 'extract_builtins', label: 'Extract builtin nodes', progressThreshold: 20 },
+  { id: 'configure_pytorch', label: 'Configure PyTorch', progressThreshold: 35 },
+  { id: 'install_dependencies', label: 'Install dependencies', progressThreshold: 60 },
+  { id: 'sync_nodes', label: 'Sync custom nodes', progressThreshold: 70 },
+  { id: 'copy_workflows', label: 'Copy workflows', progressThreshold: 80 },
+  { id: 'resolve_models', label: 'Resolve models', progressThreshold: 85 },
+  { id: 'download_models', label: 'Download models', progressThreshold: 95 },
+  { id: 'finalize', label: 'Finalize environment', progressThreshold: 100 },
+]
 
 // Transform ImportAnalysis to the format ImportPreview expects
 const previewData = computed(() => {
@@ -305,7 +330,7 @@ function handleClearFile() {
   importResultMessage.value = ''
   importAnalysis.value = null
   previewError.value = null
-  importConfig.value = { name: '', modelStrategy: 'required', torchBackend: 'auto' }
+  importConfig.value = { name: '', modelStrategy: 'required', torchBackend: 'auto', switchAfterImport: true }
   nameError.value = null
 }
 
@@ -316,8 +341,9 @@ function handleReset() {
   isLoadingPreview.value = false
   importProgress.value = {
     message: 'Preparing import...',
-    detail: '',
-    percent: 0
+    phase: '',
+    progress: 0,
+    error: null
   }
 }
 
@@ -339,7 +365,7 @@ async function handleStartImport() {
 
   isImporting.value = true
   importComplete.value = false
-  importProgress.value = { message: `Creating environment '${importConfig.value.name}'...`, detail: '', percent: 0 }
+  importProgress.value = { message: `Creating environment '${importConfig.value.name}'...`, phase: '', progress: 0, error: null }
 
   try {
     const result = await executeImport(
@@ -373,10 +399,12 @@ function startImportPolling() {
   importPollInterval = setInterval(async () => {
     try {
       const progress = await getImportProgress()
+
       importProgress.value = {
         message: progress.message,
-        detail: '',
-        percent: progress.state === 'importing' ? 50 : (progress.state === 'complete' ? 100 : 0)
+        phase: progress.phase || '',
+        progress: progress.progress ?? (progress.state === 'importing' ? 50 : 0),
+        error: progress.error || null
       }
 
       if (progress.state === 'complete') {
@@ -385,6 +413,11 @@ function startImportPolling() {
         importResultMessage.value = `Environment '${progress.environment_name}' created successfully`
         isImporting.value = false
         importComplete.value = true
+
+        // Auto-switch if enabled
+        if (importConfig.value.switchAfterImport && progress.environment_name) {
+          emit('import-complete-switch', progress.environment_name)
+        }
       } else if (progress.state === 'error') {
         stopImportPolling()
         importSuccess.value = false
@@ -522,66 +555,37 @@ function formatFileSize(bytes: number): string {
   display: flex;
   flex-direction: column;
   gap: var(--cg-space-4);
-  align-items: center;
-  justify-content: center;
-  padding: var(--cg-space-8) var(--cg-space-4);
+  padding: var(--cg-space-4);
 }
 
-.progress-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--cg-space-3);
-}
-
-.progress-icon .spinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid var(--cg-color-border);
-  border-top-color: var(--cg-color-accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.progress-info {
+.creating-intro {
+  color: var(--cg-color-text-secondary);
+  font-size: var(--cg-font-size-base);
+  margin: 0;
   text-align: center;
 }
 
-.progress-title {
+.creating-intro strong {
   color: var(--cg-color-text-primary);
-  font-size: var(--cg-font-size-lg);
-  font-weight: var(--cg-font-weight-semibold);
-  margin-bottom: var(--cg-space-1);
 }
 
-.progress-detail {
+.progress-warning {
   color: var(--cg-color-text-muted);
   font-size: var(--cg-font-size-sm);
+  text-align: center;
+  margin: 0;
 }
 
-.progress-bar {
-  width: 100%;
-  max-width: 500px;
-  height: 8px;
-  background: var(--cg-color-bg-tertiary);
-  border: 1px solid var(--cg-color-border);
-  overflow: hidden;
+.import-error {
+  background: var(--cg-color-error-muted);
+  border: 1px solid var(--cg-color-error);
+  padding: var(--cg-space-3);
 }
 
-.progress-bar-fill {
-  height: 100%;
-  background: var(--cg-color-accent);
-  transition: width var(--cg-transition-base);
-}
-
-.progress-status {
-  color: var(--cg-color-text-muted);
+.error-message {
+  color: var(--cg-color-error);
   font-size: var(--cg-font-size-sm);
-  font-family: var(--cg-font-mono);
+  margin: 0;
 }
 
 /* Complete State */

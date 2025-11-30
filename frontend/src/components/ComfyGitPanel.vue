@@ -245,7 +245,10 @@
           <ExportSection v-else-if="currentView === 'export'" />
 
           <!-- Import View -->
-          <ImportSection v-else-if="currentView === 'import'" />
+          <ImportSection
+            v-else-if="currentView === 'import'"
+            @import-complete-switch="handleImportCompleteSwitch"
+          />
 
           <!-- Remotes View -->
           <RemotesSection v-else-if="currentView === 'remotes'" @toast="handleToast" />
@@ -1162,6 +1165,14 @@ function handleSetupWizardClose() {
 async function handleEnvironmentSwitchFromWizard(envName: string) {
   // Use existing environment switch flow
   await handleEnvironmentSwitch(envName)
+}
+
+async function handleImportCompleteSwitch(environmentName: string) {
+  // Refresh environments list first
+  await refresh()
+
+  // Trigger the standard environment switch flow
+  await handleEnvironmentSwitch(environmentName)
 }
 
 async function handleEnvironmentCreatedNoSwitch(envName: string) {
