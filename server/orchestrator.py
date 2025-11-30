@@ -45,14 +45,13 @@ def find_workspace_root() -> Optional[Path]:
 
     # Try default location
     default_workspace = Path.home() / 'comfygit'
-    if default_workspace.exists() and (default_workspace / 'pyproject.toml').exists():
+    if (default_workspace / '.metadata').is_dir():
         return default_workspace
 
     # Try searching upwards from CWD
     current = Path.cwd()
     while current != current.parent:
-        if (current / 'pyproject.toml').exists() and \
-           (current / 'environments').is_dir():
+        if (current / '.metadata').is_dir():
             return current
         current = current.parent
 
