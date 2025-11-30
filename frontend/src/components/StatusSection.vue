@@ -241,6 +241,21 @@
             </ActionButton>
           </template>
         </IssueCard>
+
+        <!-- WARNING: Legacy ComfyUI-Manager detected -->
+        <IssueCard
+          v-if="status.has_legacy_manager"
+          severity="warning"
+          icon="⚠"
+          title="Legacy ComfyUI-Manager detected"
+          description="The old ComfyUI-Manager extension is installed alongside ComfyGit. For proper environment tracking, use ComfyGit's built-in Manager instead and remove the legacy extension."
+        >
+          <template #actions>
+            <ActionButton variant="primary" size="sm" @click="$emit('view-nodes')">
+              See Nodes
+            </ActionButton>
+          </template>
+        </IssueCard>
       </div>
 
       <!-- All Good State -->
@@ -370,7 +385,8 @@ const hasActualIssues = computed(() => {
   return hasBrokenWorkflows.value ||
          pathSyncWorkflows.value.length > 0 ||
          props.status.missing_models_count > 0 ||
-         !props.status.comparison.is_synced
+         !props.status.comparison.is_synced ||
+         props.status.has_legacy_manager
 })
 
 // Short summary for the suggestions box

@@ -12,6 +12,7 @@ from datetime import datetime
 
 from aiohttp import web
 from server import PromptServer
+import orchestrator
 
 # Suppress verbose INFO logs from the core library during server operation
 # We only want to see WARNING and above (errors, etc.)
@@ -24,28 +25,32 @@ routes = PromptServer.instance.routes
 # Feature Flag & CLI Argument Injection
 # ============================================================================
 
-# Inject --enable-manager into sys.argv so the frontend enables the Manager UI
-# The frontend checks systemStats.system.argv for this flag
-if '--enable-manager' not in sys.argv:
-    sys.argv.append('--enable-manager')
-    print("[ComfyGit] Injected --enable-manager into sys.argv")
+# Only enable ComfyGit's Manager UI in managed environments.
+# In unmanaged envs, users should continue using their existing ComfyUI-Manager.
+_is_managed, _, _ = orchestrator.detect_environment_type()
 
-# Inject extension.manager.supports_v4 into ComfyUI's feature flags
-# This tells the frontend to use the new Manager UI
-try:
-    from comfy_api import feature_flags
-    if hasattr(feature_flags, 'SERVER_FEATURE_FLAGS'):
-        # Add our extension feature flag
-        if 'extension' not in feature_flags.SERVER_FEATURE_FLAGS:
-            feature_flags.SERVER_FEATURE_FLAGS['extension'] = {}
-        if 'manager' not in feature_flags.SERVER_FEATURE_FLAGS['extension']:
-            feature_flags.SERVER_FEATURE_FLAGS['extension']['manager'] = {}
-        feature_flags.SERVER_FEATURE_FLAGS['extension']['manager']['supports_v4'] = True
-        print("[ComfyGit] Injected extension.manager.supports_v4 feature flag")
-except ImportError:
-    print("[ComfyGit] Warning: Could not import comfy_api.feature_flags - feature flags not injected")
-except Exception as e:
-    print(f"[ComfyGit] Warning: Failed to inject feature flags: {e}")
+if _is_managed:
+    # Inject --enable-manager into sys.argv so the frontend enables the Manager UI
+    if '--enable-manager' not in sys.argv:
+        sys.argv.append('--enable-manager')
+        print("[ComfyGit] Injected --enable-manager into sys.argv")
+
+    # Inject extension.manager.supports_v4 into ComfyUI's feature flags
+    try:
+        from comfy_api import feature_flags
+        if hasattr(feature_flags, 'SERVER_FEATURE_FLAGS'):
+            if 'extension' not in feature_flags.SERVER_FEATURE_FLAGS:
+                feature_flags.SERVER_FEATURE_FLAGS['extension'] = {}
+            if 'manager' not in feature_flags.SERVER_FEATURE_FLAGS['extension']:
+                feature_flags.SERVER_FEATURE_FLAGS['extension']['manager'] = {}
+            feature_flags.SERVER_FEATURE_FLAGS['extension']['manager']['supports_v4'] = True
+            print("[ComfyGit] Injected extension.manager.supports_v4 feature flag")
+    except ImportError:
+        print("[ComfyGit] Warning: Could not import comfy_api.feature_flags")
+    except Exception as e:
+        print(f"[ComfyGit] Warning: Failed to inject feature flags: {e}")
+else:
+    print("[ComfyGit] Unmanaged environment - Manager UI disabled (use existing ComfyUI-Manager)")
 
 # ============================================================================
 # State Management

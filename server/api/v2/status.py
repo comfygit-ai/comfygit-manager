@@ -43,7 +43,7 @@ async def get_status(request: web.Request, env) -> web.Response:
                     print(f"[ComfyGit] Warning: Model sync failed: {e}")
 
         status = await run_sync(env.status)
-        return web.json_response(serialize_environment_status(status, env.name))
+        return web.json_response(serialize_environment_status(status, env.name, env))
     except Exception as e:
         return web.json_response({
             "error": str(e)

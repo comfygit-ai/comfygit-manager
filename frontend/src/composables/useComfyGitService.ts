@@ -36,6 +36,7 @@ import type {
   ValidatePathResult
 } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
+import { useMockControls } from '@/composables/useMockControls'
 
 // Access ComfyUI's API
 declare global {
@@ -779,41 +780,27 @@ export function useComfyGitService() {
   // First-Time Setup
   async function getSetupStatus(): Promise<SetupStatus> {
     if (USE_MOCK) {
-      // Check if environment was created in this session
+      // Use mock controls state as primary source
+      const { state: mockState, setupState } = useMockControls()
+
+      // Build environments list based on mock controls
+      const environments: string[] = []
+      if (mockState.hasEnvironments) {
+        environments.push('mock-env-1', 'mock-env-2')
+      }
+      // Add any environment created during this session
       if (mockCreateEnvState.state === 'complete' && mockCreateEnvState.envName) {
-        // Environment created, show unmanaged with the new env
-        return {
-          state: 'unmanaged',
-          workspace_path: '~/comfygit',
-          default_path: '~/comfygit',
-          environments: [mockCreateEnvState.envName],
-          current_environment: null,
-          detected_models_dir: '/mock/ComfyUI/models',
-          cli_installed: false,  // Mock as not installed to test warning
-          cli_path: null
+        if (!environments.includes(mockCreateEnvState.envName)) {
+          environments.push(mockCreateEnvState.envName)
         }
       }
-      // Check if workspace was already created in this session
-      if (mockSetupState.initState === 'complete') {
-        // Workspace created, but no environments yet
-        return {
-          state: 'empty_workspace',
-          workspace_path: '~/comfygit',
-          default_path: '~/comfygit',
-          environments: [],
-          current_environment: null,
-          detected_models_dir: '/mock/ComfyUI/models',
-          cli_installed: false,  // Mock as not installed to test warning
-          cli_path: null
-        }
-      }
-      // Default: no workspace
+
       return {
-        state: 'no_workspace',
-        workspace_path: null,
+        state: setupState.value,
+        workspace_path: mockState.hasWorkspace ? '~/comfygit' : null,
         default_path: '~/comfygit',
-        environments: [],
-        current_environment: null,
+        environments,
+        current_environment: mockState.isManaged ? 'mock-env-1' : null,
         detected_models_dir: '/mock/ComfyUI/models',
         cli_installed: false,
         cli_path: null

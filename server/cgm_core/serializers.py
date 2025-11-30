@@ -169,13 +169,24 @@ def serialize_workflow_details(
     }
 
 
-def serialize_environment_status(status, env_name: str) -> dict:
+def serialize_environment_status(status, env_name: str, env=None) -> dict:
     """
     Convert EnvironmentStatus to JSON dict.
 
     Returns structure matching current API.
+
+    Args:
+        status: EnvironmentStatus from core
+        env_name: Name of the environment
+        env: Optional Environment object for additional checks
     """
     workflow_sync = status.workflow.sync_status
+
+    # Check for legacy ComfyUI-Manager (competing manager)
+    has_legacy_manager = False
+    if env and hasattr(env, 'custom_nodes_path'):
+        legacy_manager_path = env.custom_nodes_path / "ComfyUI-Manager"
+        has_legacy_manager = legacy_manager_path.exists()
 
     # Serialize analyzed workflows with full resolution state
     analyzed = []
@@ -234,4 +245,5 @@ def serialize_environment_status(status, env_name: str) -> dict:
             "extra_nodes": list(status.comparison.extra_nodes),
         },
         "missing_models_count": len(status.missing_models),
+        "has_legacy_manager": has_legacy_manager,
     }

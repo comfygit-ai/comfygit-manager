@@ -51,6 +51,7 @@ export interface ComfyGitStatus {
   git_changes: GitChanges
   comparison: ComparisonStatus
   missing_models_count: number
+  has_legacy_manager: boolean
 }
 
 export interface CommitInfo {

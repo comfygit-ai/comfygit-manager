@@ -22,6 +22,9 @@ def mock_environment():
     mock_workspace.path = Path("/tmp/test-workspace")
     mock_env.workspace = mock_workspace
 
+    # Mock custom_nodes_path for legacy manager detection
+    mock_env.custom_nodes_path = Path("/tmp/test-workspace/environments/test-env/ComfyUI/custom_nodes")
+
     # Mock workflow manager
     mock_env.workflow_manager = Mock()
 
