@@ -357,16 +357,8 @@ def _run_initialize_workspace(workspace_path: Path, models_dir: Path | None):
         # Install comfygit-manager into system_nodes
         _install_self_as_system_node(workspace)
 
-        # Phase 2: Set models directory (if provided)
+        # Phase 2: Set models directory with progress (if provided)
         if models_dir:
-            _update_init_state("setting_models_dir", 25, "Configuring models directory...")
-            workspace.set_models_directory(models_dir)
-
-            # Brief delay to ensure frontend sees the transition
-            time.sleep(0.1)
-            _update_init_state("scanning_models", 28, "Preparing model scan...")
-
-            # Phase 3: Scan models with progress
             class ProgressCallback(ModelScanProgress):
                 def on_scan_start(self, total_files: int):
                     logger.info(f"[Setup] Model scan starting: {total_files} files")
@@ -390,8 +382,9 @@ def _run_initialize_workspace(workspace_path: Path, models_dir: Path | None):
                         models_found=result.added_count
                     )
 
-            _update_init_state("scanning_models", 30, "Starting model scan...")
-            workspace.sync_model_directory(progress=ProgressCallback())
+            _update_init_state("scanning_models", 25, "Scanning models directory...")
+            # Pass progress to set_models_directory - the scan happens there
+            workspace.set_models_directory(models_dir, progress=ProgressCallback())
         else:
             _update_init_state("complete", 100, "Workspace created successfully", models_found=0)
 
