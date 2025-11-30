@@ -34,6 +34,11 @@
               <span class="change-icon deleted">-</span>
               <span>{{ status.git_changes.nodes_removed.length }} node(s) removed</span>
             </div>
+            <!-- Fallback for config-only changes (uv.lock, pyproject.toml, etc.) -->
+            <div v-if="!hasSpecificChanges" class="change-item">
+              <span class="change-icon modified">~</span>
+              <span>Configuration updated</span>
+            </div>
           </div>
           <div v-else-if="status" class="no-changes">
             No changes to commit
@@ -122,6 +127,11 @@
           <span class="change-icon deleted">-</span>
           <span>{{ status.git_changes.nodes_removed.length }} node(s) removed</span>
         </div>
+        <!-- Fallback for config-only changes (uv.lock, pyproject.toml, etc.) -->
+        <div v-if="!hasSpecificChanges" class="change-item">
+          <span class="change-icon modified">~</span>
+          <span>Configuration updated</span>
+        </div>
       </div>
       <div v-else-if="status" class="no-changes">
         No changes to commit
@@ -207,6 +217,15 @@ const hasChanges = computed(() => {
   if (!props.status) return false
   const wf = props.status.workflows
   return wf.new.length > 0 || wf.modified.length > 0 || wf.deleted.length > 0 || props.status.has_changes
+})
+
+// True when there are displayable workflow/node changes (not just config files)
+const hasSpecificChanges = computed(() => {
+  if (!props.status) return false
+  const wf = props.status.workflows
+  const gc = props.status.git_changes
+  return wf.new.length > 0 || wf.modified.length > 0 || wf.deleted.length > 0 ||
+         gc.nodes_added.length > 0 || gc.nodes_removed.length > 0
 })
 
 const uncommittedWorkflowsWithIssues = computed(() => {
