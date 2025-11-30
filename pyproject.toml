@@ -15,6 +15,3 @@ dev = [
     "pytest-aiohttp>=1.1.0",
     "pytest-mock>=3.15.1",
 ]
-
-[tool.uv.sources]
-comfygit-core = { path = "/home/akatzfey/projects/comfyhub/comfygit/packages/core", editable = true }
