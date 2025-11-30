@@ -40,14 +40,6 @@
         <ErrorState :message="error" :retry="true" @retry="loadEnvironments" />
       </template>
       <template v-else>
-        <!-- Summary Bar -->
-        <SummaryBar v-if="environments.length" variant="compact">
-          Total: {{ environments.length }} {{ environments.length === 1 ? 'environment' : 'environments' }}
-          <template v-if="currentEnvironment">
-            • Current: <strong>{{ currentEnvironment.name }}</strong>
-          </template>
-        </SummaryBar>
-
         <!-- Environment List -->
         <SectionGroup v-if="filteredEnvironments.length" title="ENVIRONMENTS" :count="filteredEnvironments.length">
           <EnvironmentListItem
@@ -151,7 +143,6 @@ import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
 import SearchBar from '@/components/base/molecules/SearchBar.vue'
 import EnvironmentListItem from '@/components/base/molecules/EnvironmentListItem.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
-import SummaryBar from '@/components/base/molecules/SummaryBar.vue'
 import EmptyState from '@/components/base/molecules/EmptyState.vue'
 import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
@@ -175,10 +166,6 @@ const searchQuery = ref('')
 const showPopover = ref(false)
 const showCreateModal = ref(false)
 const selectedEnvironment = ref<EnvironmentInfo | null>(null)
-
-const currentEnvironment = computed(() =>
-  environments.value.find(e => e.is_current)
-)
 
 const filteredEnvironments = computed(() => {
   if (!searchQuery.value.trim()) return environments.value
