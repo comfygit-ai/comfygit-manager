@@ -714,6 +714,35 @@ export function useComfyGitService() {
     }
   }
 
+  async function getEnvironmentLogPath(): Promise<{ path: string; exists: boolean }> {
+    if (USE_MOCK) {
+      return { path: '/mock/workspace/logs/env/full.log', exists: true }
+    }
+
+    return fetchApi<{ path: string; exists: boolean }>('/v2/comfygit/debug/logs/path')
+  }
+
+  async function getWorkspaceLogPath(): Promise<{ path: string; exists: boolean }> {
+    if (USE_MOCK) {
+      return { path: '/mock/workspace/logs/workspace/full.log', exists: true }
+    }
+
+    return fetchApi<{ path: string; exists: boolean }>('/v2/workspace/debug/logs/path')
+  }
+
+  async function openFile(path: string): Promise<{ status: string }> {
+    if (USE_MOCK) {
+      console.log(`[MOCK] Opening file: ${path}`)
+      return { status: 'success' }
+    }
+
+    return fetchApi('/v2/workspace/open-file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path })
+    })
+  }
+
   // Node Management
   async function getNodes(): Promise<NodesResult> {
     if (USE_MOCK) return mockApi.getNodes()
@@ -1291,6 +1320,9 @@ export function useComfyGitService() {
     // Debug/Logs
     getEnvironmentLogs,
     getWorkspaceLogs,
+    getEnvironmentLogPath,
+    getWorkspaceLogPath,
+    openFile,
     // Node Management
     getNodes,
     trackNodeAsDev,

@@ -10,6 +10,15 @@
           <ActionButton
             variant="secondary"
             size="sm"
+            @click="openLogFile"
+            :disabled="!logFilePath || openingLogFile"
+            title="Open log file in default editor"
+          >
+            {{ openingLogFile ? 'Opening...' : 'Open Log File' }}
+          </ActionButton>
+          <ActionButton
+            variant="secondary"
+            size="sm"
             @click="loadLogs"
             :disabled="loading"
           >
@@ -89,13 +98,15 @@ import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 
-const { getWorkspaceLogs } = useComfyGitService()
+const { getWorkspaceLogs, getWorkspaceLogPath, openFile } = useComfyGitService()
 
 const logs = ref<LogEntry[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const showPopover = ref(false)
 const logOutputElement = ref<HTMLPreElement | null>(null)
+const logFilePath = ref<string | null>(null)
+const openingLogFile = ref(false)
 
 // Format logs to match CLI output exactly
 const formattedLogs = computed(() => {
@@ -133,7 +144,34 @@ async function loadLogs() {
   }
 }
 
-onMounted(loadLogs)
+async function loadLogPath() {
+  try {
+    const result = await getWorkspaceLogPath()
+    if (result.exists) {
+      logFilePath.value = result.path
+    }
+  } catch {
+    // Ignore error, button will remain disabled
+  }
+}
+
+async function openLogFile() {
+  if (!logFilePath.value) return
+
+  openingLogFile.value = true
+  try {
+    await openFile(logFilePath.value)
+  } catch (err) {
+    console.error('Failed to open log file:', err)
+  } finally {
+    openingLogFile.value = false
+  }
+}
+
+onMounted(() => {
+  loadLogs()
+  loadLogPath()
+})
 </script>
 
 <style scoped>

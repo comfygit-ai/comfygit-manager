@@ -134,3 +134,32 @@ async def get_workspace_logs(request: web.Request) -> web.Response:
     logs = await run_sync(parse_log_file, log_file, level, lines)
 
     return web.json_response(logs)
+
+
+@routes.get("/v2/comfygit/debug/logs/path")
+@requires_environment
+async def get_environment_log_path(request: web.Request, env) -> web.Response:
+    """Get the file path to the environment log file."""
+    log_file = env.workspace.path / "logs" / env.name / "full.log"
+
+    return web.json_response({
+        "path": str(log_file),
+        "exists": log_file.exists()
+    })
+
+
+@routes.get("/v2/workspace/debug/logs/path")
+async def get_workspace_log_path(request: web.Request) -> web.Response:
+    """Get the file path to the workspace log file."""
+    from comfygit_server import get_environment_from_cwd
+
+    env = get_environment_from_cwd()
+    if not env:
+        return web.json_response({"error": "No environment detected"}, status=500)
+
+    log_file = env.workspace.path / "logs" / "workspace" / "full.log"
+
+    return web.json_response({
+        "path": str(log_file),
+        "exists": log_file.exists()
+    })

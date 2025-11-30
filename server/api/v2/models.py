@@ -456,3 +456,53 @@ async def open_file_location(request: web.Request, env) -> web.Response:
         return web.json_response({"status": "success"})
     except Exception as e:
         return web.json_response({"error": f"Failed to open location: {e}"}, status=500)
+
+
+@routes.post("/v2/workspace/open-file")
+@requires_environment
+async def open_file(request: web.Request, env) -> web.Response:
+    """Open a file in the system's default application (e.g., text editor for logs).
+
+    Cross-platform support:
+    - Windows: Uses 'start' command
+    - macOS: Uses 'open' command
+    - Linux: Uses 'xdg-open'
+    - WSL: Converts path and uses Windows editor
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    file_path = body.get("path")
+    if not file_path:
+        return web.json_response({"error": "Missing 'path' field"}, status=400)
+
+    path = Path(file_path)
+    if not path.exists():
+        return web.json_response({"error": f"Path does not exist: {file_path}"}, status=404)
+
+    if not path.is_file():
+        return web.json_response({"error": f"Path is not a file: {file_path}"}, status=400)
+
+    try:
+        system = platform.system()
+
+        if system == "Windows":
+            # Windows: 'start' opens file with default application
+            subprocess.Popen(["cmd", "/c", "start", "", str(path)], shell=False)
+        elif system == "Darwin":
+            # macOS: 'open' opens file with default application
+            subprocess.Popen(["open", str(path)])
+        elif _is_wsl():
+            # WSL: Convert path to Windows format and use notepad.exe or default
+            win_path = _wsl_path_to_windows(str(path))
+            # Try to open with default Windows app
+            subprocess.Popen(["cmd.exe", "/c", "start", "", win_path], shell=False)
+        else:
+            # Linux: xdg-open opens file with default application
+            subprocess.Popen(["xdg-open", str(path)])
+
+        return web.json_response({"status": "success"})
+    except Exception as e:
+        return web.json_response({"error": f"Failed to open file: {e}"}, status=500)
