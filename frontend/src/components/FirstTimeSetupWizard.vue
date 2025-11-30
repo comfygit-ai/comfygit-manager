@@ -263,6 +263,7 @@ const props = defineProps<{
   existingEnvironments?: string[]
   cliInstalled?: boolean
   setupState: SetupState
+  workspacePath?: string | null  // Actual workspace path from setupStatus
 }>()
 
 const emit = defineEmits<{
@@ -302,6 +303,7 @@ const comfyUIVersion = ref('latest')
 const torchBackend = ref(DEFAULT_TORCH_BACKEND)
 const switchAfter = ref(true)
 const envCreateError = ref<string | null>(null)
+const createdWorkspacePath = ref<string | null>(null)  // Track workspace path for Step 2
 
 // Releases loading
 const releases = ref<ComfyUIRelease[]>([{ tag_name: 'latest', name: 'Latest', published_at: '' }])
@@ -445,6 +447,8 @@ async function handleStep1Next() {
         if (progress.state === 'complete') {
           clearInterval(poll)
           isCreatingWorkspace.value = false
+          // Store the workspace path for Step 2 environment creation
+          createdWorkspacePath.value = workspacePath.value?.trim() || props.defaultPath
           currentStep.value = 2
           loadReleases()
         } else if (progress.state === 'error') {
@@ -480,7 +484,8 @@ async function handleStep2Create() {
       python_version: pythonVersion.value,
       comfyui_version: comfyUIVersion.value,
       torch_backend: torchBackend.value,
-      switch_after: switchAfter.value
+      switch_after: switchAfter.value,
+      workspace_path: createdWorkspacePath.value || undefined  // Pass workspace path for first-time setup
     }
 
     const result = await createEnvironment(request)
@@ -572,6 +577,12 @@ onMounted(() => {
   // Pre-fill models path if detected
   if (props.detectedModelsDir) {
     modelsPath.value = props.detectedModelsDir
+  }
+
+  // Initialize workspace path from prop when starting at step 2
+  // (for empty_workspace or unmanaged states where workspace already exists)
+  if (props.workspacePath) {
+    createdWorkspacePath.value = props.workspacePath
   }
 
   // Load releases if starting at step 2

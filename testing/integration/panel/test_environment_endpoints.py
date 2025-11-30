@@ -1,8 +1,9 @@
 """Integration tests for environment management panel endpoints."""
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, MagicMock
 import json
 from pathlib import Path
+import threading
 
 
 @pytest.mark.integration
@@ -347,3 +348,173 @@ class TestSwitchStatusEndpoint:
         assert resp.status == 500
         data = await resp.json()
         assert "error" in data
+
+
+@pytest.mark.integration
+class TestCreateEnvironmentEndpoint:
+    """POST /v2/workspace/environments - Create a new environment."""
+
+    @pytest.fixture(autouse=True)
+    def reset_create_state(self):
+        """Reset global create task state before each test."""
+        import api.v2.environments as env_module
+        with env_module._create_task_lock:
+            env_module._create_task_state = {
+                "state": "idle",
+                "task_id": None,
+                "environment_name": None,
+                "phase": None,
+                "progress": 0,
+                "message": "No creation in progress",
+                "error": None
+            }
+        yield
+        # Reset again after test
+        with env_module._create_task_lock:
+            env_module._create_task_state = {
+                "state": "idle",
+                "task_id": None,
+                "environment_name": None,
+                "phase": None,
+                "progress": 0,
+                "message": "No creation in progress",
+                "error": None
+            }
+
+    async def test_error_without_workspace_path_in_unmanaged(self, client, monkeypatch):
+        """Should return 500 when no workspace_path and orchestrator can't detect.
+
+        This is the CURRENT (broken) behavior - environment creation fails
+        during first-time setup because orchestrator.detect_environment_type()
+        returns (False, None, None).
+        """
+        # Setup: Not managed, no explicit workspace_path
+        def mock_detect():
+            return (False, None, None)
+
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+
+        # Execute: POST without workspace_path
+        resp = await client.post("/v2/workspace/environments", json={
+            "name": "my-new-env",
+            "python_version": "3.12"
+        })
+
+        # Verify: Should fail (this tests the current broken behavior)
+        assert resp.status == 500
+        data = await resp.json()
+        assert data["status"] == "error"
+        assert "Not in managed workspace" in data["message"]
+
+    async def test_success_with_explicit_workspace_path(self, client, monkeypatch, tmp_path):
+        """Should create environment when workspace_path is explicitly provided.
+
+        Bug #3: During first-time setup, the frontend passes workspace_path
+        but the backend ignores it and calls orchestrator.detect_environment_type()
+        which fails because the workspace was just created and isn't detectable.
+        """
+        import api.v2.environments as env_module
+
+        # Setup: Mock workspace
+        mock_workspace = Mock()
+        mock_workspace.path = tmp_path
+        mock_workspace.list_environments.return_value = []
+
+        # Mock WorkspaceFactory.find in the environments module
+        monkeypatch.setattr(env_module.WorkspaceFactory, "find", lambda path: mock_workspace)
+
+        # Mock orchestrator to return NOT managed (simulating first-time setup)
+        monkeypatch.setattr("orchestrator.detect_environment_type", lambda: (False, None, None))
+
+        # Mock run_sync to return immediately
+        async def mock_run_sync(func, *args, **kwargs):
+            return func(*args, **kwargs)
+        monkeypatch.setattr(env_module, "run_sync", mock_run_sync)
+
+        # Mock the background thread to avoid actual creation
+        monkeypatch.setattr(env_module.threading, "Thread", MagicMock())
+
+        # Execute: POST with workspace_path
+        resp = await client.post("/v2/workspace/environments", json={
+            "name": "my-new-env",
+            "python_version": "3.12",
+            "workspace_path": str(tmp_path)
+        })
+
+        # Verify: Should start creation, not fail with "Not in managed workspace"
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "started"
+        assert "my-new-env" in data["message"]
+
+    async def test_success_falls_back_to_detection_when_no_workspace_path(
+        self, client, monkeypatch, tmp_path
+    ):
+        """Should fall back to orchestrator detection when workspace_path not provided."""
+        import api.v2.environments as env_module
+
+        # Setup: Managed workspace detected
+        mock_workspace = Mock()
+        mock_workspace.path = tmp_path
+        mock_workspace.list_environments.return_value = []
+
+        monkeypatch.setattr("orchestrator.detect_environment_type", lambda: (True, mock_workspace, None))
+
+        # Mock run_sync to return immediately
+        async def mock_run_sync(func, *args, **kwargs):
+            return func(*args, **kwargs)
+        monkeypatch.setattr(env_module, "run_sync", mock_run_sync)
+
+        monkeypatch.setattr(env_module.threading, "Thread", MagicMock())
+
+        # Execute: POST without workspace_path
+        resp = await client.post("/v2/workspace/environments", json={
+            "name": "my-new-env",
+            "python_version": "3.12"
+        })
+
+        # Verify: Should work via detection
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "started"
+
+    async def test_error_workspace_path_not_found(self, client, monkeypatch):
+        """Should return 404 when explicit workspace_path doesn't exist."""
+        from comfygit_core.models.exceptions import CDWorkspaceNotFoundError
+
+        def mock_find(path):
+            raise CDWorkspaceNotFoundError(f"Workspace not found at {path}")
+
+        import api.v2.environments as env_module
+        monkeypatch.setattr(env_module.WorkspaceFactory, "find", mock_find)
+
+        # Execute: POST with invalid workspace_path
+        resp = await client.post("/v2/workspace/environments", json={
+            "name": "my-new-env",
+            "workspace_path": "/nonexistent/path"
+        })
+
+        # Verify
+        assert resp.status == 404
+        data = await resp.json()
+        assert "not found" in data["message"].lower()
+
+    async def test_validation_missing_name(self, client, monkeypatch, tmp_path):
+        """Should return 400 when name is missing."""
+        mock_workspace = Mock()
+        mock_workspace.path = tmp_path
+
+        def mock_detect():
+            return (True, mock_workspace, None)
+
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+
+        # Execute: POST without name
+        resp = await client.post("/v2/workspace/environments", json={
+            "python_version": "3.12"
+        })
+
+        # Verify
+        assert resp.status == 400
+        data = await resp.json()
+        assert "name" in data["message"].lower()

@@ -338,6 +338,7 @@ def _install_self_as_system_node(workspace):
 
 def _run_initialize_workspace(workspace_path: Path, models_dir: Path | None):
     """Background thread function to initialize workspace."""
+    import time
     from comfygit_core.analyzers.model_scanner import ModelScanProgress
 
     try:
@@ -353,31 +354,42 @@ def _run_initialize_workspace(workspace_path: Path, models_dir: Path | None):
         if models_dir:
             _update_init_state("setting_models_dir", 25, "Configuring models directory...")
             workspace.set_models_directory(models_dir)
-            _update_init_state("scanning_models", 30, "Starting model scan...")
+
+            # Brief delay to ensure frontend sees the transition
+            time.sleep(0.1)
+            _update_init_state("scanning_models", 28, "Preparing model scan...")
 
             # Phase 3: Scan models with progress
             class ProgressCallback(ModelScanProgress):
                 def on_scan_start(self, total_files: int):
+                    logger.info(f"[Setup] Model scan starting: {total_files} files")
                     self.total = total_files
-                    _update_init_state("scanning_models", 30, f"Found {total_files} files to scan...")
+                    if total_files == 0:
+                        _update_init_state("scanning_models", 95, "No model files found to index")
+                    else:
+                        _update_init_state("scanning_models", 30, f"Found {total_files} files to scan...")
 
                 def on_file_processed(self, current: int, total: int, filename: str):
+                    logger.debug(f"[Setup] Processing {current}/{total}: {filename}")
                     # Map to 30-95% progress range
                     pct = 30 + int((current / max(total, 1)) * 65)
                     _update_init_state("scanning_models", pct, f"Scanning models ({current}/{total})...")
 
                 def on_scan_complete(self, result):
+                    logger.info(f"[Setup] Model scan complete: {result.added_count} added")
                     _update_init_state(
                         "complete", 100,
                         f"Complete! {result.added_count} models indexed",
                         models_found=result.added_count
                     )
 
+            _update_init_state("scanning_models", 30, "Starting model scan...")
             workspace.sync_model_directory(progress=ProgressCallback())
         else:
             _update_init_state("complete", 100, "Workspace created successfully", models_found=0)
 
     except Exception as e:
+        logger.error(f"[Setup] Workspace initialization failed: {e}")
         _update_init_state("error", 0, f"Failed: {e}", error=str(e))
 
 

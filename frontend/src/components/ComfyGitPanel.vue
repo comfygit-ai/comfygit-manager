@@ -414,6 +414,7 @@
       :existing-environments="setupStatus?.environments || []"
       :cli-installed="setupStatus?.cli_installed ?? true"
       :setup-state="setupStatus?.state || 'no_workspace'"
+      :workspace-path="setupStatus?.workspace_path || null"
       @complete="handleSetupComplete"
       @close="handleSetupWizardClose"
       @switch-environment="handleEnvironmentSwitchFromWizard"

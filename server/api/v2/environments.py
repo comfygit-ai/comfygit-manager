@@ -9,6 +9,8 @@ from aiohttp import web
 from pathlib import Path
 
 from cgm_utils.async_helpers import run_sync
+from comfygit_core.factories.workspace_factory import WorkspaceFactory
+from comfygit_core.models.exceptions import CDWorkspaceNotFoundError
 import orchestrator
 
 routes = web.RouteTableDef()
@@ -358,7 +360,8 @@ async def create_environment(request: web.Request) -> web.Response:
             "python_version": "3.12",
             "comfyui_version": "latest",
             "torch_backend": "auto",
-            "switch_after": false
+            "switch_after": false,
+            "workspace_path": "/path/to/workspace"  // Optional, for first-time setup
         }
 
     Returns:
@@ -370,28 +373,14 @@ async def create_environment(request: web.Request) -> web.Response:
     """
     global _create_task_state
 
-    is_managed, workspace, _ = orchestrator.detect_environment_type()
-    if not is_managed or not workspace:
-        return web.json_response({
-            "status": "error",
-            "message": "Not in managed workspace"
-        }, status=500)
-
-    # Check if creation already in progress
-    with _create_task_lock:
-        if _create_task_state["state"] == "creating":
-            return web.json_response({
-                "status": "error",
-                "message": "Environment creation already in progress"
-            }, status=409)
-
-    # Parse request
+    # Parse request first to get workspace_path
     try:
         data = await request.json()
         name = data.get("name", "").strip()
         python_version = data.get("python_version", "3.12")
         comfyui_version = data.get("comfyui_version", "latest")
         torch_backend = data.get("torch_backend", "auto")
+        workspace_path = data.get("workspace_path")  # Optional explicit path
 
         if not name:
             return web.json_response({
@@ -404,6 +393,31 @@ async def create_environment(request: web.Request) -> web.Response:
             "status": "error",
             "message": "Invalid JSON"
         }, status=400)
+
+    # Get workspace - use explicit path if provided (first-time setup), otherwise detect
+    if workspace_path:
+        try:
+            workspace = WorkspaceFactory.find(Path(workspace_path))
+        except CDWorkspaceNotFoundError:
+            return web.json_response({
+                "status": "error",
+                "message": f"Workspace not found at {workspace_path}"
+            }, status=404)
+    else:
+        is_managed, workspace, _ = orchestrator.detect_environment_type()
+        if not is_managed or not workspace:
+            return web.json_response({
+                "status": "error",
+                "message": "Not in managed workspace"
+            }, status=500)
+
+    # Check if creation already in progress
+    with _create_task_lock:
+        if _create_task_state["state"] == "creating":
+            return web.json_response({
+                "status": "error",
+                "message": "Environment creation already in progress"
+            }, status=409)
 
     # Check if environment already exists
     try:

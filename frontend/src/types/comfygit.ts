@@ -215,6 +215,7 @@ export interface CreateEnvironmentRequest {
   comfyui_version?: string
   torch_backend?: string
   switch_after?: boolean
+  workspace_path?: string  // Optional, used during first-time setup
 }
 
 export interface CreateEnvironmentResult {

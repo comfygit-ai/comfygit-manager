@@ -51,6 +51,9 @@ const globalStatus = ref<ComfyGitStatus | null>(null)
 type SetupState = 'no_workspace' | 'empty_workspace' | 'unmanaged' | 'managed'
 let currentSetupState: SetupState = 'managed'
 
+// Button group reference for visibility management
+let buttonGroup: HTMLElement | null = null
+
 // Fetch status for commit indicator
 async function fetchStatus() {
   if (!app?.api) return null
@@ -81,6 +84,36 @@ async function fetchSetupStatus() {
     }
   } catch {
     // Silently fail
+  }
+}
+
+// Check if ComfyUI-Manager is installed (original Manager, not us)
+function hasOriginalComfyUIManager(): boolean {
+  // Check for Manager button in toolbar (look for button with "Manager" text that's not ours)
+  const buttons = document.querySelectorAll('button.comfyui-button')
+  for (const btn of buttons) {
+    if (btn.textContent?.includes('Manager') && !btn.classList.contains('comfygit-panel-btn')) {
+      return true
+    }
+  }
+  // Also check for comfyManager global (set by ComfyUI-Manager)
+  if ((window as unknown as { comfyManager?: unknown }).comfyManager !== undefined) {
+    return true
+  }
+  return false
+}
+
+// Update button visibility based on environment state
+function updateButtonVisibility() {
+  if (!buttonGroup) return
+
+  // In unmanaged environment with original ComfyUI-Manager: hide our buttons
+  // (user should use the original Manager)
+  if (currentSetupState === 'unmanaged' && hasOriginalComfyUIManager()) {
+    buttonGroup.style.display = 'none'
+    console.log('[ComfyGit] Hiding buttons - unmanaged environment with ComfyUI-Manager present')
+  } else {
+    buttonGroup.style.display = ''
   }
 }
 
@@ -124,6 +157,7 @@ function showPanel(initialView?: string) {
         // Also refresh setup state in case user switched environments
         await fetchSetupStatus()
         updateCommitButtonState()
+        updateButtonVisibility()  // Update visibility after environment switch
       }
     })
   })
@@ -441,6 +475,7 @@ app.registerExtension({
     // Insert before settings button
     if (app.menu?.settingsGroup?.element) {
       app.menu.settingsGroup.element.before(btnGroup)
+      buttonGroup = btnGroup  // Store reference for visibility management
       console.log('[ComfyGit] Control Panel buttons added to toolbar')
     }
 
@@ -454,6 +489,7 @@ app.registerExtension({
     // Initial status fetch for indicator and setup state
     await Promise.all([fetchStatus(), fetchSetupStatus()])
     updateCommitIndicator()
+    updateButtonVisibility()  // Hide buttons in unmanaged + original Manager scenario
     updateCommitButtonState()
 
     // Refresh status periodically (fallback for external changes)
