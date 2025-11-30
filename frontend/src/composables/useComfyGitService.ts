@@ -4,6 +4,7 @@ import type {
   CommitResult,
   LogResult,
   ExportResult,
+  ExportValidationResult,
   BranchesResult,
   CommitDetail,
   CheckoutResult,
@@ -28,7 +29,15 @@ import type {
   NodesResult,
   RemotesResult,
   RemoteOperationResult,
-  RemoteSyncStatus
+  RemoteSyncStatus,
+  PullPreview,
+  PullResult,
+  PushPreview,
+  PushResult,
+  ImportAnalysis,
+  ValidateNameResult,
+  ImportResult,
+  ImportProgress
 } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
 
@@ -98,6 +107,26 @@ export function useComfyGitService() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ output_path: outputPath })
+    })
+  }
+
+  async function validateExport(): Promise<ExportValidationResult> {
+    if (USE_MOCK) return mockApi.validateExport()
+
+    return fetchApi<ExportValidationResult>('/v2/comfygit/export/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    })
+  }
+
+  async function exportEnvWithForce(outputPath?: string): Promise<ExportResult> {
+    if (USE_MOCK) return mockApi.exportEnvWithForce(outputPath)
+
+    return fetchApi<ExportResult>('/v2/comfygit/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ output_path: outputPath, force: true })
     })
   }
 
@@ -628,6 +657,197 @@ export function useComfyGitService() {
     })
   }
 
+  // Push/Pull Operations
+  async function getPullPreview(remote: string, branch?: string): Promise<PullPreview> {
+    if (USE_MOCK) return mockApi.getPullPreview(remote)
+    const url = branch
+      ? `/v2/comfygit/remotes/${encodeURIComponent(remote)}/pull-preview?branch=${encodeURIComponent(branch)}`
+      : `/v2/comfygit/remotes/${encodeURIComponent(remote)}/pull-preview`
+    return fetchApi<PullPreview>(url)
+  }
+
+  async function pullFromRemote(
+    remote: string,
+    options: { modelStrategy?: string; force?: boolean; resolutions?: any[] } = {}
+  ): Promise<PullResult> {
+    if (USE_MOCK) return mockApi.pullFromRemote(remote, options)
+    return fetchApi<PullResult>(`/v2/comfygit/remotes/${encodeURIComponent(remote)}/pull`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model_strategy: options.modelStrategy || 'skip',
+        force: options.force || false,
+        resolutions: options.resolutions
+      })
+    })
+  }
+
+  async function getPushPreview(remote: string, branch?: string): Promise<PushPreview> {
+    if (USE_MOCK) return mockApi.getPushPreview(remote)
+    const url = branch
+      ? `/v2/comfygit/remotes/${encodeURIComponent(remote)}/push-preview?branch=${encodeURIComponent(branch)}`
+      : `/v2/comfygit/remotes/${encodeURIComponent(remote)}/push-preview`
+    return fetchApi<PushPreview>(url)
+  }
+
+  async function pushToRemote(
+    remote: string,
+    options: { force?: boolean } = {}
+  ): Promise<PushResult> {
+    if (USE_MOCK) return mockApi.pushToRemote(remote, options)
+    return fetchApi<PushResult>(`/v2/comfygit/remotes/${encodeURIComponent(remote)}/push`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ force: options.force || false })
+    })
+  }
+
+  // V2: Validate merge before executing
+  async function validateMerge(
+    remote: string,
+    resolutions: Array<{ name: string; resolution: string }>
+  ): Promise<{ is_compatible: boolean; node_conflicts: any[]; warnings: string[] }> {
+    if (USE_MOCK) return mockApi.validateMerge(remote, resolutions)
+    return fetchApi(`/v2/comfygit/remotes/${encodeURIComponent(remote)}/validate-merge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resolutions })
+    })
+  }
+
+  // Repair missing model references by re-resolving workflows
+  async function repairWorkflowModels(workflowNames: string[]): Promise<{
+    success: number
+    failed: Array<{ name: string; error: string }>
+  }> {
+    const results = {
+      success: 0,
+      failed: [] as Array<{ name: string; error: string }>
+    }
+
+    for (const name of workflowNames) {
+      try {
+        await resolveWorkflow(name)
+        results.success++
+      } catch (err) {
+        results.failed.push({
+          name,
+          error: err instanceof Error ? err.message : 'Unknown error'
+        })
+      }
+    }
+
+    return results
+  }
+
+  // Import Operations
+  async function previewTarballImport(file: File): Promise<ImportAnalysis> {
+    if (USE_MOCK) {
+      // Return mock data for development
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return {
+        comfyui_version: 'v0.3.8',
+        comfyui_version_type: 'release',
+        total_models: 3,
+        models_locally_available: 1,
+        models_needing_download: 1,
+        models_without_sources: 1,
+        models: [],
+        total_nodes: 5,
+        registry_nodes: 4,
+        dev_nodes: 1,
+        git_nodes: 0,
+        nodes: [],
+        total_workflows: 2,
+        workflows: [],
+        needs_model_downloads: true,
+        needs_node_installs: true,
+        download_strategy_recommendation: 'required'
+      }
+    }
+
+    // Use FormData to upload the file
+    const formData = new FormData()
+    formData.append('file', file)
+
+    if (!window.app?.api) {
+      throw new Error('ComfyUI API not available')
+    }
+
+    const response = await window.app.api.fetchApi('/v2/workspace/import/preview', {
+      method: 'POST',
+      body: formData
+      // Don't set Content-Type - browser will set multipart boundary automatically
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.error || `Preview failed: ${response.status}`)
+    }
+
+    return response.json()
+  }
+
+  async function validateEnvironmentName(name: string): Promise<ValidateNameResult> {
+    if (USE_MOCK) {
+      await new Promise(resolve => setTimeout(resolve, 200))
+      // Simulate name validation
+      if (name === 'existing-env') {
+        return { valid: false, error: "Environment 'existing-env' already exists" }
+      }
+      if (name.includes('/') || name.includes(' ')) {
+        return { valid: false, error: 'Name contains invalid characters' }
+      }
+      return { valid: true, name }
+    }
+
+    return fetchApi<ValidateNameResult>(
+      `/v2/workspace/environments/validate?name=${encodeURIComponent(name)}`
+    )
+  }
+
+  async function executeImport(
+    file: File,
+    name: string,
+    modelStrategy: 'all' | 'required' | 'skip',
+    torchBackend: string
+  ): Promise<ImportResult> {
+    if (USE_MOCK) {
+      await new Promise(resolve => setTimeout(resolve, 300))
+      return { status: 'started', message: `Importing environment '${name}'...` }
+    }
+
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('name', name)
+    formData.append('model_strategy', modelStrategy)
+    formData.append('torch_backend', torchBackend)
+
+    if (!window.app?.api) {
+      throw new Error('ComfyUI API not available')
+    }
+
+    const response = await window.app.api.fetchApi('/v2/workspace/import', {
+      method: 'POST',
+      body: formData
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.message || errorData.error || `Import failed: ${response.status}`)
+    }
+
+    return response.json()
+  }
+
+  async function getImportProgress(): Promise<ImportProgress> {
+    if (USE_MOCK) {
+      return { state: 'idle', message: 'No import in progress' }
+    }
+
+    return fetchApi<ImportProgress>('/v2/workspace/import/status')
+  }
+
   return {
     isLoading,
     error,
@@ -635,6 +855,8 @@ export function useComfyGitService() {
     commit,
     getHistory,
     exportEnv,
+    validateExport,
+    exportEnvWithForce,
     // Git Operations
     getBranches,
     getCommitDetail,
@@ -687,7 +909,20 @@ export function useComfyGitService() {
     updateRemoteUrl,
     fetchRemote,
     getRemoteSyncStatus,
+    // Push/Pull
+    getPullPreview,
+    pullFromRemote,
+    getPushPreview,
+    pushToRemote,
+    validateMerge,
     // Environment Sync
-    syncEnvironmentManually
+    syncEnvironmentManually,
+    // Workflow Repair
+    repairWorkflowModels,
+    // Import Operations
+    previewTarballImport,
+    validateEnvironmentName,
+    executeImport,
+    getImportProgress
   }
 }

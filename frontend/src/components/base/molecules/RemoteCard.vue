@@ -8,25 +8,28 @@
         <span>{{ remote.name }}</span>
         <span v-if="isDefault" class="default-badge">DEFAULT</span>
         <span v-if="syncStatus" class="sync-badge">
-          <span v-if="syncStatus.ahead > 0" class="ahead">↑{{ syncStatus.ahead }}</span>
-          <span v-if="syncStatus.behind > 0" class="behind">↓{{ syncStatus.behind }}</span>
+          <template v-if="syncStatus.ahead > 0 || syncStatus.behind > 0">
+            <span v-if="syncStatus.ahead > 0" class="ahead">↑{{ syncStatus.ahead }}</span>
+            <span v-if="syncStatus.behind > 0" class="behind">↓{{ syncStatus.behind }}</span>
+          </template>
+          <span v-else class="synced">✓ synced</span>
         </span>
       </div>
     </template>
     <template #subtitle>
-      <span v-if="isTracking" class="tracking-info">
-        Tracking: {{ trackingBranch }}
-      </span>
+      <a
+        v-if="webUrl"
+        :href="webUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="remote-url-link"
+        @click.stop
+      >{{ displayUrl }}</a>
+      <span v-else class="remote-url-text">{{ displayUrl }}</span>
     </template>
-    <template #details>
-      <DetailRow label="Fetch:">
-        <RemoteUrlDisplay :url="remote.fetch_url" />
-      </DetailRow>
-      <DetailRow v-if="remote.push_url !== remote.fetch_url" label="Push:">
+    <template v-if="hasDetails" #details>
+      <DetailRow v-if="remote.push_url !== remote.fetch_url" label="Push URL:">
         <RemoteUrlDisplay :url="remote.push_url" />
-      </DetailRow>
-      <DetailRow v-if="syncStatus?.last_fetch" label="Last Fetch:">
-        <span>{{ formatLastFetch(syncStatus.last_fetch) }}</span>
       </DetailRow>
     </template>
     <template #actions>
@@ -37,6 +40,22 @@
         @click="$emit('fetch', remote.name)"
       >
         Fetch
+      </ActionButton>
+      <ActionButton
+        :variant="canPull ? 'primary' : 'secondary'"
+        size="xs"
+        :disabled="!syncStatus"
+        @click="$emit('pull', remote.name)"
+      >
+        Pull{{ syncStatus && syncStatus.behind > 0 ? ` ↓${syncStatus.behind}` : '' }}
+      </ActionButton>
+      <ActionButton
+        :variant="canPush ? 'primary' : 'secondary'"
+        size="xs"
+        :disabled="!syncStatus"
+        @click="$emit('push', remote.name)"
+      >
+        Push{{ syncStatus && syncStatus.ahead > 0 ? ` ↑${syncStatus.ahead}` : '' }}
       </ActionButton>
       <ActionButton
         variant="secondary"
@@ -58,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import type { RemoteInfo, RemoteSyncStatus } from '@/types/comfygit'
 import ItemCard from './ItemCard.vue'
 import DetailRow from './DetailRow.vue'
@@ -68,37 +87,53 @@ import RemoteUrlDisplay from '../atoms/RemoteUrlDisplay.vue'
 const props = defineProps<{
   remote: RemoteInfo
   syncStatus?: RemoteSyncStatus | null
-  trackingBranch?: string
   fetchingRemote?: string | null
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   fetch: [remoteName: string]
   edit: [remoteName: string]
   remove: [remoteName: string]
+  pull: [remoteName: string]
+  push: [remoteName: string]
 }>()
 
 const fetchingLocal = computed(() => props.fetchingRemote === props.remote.name)
 const isDefault = computed(() => props.remote.is_default)
-const isTracking = computed(() => !!props.trackingBranch)
+const canPull = computed(() => props.syncStatus && props.syncStatus.behind > 0)
+const canPush = computed(() => props.syncStatus && props.syncStatus.ahead > 0)
+const hasDetails = computed(() => props.remote.push_url !== props.remote.fetch_url)
 
-function formatLastFetch(isoDate: string): string {
-  const date = new Date(isoDate)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
+// Convert git URL to browsable web URL
+const webUrl = computed(() => {
+  const url = props.remote.fetch_url
 
-  if (diffMins < 1) return 'Just now'
-  if (diffMins < 60) return `${diffMins}m ago`
+  // Handle SSH format: git@github.com:user/repo.git
+  const sshMatch = url.match(/^git@([^:]+):(.+?)(?:\.git)?$/)
+  if (sshMatch) {
+    return `https://${sshMatch[1]}/${sshMatch[2]}`
+  }
 
-  const diffHours = Math.floor(diffMins / 60)
-  if (diffHours < 24) return `${diffHours}h ago`
+  // Handle HTTPS format: https://github.com/user/repo.git
+  if (url.startsWith('https://') || url.startsWith('http://')) {
+    return url.replace(/\.git$/, '')
+  }
 
-  const diffDays = Math.floor(diffHours / 24)
-  if (diffDays < 7) return `${diffDays}d ago`
+  // Can't convert to web URL
+  return null
+})
 
-  return date.toLocaleDateString()
-}
+// Display URL (shortened for display)
+const displayUrl = computed(() => {
+  const url = props.remote.fetch_url
+
+  // Remove protocol and .git suffix for cleaner display
+  return url
+    .replace(/^https?:\/\//, '')
+    .replace(/^git@/, '')
+    .replace(/\.git$/, '')
+    .replace(/:/, '/')  // Convert SSH colon to slash
+})
 </script>
 
 <style scoped>
@@ -136,9 +171,24 @@ function formatLastFetch(isoDate: string): string {
   color: var(--cg-color-warning);
 }
 
-.tracking-info {
+.sync-badge .synced {
+  color: var(--cg-color-success);
+}
+
+.remote-url-link {
   font-family: var(--cg-font-mono);
-  color: var(--cg-color-text-muted);
   font-size: var(--cg-font-size-xs);
+  color: var(--cg-color-info);
+  text-decoration: none;
+}
+
+.remote-url-link:hover {
+  text-decoration: underline;
+}
+
+.remote-url-text {
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  color: var(--cg-color-text-muted);
 }
 </style>

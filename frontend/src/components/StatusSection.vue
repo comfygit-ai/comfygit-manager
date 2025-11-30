@@ -127,86 +127,99 @@
         </template>
       </IssueCard>
 
-      <!-- Issues Detected Section -->
-      <div v-if="hasActualIssues" style="margin-top: var(--cg-space-3)">
+      <!-- Issues Section - Always shown for consistency -->
+      <div style="margin-top: var(--cg-space-3)">
         <SectionTitle level="4" style="margin-bottom: var(--cg-space-2)">
-          ISSUES DETECTED
+          ISSUES
         </SectionTitle>
 
-        <!-- ERROR: Broken Workflows (can't run - missing nodes/dependencies) -->
-        <IssueCard
-          v-if="allBrokenWorkflows.length > 0"
-          severity="error"
-          icon="⚠"
-          :title="`${allBrokenWorkflows.length} workflow${allBrokenWorkflows.length === 1 ? '' : 's'} can't run`"
-          description="These workflows have missing dependencies that must be resolved before they can run."
-          :items="allBrokenWorkflows.map(w => `${w.name} — ${w.issue_summary}`)"
-        >
-          <template #actions>
-            <ActionButton variant="primary" size="sm" @click="$emit('view-workflows')">
-              See Workflows
-            </ActionButton>
-          </template>
-        </IssueCard>
+        <!-- Show issue cards when there are actual issues -->
+        <template v-if="hasActualIssues">
+          <!-- ERROR: Broken Workflows (can't run - missing nodes/dependencies) -->
+          <IssueCard
+            v-if="allBrokenWorkflows.length > 0"
+            severity="error"
+            icon="⚠"
+            :title="`${allBrokenWorkflows.length} workflow${allBrokenWorkflows.length === 1 ? '' : 's'} can't run`"
+            description="These workflows have missing dependencies that must be resolved before they can run."
+            :items="allBrokenWorkflows.map(w => `${w.name} — ${w.issue_summary}`)"
+          >
+            <template #actions>
+              <ActionButton variant="primary" size="sm" @click="$emit('view-workflows')">
+                See Workflows
+              </ActionButton>
+            </template>
+          </IssueCard>
 
-        <!-- WARNING: Path Sync Issues (can run but paths need fixing) -->
-        <IssueCard
-          v-if="pathSyncWorkflows.length > 0"
-          severity="warning"
-          icon="⚠"
-          :title="`${pathSyncWorkflows.length} workflow${pathSyncWorkflows.length === 1 ? '' : 's'} with path issues`"
-          description="These workflows can run but have model paths that should be synced."
-          :items="pathSyncWorkflows.map(w => `${w.name} — ${w.models_needing_path_sync_count} model path${w.models_needing_path_sync_count === 1 ? '' : 's'} to sync`)"
-        >
-          <template #actions>
-            <ActionButton variant="primary" size="sm" @click="$emit('view-workflows')">
-              See Workflows
-            </ActionButton>
-          </template>
-        </IssueCard>
+          <!-- WARNING: Path Sync Issues (can run but paths need fixing) -->
+          <IssueCard
+            v-if="pathSyncWorkflows.length > 0"
+            severity="warning"
+            icon="⚠"
+            :title="`${pathSyncWorkflows.length} workflow${pathSyncWorkflows.length === 1 ? '' : 's'} with path issues`"
+            description="These workflows can run but have model paths that should be synced."
+            :items="pathSyncWorkflows.map(w => `${w.name} — ${w.models_needing_path_sync_count} model path${w.models_needing_path_sync_count === 1 ? '' : 's'} to sync`)"
+          >
+            <template #actions>
+              <ActionButton variant="primary" size="sm" @click="$emit('view-workflows')">
+                See Workflows
+              </ActionButton>
+            </template>
+          </IssueCard>
 
-        <!-- WARNING: Missing Models (not in broken workflows) -->
-        <IssueCard
-          v-if="status.missing_models_count > 0 && !hasBrokenWorkflows"
-          severity="warning"
-          icon="⚠"
-          :title="`${status.missing_models_count} missing model${status.missing_models_count === 1 ? '' : 's'}`"
-          description="Some workflows reference models that are not found in the workspace index."
-        >
-          <template #actions>
-            <ActionButton variant="primary" size="sm" @click="$emit('view-workflows')">
-              See Workflows
-            </ActionButton>
-          </template>
-        </IssueCard>
+          <!-- WARNING: Missing Models (not in broken workflows) -->
+          <IssueCard
+            v-if="status.missing_models_count > 0 && !hasBrokenWorkflows"
+            severity="warning"
+            icon="⚠"
+            :title="`${status.missing_models_count} missing model${status.missing_models_count === 1 ? '' : 's'}`"
+            description="Some workflows reference models that are not found in the workspace index. This can happen after updating the model index."
+          >
+            <template #actions>
+              <ActionButton
+                variant="primary"
+                size="sm"
+                :disabled="isRepairing"
+                @click="handleRepairMissingModels"
+              >
+                {{ isRepairing ? 'Repairing...' : 'Repair' }}
+              </ActionButton>
+              <ActionButton variant="secondary" size="sm" @click="$emit('view-workflows')">
+                See Workflows
+              </ActionButton>
+            </template>
+          </IssueCard>
 
-        <!-- ERROR: Environment Not Synced -->
-        <IssueCard
-          v-if="!status.comparison.is_synced"
-          severity="error"
-          icon="⚠"
-          title="Environment not synced"
-          :description="syncIssueDescription"
-          :items="syncIssueItems"
-        >
-          <template #actions>
-            <ActionButton variant="secondary" size="sm" @click="handleShowAll">
-              View Details
-            </ActionButton>
-            <ActionButton variant="primary" size="sm" @click="$emit('view-nodes')">
-              See Nodes
-            </ActionButton>
-          </template>
-        </IssueCard>
+          <!-- ERROR: Environment Not Synced -->
+          <IssueCard
+            v-if="!status.comparison.is_synced"
+            severity="error"
+            icon="⚠"
+            title="Environment not synced"
+            :description="syncIssueDescription"
+            :items="syncIssueItems"
+          >
+            <template #actions>
+              <ActionButton variant="secondary" size="sm" @click="handleShowAll">
+                View Details
+              </ActionButton>
+              <ActionButton variant="primary" size="sm" @click="$emit('view-nodes')">
+                See Nodes
+              </ActionButton>
+            </template>
+          </IssueCard>
+        </template>
+
+        <!-- No issues but has uncommitted work - simple text -->
+        <span v-else-if="hasUncommittedWork" class="no-issues-text">No issues</span>
+
+        <!-- All Good State - no issues and no uncommitted work -->
+        <EmptyState
+          v-else
+          icon="✅"
+          message="Everything looks good! No issues detected."
+        />
       </div>
-
-      <!-- All Good State -->
-      <EmptyState
-        v-if="!hasActualIssues && !hasUncommittedWork"
-        icon="✅"
-        message="Everything looks good! No issues detected."
-        style="margin-top: var(--cg-space-4)"
-      />
 
     </template>
   </PanelLayout>
@@ -263,7 +276,38 @@ const emit = defineEmits<{
   'sync-environment': []
   'create-branch': []
   'view-nodes': []
+  'repair-missing-models': [workflowNames: string[]]
 }>()
+
+const isRepairing = ref(false)
+
+// Workflows with unresolved or ambiguous models
+const workflowsWithMissingModels = computed(() => {
+  const analyzed = props.status.workflows.analyzed || []
+  // Filter workflows that have missing model issues
+  const filtered = analyzed.filter(w =>
+    w.unresolved_models_count > 0 || w.ambiguous_models_count > 0
+  )
+  // If no specific workflows found but missing_models_count > 0, return all synced workflows
+  // (the backend resolve endpoint will re-resolve and fix any mismatched hashes)
+  if (filtered.length === 0 && props.status.missing_models_count > 0) {
+    return analyzed.filter(w => w.sync_state === 'synced')
+  }
+  return filtered
+})
+
+function handleRepairMissingModels() {
+  const workflows = workflowsWithMissingModels.value
+  if (workflows.length === 0) return
+  isRepairing.value = true
+  emit('repair-missing-models', workflows.map(w => w.name))
+}
+
+function resetRepairingState() {
+  isRepairing.value = false
+}
+
+defineExpose({ resetRepairingState })
 
 const hasWorkflowChanges = computed(() => {
   return props.status.workflows.new.length > 0 ||
@@ -438,5 +482,11 @@ const syncIssueItems = computed(() => {
 
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
+}
+
+/* No issues text - simple inline display */
+.no-issues-text {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-sm);
 }
 </style>

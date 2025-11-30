@@ -72,8 +72,16 @@ import type {
   EnvironmentStatus,
   GitCommit,
   NodeInfo,
-  NodesResult
+  NodesResult,
+  ExportValidationResult,
+  ExportResult
 } from '@/types/comfygit'
+
+// =============================================================================
+// Mock State - Tracks added sources for testing export flow
+// =============================================================================
+
+const mockAddedSources = new Set<string>()
 
 // =============================================================================
 // Mock Data Generators - Matching Core Library Structures
@@ -860,9 +868,10 @@ export const mockApi = {
     }
   },
 
-  updateModelSource: async (sha256: string, sourceUrl: string): Promise<void> => {
+  updateModelSource: async (hash: string, sourceUrl: string): Promise<void> => {
     await delay(300)
-    console.log(`[MOCK] Updating source for ${sha256}: ${sourceUrl}`)
+    mockAddedSources.add(hash)
+    console.log(`[MOCK] Added source for ${hash}: ${sourceUrl}`)
   },
 
   deleteModel: async (sha256: string): Promise<void> => {
@@ -1145,6 +1154,188 @@ export const mockApi = {
       ahead: 2,
       behind: 1,
       last_fetch: new Date(Date.now() - 3600000).toISOString()
+    }
+  },
+
+  /**
+   * Get Pull Preview - Returns preview with optional workflow conflicts (V2)
+   * GET /v2/comfygit/remotes/{name}/pull-preview
+   *
+   * Test scenarios by remote name:
+   * - "origin" - Returns preview WITH workflow conflicts (default for testing)
+   * - "upstream" - Returns preview WITHOUT conflicts (clean pull)
+   * - Any other - Returns preview with workflow conflicts
+   */
+  getPullPreview: async (remote: string): Promise<any> => {
+    await delay(500)
+
+    const basePreview = {
+      remote,
+      branch: 'main',
+      commits_behind: 3,
+      commits: [
+        { hash: 'abc1234', short_hash: 'abc1234', message: 'Add new workflow features', date: '2024-01-15T10:30:00Z', date_relative: '2 hours ago' },
+        { hash: 'def5678', short_hash: 'def5678', message: 'Update node dependencies', date: '2024-01-15T09:15:00Z', date_relative: '3 hours ago' },
+        { hash: 'ghi9012', short_hash: 'ghi9012', message: 'Fix model path handling', date: '2024-01-15T08:00:00Z', date_relative: '4 hours ago' }
+      ],
+      changes: {
+        workflows: {
+          added: ['new-workflow.json'],
+          modified: ['flux-schnell.json', 'sdxl-turbo.json'],
+          deleted: []
+        },
+        nodes: {
+          to_install: ['comfyui-animatediff', 'comfyui-controlnet-aux'],
+          to_remove: []
+        },
+        models: {
+          referenced: ['flux1-dev.safetensors', 'sdxl_base.safetensors'],
+          count: 2
+        }
+      },
+      has_uncommitted_changes: false,
+      can_pull: true,
+      block_reason: null
+    }
+
+    // Return preview WITH workflow conflicts for "origin" or other remotes (V2 format)
+    if (remote !== 'upstream') {
+      return {
+        ...basePreview,
+        has_conflicts: true,
+        workflow_conflicts: [
+          {
+            name: 'flux-schnell',
+            conflict_type: 'both_modified',
+            base_hash: 'abc12345',
+            target_hash: 'def67890'
+          },
+          {
+            name: 'sdxl-turbo',
+            conflict_type: 'both_modified',
+            base_hash: '11111111',
+            target_hash: '22222222'
+          }
+        ]
+      }
+    }
+
+    // Clean preview for "upstream" (no conflicts)
+    return {
+      ...basePreview,
+      has_conflicts: false,
+      workflow_conflicts: []
+    }
+  },
+
+  /**
+   * Validate Merge - Check node version compatibility after workflow resolutions (V2)
+   * POST /v2/comfygit/remotes/{name}/validate-merge
+   */
+  validateMerge: async (_remote: string, resolutions: Array<{ name: string; resolution: string }>): Promise<any> => {
+    await delay(400)
+
+    // Simulate: if user chose mixed resolutions, show node conflict
+    const hasBase = resolutions.some(r => r.resolution === 'take_base')
+    const hasTarget = resolutions.some(r => r.resolution === 'take_target')
+    const hasMixed = hasBase && hasTarget
+
+    if (hasMixed) {
+      return {
+        is_compatible: false,
+        node_conflicts: [
+          {
+            node_id: 'rgthree-comfy',
+            node_name: "rgthree's ComfyUI Nodes",
+            base_version: '2.0.0',
+            target_version: '1.5.0',
+            chosen_version: '1.5.0',
+            chosen_reason: 'Required by sdxl-turbo (theirs)',
+            affected_workflows: [
+              { name: 'flux-schnell', source: 'base', required_version: '2.0.0' },
+              { name: 'sdxl-turbo', source: 'target', required_version: '1.5.0' }
+            ]
+          }
+        ],
+        warnings: []
+      }
+    }
+
+    // All same side - compatible
+    return {
+      is_compatible: true,
+      node_conflicts: [],
+      warnings: hasTarget ? ["Model 'flux-dev.safetensors' has no download source"] : []
+    }
+  },
+
+  /**
+   * Pull from Remote - Execute pull with optional conflict resolutions (V2)
+   * POST /v2/comfygit/remotes/{name}/pull
+   */
+  pullFromRemote: async (remote: string, options: any): Promise<any> => {
+    await delay(1500)
+    console.log(`[MOCK] Pulling from ${remote} with options:`, options)
+
+    // Simulate occasional rollback for testing (10% chance)
+    if (options.resolutions && Math.random() < 0.1) {
+      return {
+        status: 'error',
+        pull_output: '',
+        sync_result: { nodes_installed: [], nodes_removed: [], models_queued: 0, errors: [] },
+        rolled_back: true,
+        error: 'Simulated sync failure - merge rolled back'
+      }
+    }
+
+    return {
+      status: 'success',
+      pull_output: 'Already up to date.',
+      sync_result: {
+        nodes_installed: options.resolutions ? ['comfyui-animatediff'] : [],
+        nodes_removed: [],
+        models_queued: 0,
+        errors: []
+      },
+      rolled_back: false,
+      message: 'Pull completed successfully'
+    }
+  },
+
+  /**
+   * Get Push Preview
+   * GET /v2/comfygit/remotes/{name}/push-preview
+   */
+  getPushPreview: async (remote: string): Promise<any> => {
+    await delay(400)
+    return {
+      remote,
+      branch: 'main',
+      commits_ahead: 2,
+      commits: [
+        { hash: 'xyz1234', short_hash: 'xyz1234', message: 'Local workflow changes', date: '2024-01-15T11:00:00Z', date_relative: '1 hour ago' },
+        { hash: 'uvw5678', short_hash: 'uvw5678', message: 'Add new node configuration', date: '2024-01-15T10:45:00Z', date_relative: '1.5 hours ago' }
+      ],
+      has_uncommitted_changes: false,
+      remote_has_new_commits: false,
+      can_push: true,
+      needs_force: false,
+      block_reason: null
+    }
+  },
+
+  /**
+   * Push to Remote
+   * POST /v2/comfygit/remotes/{name}/push
+   */
+  pushToRemote: async (remote: string, options: any): Promise<any> => {
+    await delay(1000)
+    console.log(`[MOCK] Pushing to ${remote} with options:`, options)
+    return {
+      status: 'success',
+      push_output: 'Everything up-to-date',
+      commits_pushed: 2,
+      message: 'Push completed successfully'
     }
   },
 
@@ -1833,6 +2024,80 @@ export const mockApi = {
     return {
       results: allResults.slice(0, limit),
       total: allResults.length
+    }
+  },
+
+  // Export Validation - shows warnings for models without sources
+  validateExport: async (): Promise<ExportValidationResult> => {
+    await delay(400)
+    // All models that could be missing sources
+    const allModelsWithoutSources = [
+      {
+        filename: 'sd_xl_base_1.0.safetensors',
+        hash: 'abc123def456',
+        workflows: ['flux-dev-img2img.json', 'sdxl-lightning.json']
+      },
+      {
+        filename: 'controlnet_openpose.safetensors',
+        hash: 'xyz789ghi012',
+        workflows: ['pose-to-image.json']
+      },
+      {
+        filename: 'custom_lora_v2.safetensors',
+        hash: 'lmn345opq678',
+        workflows: ['flux-dev-img2img.json']
+      },
+      {
+        filename: 'vae_ft_mse.pt',
+        hash: 'rst901uvw234',
+        workflows: ['sdxl-lightning.json', 'pose-to-image.json', 'upscale-workflow.json']
+      }
+    ]
+
+    // Filter out models that have had sources added
+    const modelsWithoutSources = allModelsWithoutSources.filter(
+      m => !mockAddedSources.has(m.hash)
+    )
+
+    return {
+      can_export: true,
+      blocking_issues: [],
+      warnings: {
+        models_without_sources: modelsWithoutSources
+      }
+    }
+  },
+
+  // Mock for blocked export (call this variant to test blocked UI)
+  validateExportBlocked: async (): Promise<ExportValidationResult> => {
+    await delay(400)
+    return {
+      can_export: false,
+      blocking_issues: [
+        {
+          type: 'uncommitted_workflows',
+          message: 'Cannot export with uncommitted workflow changes',
+          details: ['new-workflow.json', 'modified-portrait.json', 'another-change.json']
+        },
+        {
+          type: 'unresolved_issues',
+          message: 'Cannot export - workflows have unresolved issues',
+          details: []
+        }
+      ],
+      warnings: {
+        models_without_sources: []
+      }
+    }
+  },
+
+  exportEnvWithForce: async (outputPath?: string): Promise<ExportResult> => {
+    await delay(800)
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    return {
+      status: 'success',
+      path: outputPath || `/home/user/exports/production_export_${timestamp}.tar.gz`,
+      models_without_sources: 4
     }
   }
 }

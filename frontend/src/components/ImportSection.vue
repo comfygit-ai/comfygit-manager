@@ -1,7 +1,11 @@
 <template>
   <PanelLayout>
     <template #header>
-      <PanelHeader title="IMPORT ENVIRONMENT" />
+      <PanelHeader
+        title="IMPORT ENVIRONMENT"
+        :show-info="true"
+        @info-click="showInfoPopover = true"
+      />
     </template>
 
     <template #content>
@@ -14,48 +18,6 @@
           button-text="Select Export File"
           @file-selected="handleFileSelected"
         />
-
-        <div class="import-help">
-          <SectionTitle>How to Import</SectionTitle>
-          <div class="help-content">
-            <div class="help-item">
-              <span class="help-number">1</span>
-              <div class="help-text">
-                <div class="help-title">Select Export File</div>
-                <div class="help-description">
-                  Choose a ComfyGit environment export file created with the EXPORT feature
-                </div>
-              </div>
-            </div>
-            <div class="help-item">
-              <span class="help-number">2</span>
-              <div class="help-text">
-                <div class="help-title">Review Preview</div>
-                <div class="help-description">
-                  Check what workflows, models, and nodes will be imported
-                </div>
-              </div>
-            </div>
-            <div class="help-item">
-              <span class="help-number">3</span>
-              <div class="help-text">
-                <div class="help-title">Configure Options</div>
-                <div class="help-description">
-                  Choose how to handle conflicts and which components to import
-                </div>
-              </div>
-            </div>
-            <div class="help-item">
-              <span class="help-number">4</span>
-              <div class="help-text">
-                <div class="help-title">Import</div>
-                <div class="help-description">
-                  Start the import process and wait for completion
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       <!-- File Selected: Show preview and options -->
@@ -78,8 +40,23 @@
           </ActionButton>
         </div>
 
-        <!-- Preview (mock data for now) -->
+        <!-- Loading Preview -->
+        <div v-if="isLoadingPreview" class="preview-loading">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">Analyzing import file...</div>
+        </div>
+
+        <!-- Preview Error -->
+        <IssueCard
+          v-else-if="previewError"
+          type="error"
+          title="Failed to Analyze File"
+          :details="[previewError]"
+        />
+
+        <!-- Preview (from API) -->
         <ImportPreview
+          v-else-if="importAnalysis"
           :source-environment="previewData.sourceEnvironment"
           :workflows="previewData.workflows"
           :models="previewData.models"
@@ -88,24 +65,24 @@
           :git-commit="previewData.gitCommit"
         />
 
-        <!-- Options -->
-        <ImportOptions
-          v-model:conflict-mode="importOptions.conflictMode"
-          v-model:include-workflows="importOptions.includeWorkflows"
-          v-model:include-models="importOptions.includeModels"
-          v-model:include-nodes="importOptions.includeNodes"
-          v-model:include-git-history="importOptions.includeGitHistory"
+        <!-- Configuration -->
+        <ImportConfigForm
+          v-if="importAnalysis"
+          v-model:name="importConfig.name"
+          v-model:model-strategy="importConfig.modelStrategy"
+          v-model:torch-backend="importConfig.torchBackend"
+          :name-error="nameError"
+          @validate-name="handleValidateName"
         />
 
-        <!-- Warning if models excluded -->
+        <!-- Warning if skipping models -->
         <IssueCard
-          v-if="!importOptions.includeModels && previewData.models.length > 0"
+          v-if="importConfig.modelStrategy === 'skip' && importAnalysis?.models_needing_download"
           type="warning"
-          title="Models Will Not Be Imported"
+          title="Models Will Not Be Downloaded"
           :details="[
-            `${previewData.models.length} model file(s) will be skipped`,
-            'Workflows may not function without required models',
-            'You can download models manually from the MODEL INDEX'
+            `${importAnalysis.models_needing_download} model(s) will need to be downloaded later`,
+            'You can resolve missing models from the STATUS page after import'
           ]"
         />
 
@@ -118,10 +95,9 @@
             @click="handleStartImport"
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 12L4 8h3V4h2v4h3L8 12z"/>
-              <path d="M2 14h12v-2H2v2z"/>
+              <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12.5a5.5 5.5 0 110-11 5.5 5.5 0 010 11zM8 4v4h3l-4 4-4-4h3V4h2z"/>
             </svg>
-            Start Import
+            Create Environment
           </ActionButton>
           <ActionButton
             variant="secondary"
@@ -180,6 +156,46 @@
       </div>
     </template>
   </PanelLayout>
+
+  <!-- Info Popover -->
+  <InfoPopover
+    :show="showInfoPopover"
+    title="How Import Works"
+    @close="showInfoPopover = false"
+  >
+    <template #content>
+      <div class="help-steps">
+        <div class="help-step">
+          <span class="step-number">1</span>
+          <div class="step-content">
+            <strong>Creates a New Environment</strong>
+            <p>Import does not modify your current environment - it creates a brand new one</p>
+          </div>
+        </div>
+        <div class="help-step">
+          <span class="step-number">2</span>
+          <div class="step-content">
+            <strong>Preview Before Import</strong>
+            <p>See what nodes, models, and workflows will be set up</p>
+          </div>
+        </div>
+        <div class="help-step">
+          <span class="step-number">3</span>
+          <div class="step-content">
+            <strong>Choose Model Strategy</strong>
+            <p>Download all models, only required ones, or skip for later</p>
+          </div>
+        </div>
+        <div class="help-step">
+          <span class="step-number">4</span>
+          <div class="step-content">
+            <strong>Switch When Ready</strong>
+            <p>After creation, switch to the new environment to start using it</p>
+          </div>
+        </div>
+      </div>
+    </template>
+  </InfoPopover>
 </template>
 
 <script setup lang="ts">
@@ -188,26 +204,38 @@ import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
 import FileDropZone from '@/components/base/molecules/FileDropZone.vue'
 import ImportPreview from '@/components/base/molecules/ImportPreview.vue'
-import ImportOptions from '@/components/base/molecules/ImportOptions.vue'
+import ImportConfigForm from '@/components/base/molecules/ImportConfigForm.vue'
 import IssueCard from '@/components/base/molecules/IssueCard.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
-import SectionTitle from '@/components/base/atoms/SectionTitle.vue'
+import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
+import { useComfyGitService } from '@/composables/useComfyGitService'
+import type { ImportAnalysis } from '@/types/comfygit'
+
+const { previewTarballImport, validateEnvironmentName, executeImport, getImportProgress } = useComfyGitService()
+
+// Polling interval for import progress
+let importPollInterval: ReturnType<typeof setInterval> | null = null
 
 // State
+const showInfoPopover = ref(false)
 const selectedFile = ref<File | null>(null)
 const isImporting = ref(false)
 const importComplete = ref(false)
 const importSuccess = ref(false)
 const importResultMessage = ref('')
+const isLoadingPreview = ref(false)
+const previewError = ref<string | null>(null)
 
-// Import options
-const importOptions = ref({
-  conflictMode: 'overwrite' as 'overwrite' | 'keep' | 'rename',
-  includeWorkflows: true,
-  includeModels: true,
-  includeNodes: true,
-  includeGitHistory: true
+// Import analysis from API
+const importAnalysis = ref<ImportAnalysis | null>(null)
+
+// Import configuration (replaces old options)
+const importConfig = ref({
+  name: '',
+  modelStrategy: 'required' as 'all' | 'required' | 'skip',
+  torchBackend: 'auto'
 })
+const nameError = ref<string | null>(null)
 
 // Import progress
 const importProgress = ref({
@@ -216,41 +244,58 @@ const importProgress = ref({
   percent: 0
 })
 
-// Mock preview data (in real implementation, this would come from analyzing the file)
-const previewData = ref({
-  sourceEnvironment: 'production-env',
-  workflows: [
-    'workflow-1.json',
-    'workflow-2.json',
-    'complex-workflow.json'
-  ],
-  models: [
-    { filename: 'sd_xl_base_1.0.safetensors', size: 6938025472, type: 'Stable-diffusion' },
-    { filename: 'controlnet_canny.safetensors', size: 1445075712, type: 'ControlNet' },
-    { filename: 'vae.safetensors', size: 334643200, type: 'VAE' }
-  ],
-  nodes: [
-    'comfyui-impact-pack',
-    'comfyui-controlnet-aux',
-    'comfyui-custom-scripts'
-  ],
-  gitBranch: 'main',
-  gitCommit: 'a1b2c3d'
+// Transform ImportAnalysis to the format ImportPreview expects
+const previewData = computed(() => {
+  if (!importAnalysis.value) {
+    return {
+      sourceEnvironment: '',
+      workflows: [] as string[],
+      models: [] as Array<{ filename: string; size: number; type: string }>,
+      nodes: [] as string[],
+      gitBranch: undefined,
+      gitCommit: undefined
+    }
+  }
+
+  const analysis = importAnalysis.value
+  return {
+    sourceEnvironment: analysis.comfyui_version ? `ComfyUI ${analysis.comfyui_version}` : 'Unknown',
+    workflows: analysis.workflows.map(w => w.name),
+    models: analysis.models.map(m => ({
+      filename: m.filename,
+      size: 0,
+      type: m.relative_path.split('/')[0] || 'model'
+    })),
+    nodes: analysis.nodes.map(n => n.name),
+    gitBranch: undefined,
+    gitCommit: undefined
+  }
 })
 
 const canImport = computed(() => {
-  return importOptions.value.includeWorkflows ||
-         importOptions.value.includeModels ||
-         importOptions.value.includeNodes ||
-         importOptions.value.includeGitHistory
+  return !isLoadingPreview.value &&
+         !previewError.value &&
+         importAnalysis.value &&
+         importConfig.value.name.length > 0 &&
+         !nameError.value
 })
 
 // Handlers
-function handleFileSelected(file: File) {
+async function handleFileSelected(file: File) {
   selectedFile.value = file
+  isLoadingPreview.value = true
+  previewError.value = null
+  importAnalysis.value = null
 
-  // TODO: In real implementation, analyze the file to populate previewData
-  // For now, we're using mock data defined above
+  try {
+    const analysis = await previewTarballImport(file)
+    importAnalysis.value = analysis
+  } catch (err) {
+    previewError.value = err instanceof Error ? err.message : 'Failed to analyze file'
+    console.error('Preview error:', err)
+  } finally {
+    isLoadingPreview.value = false
+  }
 }
 
 function handleClearFile() {
@@ -258,11 +303,17 @@ function handleClearFile() {
   importComplete.value = false
   importSuccess.value = false
   importResultMessage.value = ''
+  importAnalysis.value = null
+  previewError.value = null
+  importConfig.value = { name: '', modelStrategy: 'required', torchBackend: 'auto' }
+  nameError.value = null
 }
 
 function handleReset() {
+  stopImportPolling()
   handleClearFile()
   isImporting.value = false
+  isLoadingPreview.value = false
   importProgress.value = {
     message: 'Preparing import...',
     detail: '',
@@ -270,43 +321,88 @@ function handleReset() {
   }
 }
 
+async function handleValidateName(name: string) {
+  if (!name) {
+    nameError.value = 'Environment name is required'
+    return
+  }
+  try {
+    const result = await validateEnvironmentName(name)
+    nameError.value = result.valid ? null : (result.error || 'Invalid name')
+  } catch {
+    nameError.value = 'Failed to validate name'
+  }
+}
+
 async function handleStartImport() {
-  if (!selectedFile.value) return
+  if (!selectedFile.value || !importConfig.value.name) return
 
   isImporting.value = true
   importComplete.value = false
+  importProgress.value = { message: `Creating environment '${importConfig.value.name}'...`, detail: '', percent: 0 }
 
-  // TODO: Implement actual import API call
-  // For now, simulate import progress
   try {
-    // Simulate progress steps
-    const steps = [
-      { message: 'Extracting archive...', detail: 'Unpacking export file', percent: 10 },
-      { message: 'Validating contents...', detail: 'Checking file integrity', percent: 25 },
-      { message: 'Importing workflows...', detail: `Processing ${previewData.value.workflows.length} workflows`, percent: 40 },
-      { message: 'Importing models...', detail: `Copying ${previewData.value.models.length} model files`, percent: 60 },
-      { message: 'Installing nodes...', detail: `Setting up ${previewData.value.nodes.length} custom nodes`, percent: 80 },
-      { message: 'Finalizing...', detail: 'Applying git history and configuration', percent: 95 }
-    ]
+    const result = await executeImport(
+      selectedFile.value,
+      importConfig.value.name,
+      importConfig.value.modelStrategy,
+      importConfig.value.torchBackend
+    )
 
-    for (const step of steps) {
-      importProgress.value = step
-      await new Promise(resolve => setTimeout(resolve, 800))
+    if (result.status === 'started') {
+      // Start polling for progress
+      startImportPolling()
+    } else {
+      // Error starting import
+      importSuccess.value = false
+      importResultMessage.value = result.message
+      isImporting.value = false
+      importComplete.value = true
     }
-
-    importProgress.value = { message: 'Complete!', detail: '', percent: 100 }
-    await new Promise(resolve => setTimeout(resolve, 500))
-
-    // Mock success
-    importSuccess.value = true
-    importResultMessage.value = `Successfully imported ${previewData.value.workflows.length} workflows, ${previewData.value.models.length} models, and ${previewData.value.nodes.length} custom nodes.`
-
   } catch (error) {
     importSuccess.value = false
     importResultMessage.value = error instanceof Error ? error.message : 'Unknown error occurred during import'
-  } finally {
     isImporting.value = false
     importComplete.value = true
+  }
+}
+
+function startImportPolling() {
+  if (importPollInterval) return
+
+  importPollInterval = setInterval(async () => {
+    try {
+      const progress = await getImportProgress()
+      importProgress.value = {
+        message: progress.message,
+        detail: '',
+        percent: progress.state === 'importing' ? 50 : (progress.state === 'complete' ? 100 : 0)
+      }
+
+      if (progress.state === 'complete') {
+        stopImportPolling()
+        importSuccess.value = true
+        importResultMessage.value = `Environment '${progress.environment_name}' created successfully`
+        isImporting.value = false
+        importComplete.value = true
+      } else if (progress.state === 'error') {
+        stopImportPolling()
+        importSuccess.value = false
+        importResultMessage.value = progress.error || progress.message
+        isImporting.value = false
+        importComplete.value = true
+      }
+    } catch (err) {
+      console.error('Failed to poll import progress:', err)
+      // Continue polling - might be transient
+    }
+  }, 2000) // Poll every 2 seconds
+}
+
+function stopImportPolling() {
+  if (importPollInterval) {
+    clearInterval(importPollInterval)
+    importPollInterval = null
   }
 }
 
@@ -326,53 +422,48 @@ function formatFileSize(bytes: number): string {
   gap: var(--cg-space-6);
 }
 
-.import-help {
-  background: var(--cg-color-bg-tertiary);
-  border: 1px solid var(--cg-color-border-subtle);
-  padding: var(--cg-space-4);
-}
-
-.help-content {
+/* Info Popover Steps */
+.help-steps {
   display: flex;
   flex-direction: column;
   gap: var(--cg-space-3);
-  margin-top: var(--cg-space-3);
 }
 
-.help-item {
+.help-step {
   display: flex;
   gap: var(--cg-space-3);
   align-items: flex-start;
 }
 
-.help-number {
+.step-number {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   background: var(--cg-color-accent-muted);
   color: var(--cg-color-accent);
   border: 1px solid var(--cg-color-accent);
-  font-size: var(--cg-font-size-base);
+  font-size: var(--cg-font-size-sm);
   font-weight: var(--cg-font-weight-bold);
   flex-shrink: 0;
 }
 
-.help-text {
+.step-content {
   flex: 1;
 }
 
-.help-title {
+.step-content strong {
   color: var(--cg-color-text-primary);
-  font-size: var(--cg-font-size-base);
-  font-weight: var(--cg-font-weight-semibold);
+  font-size: var(--cg-font-size-sm);
+  display: block;
   margin-bottom: var(--cg-space-1);
 }
 
-.help-description {
+.step-content p {
   color: var(--cg-color-text-secondary);
-  font-size: var(--cg-font-size-sm);
+  font-size: var(--cg-font-size-xs);
+  margin: 0;
 }
 
 /* Configure State */
@@ -547,5 +638,30 @@ function formatFileSize(bytes: number): string {
   display: flex;
   gap: var(--cg-space-3);
   margin-top: var(--cg-space-2);
+}
+
+/* Loading Preview State */
+.preview-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--cg-space-3);
+  padding: var(--cg-space-6);
+  background: var(--cg-color-bg-tertiary);
+  border: 1px solid var(--cg-color-border-subtle);
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--cg-color-border);
+  border-top-color: var(--cg-color-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.loading-text {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-sm);
 }
 </style>

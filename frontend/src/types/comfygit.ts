@@ -84,6 +84,27 @@ export interface ExportResult {
   message?: string
 }
 
+// Export Validation Types
+export interface ModelWithoutSource {
+  filename: string
+  hash: string
+  workflows: string[]
+}
+
+export interface ExportBlockingIssue {
+  type: 'uncommitted_workflows' | 'uncommitted_git_changes' | 'unresolved_issues'
+  message: string
+  details: string[]
+}
+
+export interface ExportValidationResult {
+  can_export: boolean
+  blocking_issues: ExportBlockingIssue[]
+  warnings: {
+    models_without_sources: ModelWithoutSource[]
+  }
+}
+
 export interface LogResult {
   commits: CommitInfo[]
   has_more: boolean
@@ -393,6 +414,63 @@ export interface RemoteSyncStatus {
   last_fetch?: string
 }
 
+// Push/Pull Types
+export interface PullPreview {
+  remote: string
+  branch: string
+  commits_behind: number
+  commits: CommitInfo[]
+  changes: {
+    workflows: {
+      added: string[]
+      modified: string[]
+      deleted: string[]
+    }
+    nodes: {
+      to_install: string[]
+      to_remove: string[]
+    }
+    models: {
+      referenced: string[]
+      count: number
+    }
+  }
+  has_uncommitted_changes: boolean
+  can_pull: boolean
+  block_reason: string | null
+}
+
+export interface PullResult {
+  status: 'success' | 'error'
+  pull_output: string
+  sync_result: {
+    nodes_installed: string[]
+    nodes_removed: string[]
+    models_queued: number
+    errors: string[]
+  }
+  message?: string
+}
+
+export interface PushPreview {
+  remote: string
+  branch: string
+  commits_ahead: number
+  commits: CommitInfo[]
+  has_uncommitted_changes: boolean
+  remote_has_new_commits: boolean
+  can_push: boolean
+  needs_force: boolean
+  block_reason: string | null
+}
+
+export interface PushResult {
+  status: 'success' | 'error'
+  push_output: string
+  commits_pushed: number
+  message?: string
+}
+
 // Interactive Workflow Resolution Types
 export interface ResolvedNode {
   node_type: string
@@ -608,4 +686,147 @@ export interface DownloadQueueItem {
 export interface DownloadQueue {
   items: DownloadQueueItem[]
   status: 'idle' | 'downloading' | 'paused'
+}
+
+// =============================================================================
+// Workflow Resolution Types (V2 - Simplified, workflows only)
+// =============================================================================
+
+/** Workflow file conflict requiring user resolution */
+export interface WorkflowConflict {
+  name: string  // Workflow filename without .json extension
+  conflict_type: 'both_modified' | 'delete_modify'
+  base_hash: string | null  // Hash of local version
+  target_hash: string | null  // Hash of incoming version
+}
+
+/** User's resolution choice for a workflow conflict */
+export interface WorkflowResolution {
+  name: string
+  resolution: 'take_base' | 'take_target'
+}
+
+// =============================================================================
+// Validation Types (Post-resolution, read-only display)
+// =============================================================================
+
+/** Node version conflict detected after workflow resolution */
+export interface NodeVersionConflict {
+  node_id: string
+  node_name: string
+  base_version: string  // Version in our branch
+  target_version: string  // Version in their branch
+  chosen_version: string  // Version that will be used
+  chosen_reason: string  // Explanation: "Required by workflow-b (theirs)"
+  affected_workflows: AffectedWorkflow[]
+}
+
+export interface AffectedWorkflow {
+  name: string
+  source: 'base' | 'target'  // Which branch this workflow came from
+  required_version: string
+}
+
+/** Result of merge validation after workflow resolutions */
+export interface MergeValidation {
+  is_compatible: boolean
+  node_conflicts: NodeVersionConflict[]
+  warnings: string[]  // Non-blocking warnings
+}
+
+// =============================================================================
+// Pull/Merge Preview Types (V2)
+// =============================================================================
+
+/** Extended PullPreview with workflow conflicts only */
+export interface PullPreviewWithConflicts extends PullPreview {
+  has_conflicts: boolean
+  workflow_conflicts: WorkflowConflict[]  // ONLY workflows, not nodes/deps
+}
+
+/** Type guard for preview with workflow conflicts */
+export function hasWorkflowConflicts(preview: PullPreview): preview is PullPreviewWithConflicts {
+  return 'has_conflicts' in preview &&
+         (preview as PullPreviewWithConflicts).has_conflicts === true &&
+         Array.isArray((preview as PullPreviewWithConflicts).workflow_conflicts)
+}
+
+// =============================================================================
+// Import Types (matches core library dataclasses)
+// =============================================================================
+
+/** Model analysis from import preview */
+export interface ModelAnalysis {
+  filename: string
+  hash: string | null
+  sources: string[]
+  relative_path: string
+  locally_available: boolean
+  needs_download: boolean
+  workflows: string[]
+}
+
+/** Node analysis from import preview */
+export interface NodeAnalysis {
+  name: string
+  source: string  // "registry" | "development" | "git"
+  install_spec: string | null
+  is_dev_node: boolean
+}
+
+/** Workflow analysis from import preview */
+export interface WorkflowAnalysis {
+  name: string
+  models_required: number
+  models_optional: number
+}
+
+/** Import analysis result from preview endpoint (matches core library ImportAnalysis dataclass) */
+export interface ImportAnalysis {
+  // ComfyUI version
+  comfyui_version: string | null
+  comfyui_version_type: string | null
+
+  // Models breakdown
+  models: ModelAnalysis[]
+  total_models: number
+  models_locally_available: number
+  models_needing_download: number
+  models_without_sources: number
+
+  // Nodes breakdown
+  nodes: NodeAnalysis[]
+  total_nodes: number
+  registry_nodes: number
+  dev_nodes: number
+  git_nodes: number
+
+  // Workflows
+  workflows: WorkflowAnalysis[]
+  total_workflows: number
+
+  // Summary flags
+  needs_model_downloads: boolean
+  needs_node_installs: boolean
+}
+
+/** Environment name validation result */
+export interface ValidateNameResult {
+  valid: boolean
+  name?: string
+  error?: string
+}
+
+/** Import start result */
+export interface ImportResult {
+  status: 'started' | 'error'
+  message: string
+}
+
+/** Import progress (polling response) */
+export interface ImportProgress {
+  state: 'idle' | 'importing' | 'complete' | 'error'
+  message: string
+  environment_name?: string | null
+  error?: string | null
 }

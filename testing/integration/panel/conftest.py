@@ -150,6 +150,12 @@ def panel_routes():
                 return handler
             return decorator
 
+        def patch(self, path):
+            def decorator(handler):
+                mock_routes_list.append(("PATCH", path, handler))
+                return handler
+            return decorator
+
     mock_prompt_server = MagicMock()
     mock_prompt_server.instance.routes = MockRoutes()
 

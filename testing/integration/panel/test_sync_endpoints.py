@@ -255,3 +255,178 @@ class TestExportEndpoint:
         assert resp.status == 500
         data = await resp.json()
         assert data["status"] == "error"
+
+
+@pytest.mark.integration
+class TestExportValidateEndpoint:
+    """POST /v2/comfygit/export/validate - Pre-flight validation for export."""
+
+    async def test_success_can_export_no_warnings(
+        self,
+        client,
+        mock_environment,
+        mock_env_status
+    ):
+        """Should return can_export=true with no warnings for clean environment."""
+        # Setup: Clean environment with no uncommitted changes
+        mock_env_status.workflow.sync_status.has_changes = False
+        mock_env_status.workflow.sync_status.new = []
+        mock_env_status.workflow.sync_status.modified = []
+        mock_env_status.workflow.sync_status.deleted = []
+        mock_env_status.workflow.is_commit_safe = True
+        mock_environment.workflow_manager.get_workflow_status.return_value = mock_env_status.workflow
+        mock_environment.git_manager.has_uncommitted_changes.return_value = False
+
+        # Mock pyproject with no models without sources
+        mock_pyproject = Mock()
+        mock_pyproject.models.get_all.return_value = []
+        mock_environment.pyproject = mock_pyproject
+
+        # Execute
+        resp = await client.post("/v2/comfygit/export/validate", json={})
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["can_export"] is True
+        assert len(data["blocking_issues"]) == 0
+        assert len(data["warnings"]["models_without_sources"]) == 0
+
+    async def test_blocked_uncommitted_workflows(
+        self,
+        client,
+        mock_environment,
+        mock_env_status
+    ):
+        """Should return can_export=false when workflows have uncommitted changes."""
+        # Setup: Uncommitted workflow changes
+        mock_env_status.workflow.sync_status.has_changes = True
+        mock_env_status.workflow.sync_status.new = ["new-workflow.json"]
+        mock_env_status.workflow.sync_status.modified = ["modified-workflow.json"]
+        mock_env_status.workflow.sync_status.deleted = []
+        mock_environment.workflow_manager.get_workflow_status.return_value = mock_env_status.workflow
+
+        # Execute
+        resp = await client.post("/v2/comfygit/export/validate", json={})
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["can_export"] is False
+        assert len(data["blocking_issues"]) >= 1
+        issue = next(i for i in data["blocking_issues"] if i["type"] == "uncommitted_workflows")
+        assert "new-workflow.json" in issue["details"]
+        assert "modified-workflow.json" in issue["details"]
+
+    async def test_blocked_uncommitted_git_changes(
+        self,
+        client,
+        mock_environment,
+        mock_env_status
+    ):
+        """Should return can_export=false when git has uncommitted changes."""
+        # Setup: No workflow changes but git has uncommitted changes
+        mock_env_status.workflow.sync_status.has_changes = False
+        mock_env_status.workflow.sync_status.new = []
+        mock_env_status.workflow.sync_status.modified = []
+        mock_env_status.workflow.sync_status.deleted = []
+        mock_env_status.workflow.is_commit_safe = True
+        mock_environment.workflow_manager.get_workflow_status.return_value = mock_env_status.workflow
+        mock_environment.git_manager.has_uncommitted_changes.return_value = True
+
+        # Execute
+        resp = await client.post("/v2/comfygit/export/validate", json={})
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["can_export"] is False
+        assert any(i["type"] == "uncommitted_git_changes" for i in data["blocking_issues"])
+
+    async def test_blocked_unresolved_issues(
+        self,
+        client,
+        mock_environment,
+        mock_env_status
+    ):
+        """Should return can_export=false when workflows have unresolved issues."""
+        # Setup: Workflows have unresolved issues
+        mock_env_status.workflow.sync_status.has_changes = False
+        mock_env_status.workflow.sync_status.new = []
+        mock_env_status.workflow.sync_status.modified = []
+        mock_env_status.workflow.sync_status.deleted = []
+        mock_env_status.workflow.is_commit_safe = False  # Has unresolved issues
+        mock_environment.workflow_manager.get_workflow_status.return_value = mock_env_status.workflow
+        mock_environment.git_manager.has_uncommitted_changes.return_value = False
+
+        # Execute
+        resp = await client.post("/v2/comfygit/export/validate", json={})
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["can_export"] is False
+        assert any(i["type"] == "unresolved_issues" for i in data["blocking_issues"])
+
+    async def test_warning_models_without_sources(
+        self,
+        client,
+        mock_environment,
+        mock_env_status
+    ):
+        """Should return warnings for models without source URLs."""
+        # Setup: Clean environment but models without sources
+        mock_env_status.workflow.sync_status.has_changes = False
+        mock_env_status.workflow.sync_status.new = []
+        mock_env_status.workflow.sync_status.modified = []
+        mock_env_status.workflow.sync_status.deleted = []
+        mock_env_status.workflow.is_commit_safe = True
+        mock_environment.workflow_manager.get_workflow_status.return_value = mock_env_status.workflow
+        mock_environment.git_manager.has_uncommitted_changes.return_value = False
+
+        # Mock pyproject with models without sources
+        mock_model = Mock()
+        mock_model.filename = "sd_xl_base_1.0.safetensors"
+        mock_model.hash = "abc123"
+        mock_model.sources = []  # No sources
+
+        mock_pyproject = Mock()
+        mock_pyproject.models.get_all.return_value = [mock_model]
+        mock_pyproject.workflows.get_all_with_resolutions.return_value = {
+            "portrait.json": Mock()
+        }
+
+        # Mock workflow models to reference the model without sources
+        mock_wf_model = Mock()
+        mock_wf_model.hash = "abc123"
+        mock_pyproject.workflows.get_workflow_models.return_value = [mock_wf_model]
+
+        mock_environment.pyproject = mock_pyproject
+
+        # Execute
+        resp = await client.post("/v2/comfygit/export/validate", json={})
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["can_export"] is True  # Warnings don't block export
+        assert len(data["blocking_issues"]) == 0
+        assert len(data["warnings"]["models_without_sources"]) == 1
+
+        model_warning = data["warnings"]["models_without_sources"][0]
+        assert model_warning["filename"] == "sd_xl_base_1.0.safetensors"
+        assert model_warning["hash"] == "abc123"
+        assert "portrait.json" in model_warning["workflows"]
+
+    async def test_error_no_environment(self, client, monkeypatch):
+        """Should return 500 when no environment detected."""
+        monkeypatch.setattr(
+            "comfygit_panel.get_environment_from_cwd",
+            lambda: None
+        )
+
+        resp = await client.post("/v2/comfygit/export/validate", json={})
+
+        assert resp.status == 500
+        data = await resp.json()
+        assert "error" in data

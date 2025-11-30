@@ -657,10 +657,6 @@
   border-left: 3px solid var(--cg-color-error);
 }
 
-[data-comfygit-theme="phosphor"] .toast-icon {
-  font-family: var(--cg-font-mono);
-}
-
 [data-comfygit-theme="phosphor"] .toast-message::before {
   content: '> ';
   opacity: 0.5;

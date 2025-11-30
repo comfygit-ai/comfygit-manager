@@ -168,6 +168,7 @@
           <!-- Status View -->
           <StatusSection
             v-if="currentView === 'status'"
+            ref="statusSectionRef"
             :status="status!"
             @switch-branch="handleSwitchBranchClick"
             @commit-changes="showCommitModal = true"
@@ -175,6 +176,7 @@
             @view-workflows="selectView('workflows', 'this-env')"
             @view-history="selectView('history', 'this-env')"
             @view-debug="selectView('debug-env', 'this-env')"
+            @repair-missing-models="handleRepairMissingModels"
           />
 
           <!-- Workflows View -->
@@ -242,7 +244,7 @@
           <ImportSection v-else-if="currentView === 'import'" />
 
           <!-- Remotes View -->
-          <RemotesSection v-else-if="currentView === 'remotes'" />
+          <RemotesSection v-else-if="currentView === 'remotes'" @toast="handleToast" />
         </template>
       </div>
     </div>
@@ -374,7 +376,6 @@
           :key="toast.id"
           :class="['toast', toast.type]"
         >
-          <span class="toast-icon">{{ getToastIcon(toast.type) }}</span>
           <span class="toast-message">{{ toast.message }}</span>
         </div>
       </transition-group>
@@ -428,7 +429,8 @@ const {
   createEnvironment,
   getCreateProgress,
   deleteEnvironment,
-  syncEnvironmentManually
+  syncEnvironmentManually,
+  repairWorkflowModels
 } = useComfyGitService()
 
 const orchestratorService = useOrchestratorService()
@@ -452,6 +454,7 @@ const showEnvironmentSelector = ref(false)
 // Ref to child components for triggering reloads
 const workflowsSectionRef = ref<{ loadWorkflows: (forceRefresh?: boolean) => Promise<void> } | null>(null)
 const environmentsSectionRef = ref<{ loadEnvironments: () => Promise<void> } | null>(null)
+const statusSectionRef = ref<{ resetRepairingState: () => void } | null>(null)
 
 // Environment switching modals
 const showConfirmSwitch = ref(false)
@@ -550,15 +553,6 @@ function showToast(message: string, type: Toast['type'] = 'info', duration = 300
 
 function removeToast(id: number) {
   toasts.value = toasts.value.filter(t => t.id !== id)
-}
-
-function getToastIcon(type: Toast['type']): string {
-  switch (type) {
-    case 'success': return '✓'
-    case 'warning': return '!'
-    case 'error': return '✕'
-    default: return '→'
-  }
 }
 
 function handleToast(message: string, type: Toast['type']) {
@@ -1060,6 +1054,24 @@ async function handleSyncConfirm() {
   } catch (err) {
     removeToast(toastId)
     showToast(`Sync error: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
+  }
+}
+
+async function handleRepairMissingModels(workflowNames: string[]) {
+  try {
+    const result = await repairWorkflowModels(workflowNames)
+
+    if (result.failed.length === 0) {
+      showToast(`✓ Repaired ${result.success} workflow${result.success === 1 ? '' : 's'}`, 'success')
+    } else {
+      showToast(`Repaired ${result.success}, failed: ${result.failed.length}`, 'warning')
+    }
+
+    await refresh()
+  } catch (err) {
+    showToast(`Repair failed: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
+  } finally {
+    statusSectionRef.value?.resetRepairingState()
   }
 }
 
@@ -1622,11 +1634,6 @@ onMounted(refresh)
 .toast.success { border-left: 3px solid var(--cg-color-success); }
 .toast.warning { border-left: 3px solid var(--cg-color-warning); }
 .toast.error { border-left: 3px solid var(--cg-color-error); }
-
-.toast-icon {
-  font-size: 10px;
-  font-weight: bold;
-}
 
 .toast-message {
   flex: 1;
