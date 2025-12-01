@@ -1,9 +1,26 @@
 import { fileURLToPath, URL } from 'node:url'
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
+// Read version from pyproject.toml
+function getVersion(): string {
+  try {
+    const pyproject = readFileSync('../pyproject.toml', 'utf-8')
+    const match = pyproject.match(/^version\s*=\s*"([^"]+)"/m)
+    return match ? match[1] : '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
+}
+
+const APP_VERSION = getVersion()
+
 export default defineConfig({
   plugins: [vue()],
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+  },
   test: {
     globals: true,
     environment: 'jsdom',
