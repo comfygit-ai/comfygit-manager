@@ -5,14 +5,44 @@
     :close-on-overlay-click="false"
     @close="$emit('close')"
   >
-    <!-- Custom header with settings button -->
+    <!-- Custom header with social buttons and settings -->
     <template #header>
       <h3 class="base-modal-title">WELCOME TO COMFYGIT</h3>
       <div class="header-actions">
+        <!-- Social links -->
+        <button class="icon-btn sponsor-btn" @click="openLink('https://github.com/sponsors/comfyhub-org')" title="Sponsor ComfyHub" aria-label="Sponsor ComfyHub on GitHub">
+          Sponsor
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 14s-5.5-3.5-5.5-7A3.5 3.5 0 0 1 6 3.5c1.1 0 2 .5 2 .5s.9-.5 2-.5a3.5 3.5 0 0 1 3.5 3.5c0 3.5-5.5 7-5.5 7z"/>
+          </svg>
+        </button>
+        <button class="icon-btn social-link" @click="openLink('https://discord.gg/2h5rSTeh6Y')" title="Join Discord" aria-label="Join ComfyHub Discord">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M13.545 2.907a13.227 13.227 0 0 0-3.257-1.011.05.05 0 0 0-.052.025c-.141.25-.297.577-.406.833a12.19 12.19 0 0 0-3.658 0 8.258 8.258 0 0 0-.412-.833.051.051 0 0 0-.052-.025c-1.125.194-2.22.534-3.257 1.011a.041.041 0 0 0-.021.018C.356 6.024-.213 9.047.066 12.032c.001.014.01.028.021.037a13.276 13.276 0 0 0 3.995 2.02.05.05 0 0 0 .056-.019c.308-.42.582-.863.818-1.329a.05.05 0 0 0-.027-.07 8.735 8.735 0 0 1-1.248-.595.05.05 0 0 1-.005-.083c.084-.063.168-.129.248-.195a.05.05 0 0 1 .051-.007c2.619 1.196 5.454 1.196 8.041 0a.052.052 0 0 1 .053.007c.08.066.164.132.248.195a.051.051 0 0 1-.004.085c-.399.233-.813.44-1.249.594a.05.05 0 0 0-.027.07c.24.465.515.909.817 1.329a.05.05 0 0 0 .056.019 13.235 13.235 0 0 0 4.001-2.02.049.049 0 0 0 .021-.037c.334-3.451-.559-6.449-2.366-9.106a.034.034 0 0 0-.02-.019zM5.347 10.64c-.79 0-1.44-.724-1.44-1.612 0-.889.637-1.613 1.44-1.613.807 0 1.451.733 1.44 1.613 0 .888-.637 1.612-1.44 1.612zm5.316 0c-.788 0-1.44-.724-1.44-1.612 0-.889.637-1.613 1.44-1.613.808 0 1.451.733 1.44 1.613 0 .888-.632 1.612-1.44 1.612z"/>
+          </svg>
+        </button>
+        <button class="icon-btn social-link" @click="openLink('https://x.com/akatz_ai')" title="Follow on X" aria-label="Follow on X">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M12.6.75h2.454l-5.36 6.142L16 15.25h-4.937l-3.867-5.07-4.425 5.07H.316l5.733-6.57L0 .75h5.063l3.495 4.633L12.601.75zm-.86 13.028h1.36L4.323 2.145H2.865l8.875 11.633z"/>
+          </svg>
+        </button>
+        <button class="icon-btn social-link" @click="openLink('https://github.com/comfyhub-org/comfygit')" title="View on GitHub" aria-label="View ComfyGit on GitHub">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+        </button>
+        <button class="icon-btn social-link" @click="openLink('https://docs.comfyhub.org/comfygit/')" title="Documentation" aria-label="View ComfyGit Documentation">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 1.783C7.015.936 5.587.81 4.287.94c-1.514.153-3.042.672-3.994 1.105A.5.5 0 0 0 0 2.5v11a.5.5 0 0 0 .707.455c.882-.4 2.303-.881 3.68-1.02 1.409-.142 2.59.087 3.223.877a.5.5 0 0 0 .78 0c.633-.79 1.814-1.019 3.222-.877 1.378.139 2.8.62 3.681 1.02A.5.5 0 0 0 16 13.5v-11a.5.5 0 0 0-.293-.455c-.952-.433-2.48-.952-3.994-1.105C10.413.809 8.985.936 8 1.783z"/>
+          </svg>
+        </button>
+
+        <span class="header-divider"></span>
+
         <!-- Settings button: show when workspace exists (step 2, or step 1 after workspace created) -->
         <button
           v-if="showSettingsButton"
-          class="settings-btn"
+          class="icon-btn settings-btn"
           title="Workspace Settings"
           @click="showSettingsModal = true"
         >
@@ -21,7 +51,7 @@
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>
         </button>
-        <button class="base-modal-close" @click="$emit('close')">
+        <button class="icon-btn" @click="$emit('close')" title="Close">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
             <path d="M4.28 3.22a.75.75 0 0 0-1.06 1.06L6.94 8l-3.72 3.72a.75.75 0 1 0 1.06 1.06L8 9.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L9.06 8l3.72-3.72a.75.75 0 0 0-1.06-1.06L8 6.94 4.28 3.22z"/>
           </svg>
@@ -248,47 +278,58 @@
     </template>
 
     <template #footer>
-      <template v-if="currentStep === 1">
-        <BaseButton
-          variant="primary"
-          :disabled="!canProceedStep1 || isCreatingWorkspace"
-          @click="handleStep1Next"
-        >
-          {{ isCreatingWorkspace ? 'Creating...' : 'Next' }}
-        </BaseButton>
-      </template>
+      <div class="wizard-footer">
+        <!-- Version and made by info -->
+        <div class="wizard-footer-info">
+          <span class="version">v0.0.1</span>
+          <span class="made-by">made with <svg class="heart-icon" width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M8 14s-5.5-3.5-5.5-7A3.5 3.5 0 0 1 6 3.5c1.1 0 2 .5 2 .5s.9-.5 2-.5a3.5 3.5 0 0 1 3.5 3.5c0 3.5-5.5 7-5.5 7z"/></svg> by Akatz</span>
+        </div>
 
-      <template v-else-if="currentStep === 2">
-        <!-- Back button: hide entirely during creation/import, and hide at landing if workspace already created -->
-        <BaseButton
-          v-if="!isCreatingEnvironment && !isImporting && (wizardMode !== 'landing' || (props.setupState === 'no_workspace' && !createdWorkspacePath))"
-          variant="secondary"
-          @click="handleBack"
-        >
-          Back
-        </BaseButton>
+        <!-- Action buttons -->
+        <div class="wizard-footer-actions">
+          <template v-if="currentStep === 1">
+            <BaseButton
+              variant="primary"
+              :disabled="!canProceedStep1 || isCreatingWorkspace"
+              @click="handleStep1Next"
+            >
+              {{ isCreatingWorkspace ? 'Creating...' : 'Next' }}
+            </BaseButton>
+          </template>
 
-        <!-- Create button (only in create mode) -->
-        <BaseButton
-          v-if="wizardMode === 'create'"
-          variant="primary"
-          :disabled="!canProceedStep2 || isCreatingEnvironment"
-          @click="handleStep2Create"
-        >
-          {{ isCreatingEnvironment ? 'Creating...' : (switchAfter ? 'Create & Switch' : 'Create Environment') }}
-        </BaseButton>
+          <template v-else-if="currentStep === 2">
+            <!-- Back button: hide entirely during creation/import, and hide at landing if workspace already created -->
+            <BaseButton
+              v-if="!isCreatingEnvironment && !isImporting && (wizardMode !== 'landing' || (props.setupState === 'no_workspace' && !createdWorkspacePath))"
+              variant="secondary"
+              @click="handleBack"
+            >
+              Back
+            </BaseButton>
 
-        <!-- Switch to existing button (only in landing mode with selection) -->
-        <BaseButton
-          v-if="wizardMode === 'landing' && selectedEnv"
-          variant="primary"
-          @click="handleSwitchToExisting"
-        >
-          Switch to {{ selectedEnv }}
-        </BaseButton>
+            <!-- Create button (only in create mode) -->
+            <BaseButton
+              v-if="wizardMode === 'create'"
+              variant="primary"
+              :disabled="!canProceedStep2 || isCreatingEnvironment"
+              @click="handleStep2Create"
+            >
+              {{ isCreatingEnvironment ? 'Creating...' : (switchAfter ? 'Create & Switch' : 'Create Environment') }}
+            </BaseButton>
 
-        <!-- Import mode has its own buttons in ImportFlow -->
-      </template>
+            <!-- Switch to existing button (only in landing mode with selection) -->
+            <BaseButton
+              v-if="wizardMode === 'landing' && selectedEnv"
+              variant="primary"
+              @click="handleSwitchToExisting"
+            >
+              Switch to {{ selectedEnv }}
+            </BaseButton>
+
+            <!-- Import mode has its own buttons in ImportFlow -->
+          </template>
+        </div>
+      </div>
     </template>
   </BaseModal>
 
@@ -337,6 +378,10 @@ const {
   getImportProgress,
   getComfyUIReleases
 } = useComfyGitService()
+
+function openLink(url: string) {
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
 
 // Step state
 const currentStep = ref(props.initialStep || 1)
@@ -864,37 +909,7 @@ async function resumeCreationPolling() {
   gap: var(--cg-space-2);
 }
 
-.settings-btn {
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--cg-color-text-primary);
-  cursor: pointer;
-  padding: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.settings-btn:hover {
-  background: var(--cg-color-bg-hover);
-  border-color: var(--cg-color-border-subtle);
-}
-
-.base-modal-close {
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--cg-color-text-primary);
-  cursor: pointer;
-  padding: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.base-modal-close:hover {
-  background: var(--cg-color-bg-hover);
-  border-color: var(--cg-color-border-subtle);
-}
+/* Settings button inherits from .icon-btn */
 
 .wizard-step {
   min-height: 300px;
@@ -1216,5 +1231,93 @@ async function resumeCreationPolling() {
 .loading-text {
   color: var(--cg-color-text-muted);
   font-size: var(--cg-font-size-sm);
+}
+
+/* Icon buttons */
+.icon-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--cg-color-text-primary);
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn:hover {
+  background: var(--cg-color-bg-hover);
+  border-color: var(--cg-color-border-subtle);
+}
+
+/* Sponsor button */
+.sponsor-btn {
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--cg-color-border-subtle);
+  color: var(--cg-color-text-secondary);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  opacity: 0.7;
+}
+
+.sponsor-btn:hover {
+  opacity: 1;
+  border-color: #db61a2;
+  color: #db61a2;
+}
+
+/* Social link icons - slightly muted until hover */
+.icon-btn.social-link {
+  opacity: 0.7;
+}
+
+.icon-btn.social-link:hover {
+  opacity: 1;
+}
+
+/* Header divider between social links and panel controls */
+.header-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--cg-color-border-subtle);
+  margin: 0 4px;
+  align-self: center;
+}
+
+/* Wizard footer */
+.wizard-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.wizard-footer-info {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-3);
+  font-size: 10px;
+  color: var(--cg-color-text-muted);
+}
+
+.wizard-footer-info .version {
+  opacity: 0.7;
+}
+
+.wizard-footer-info .made-by {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.wizard-footer-info .heart-icon {
+  color: #db61a2;
+}
+
+.wizard-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
 }
 </style>
