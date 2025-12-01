@@ -126,7 +126,7 @@ async def deploy_to_runpod(request: web.Request, workspace) -> web.Response:
     Request body:
         gpu_type_id: GPU type (e.g., "NVIDIA GeForce RTX 4090")
         pod_name: Name for the pod
-        volume_size_gb: Volume size (optional, default 50)
+        network_volume_id: Network volume to attach (for persistent storage)
         cloud_type: "SECURE" or "COMMUNITY" (optional, default "SECURE")
 
     Returns:
@@ -143,7 +143,7 @@ async def deploy_to_runpod(request: web.Request, workspace) -> web.Response:
     data = await request.json()
     gpu_type_id = data.get("gpu_type_id")
     pod_name = data.get("pod_name", "comfygit-deploy")
-    volume_size_gb = data.get("volume_size_gb", 50)
+    network_volume_id = data.get("network_volume_id")
     cloud_type = data.get("cloud_type", "SECURE")
 
     client = RunPodClient(api_key)
@@ -154,8 +154,8 @@ async def deploy_to_runpod(request: web.Request, workspace) -> web.Response:
             name=pod_name,
             image_name="runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04",
             gpu_type_id=gpu_type_id,
-            volume_in_gb=volume_size_gb,
             cloud_type=cloud_type,
+            network_volume_id=network_volume_id,
             ports=["8188/http", "22/tcp"],
         )
 
@@ -207,3 +207,61 @@ async def get_runpod_key_status(request: web.Request, workspace) -> web.Response
             "configured": False,
             "key_suffix": None,
         })
+
+
+@routes.get("/v2/comfygit/deploy/runpod/volumes")
+@requires_workspace
+async def get_runpod_volumes(request: web.Request, workspace) -> web.Response:
+    """List user's network volumes.
+
+    Returns:
+        volumes: List of volume objects with id, name, size_gb, data_center_id
+    """
+    api_key = workspace.workspace_config_manager.get_runpod_token()
+    if not api_key:
+        return web.json_response(
+            {"status": "error", "error": "RunPod API key not configured"},
+            status=400,
+        )
+
+    client = RunPodClient(api_key)
+    volumes = await client.list_network_volumes()
+
+    # Transform to consistent API format
+    result_volumes = [
+        {
+            "id": vol.get("id"),
+            "name": vol.get("name"),
+            "size_gb": vol.get("size"),
+            "data_center_id": vol.get("dataCenterId"),
+        }
+        for vol in volumes
+    ]
+
+    return web.json_response({"volumes": result_volumes})
+
+
+@routes.get("/v2/comfygit/deploy/runpod/gpu-types")
+@requires_workspace
+async def get_runpod_gpu_types(request: web.Request, workspace) -> web.Response:
+    """Get available GPU types.
+
+    Query params:
+        data_center_id: Optional filter by data center
+
+    Returns:
+        gpu_types: List of GPU type objects
+    """
+    api_key = workspace.workspace_config_manager.get_runpod_token()
+    if not api_key:
+        return web.json_response(
+            {"status": "error", "error": "RunPod API key not configured"},
+            status=400,
+        )
+
+    data_center_id = request.query.get("data_center_id")
+
+    client = RunPodClient(api_key)
+    gpu_types = await client.get_gpu_types(data_center_id=data_center_id)
+
+    return web.json_response({"gpu_types": gpu_types})

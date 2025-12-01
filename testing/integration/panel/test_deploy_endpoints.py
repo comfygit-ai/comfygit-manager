@@ -266,3 +266,169 @@ class TestRunPodKeyStatus:
         data = await resp.json()
         assert data["configured"] is False
         assert data.get("key_suffix") is None
+
+
+@pytest.mark.integration
+class TestRunPodGetNetworkVolumes:
+    """GET /v2/comfygit/deploy/runpod/volumes - List user's network volumes."""
+
+    async def test_success_with_volumes(self, client, mock_workspace_context):
+        """Should return 200 with volumes list."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.list_network_volumes.return_value = [
+                {
+                    "id": "5aio30csvw",
+                    "name": "comfygit_workspace",
+                    "size": 100,
+                    "dataCenterId": "US-IL-1",
+                }
+            ]
+            MockClient.return_value = mock_client
+
+            resp = await client.get("/v2/comfygit/deploy/runpod/volumes")
+
+            assert resp.status == 200
+            data = await resp.json()
+            assert "volumes" in data
+            assert len(data["volumes"]) == 1
+            vol = data["volumes"][0]
+            assert vol["id"] == "5aio30csvw"
+            assert vol["name"] == "comfygit_workspace"
+            assert vol["size_gb"] == 100
+            assert vol["data_center_id"] == "US-IL-1"
+
+    async def test_success_empty_volumes(self, client, mock_workspace_context):
+        """Should return 200 with empty volumes list."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.list_network_volumes.return_value = []
+            MockClient.return_value = mock_client
+
+            resp = await client.get("/v2/comfygit/deploy/runpod/volumes")
+
+            assert resp.status == 200
+            data = await resp.json()
+            assert data["volumes"] == []
+
+    async def test_error_no_api_key(self, client, mock_workspace_context):
+        """Should return 400 when no API key configured."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = None
+
+        resp = await client.get("/v2/comfygit/deploy/runpod/volumes")
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "api key" in data.get("error", "").lower()
+
+
+@pytest.mark.integration
+class TestRunPodGetGpuTypes:
+    """GET /v2/comfygit/deploy/runpod/gpu-types - Get available GPU types."""
+
+    async def test_success_all_gpus(self, client, mock_workspace_context):
+        """Should return 200 with all GPU types when no filter."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.get_gpu_types.return_value = [
+                {
+                    "id": "NVIDIA RTX 4090",
+                    "displayName": "RTX 4090",
+                    "memoryInGb": 24,
+                    "secureCloud": 0.44,
+                    "communityCloud": 0.34,
+                    "lowestPrice": {"minimumBidPrice": 0.34},
+                },
+                {
+                    "id": "NVIDIA RTX A6000",
+                    "displayName": "RTX A6000",
+                    "memoryInGb": 48,
+                    "secureCloud": 0.79,
+                    "communityCloud": 0.59,
+                    "lowestPrice": {"minimumBidPrice": 0.59},
+                },
+            ]
+            MockClient.return_value = mock_client
+
+            resp = await client.get("/v2/comfygit/deploy/runpod/gpu-types")
+
+            assert resp.status == 200
+            data = await resp.json()
+            assert "gpu_types" in data
+            assert len(data["gpu_types"]) == 2
+            gpu = data["gpu_types"][0]
+            assert gpu["id"] == "NVIDIA RTX 4090"
+            assert gpu["displayName"] == "RTX 4090"
+            assert gpu["memoryInGb"] == 24
+
+    async def test_success_filtered_by_data_center(self, client, mock_workspace_context):
+        """Should filter GPUs by data center when provided."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            # Simulate filtered response
+            mock_client.get_gpu_types.return_value = [
+                {
+                    "id": "NVIDIA RTX 4090",
+                    "displayName": "RTX 4090",
+                    "memoryInGb": 24,
+                    "secureCloud": 0.44,
+                    "communityCloud": 0.34,
+                    "lowestPrice": {"minimumBidPrice": 0.34},
+                },
+            ]
+            MockClient.return_value = mock_client
+
+            resp = await client.get("/v2/comfygit/deploy/runpod/gpu-types?data_center_id=US-IL-1")
+
+            assert resp.status == 200
+            mock_client.get_gpu_types.assert_called_once_with(data_center_id="US-IL-1")
+
+    async def test_error_no_api_key(self, client, mock_workspace_context):
+        """Should return 400 when no API key configured."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = None
+
+        resp = await client.get("/v2/comfygit/deploy/runpod/gpu-types")
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "api key" in data.get("error", "").lower()
+
+
+@pytest.mark.integration
+class TestRunPodDeployWithNetworkVolume:
+    """POST /v2/comfygit/deploy/runpod - Deploy with network volume."""
+
+    async def test_success_with_network_volume(self, client, mock_workspace_context):
+        """Should deploy with network_volume_id instead of volume_size_gb."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.create_pod.return_value = {"id": "newpod123", "name": "test"}
+            MockClient.return_value = mock_client
+
+            resp = await client.post(
+                "/v2/comfygit/deploy/runpod",
+                json={
+                    "gpu_type_id": "NVIDIA GeForce RTX 4090",
+                    "pod_name": "my-comfyui",
+                    "network_volume_id": "5aio30csvw",
+                },
+            )
+
+            assert resp.status == 200
+            data = await resp.json()
+            assert data["status"] == "success"
+            assert data["pod_id"] == "newpod123"
+
+            # Verify network_volume_id was passed to create_pod
+            call_kwargs = mock_client.create_pod.call_args[1]
+            assert call_kwargs.get("network_volume_id") == "5aio30csvw"

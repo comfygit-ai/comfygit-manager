@@ -483,3 +483,37 @@ class TestRunPodGPUTypes:
         assert "NVIDIA GeForce RTX 3090" in GPU_TYPES
         assert "NVIDIA A100 80GB PCIe" in GPU_TYPES
         assert "NVIDIA H100 80GB HBM3" in GPU_TYPES
+
+    @pytest.mark.asyncio
+    async def test_get_gpu_types_returns_list(self):
+        """Should return list of GPU types with display info."""
+        from server.deploy.runpod_client import RunPodClient
+
+        client = RunPodClient(api_key="test")
+        gpu_types = await client.get_gpu_types()
+
+        assert len(gpu_types) > 0
+        # Check first GPU has expected fields
+        gpu = gpu_types[0]
+        assert "id" in gpu
+        assert "displayName" in gpu
+        assert "memoryInGb" in gpu
+
+    @pytest.mark.asyncio
+    async def test_get_gpu_types_accepts_data_center_filter(self):
+        """Should accept data_center_id parameter (for API compatibility)."""
+        from server.deploy.runpod_client import RunPodClient
+
+        client = RunPodClient(api_key="test")
+        # Should not raise - filter accepted but not implemented
+        gpu_types = await client.get_gpu_types(data_center_id="US-IL-1")
+        assert len(gpu_types) > 0
+
+    def test_estimate_gpu_memory(self):
+        """Should estimate GPU memory based on model name."""
+        from server.deploy.runpod_client import RunPodClient
+
+        assert RunPodClient._estimate_gpu_memory("NVIDIA GeForce RTX 4090") == 24
+        assert RunPodClient._estimate_gpu_memory("NVIDIA A100 80GB PCIe") == 80
+        assert RunPodClient._estimate_gpu_memory("NVIDIA H100 80GB HBM3") == 80
+        assert RunPodClient._estimate_gpu_memory("Unknown GPU") == 24  # Default

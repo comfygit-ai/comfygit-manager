@@ -572,6 +572,58 @@ class RunPodClient:
         return True
 
     # =========================================================================
+    # GPU Types (derived from static list - no REST endpoint available)
+    # =========================================================================
+
+    async def get_gpu_types(self, data_center_id: str | None = None) -> list[dict]:
+        """Get available GPU types.
+
+        Note: The RunPod REST API doesn't have a GPU types endpoint.
+        This returns the static GPU_TYPES list. The data_center_id filter
+        is accepted for API compatibility but doesn't filter results
+        since availability data isn't available via REST API.
+
+        Args:
+            data_center_id: Optional data center filter (not implemented)
+
+        Returns:
+            List of GPU type objects with id and display info
+        """
+        # Return GPU types with basic info
+        # Real pricing/availability would require GraphQL API
+        return [
+            {
+                "id": gpu_id,
+                "displayName": gpu_id.replace("NVIDIA ", "").replace("GeForce ", ""),
+                "memoryInGb": self._estimate_gpu_memory(gpu_id),
+                "secureCloud": None,  # Pricing not available via REST API
+                "communityCloud": None,
+                "lowestPrice": None,
+            }
+            for gpu_id in GPU_TYPES
+        ]
+
+    @staticmethod
+    def _estimate_gpu_memory(gpu_id: str) -> int:
+        """Estimate GPU memory based on model name."""
+        memory_map = {
+            "RTX 4090": 24, "RTX 5090": 32, "RTX 5080": 16,
+            "RTX 4080": 16, "RTX 3090": 24, "RTX 3080": 10,
+            "RTX 3070": 8, "RTX 4070": 12,
+            "A100 80GB": 80, "A100-SXM4-80GB": 80,
+            "H100 80GB": 80, "H100 PCIe": 80, "H100 NVL": 94, "H200": 141, "B200": 192,
+            "A40": 48, "A30": 24, "L40S": 48, "L40": 48, "L4": 24,
+            "RTX A6000": 48, "RTX A5000": 24, "RTX A4500": 20, "RTX A4000": 16,
+            "RTX 6000 Ada": 48, "RTX 5000 Ada": 32, "RTX 4000 Ada": 20,
+            "V100": 16, "V100-SXM2-32GB": 32,
+            "MI300X": 192,
+        }
+        for key, mem in memory_map.items():
+            if key in gpu_id:
+                return mem
+        return 24  # Default
+
+    # =========================================================================
     # Static Helper Methods
     # =========================================================================
 
