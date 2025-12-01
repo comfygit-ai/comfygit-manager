@@ -5,7 +5,7 @@ description = "ComfyGit Manager - Node for managing comfygit environments in Com
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "comfygit-core",
+    "comfygit-core>=0.3.0",
     "watchdog>=6.0.0",
 ]
 
