@@ -68,12 +68,10 @@
               :placeholder="isBlockedByIssues ? 'Enable \'Allow issues\' to commit' : hasChanges ? 'Describe your changes...' : 'No changes'"
               :disabled="!hasChanges || isLoading || isBlockedByIssues"
               :rows="3"
+              :submit-on-enter="true"
               @ctrl-enter="handleCommit"
+              @submit="handleCommit"
             />
-          </div>
-
-          <div v-if="result" :class="['result', result.type]">
-            {{ result.message }}
           </div>
         </div>
 
@@ -161,12 +159,10 @@
           :placeholder="isBlockedByIssues ? 'Enable \'Allow issues\' to commit' : hasChanges ? 'Describe your changes...' : 'No changes'"
           :disabled="!hasChanges || isLoading || isBlockedByIssues"
           :rows="3"
+          :submit-on-enter="true"
           @ctrl-enter="handleCommit"
+          @submit="handleCommit"
         />
-      </div>
-
-      <div v-if="result" :class="['result', result.type]">
-        {{ result.message }}
       </div>
     </div>
 
@@ -203,7 +199,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   close: []
-  committed: []
+  committed: [result: { success: boolean; message: string }]
 }>()
 
 const { commit } = useComfyGitService()
@@ -211,7 +207,6 @@ const { commit } = useComfyGitService()
 const message = ref('')
 const isLoading = ref(false)
 const allowIssues = ref(false)
-const result = ref<{ type: 'success' | 'error', message: string } | null>(null)
 
 const hasChanges = computed(() => {
   if (!props.status) return false
@@ -245,31 +240,22 @@ async function handleCommit() {
   if (!hasChanges.value || !message.value.trim() || isLoading.value) return
 
   isLoading.value = true
-  result.value = null
 
   try {
     const res = await commit(message.value.trim(), allowIssues.value)
 
     if (res.status === 'success') {
-      result.value = {
-        type: 'success',
-        message: `Committed: ${res.summary?.new || 0} new, ${res.summary?.modified || 0} modified, ${res.summary?.deleted || 0} deleted`
-      }
-      message.value = ''
-      allowIssues.value = false
-      setTimeout(() => emit('committed'), 1000)
+      const successMessage = `Committed: ${res.summary?.new || 0} new, ${res.summary?.modified || 0} modified, ${res.summary?.deleted || 0} deleted`
+      emit('committed', { success: true, message: successMessage })
     } else if (res.status === 'no_changes') {
-      result.value = { type: 'error', message: 'No changes to commit' }
+      emit('committed', { success: false, message: 'No changes to commit' })
     } else if (res.status === 'blocked') {
-      result.value = {
-        type: 'error',
-        message: 'Commit blocked - enable "Allow issues" to force commit'
-      }
+      emit('committed', { success: false, message: 'Commit blocked - enable "Allow issues" to force commit' })
     } else {
-      result.value = { type: 'error', message: res.message || 'Commit failed' }
+      emit('committed', { success: false, message: res.message || 'Commit failed' })
     }
   } catch (err) {
-    result.value = { type: 'error', message: err instanceof Error ? err.message : 'Commit failed' }
+    emit('committed', { success: false, message: err instanceof Error ? err.message : 'Commit failed' })
   } finally {
     isLoading.value = false
   }
@@ -400,25 +386,6 @@ async function handleCommit() {
 
 .message-section {
   margin-bottom: 8px;
-}
-
-.result {
-  padding: 6px 8px;
-  border-radius: var(--cg-radius-md);
-  font-size: var(--cg-font-size-xs);
-  margin-top: 8px;
-}
-
-.result.success {
-  background: var(--cg-color-success-muted);
-  border: 1px solid var(--cg-color-success);
-  color: #86efac;
-}
-
-.result.error {
-  background: var(--cg-color-error-muted);
-  border: 1px solid var(--cg-color-error);
-  color: #fca5a5;
 }
 
 .issues-error {

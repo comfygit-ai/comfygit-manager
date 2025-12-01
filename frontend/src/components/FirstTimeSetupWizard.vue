@@ -98,10 +98,15 @@
 
         <template v-else>
         <!-- CLI Warning Banner -->
-        <div v-if="!props.cliInstalled" class="cli-warning">
+        <div v-if="!props.cliInstalled && !cliWarningDismissed" class="cli-warning">
           <div class="cli-warning-header">
             <span class="cli-warning-icon">!</span>
             <span class="cli-warning-title">ComfyGit CLI Not Installed</span>
+            <button class="cli-warning-close" @click="cliWarningDismissed = true" title="Dismiss">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M4.28 3.22a.75.75 0 0 0-1.06 1.06L6.94 8l-3.72 3.72a.75.75 0 1 0 1.06 1.06L8 9.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L9.06 8l3.72-3.72a.75.75 0 0 0-1.06-1.06L8 6.94 4.28 3.22z"/>
+              </svg>
+            </button>
           </div>
           <p class="cli-warning-text">
             To start managed environments from the command line, you'll need the ComfyGit CLI.
@@ -362,6 +367,7 @@ type WizardMode = 'landing' | 'create' | 'import'
 const wizardMode = ref<WizardMode>('landing')
 const showSettingsModal = ref(false)
 const isImporting = ref(false)
+const cliWarningDismissed = ref(false)
 const resumingImport = ref(false)  // True when resuming a detected in-progress import
 const detectedImportProgress = ref<{ message: string; phase: string; progress: number; environmentName: string } | null>(null)
 // True while checking for in-progress operations on step 2 mount
@@ -989,6 +995,27 @@ async function resumeCreationPolling() {
   align-items: center;
   gap: var(--cg-space-2);
   margin-bottom: var(--cg-space-2);
+}
+
+.cli-warning-title {
+  flex: 1;
+}
+
+.cli-warning-close {
+  background: transparent;
+  border: none;
+  color: var(--cg-color-text-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+}
+
+.cli-warning-close:hover {
+  opacity: 1;
+  color: var(--cg-color-text-primary);
 }
 
 .cli-warning-icon {

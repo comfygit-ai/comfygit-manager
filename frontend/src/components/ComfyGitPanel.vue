@@ -1071,10 +1071,10 @@ function cancelEnvironmentSwitch() {
 }
 
 // Commit and Sync handlers
-async function handleCommitSuccess() {
+async function handleCommitSuccess(result: { success: boolean; message: string }) {
   showCommitModal.value = false
   await refresh()
-  showToast('✓ Changes committed', 'success')
+  showToast(result.message, result.success ? 'success' : 'error')
 }
 
 async function handleSyncConfirm() {

@@ -10,6 +10,7 @@
       @input="$emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
       @keydown.ctrl.enter="$emit('ctrlEnter')"
       @keydown.meta.enter="$emit('ctrlEnter')"
+      @keydown.enter="handleEnter"
     ></textarea>
     <div v-if="showCharCount && maxLength" class="base-textarea-count">
       {{ modelValue.length }} / {{ maxLength }}
@@ -18,23 +19,38 @@
 </template>
 
 <script setup lang="ts">
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   modelValue: string
   rows?: number
   placeholder?: string
   disabled?: boolean
   maxLength?: number
   showCharCount?: boolean
+  submitOnEnter?: boolean  // If true, Enter key emits 'submit' instead of inserting newline
 }>(), {
   rows: 3,
   disabled: false,
-  showCharCount: false
+  showCharCount: false,
+  submitOnEnter: false
 })
 
-defineEmits<{
+const emit = defineEmits<{
   'update:modelValue': [value: string]
   ctrlEnter: []
+  submit: []
 }>()
+
+function handleEnter(event: KeyboardEvent) {
+  // Shift+Enter always inserts newline (default behavior)
+  // Ctrl/Meta+Enter is handled separately
+  if (event.shiftKey || event.ctrlKey || event.metaKey) return
+
+  // If submitOnEnter is enabled, Enter key submits instead of newline
+  if (props.submitOnEnter) {
+    event.preventDefault()
+    emit('submit')
+  }
+}
 </script>
 
 <style scoped>

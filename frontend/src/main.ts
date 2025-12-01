@@ -198,8 +198,9 @@ function showCommitPopover(anchorElement: HTMLElement) {
     render: () => h(CommitPopover, {
       status: globalStatus.value,
       onClose: closeCommitPopover,
-      onCommitted: () => {
+      onCommitted: (result: { success: boolean; message: string }) => {
         closeCommitPopover()
+        showCommitToast(result.success, result.message)
         fetchStatus().then(updateCommitIndicator)
       }
     })
@@ -218,6 +219,56 @@ function closeCommitPopover() {
     commitPopover.remove()
     commitPopover = null
   }
+}
+
+function showCommitToast(success: boolean, message: string) {
+  const toast = document.createElement('div')
+  const borderColor = success ? '#22c55e' : '#ef4444'
+  const bgColor = success ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)'
+
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-color, #1a1a1a);
+    border: 1px solid ${borderColor};
+    border-radius: 8px;
+    padding: 12px 16px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 10002;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: sans-serif;
+    font-size: 13px;
+    color: var(--fg-color, #fff);
+    animation: toastSlideUp 0.2s ease;
+  `
+
+  // Icon
+  const icon = document.createElement('span')
+  icon.textContent = success ? '✓' : '✕'
+  icon.style.cssText = `
+    color: ${borderColor};
+    font-weight: bold;
+    font-size: 14px;
+  `
+  toast.appendChild(icon)
+
+  // Message
+  const msgEl = document.createElement('span')
+  msgEl.textContent = message
+  toast.appendChild(msgEl)
+
+  document.body.appendChild(toast)
+
+  // Auto-remove after 3 seconds
+  setTimeout(() => {
+    toast.style.opacity = '0'
+    toast.style.transition = 'opacity 0.2s ease'
+    setTimeout(() => toast.remove(), 200)
+  }, 3000)
 }
 
 function mountDownloadQueue() {
