@@ -85,6 +85,13 @@
 
       <!-- Step 2: Environment Setup -->
       <div v-if="currentStep === 2" class="wizard-step">
+        <!-- Loading state while checking for in-progress operations -->
+        <div v-if="isCheckingProgress" class="progress-check-loading">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">Checking for in-progress operations...</div>
+        </div>
+
+        <template v-else>
         <!-- CLI Warning Banner -->
         <div v-if="!props.cliInstalled" class="cli-warning">
           <div class="cli-warning-header">
@@ -149,13 +156,6 @@
                 <span class="env-name">{{ env }}</span>
               </label>
             </div>
-            <BaseButton
-              v-if="selectedEnv"
-              variant="primary"
-              @click="handleSwitchToExisting"
-            >
-              Switch to {{ selectedEnv }}
-            </BaseButton>
           </template>
         </div>
 
@@ -243,6 +243,7 @@
             @source-cleared="handleImportCleared"
           />
         </div>
+        </template>
       </div>
     </template>
 
@@ -275,6 +276,15 @@
           @click="handleStep2Create"
         >
           {{ isCreatingEnvironment ? 'Creating...' : (switchAfter ? 'Create & Switch' : 'Create Environment') }}
+        </BaseButton>
+
+        <!-- Switch to existing button (only in landing mode with selection) -->
+        <BaseButton
+          v-if="wizardMode === 'landing' && selectedEnv"
+          variant="primary"
+          @click="handleSwitchToExisting"
+        >
+          Switch to {{ selectedEnv }}
         </BaseButton>
 
         <!-- Import mode has its own buttons in ImportFlow -->
@@ -338,7 +348,9 @@ const wizardMode = ref<WizardMode>('landing')
 const showSettingsModal = ref(false)
 const isImporting = ref(false)
 const resumingImport = ref(false)  // True when resuming a detected in-progress import
-const detectedImportProgress = ref<{ message: string; phase: string; progress: number } | null>(null)
+const detectedImportProgress = ref<{ message: string; phase: string; progress: number; environmentName: string } | null>(null)
+// True while checking for in-progress operations on step 2 mount
+const isCheckingProgress = ref(props.initialStep === 2)
 
 // Step 1 state
 const workspacePath = ref(props.defaultPath)
@@ -695,8 +707,17 @@ onMounted(async () => {
   if (currentStep.value === 2) {
     loadReleases()
 
+    // Set up a 3-second timeout fallback for progress check
+    const progressCheckTimeout = setTimeout(() => {
+      isCheckingProgress.value = false
+    }, 3000)
+
     // Check if there's an environment creation already in progress
     await checkAndResumeCreation()
+
+    // Clear timeout and loading state when done
+    clearTimeout(progressCheckTimeout)
+    isCheckingProgress.value = false
   }
 })
 
@@ -738,7 +759,8 @@ async function checkAndResumeCreation() {
       detectedImportProgress.value = {
         message: importProgress.message || 'Importing...',
         phase: importProgress.phase || '',
-        progress: importProgress.progress ?? 0
+        progress: importProgress.progress ?? 0,
+        environmentName: importProgress.environment_name || ''
       }
       resumingImport.value = true  // Tell ImportFlow to start in importing state
       wizardMode.value = 'import'
@@ -1165,5 +1187,34 @@ async function resumeCreationPolling() {
   font-size: var(--cg-font-size-sm);
   text-align: center;
   margin: 0;
+}
+
+/* Loading state for progress check */
+.progress-check-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cg-space-3);
+  padding: var(--cg-space-8);
+  min-height: 200px;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--cg-color-border);
+  border-top-color: var(--cg-color-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-text {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-sm);
 }
 </style>

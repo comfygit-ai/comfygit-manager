@@ -211,6 +211,7 @@ const props = defineProps<{
     message: string
     phase: string
     progress: number
+    environmentName: string
   }
 }>()
 
@@ -243,9 +244,9 @@ const gitPreviewError = ref<string | null>(null)
 // Import analysis from API
 const importAnalysis = ref<ImportAnalysis | null>(null)
 
-// Import configuration
+// Import configuration - initialize name from prop if resuming
 const importConfig = ref({
-  name: '',
+  name: props.initialProgress?.environmentName ?? '',
   modelStrategy: 'required' as 'all' | 'required' | 'skip',
   torchBackend: 'auto',
   switchAfterImport: true
@@ -527,7 +528,7 @@ onMounted(async () => {
 
       // Set up the UI to show import progress
       isImporting.value = true
-      importConfig.value.name = progress.environment_name || 'importing...'
+      importConfig.value.name = progress.environment_name || importConfig.value.name || ''
 
       importProgress.value = {
         progress: progress.progress ?? 0,
