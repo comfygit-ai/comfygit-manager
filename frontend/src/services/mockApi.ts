@@ -917,10 +917,13 @@ export const mockApi = {
   getConfig: async (): Promise<ConfigSettings> => {
     await delay(200)
     return {
+      workspace_path: '/workspace',
       civitai_api_key: '',
       huggingface_token: '',
       models_path: '/workspace/models',
-      auto_sync_models: true
+      auto_sync_models: true,
+      confirm_destructive: true,
+      comfyui_extra_args: []
     }
   },
 

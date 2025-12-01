@@ -204,6 +204,14 @@ import type { ImportAnalysis } from '@/types/comfygit'
 const props = defineProps<{
   // Optional: Allow parent to inject workspace path for first-time setup
   workspacePath?: string | null
+  // If true, component starts in "resuming import" mode (shows progress immediately)
+  resumeImport?: boolean
+  // Initial progress data when resuming (to avoid lag)
+  initialProgress?: {
+    message: string
+    phase: string
+    progress: number
+  }
 }>()
 
 const emit = defineEmits<{
@@ -217,9 +225,9 @@ const { previewTarballImport, previewGitImport, validateEnvironmentName, execute
 // Polling interval for import progress
 let importPollInterval: ReturnType<typeof setInterval> | null = null
 
-// State
+// State - initialize isImporting from prop for immediate UI when resuming
 const selectedFile = ref<File | null>(null)
-const isImporting = ref(false)
+const isImporting = ref(props.resumeImport ?? false)
 const importComplete = ref(false)
 const importSuccess = ref(false)
 const importResultMessage = ref('')
@@ -244,11 +252,11 @@ const importConfig = ref({
 })
 const nameError = ref<string | null>(null)
 
-// Import progress
+// Import progress - initialize from prop if resuming
 const importProgress = ref({
-  message: 'Preparing import...',
-  phase: '',
-  progress: 0,
+  message: props.initialProgress?.message ?? 'Preparing import...',
+  phase: props.initialProgress?.phase ?? '',
+  progress: props.initialProgress?.progress ?? 0,
   error: null as string | null
 })
 
@@ -439,10 +447,11 @@ async function handleStartImport() {
   }
 }
 
-function startImportPolling() {
+async function startImportPolling() {
   if (importPollInterval) return
 
-  importPollInterval = setInterval(async () => {
+  // Helper to process a single poll
+  const processPoll = async (): Promise<boolean> => {
     try {
       const progress = await getImportProgress()
 
@@ -464,18 +473,33 @@ function startImportPolling() {
         if (progress.environment_name) {
           emit('import-complete', progress.environment_name, importConfig.value.switchAfterImport)
         }
+        return false
       } else if (progress.state === 'error') {
         stopImportPolling()
         importSuccess.value = false
         importResultMessage.value = progress.error || progress.message
         isImporting.value = false
         importComplete.value = true
+        return false
       }
+      return true  // Continue polling
     } catch (err) {
       console.error('Failed to poll import progress:', err)
-      // Continue polling - might be transient
+      return true  // Continue polling - might be transient
     }
-  }, 2000) // Poll every 2 seconds
+  }
+
+  // Immediate first poll to get current state
+  const shouldContinue = await processPoll()
+  if (!shouldContinue) return
+
+  // Start interval for subsequent polls
+  importPollInterval = setInterval(async () => {
+    const continuePolling = await processPoll()
+    if (!continuePolling) {
+      stopImportPolling()
+    }
+  }, 2000)
 }
 
 function stopImportPolling() {

@@ -119,7 +119,7 @@
           </button>
 
           <!-- Import Button -->
-          <button class="landing-option" @click="wizardMode = 'import'">
+          <button class="landing-option" @click="resumingImport = false; wizardMode = 'import'">
             <span class="option-icon">📦</span>
             <div class="option-content">
               <span class="option-title">Import Environment</span>
@@ -236,6 +236,8 @@
         <div v-else-if="wizardMode === 'import'" class="env-import">
           <ImportFlow
             :workspace-path="createdWorkspacePath"
+            :resume-import="resumingImport"
+            :initial-progress="detectedImportProgress ?? undefined"
             @import-complete="handleImportComplete"
             @import-started="isImporting = true"
             @source-cleared="handleImportCleared"
@@ -335,6 +337,8 @@ type WizardMode = 'landing' | 'create' | 'import'
 const wizardMode = ref<WizardMode>('landing')
 const showSettingsModal = ref(false)
 const isImporting = ref(false)
+const resumingImport = ref(false)  // True when resuming a detected in-progress import
+const detectedImportProgress = ref<{ message: string; phase: string; progress: number } | null>(null)
 
 // Step 1 state
 const workspacePath = ref(props.defaultPath)
@@ -730,29 +734,36 @@ async function checkAndResumeCreation() {
     if (importProgress.state === 'importing') {
       console.log('[ComfyGit] Resuming in-progress import:', importProgress.environment_name)
 
+      // Store detected progress for immediate display
+      detectedImportProgress.value = {
+        message: importProgress.message || 'Importing...',
+        phase: importProgress.phase || '',
+        progress: importProgress.progress ?? 0
+      }
+      resumingImport.value = true  // Tell ImportFlow to start in importing state
       wizardMode.value = 'import'
       isImporting.value = true
-
-      // The ImportFlow component handles its own polling, but we need to set up the wizard state
-      // The ImportFlow will detect the in-progress import when it mounts
     }
   } catch (err) {
     console.log('[ComfyGit] Import progress check failed:', err)
   }
 }
 
-function resumeCreationPolling() {
+async function resumeCreationPolling() {
   // Initialize polling safeguards
   step2FailureCount.value = 0
   step2StartTime.value = Date.now()
 
-  const poll = setInterval(async () => {
+  let pollInterval: ReturnType<typeof setInterval> | null = null
+
+  // Helper to process a single poll result
+  const processPoll = async (): Promise<boolean> => {
     // Check overall timeout
     if (step2StartTime.value && Date.now() - step2StartTime.value > STEP2_TIMEOUT_MS) {
-      clearInterval(poll)
+      if (pollInterval) clearInterval(pollInterval)
       isCreatingEnvironment.value = false
       envCreateError.value = 'Environment creation timed out. Check server logs for details.'
-      return
+      return false
     }
 
     try {
@@ -761,10 +772,10 @@ function resumeCreationPolling() {
 
       // Detect unexpected idle state
       if (progress.state === 'idle' && isCreatingEnvironment.value) {
-        clearInterval(poll)
+        if (pollInterval) clearInterval(pollInterval)
         isCreatingEnvironment.value = false
         envCreateError.value = 'Environment creation was interrupted. Please try again.'
-        return
+        return false
       }
 
       createProgress.value = {
@@ -774,25 +785,42 @@ function resumeCreationPolling() {
       }
 
       if (progress.state === 'complete') {
-        clearInterval(poll)
+        if (pollInterval) clearInterval(pollInterval)
         isCreatingEnvironment.value = false
         const completedEnvName = progress.environment_name || envName.value
         // For resumed creations, assume switch was intended (safest default)
         emit('complete', completedEnvName, createdWorkspacePath.value)
+        return false
       } else if (progress.state === 'error') {
-        clearInterval(poll)
+        if (pollInterval) clearInterval(pollInterval)
         isCreatingEnvironment.value = false
         envCreateError.value = progress.error || 'Environment creation failed'
+        return false
       }
+      return true  // Continue polling
     } catch (err) {
       step2FailureCount.value++
       console.warn(`Polling failure ${step2FailureCount.value}/${MAX_FAILURES}:`, err)
 
       if (step2FailureCount.value >= MAX_FAILURES) {
-        clearInterval(poll)
+        if (pollInterval) clearInterval(pollInterval)
         isCreatingEnvironment.value = false
         envCreateError.value = 'Lost connection to server. Please refresh and try again.'
+        return false
       }
+      return true  // Continue polling on transient errors
+    }
+  }
+
+  // Immediate first poll to get current state
+  const shouldContinue = await processPoll()
+  if (!shouldContinue) return
+
+  // Start interval for subsequent polls
+  pollInterval = setInterval(async () => {
+    const continuePolling = await processPoll()
+    if (!continuePolling && pollInterval) {
+      clearInterval(pollInterval)
     }
   }, 2000)
 }
