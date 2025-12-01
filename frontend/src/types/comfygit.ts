@@ -851,6 +851,16 @@ export interface ImportProgress {
 // Deploy Types
 // =============================================================================
 
+export interface NetworkVolume {
+  id: string
+  name: string
+  size_gb: number
+  data_center_id: string        // e.g., "US-IL-1", "EU-CZ-1"
+  data_center_name: string      // e.g., "United States", "Europe"
+  used_gb?: number              // Optional: current usage
+  created_at?: string
+}
+
 export interface RunPodGpuType {
   id: string
   displayName: string
@@ -858,12 +868,13 @@ export interface RunPodGpuType {
   securePrice: number      // $/hr for secure cloud
   communityPrice: number   // $/hr for community cloud
   available: boolean
+  data_center_id?: string  // Which data center this GPU is in
 }
 
 export interface DeployConfig {
   gpu_type_id: string
   pod_name: string
-  volume_size_gb: number
+  network_volume_id: string  // Network volume ID instead of ephemeral storage
   cloud_type: 'SECURE' | 'COMMUNITY'
 }
 

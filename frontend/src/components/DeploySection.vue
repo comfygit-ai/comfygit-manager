@@ -71,12 +71,60 @@
       <!-- Configuration Section (only show when connected) -->
       <SectionGroup v-if="isConnected" title="CONFIGURATION">
         <div class="config-card">
+          <!-- Network Volume -->
+          <div class="config-row">
+            <label class="config-label">Network Volume</label>
+            <div v-if="isLoadingVolumes" class="loading-inline">Loading volumes...</div>
+            <template v-else-if="networkVolumes.length === 0">
+              <div class="no-volumes-state">
+                <span class="no-volumes-icon">⚠</span>
+                <span class="no-volumes-text">No network volumes found</span>
+              </div>
+              <p class="volume-help">
+                Network volumes provide persistent storage that survives pod termination.
+                Create one on RunPod first:
+              </p>
+              <a
+                href="https://www.runpod.io/console/user/storage"
+                target="_blank"
+                rel="noopener"
+                class="create-volume-link"
+              >
+                Create Volume on RunPod →
+              </a>
+            </template>
+            <template v-else>
+              <select v-model="selectedVolumeId" class="config-select">
+                <option
+                  v-for="vol in networkVolumes"
+                  :key="vol.id"
+                  :value="vol.id"
+                >
+                  {{ vol.name }} ({{ vol.size_gb }}GB, {{ vol.data_center_id }})
+                </option>
+              </select>
+              <a
+                href="https://www.runpod.io/console/user/storage"
+                target="_blank"
+                rel="noopener"
+                class="create-volume-inline-link"
+              >
+                + Create new volume
+              </a>
+            </template>
+          </div>
+
           <!-- GPU Type -->
           <div class="config-row">
             <label class="config-label">GPU Type</label>
-            <select v-model="selectedGpu" class="config-select" :disabled="isLoadingGpus">
-              <option v-if="isLoadingGpus" value="">Loading GPUs...</option>
-              <option v-else-if="gpuTypes.length === 0" value="">No GPUs available</option>
+            <select
+              v-model="selectedGpu"
+              class="config-select"
+              :disabled="isLoadingGpus || !selectedVolumeId"
+            >
+              <option v-if="!selectedVolumeId" value="">Select a volume first</option>
+              <option v-else-if="isLoadingGpus" value="">Loading GPUs...</option>
+              <option v-else-if="gpuTypes.length === 0" value="">No GPUs available in this region</option>
               <option
                 v-for="gpu in gpuTypes"
                 :key="gpu.id"
@@ -113,17 +161,6 @@
               class="config-input"
               placeholder="my-comfyui-deploy"
             />
-          </div>
-
-          <!-- Storage -->
-          <div class="config-row">
-            <label class="config-label">Storage</label>
-            <select v-model="volumeSize" class="config-select">
-              <option :value="20">20 GB</option>
-              <option :value="50">50 GB</option>
-              <option :value="100">100 GB</option>
-              <option :value="200">200 GB</option>
-            </select>
           </div>
         </div>
       </SectionGroup>
@@ -169,7 +206,7 @@
           variant="primary"
           size="md"
           :loading="isDeploying"
-          :disabled="isDeploying || !selectedGpu"
+          :disabled="!canDeploy"
           @click="handleDeploy"
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -344,6 +381,7 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import type {
   EnvironmentDeploySummary,
+  NetworkVolume,
   RunPodGpuType,
   RunPodInstance,
   DeployResult,
@@ -365,6 +403,7 @@ const emit = defineEmits<{
 const {
   getDeploySummary,
   testRunPodConnection,
+  getNetworkVolumes,
   getRunPodGpuTypes,
   deployToRunPod,
   getRunPodPods,
@@ -386,12 +425,14 @@ const connectionStatus = ref<{ type: 'success' | 'error'; message: string } | nu
 const creditBalance = ref<number | null>(null)
 
 // Configuration State
+const selectedVolumeId = ref('')
 const selectedGpu = ref('')
 const selectedCloudType = ref<'SECURE' | 'COMMUNITY'>('SECURE')
 const podName = ref('my-comfyui-deploy')
-const volumeSize = ref(50)
 
 // Data State
+const networkVolumes = ref<NetworkVolume[]>([])
+const isLoadingVolumes = ref(false)
 const gpuTypes = ref<RunPodGpuType[]>([])
 const isLoadingGpus = ref(false)
 const envSummary = ref<EnvironmentDeploySummary | null>(null)
@@ -407,6 +448,14 @@ const exportResult = ref<DeployPackageResult | null>(null)
 const terminatingPodId = ref<string | null>(null)
 
 // Computed
+const selectedVolume = computed(() => {
+  return networkVolumes.value.find(v => v.id === selectedVolumeId.value) || null
+})
+
+const canDeploy = computed(() => {
+  return isConnected.value && selectedVolumeId.value && selectedGpu.value && !isDeploying.value
+})
+
 const getSelectedGpuPrice = (cloudType: 'SECURE' | 'COMMUNITY') => {
   const gpu = gpuTypes.value.find(g => g.id === selectedGpu.value)
   if (!gpu) return '0.00'
@@ -430,7 +479,7 @@ async function handleTestConnection() {
 
       // Load additional data
       await Promise.all([
-        loadGpuTypes(),
+        loadNetworkVolumes(),
         loadSummary(),
         loadPods()
       ])
@@ -454,7 +503,10 @@ async function handleClearKey() {
     isConnected.value = false
     connectionStatus.value = null
     creditBalance.value = null
+    networkVolumes.value = []
+    selectedVolumeId.value = ''
     gpuTypes.value = []
+    selectedGpu.value = ''
     envSummary.value = null
     pods.value = []
     emit('toast', 'API key cleared', 'info')
@@ -463,15 +515,33 @@ async function handleClearKey() {
   }
 }
 
-async function loadGpuTypes() {
+async function loadNetworkVolumes() {
+  isLoadingVolumes.value = true
+  try {
+    const result = await getNetworkVolumes()
+    networkVolumes.value = result.volumes
+    // Auto-select first volume if available
+    if (networkVolumes.value.length > 0) {
+      selectedVolumeId.value = networkVolumes.value[0].id
+    }
+  } catch (err) {
+    emit('toast', 'Failed to load network volumes', 'error')
+  } finally {
+    isLoadingVolumes.value = false
+  }
+}
+
+async function loadGpuTypes(dataCenterId?: string) {
   isLoadingGpus.value = true
   try {
-    const result = await getRunPodGpuTypes()
+    const result = await getRunPodGpuTypes(dataCenterId)
     gpuTypes.value = result.gpu_types
     // Auto-select first available GPU
     const firstAvailable = gpuTypes.value.find(g => g.available)
     if (firstAvailable) {
       selectedGpu.value = firstAvailable.id
+    } else {
+      selectedGpu.value = ''
     }
   } catch (err) {
     emit('toast', 'Failed to load GPU types', 'error')
@@ -479,6 +549,20 @@ async function loadGpuTypes() {
     isLoadingGpus.value = false
   }
 }
+
+// Watch for volume selection changes to filter GPUs
+watch(selectedVolumeId, async (newVolumeId) => {
+  if (!newVolumeId) {
+    gpuTypes.value = []
+    selectedGpu.value = ''
+    return
+  }
+
+  const volume = networkVolumes.value.find(v => v.id === newVolumeId)
+  if (volume) {
+    await loadGpuTypes(volume.data_center_id)
+  }
+})
 
 async function loadSummary() {
   isLoadingSummary.value = true
@@ -504,7 +588,7 @@ async function loadPods() {
 }
 
 async function handleDeploy() {
-  if (!selectedGpu.value) return
+  if (!selectedGpu.value || !selectedVolumeId.value) return
 
   isDeploying.value = true
   deployResult.value = null
@@ -513,7 +597,7 @@ async function handleDeploy() {
     const result = await deployToRunPod({
       gpu_type_id: selectedGpu.value,
       pod_name: podName.value || 'my-comfyui-deploy',
-      volume_size_gb: volumeSize.value,
+      network_volume_id: selectedVolumeId.value,
       cloud_type: selectedCloudType.value
     })
 
@@ -757,6 +841,64 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: var(--cg-space-2);
+}
+
+/* Network Volume States */
+.loading-inline {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-sm);
+}
+
+.no-volumes-state {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  padding: var(--cg-space-2);
+  background: var(--cg-color-warning-muted);
+  border: 1px solid var(--cg-color-warning);
+}
+
+.no-volumes-icon {
+  color: var(--cg-color-warning);
+}
+
+.no-volumes-text {
+  color: var(--cg-color-text-primary);
+  font-size: var(--cg-font-size-sm);
+}
+
+.volume-help {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  margin: var(--cg-space-2) 0;
+  line-height: 1.4;
+}
+
+.create-volume-link {
+  display: inline-block;
+  padding: var(--cg-space-2) var(--cg-space-3);
+  background: var(--cg-color-accent);
+  color: var(--cg-color-bg-primary);
+  font-size: var(--cg-font-size-sm);
+  font-weight: var(--cg-font-weight-medium);
+  text-decoration: none;
+  text-align: center;
+}
+
+.create-volume-link:hover {
+  background: var(--cg-color-accent-hover);
+}
+
+.create-volume-inline-link {
+  display: inline-block;
+  margin-top: var(--cg-space-2);
+  color: var(--cg-color-accent);
+  font-size: var(--cg-font-size-xs);
+  text-decoration: none;
+}
+
+.create-volume-inline-link:hover {
+  text-decoration: underline;
 }
 
 .config-label {

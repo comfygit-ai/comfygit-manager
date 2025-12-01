@@ -76,6 +76,7 @@ import type {
   ExportValidationResult,
   ExportResult,
   EnvironmentDeploySummary,
+  NetworkVolume,
   RunPodGpuType,
   RunPodInstance,
   RunPodConnectionResult,
@@ -2147,16 +2148,45 @@ export const mockApi = {
     }
   },
 
-  getRunPodGpuTypes: async (): Promise<{ gpu_types: RunPodGpuType[] }> => {
+  getNetworkVolumes: async (): Promise<{ volumes: NetworkVolume[] }> => {
     await delay(400)
     return {
-      gpu_types: [
-        { id: 'NVIDIA RTX 4090', displayName: 'RTX 4090', memoryInGb: 24, securePrice: 0.44, communityPrice: 0.34, available: true },
-        { id: 'NVIDIA RTX 3090', displayName: 'RTX 3090', memoryInGb: 24, securePrice: 0.22, communityPrice: 0.16, available: true },
-        { id: 'NVIDIA A100 80GB', displayName: 'A100 80GB', memoryInGb: 80, securePrice: 1.89, communityPrice: 1.49, available: true },
-        { id: 'NVIDIA RTX A6000', displayName: 'RTX A6000', memoryInGb: 48, securePrice: 0.79, communityPrice: 0.59, available: false }
+      volumes: [
+        {
+          id: '5aio30csvw',
+          name: 'comfygit_workspace',
+          size_gb: 100,
+          data_center_id: 'US-IL-1',
+          data_center_name: 'United States'
+        },
+        {
+          id: 'abc123xyz',
+          name: 'my-sd-models',
+          size_gb: 200,
+          data_center_id: 'EU-CZ-1',
+          data_center_name: 'Europe'
+        }
       ]
     }
+  },
+
+  getRunPodGpuTypes: async (dataCenterId?: string): Promise<{ gpu_types: RunPodGpuType[] }> => {
+    await delay(400)
+
+    const allGpus: RunPodGpuType[] = [
+      { id: 'NVIDIA RTX 4090', displayName: 'RTX 4090', memoryInGb: 24, securePrice: 0.44, communityPrice: 0.34, available: true, data_center_id: 'US-IL-1' },
+      { id: 'NVIDIA RTX 3090', displayName: 'RTX 3090', memoryInGb: 24, securePrice: 0.22, communityPrice: 0.16, available: true, data_center_id: 'US-IL-1' },
+      { id: 'NVIDIA A100 80GB', displayName: 'A100 80GB', memoryInGb: 80, securePrice: 1.89, communityPrice: 1.49, available: true, data_center_id: 'US-IL-1' },
+      { id: 'NVIDIA RTX 4090', displayName: 'RTX 4090', memoryInGb: 24, securePrice: 0.44, communityPrice: 0.34, available: true, data_center_id: 'EU-CZ-1' },
+      { id: 'NVIDIA RTX A6000', displayName: 'RTX A6000', memoryInGb: 48, securePrice: 0.79, communityPrice: 0.59, available: true, data_center_id: 'EU-CZ-1' }
+    ]
+
+    // Filter by data center if specified
+    if (dataCenterId) {
+      return { gpu_types: allGpus.filter(g => g.data_center_id === dataCenterId) }
+    }
+
+    return { gpu_types: allGpus }
   },
 
   deployToRunPod: async (config: DeployConfig): Promise<DeployResult> => {

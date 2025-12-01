@@ -44,6 +44,7 @@ import type {
   ValidatePathRequest,
   ValidatePathResult,
   EnvironmentDeploySummary,
+  NetworkVolume,
   RunPodGpuType,
   RunPodInstance,
   RunPodConnectionResult,
@@ -1304,9 +1305,17 @@ export function useComfyGitService() {
     })
   }
 
-  async function getRunPodGpuTypes(): Promise<{ gpu_types: RunPodGpuType[] }> {
-    if (USE_MOCK) return mockApi.getRunPodGpuTypes()
-    return fetchApi<{ gpu_types: RunPodGpuType[] }>('/v2/comfygit/deploy/runpod/gpu-types')
+  async function getNetworkVolumes(): Promise<{ volumes: NetworkVolume[] }> {
+    if (USE_MOCK) return mockApi.getNetworkVolumes()
+    return fetchApi<{ volumes: NetworkVolume[] }>('/v2/comfygit/deploy/runpod/volumes')
+  }
+
+  async function getRunPodGpuTypes(dataCenterId?: string): Promise<{ gpu_types: RunPodGpuType[] }> {
+    if (USE_MOCK) return mockApi.getRunPodGpuTypes(dataCenterId)
+    const url = dataCenterId
+      ? `/v2/comfygit/deploy/runpod/gpu-types?data_center_id=${encodeURIComponent(dataCenterId)}`
+      : '/v2/comfygit/deploy/runpod/gpu-types'
+    return fetchApi<{ gpu_types: RunPodGpuType[] }>(url)
   }
 
   async function deployToRunPod(config: DeployConfig): Promise<DeployResult> {
@@ -1440,6 +1449,7 @@ export function useComfyGitService() {
     // Deploy Operations
     getDeploySummary,
     testRunPodConnection,
+    getNetworkVolumes,
     getRunPodGpuTypes,
     deployToRunPod,
     getRunPodPods,
