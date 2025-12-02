@@ -1346,6 +1346,20 @@ export function useComfyGitService() {
     })
   }
 
+  async function stopRunPodPod(podId: string): Promise<{ status: 'success' | 'error'; message: string }> {
+    if (USE_MOCK) return mockApi.stopRunPodPod(podId)
+    return fetchApi(`/v2/comfygit/deploy/runpod/${encodeURIComponent(podId)}/stop`, {
+      method: 'POST'
+    })
+  }
+
+  async function startRunPodPod(podId: string): Promise<{ status: 'success' | 'error'; message: string; cost_per_hour?: number }> {
+    if (USE_MOCK) return mockApi.startRunPodPod(podId)
+    return fetchApi(`/v2/comfygit/deploy/runpod/${encodeURIComponent(podId)}/start`, {
+      method: 'POST'
+    })
+  }
+
   async function getDeploymentStatus(podId: string): Promise<DeploymentStatus> {
     if (USE_MOCK) return mockApi.getDeploymentStatus(podId)
     return fetchApi<DeploymentStatus>(`/v2/comfygit/deploy/runpod/${encodeURIComponent(podId)}/status`)
@@ -1467,6 +1481,8 @@ export function useComfyGitService() {
     deployToRunPod,
     getRunPodPods,
     terminateRunPodPod,
+    stopRunPodPod,
+    startRunPodPod,
     getDeploymentStatus,
     exportDeployPackage,
     getStoredRunPodKey,

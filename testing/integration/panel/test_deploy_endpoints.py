@@ -381,7 +381,7 @@ class TestRunPodGetGpuTypes:
             assert gpu["stockStatus"] == "HIGH"
 
     async def test_success_filtered_by_data_center(self, client, mock_workspace_context):
-        """Should return GPUs (data center filter accepted but not yet implemented)."""
+        """Should filter GPUs by data center availability."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
         with patch("api.v2.deploy.RunPodClient") as MockClient:
@@ -398,15 +398,37 @@ class TestRunPodGetGpuTypes:
                     "secureSpotPrice": 0.22,
                     "communitySpotPrice": 0.17,
                     "lowestPrice": {"minimumBidPrice": 0.34, "stockStatus": "HIGH"},
+                    "nodeGroupDatacenters": [
+                        {"id": "US-IL-1", "name": "Illinois"},
+                        {"id": "US-TX-3", "name": "Texas"},
+                    ],
+                },
+                {
+                    "id": "NVIDIA RTX A6000",
+                    "displayName": "RTX A6000",
+                    "memoryInGb": 48,
+                    "secureCloud": True,
+                    "communityCloud": True,
+                    "securePrice": 0.79,
+                    "communityPrice": 0.59,
+                    "secureSpotPrice": 0.40,
+                    "communitySpotPrice": 0.30,
+                    "lowestPrice": {"minimumBidPrice": 0.59, "stockStatus": "MEDIUM"},
+                    "nodeGroupDatacenters": [
+                        {"id": "EU-CZ-1", "name": "Czech Republic"},
+                    ],
                 },
             ]
             MockClient.return_value = mock_client
 
+            # Filter by US-IL-1 - should only return RTX 4090
             resp = await client.get("/v2/comfygit/deploy/runpod/gpu-types?data_center_id=US-IL-1")
 
             assert resp.status == 200
-            # get_gpu_types_with_pricing is called (data center filter not yet implemented)
-            mock_client.get_gpu_types_with_pricing.assert_called_once()
+            data = await resp.json()
+            assert len(data["gpu_types"]) == 1
+            assert data["gpu_types"][0]["id"] == "NVIDIA RTX 4090"
+            assert data["gpu_types"][0]["dataCenterIds"] == ["US-IL-1", "US-TX-3"]
 
     async def test_error_no_api_key(self, client, mock_workspace_context):
         """Should return 400 when no API key configured."""
@@ -707,6 +729,71 @@ class TestRunPodDeployWithStartupScript:
             docker_cmd = call_kwargs.get("docker_start_cmd")
             # Branch should be passed in the script (verified via script content)
             assert docker_cmd is not None
+
+
+@pytest.mark.integration
+class TestRunPodStopPod:
+    """POST /v2/comfygit/deploy/runpod/{pod_id}/stop - Stop a running pod."""
+
+    async def test_success(self, client, mock_workspace_context):
+        """Should return 200 on successful stop."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.stop_pod.return_value = {"id": "pod123", "desiredStatus": "EXITED"}
+            MockClient.return_value = mock_client
+
+            resp = await client.post("/v2/comfygit/deploy/runpod/pod123/stop")
+
+            assert resp.status == 200
+            data = await resp.json()
+            assert data["status"] == "success"
+            assert data["message"] == "Pod stopped"
+            mock_client.stop_pod.assert_called_once_with("pod123")
+
+    async def test_error_no_api_key(self, client, mock_workspace_context):
+        """Should return 400 when no API key configured."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = None
+
+        resp = await client.post("/v2/comfygit/deploy/runpod/pod123/stop")
+
+        assert resp.status == 400
+
+
+@pytest.mark.integration
+class TestRunPodStartPod:
+    """POST /v2/comfygit/deploy/runpod/{pod_id}/start - Start a stopped pod."""
+
+    async def test_success(self, client, mock_workspace_context):
+        """Should return 200 on successful start."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.start_pod.return_value = {
+                "id": "pod123",
+                "desiredStatus": "RUNNING",
+                "costPerHr": 0.44,
+            }
+            MockClient.return_value = mock_client
+
+            resp = await client.post("/v2/comfygit/deploy/runpod/pod123/start")
+
+            assert resp.status == 200
+            data = await resp.json()
+            assert data["status"] == "success"
+            assert data["message"] == "Pod starting"
+            assert data["cost_per_hour"] == 0.44
+            mock_client.start_pod.assert_called_once_with("pod123")
+
+    async def test_error_no_api_key(self, client, mock_workspace_context):
+        """Should return 400 when no API key configured."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = None
+
+        resp = await client.post("/v2/comfygit/deploy/runpod/pod123/start")
+
+        assert resp.status == 400
 
 
 @pytest.mark.integration

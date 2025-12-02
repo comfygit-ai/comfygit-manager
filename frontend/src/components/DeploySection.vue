@@ -385,6 +385,26 @@
                 Open ComfyUI
               </ActionButton>
               <ActionButton
+                v-if="pod.status === 'RUNNING'"
+                variant="secondary"
+                size="sm"
+                :loading="stoppingPodId === pod.id"
+                @click="handleStopPod(pod.id)"
+                title="Stop pod (saves money, keeps storage)"
+              >
+                Stop
+              </ActionButton>
+              <ActionButton
+                v-if="pod.status === 'EXITED' || pod.status === 'STOPPED'"
+                variant="secondary"
+                size="sm"
+                :loading="startingPodId === pod.id"
+                @click="handleStartPod(pod.id)"
+                title="Start stopped pod"
+              >
+                Start
+              </ActionButton>
+              <ActionButton
                 variant="ghost"
                 size="sm"
                 :loading="terminatingPodId === pod.id"
@@ -519,6 +539,8 @@ const {
   deployToRunPod,
   getRunPodPods,
   terminateRunPodPod,
+  stopRunPodPod,
+  startRunPodPod,
   getDeploymentStatus,
   getStoredRunPodKey,
   clearRunPodKey
@@ -560,6 +582,8 @@ const isLoadingPods = ref(false)
 const isDeploying = ref(false)
 const deployResult = ref<DeployResult | null>(null)
 const terminatingPodId = ref<string | null>(null)
+const stoppingPodId = ref<string | null>(null)
+const startingPodId = ref<string | null>(null)
 
 // Progress Modal State
 const showProgressModal = ref(false)
@@ -933,6 +957,44 @@ async function handleTerminatePod(podId: string) {
     emit('toast', 'Failed to terminate pod', 'error')
   } finally {
     terminatingPodId.value = null
+  }
+}
+
+async function handleStopPod(podId: string) {
+  stoppingPodId.value = podId
+
+  try {
+    const result = await stopRunPodPod(podId)
+
+    if (result.status === 'success') {
+      emit('toast', 'Pod stopped', 'success')
+      await loadPods()
+    } else {
+      emit('toast', result.message, 'error')
+    }
+  } catch (err) {
+    emit('toast', 'Failed to stop pod', 'error')
+  } finally {
+    stoppingPodId.value = null
+  }
+}
+
+async function handleStartPod(podId: string) {
+  startingPodId.value = podId
+
+  try {
+    const result = await startRunPodPod(podId)
+
+    if (result.status === 'success') {
+      emit('toast', 'Pod starting...', 'success')
+      await loadPods()
+    } else {
+      emit('toast', result.message, 'error')
+    }
+  } catch (err) {
+    emit('toast', 'Failed to start pod', 'error')
+  } finally {
+    startingPodId.value = null
   }
 }
 
@@ -1320,6 +1382,10 @@ onUnmounted(() => {
 
 .pod-status.terminated {
   color: var(--cg-color-error);
+}
+
+.pod-status.stopped {
+  color: var(--cg-color-warning);
 }
 
 .pod-details {

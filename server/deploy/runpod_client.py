@@ -295,7 +295,7 @@ class RunPodClient:
         return result["data"]["myself"]
 
     async def get_gpu_types_with_pricing(self) -> list[dict]:
-        """Get GPU types with real pricing and availability from GraphQL API.
+        """Get GPU types with real pricing, availability, and data center info.
 
         Returns:
             List of GPU types with pricing fields:
@@ -304,6 +304,7 @@ class RunPodClient:
             - securePrice, communityPrice (on-demand $/hr)
             - secureSpotPrice, communitySpotPrice (spot $/hr)
             - lowestPrice: {minimumBidPrice, uninterruptablePrice, stockStatus}
+            - nodeGroupDatacenters: [{id, name}] (data centers where GPU is available)
         """
         query = """
         query {
@@ -322,12 +323,40 @@ class RunPodClient:
                     uninterruptablePrice
                     stockStatus
                 }
+                nodeGroupDatacenters {
+                    id
+                    name
+                }
             }
         }
         """
         result = await self._graphql_query(query)
         self._handle_graphql_errors(result)
         return result["data"]["gpuTypes"]
+
+    async def get_data_centers_from_api(self) -> list[dict]:
+        """Get data centers dynamically from GraphQL API.
+
+        Returns:
+            List of data center objects with id, name, location, storageSupport, listed
+        """
+        query = """
+        query {
+            myself {
+                datacenters {
+                    id
+                    name
+                    location
+                    storageSupport
+                    listed
+                    region
+                }
+            }
+        }
+        """
+        result = await self._graphql_query(query)
+        self._handle_graphql_errors(result)
+        return result["data"]["myself"]["datacenters"]
 
     async def create_spot_pod(
         self,
@@ -604,29 +633,50 @@ class RunPodClient:
         await self._delete(f"/pods/{pod_id}")
         return True
 
-    async def start_pod(self, pod_id: str) -> bool:
-        """Start a stopped pod.
+    async def start_pod(self, pod_id: str) -> dict:
+        """Start a stopped pod using GraphQL podResume mutation.
 
         Args:
             pod_id: Pod identifier
 
         Returns:
-            True on success
+            Pod object with updated status
         """
-        await self._post(f"/pods/{pod_id}/start")
-        return True
+        query = f"""
+        mutation {{
+            podResume(input: {{ podId: "{pod_id}" }}) {{
+                id
+                desiredStatus
+                costPerHr
+            }}
+        }}
+        """
+        result = await self._graphql_query(query)
+        self._handle_graphql_errors(result)
+        return result["data"]["podResume"]
 
-    async def stop_pod(self, pod_id: str) -> bool:
-        """Stop a running pod.
+    async def stop_pod(self, pod_id: str) -> dict:
+        """Stop a running pod using GraphQL podStop mutation.
+
+        Stops the pod without terminating it. Pod can be resumed later.
 
         Args:
             pod_id: Pod identifier
 
         Returns:
-            True on success
+            Pod object with updated status
         """
-        await self._post(f"/pods/{pod_id}/stop")
-        return True
+        query = f"""
+        mutation {{
+            podStop(input: {{ podId: "{pod_id}" }}) {{
+                id
+                desiredStatus
+            }}
+        }}
+        """
+        result = await self._graphql_query(query)
+        self._handle_graphql_errors(result)
+        return result["data"]["podStop"]
 
     async def restart_pod(self, pod_id: str) -> bool:
         """Restart a pod.
@@ -796,19 +846,34 @@ class RunPodClient:
         return True
 
     # =========================================================================
-    # Data Centers (static list - no REST endpoint available)
+    # Data Centers
     # =========================================================================
 
     async def get_data_centers(self) -> list[dict]:
-        """Get available data centers.
+        """Get available data centers from GraphQL API with static fallback.
 
-        Note: The RunPod REST API doesn't have a data centers endpoint.
-        This returns a static list of known data centers.
+        Fetches data centers dynamically from RunPod API. Falls back to
+        static DATA_CENTERS list if API call fails.
 
         Returns:
-            List of data center objects with id, name, available
+            List of data center objects with id, name, available, location, region
         """
-        return DATA_CENTERS.copy()
+        try:
+            raw_dcs = await self.get_data_centers_from_api()
+            return [
+                {
+                    "id": dc.get("id"),
+                    "name": dc.get("name") or dc.get("location", dc.get("id")),
+                    "location": dc.get("location"),
+                    "region": dc.get("region"),
+                    "available": dc.get("listed", True) and dc.get("storageSupport", True),
+                }
+                for dc in raw_dcs
+                if dc.get("listed", True)  # Only show listed data centers
+            ]
+        except Exception:
+            # Fallback to static list if API fails
+            return DATA_CENTERS.copy()
 
     # =========================================================================
     # GPU Types (derived from static list - no REST endpoint available)

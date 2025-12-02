@@ -131,6 +131,78 @@ async def terminate_runpod_pod(request: web.Request, workspace) -> web.Response:
         )
 
 
+@routes.post("/v2/comfygit/deploy/runpod/{pod_id}/stop")
+@requires_workspace
+async def stop_runpod_pod(request: web.Request, workspace) -> web.Response:
+    """Stop a running RunPod pod (preserves storage, saves money).
+
+    Path params:
+        pod_id: Pod identifier to stop
+
+    Returns:
+        status: "success" or "error"
+    """
+    pod_id = request.match_info["pod_id"]
+
+    api_key = workspace.workspace_config_manager.get_runpod_token()
+    if not api_key:
+        return web.json_response(
+            {"status": "error", "error": "RunPod API key not configured"},
+            status=400,
+        )
+
+    client = RunPodClient(api_key)
+    try:
+        result = await client.stop_pod(pod_id)
+        return web.json_response({
+            "status": "success",
+            "message": "Pod stopped",
+            "pod_status": result.get("desiredStatus"),
+        })
+    except Exception as e:
+        return web.json_response(
+            {"status": "error", "error": str(e)},
+            status=500,
+        )
+
+
+@routes.post("/v2/comfygit/deploy/runpod/{pod_id}/start")
+@requires_workspace
+async def start_runpod_pod(request: web.Request, workspace) -> web.Response:
+    """Start a stopped RunPod pod.
+
+    Path params:
+        pod_id: Pod identifier to start
+
+    Returns:
+        status: "success" or "error"
+        cost_per_hour: Cost per hour when running
+    """
+    pod_id = request.match_info["pod_id"]
+
+    api_key = workspace.workspace_config_manager.get_runpod_token()
+    if not api_key:
+        return web.json_response(
+            {"status": "error", "error": "RunPod API key not configured"},
+            status=400,
+        )
+
+    client = RunPodClient(api_key)
+    try:
+        result = await client.start_pod(pod_id)
+        return web.json_response({
+            "status": "success",
+            "message": "Pod starting",
+            "pod_status": result.get("desiredStatus"),
+            "cost_per_hour": result.get("costPerHr"),
+        })
+    except Exception as e:
+        return web.json_response(
+            {"status": "error", "error": str(e)},
+            status=500,
+        )
+
+
 @routes.get("/v2/comfygit/deploy/runpod/{pod_id}/status")
 @requires_workspace
 async def get_deployment_status(request: web.Request, workspace) -> web.Response:
@@ -433,7 +505,7 @@ async def get_runpod_gpu_types(request: web.Request, workspace) -> web.Response:
     """Get available GPU types with live pricing from GraphQL API.
 
     Query params:
-        data_center_id: Optional filter by data center (not yet implemented)
+        data_center_id: Optional filter by data center (filters GPUs to those available in region)
 
     Returns:
         gpu_types: List of GPU type objects with pricing
@@ -444,6 +516,9 @@ async def get_runpod_gpu_types(request: web.Request, workspace) -> web.Response:
             {"status": "error", "error": "RunPod API key not configured"},
             status=400,
         )
+
+    # Get optional data center filter
+    data_center_id = request.query.get("data_center_id")
 
     client = RunPodClient(api_key)
 
@@ -464,6 +539,14 @@ async def get_runpod_gpu_types(request: web.Request, workspace) -> web.Response:
         if not secure_price and not community_price:
             continue
 
+        # Filter by data center if specified
+        node_group_dcs = gpu.get("nodeGroupDatacenters") or []
+        dc_ids = [dc.get("id") for dc in node_group_dcs]
+
+        # If data center filter provided, skip GPUs not available in that region
+        if data_center_id and dc_ids and data_center_id not in dc_ids:
+            continue
+
         # Extract lowest price info (contains stock status)
         lowest_price = gpu.get("lowestPrice") or {}
 
@@ -477,6 +560,7 @@ async def get_runpod_gpu_types(request: web.Request, workspace) -> web.Response:
             "communitySpotPrice": gpu.get("communitySpotPrice") or 0,
             "stockStatus": lowest_price.get("stockStatus"),  # HIGH, MEDIUM, LOW, or None
             "available": gpu.get("secureCloud") or gpu.get("communityCloud") or False,
+            "dataCenterIds": dc_ids,  # List of data centers where GPU is available
         })
 
     # Sort by price (community, ascending)

@@ -854,6 +854,8 @@ export interface ImportProgress {
 export interface DataCenter {
   id: string              // e.g., 'US-IL-1', 'EU-CZ-1'
   name: string            // e.g., 'United States', 'Europe (Czech)'
+  location?: string       // e.g., 'Illinois, USA'
+  region?: string         // e.g., 'NORTH_AMERICA', 'EUROPE'
   available: boolean
 }
 
@@ -877,7 +879,7 @@ export interface RunPodGpuType {
   communitySpotPrice: number    // $/hr for community cloud (spot)
   stockStatus: 'HIGH' | 'MEDIUM' | 'LOW' | null  // GPU availability level
   available: boolean
-  data_center_id?: string       // Which data center this GPU is in
+  dataCenterIds?: string[]      // Data centers where this GPU is available
 }
 
 export interface DeployConfig {
@@ -913,7 +915,7 @@ export interface RunPodInstance {
   name: string
   gpu_type: string
   gpu_count: number
-  status: 'CREATED' | 'RUNNING' | 'EXITED' | 'TERMINATED'
+  status: 'CREATED' | 'RUNNING' | 'EXITED' | 'TERMINATED' | 'STOPPED'
   created_at: string
   cost_per_hour: number
   uptime_seconds: number

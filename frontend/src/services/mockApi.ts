@@ -2273,6 +2273,18 @@ export const mockApi = {
     return { status: 'success', message: 'Pod terminated' }
   },
 
+  stopRunPodPod: async (podId: string): Promise<{ status: 'success' | 'error'; message: string }> => {
+    await delay(800)
+    console.log(`[MOCK] Stopping pod: ${podId}`)
+    return { status: 'success', message: 'Pod stopped' }
+  },
+
+  startRunPodPod: async (podId: string): Promise<{ status: 'success' | 'error'; message: string; cost_per_hour?: number }> => {
+    await delay(800)
+    console.log(`[MOCK] Starting pod: ${podId}`)
+    return { status: 'success', message: 'Pod starting', cost_per_hour: 0.44 }
+  },
+
   exportDeployPackage: async (outputPath?: string): Promise<DeployPackageResult> => {
     await delay(1500)
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
