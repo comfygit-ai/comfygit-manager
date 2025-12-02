@@ -3,6 +3,7 @@ from aiohttp import web
 
 from cgm_core.decorators import requires_workspace
 from deploy.runpod_client import RunPodClient
+from deploy.startup_script import generate_startup_script, generate_deployment_id
 
 routes = web.RouteTableDef()
 
@@ -125,14 +126,17 @@ async def deploy_to_runpod(request: web.Request, workspace) -> web.Response:
 
     Request body:
         gpu_type_id: GPU type (e.g., "NVIDIA GeForce RTX 4090")
-        pod_name: Name for the pod
+        pod_name: Name for the pod (optional, defaults to "comfygit-deploy")
         network_volume_id: Network volume to attach (for persistent storage)
         cloud_type: "SECURE" or "COMMUNITY" (optional, default "SECURE")
         pricing_type: "ON_DEMAND" or "SPOT" (optional, default "ON_DEMAND")
+        import_source: Git URL or tarball path for cg import (required)
+        branch: Git branch/tag for import (optional)
 
     Returns:
         status: "success" or "error"
         pod_id: Created pod ID on success
+        deployment_id: Unique deployment identifier
     """
     api_key = workspace.workspace_config_manager.get_runpod_token()
     if not api_key:
@@ -147,9 +151,29 @@ async def deploy_to_runpod(request: web.Request, workspace) -> web.Response:
     network_volume_id = data.get("network_volume_id")
     cloud_type = data.get("cloud_type", "SECURE")
     pricing_type = data.get("pricing_type", "ON_DEMAND")
+    import_source = data.get("import_source")
+    branch = data.get("branch")
+
+    # Validate import_source is provided
+    if not import_source:
+        return web.json_response(
+            {"status": "error", "error": "import_source is required for deployment"},
+            status=400,
+        )
 
     # Convert pricing_type to interruptible flag
     interruptible = pricing_type == "SPOT"
+
+    # Generate unique deployment ID
+    env_name = pod_name.replace("comfygit-", "") if pod_name else "deploy"
+    deployment_id = generate_deployment_id(env_name)
+
+    # Generate startup script for pod
+    startup_script = generate_startup_script(
+        deployment_id=deployment_id,
+        import_source=import_source,
+        branch=branch,
+    )
 
     client = RunPodClient(api_key)
 
@@ -165,12 +189,15 @@ async def deploy_to_runpod(request: web.Request, workspace) -> web.Response:
             container_disk_in_gb=30,
             ports=["8188/http", "22/tcp"],
             interruptible=interruptible,
+            env={"COMFYGIT_HOME": "/workspace/comfygit"},
+            docker_start_cmd=["/bin/bash", "-c", startup_script],
         )
 
         return web.json_response({
             "status": "success",
             "pod_id": pod.get("id"),
-            "message": "Pod created. Starting ComfyUI setup...",
+            "deployment_id": deployment_id,
+            "message": "Pod created. Environment setup in progress...",
         })
     except Exception as e:
         return web.json_response(

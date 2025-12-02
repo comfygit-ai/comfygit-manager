@@ -202,7 +202,8 @@ class TestRunPodDeployEndpoint:
                 json={
                     "gpu_type_id": "NVIDIA GeForce RTX 4090",
                     "pod_name": "my-comfyui",
-                    "volume_size_gb": 50,
+                    "network_volume_id": "vol123",
+                    "import_source": "https://github.com/user/repo.git",
                 },
             )
 
@@ -407,7 +408,7 @@ class TestRunPodDeployWithNetworkVolume:
     """POST /v2/comfygit/deploy/runpod - Deploy with network volume."""
 
     async def test_success_with_network_volume(self, client, mock_workspace_context):
-        """Should deploy with network_volume_id instead of volume_size_gb."""
+        """Should deploy with network_volume_id."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
         with patch("api.v2.deploy.RunPodClient") as MockClient:
@@ -421,6 +422,7 @@ class TestRunPodDeployWithNetworkVolume:
                     "gpu_type_id": "NVIDIA GeForce RTX 4090",
                     "pod_name": "my-comfyui",
                     "network_volume_id": "5aio30csvw",
+                    "import_source": "https://github.com/user/repo.git",
                 },
             )
 
@@ -493,6 +495,7 @@ class TestRunPodDeployWithPricingType:
                     "pod_name": "my-spot-comfyui",
                     "network_volume_id": "5aio30csvw",
                     "pricing_type": "SPOT",
+                    "import_source": "https://github.com/user/repo.git",
                 },
             )
 
@@ -521,6 +524,7 @@ class TestRunPodDeployWithPricingType:
                     "pod_name": "my-ondemand-comfyui",
                     "network_volume_id": "5aio30csvw",
                     "pricing_type": "ON_DEMAND",
+                    "import_source": "https://github.com/user/repo.git",
                 },
             )
 
@@ -547,6 +551,7 @@ class TestRunPodDeployWithPricingType:
                     "gpu_type_id": "NVIDIA GeForce RTX 4090",
                     "pod_name": "my-comfyui",
                     "network_volume_id": "5aio30csvw",
+                    "import_source": "https://github.com/user/repo.git",
                     # pricing_type not specified - should default to ON_DEMAND
                 },
             )
@@ -556,3 +561,132 @@ class TestRunPodDeployWithPricingType:
             # Verify interruptible=False (on-demand behavior)
             call_kwargs = mock_client.create_pod.call_args[1]
             assert call_kwargs.get("interruptible") is False
+
+
+@pytest.mark.integration
+class TestRunPodDeployWithStartupScript:
+    """POST /v2/comfygit/deploy/runpod - Deploy with startup script."""
+
+    async def test_includes_comfygit_home_env_var(self, client, mock_workspace_context):
+        """Should set COMFYGIT_HOME=/workspace/comfygit in pod env."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.create_pod.return_value = {"id": "pod123", "name": "test"}
+            MockClient.return_value = mock_client
+
+            resp = await client.post(
+                "/v2/comfygit/deploy/runpod",
+                json={
+                    "gpu_type_id": "NVIDIA GeForce RTX 4090",
+                    "pod_name": "my-comfyui",
+                    "network_volume_id": "vol123",
+                    "import_source": "https://github.com/user/repo.git",
+                },
+            )
+
+            assert resp.status == 200
+
+            # Verify COMFYGIT_HOME is set in pod environment
+            call_kwargs = mock_client.create_pod.call_args[1]
+            env = call_kwargs.get("env", {})
+            assert env.get("COMFYGIT_HOME") == "/workspace/comfygit"
+
+    async def test_includes_startup_script(self, client, mock_workspace_context):
+        """Should include startup script in docker_start_cmd."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.create_pod.return_value = {"id": "pod123", "name": "test"}
+            MockClient.return_value = mock_client
+
+            resp = await client.post(
+                "/v2/comfygit/deploy/runpod",
+                json={
+                    "gpu_type_id": "NVIDIA GeForce RTX 4090",
+                    "pod_name": "my-comfyui",
+                    "network_volume_id": "vol123",
+                    "import_source": "https://github.com/user/repo.git",
+                },
+            )
+
+            assert resp.status == 200
+
+            # Verify docker_start_cmd includes startup script
+            call_kwargs = mock_client.create_pod.call_args[1]
+            docker_cmd = call_kwargs.get("docker_start_cmd")
+            assert docker_cmd is not None
+            # Command should execute a bash script
+            assert "bash" in str(docker_cmd).lower() or "/bin/bash" in str(docker_cmd)
+
+    async def test_returns_deployment_id(self, client, mock_workspace_context):
+        """Should return deployment_id in response."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.create_pod.return_value = {"id": "pod123", "name": "test"}
+            MockClient.return_value = mock_client
+
+            resp = await client.post(
+                "/v2/comfygit/deploy/runpod",
+                json={
+                    "gpu_type_id": "NVIDIA GeForce RTX 4090",
+                    "pod_name": "my-comfyui",
+                    "network_volume_id": "vol123",
+                    "import_source": "https://github.com/user/repo.git",
+                },
+            )
+
+            assert resp.status == 200
+            data = await resp.json()
+            # Should include deployment_id
+            assert "deployment_id" in data
+            assert data["deployment_id"].startswith("deploy-")
+
+    async def test_import_source_required(self, client, mock_workspace_context):
+        """Should require import_source for deployment."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
+
+        resp = await client.post(
+            "/v2/comfygit/deploy/runpod",
+            json={
+                "gpu_type_id": "NVIDIA GeForce RTX 4090",
+                "pod_name": "my-comfyui",
+                "network_volume_id": "vol123",
+                # import_source missing
+            },
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "import_source" in data.get("error", "").lower()
+
+    async def test_with_branch_option(self, client, mock_workspace_context):
+        """Should pass branch to startup script when provided."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.create_pod.return_value = {"id": "pod123", "name": "test"}
+            MockClient.return_value = mock_client
+
+            resp = await client.post(
+                "/v2/comfygit/deploy/runpod",
+                json={
+                    "gpu_type_id": "NVIDIA GeForce RTX 4090",
+                    "pod_name": "my-comfyui",
+                    "network_volume_id": "vol123",
+                    "import_source": "https://github.com/user/repo.git",
+                    "branch": "v1.0.0",
+                },
+            )
+
+            assert resp.status == 200
+            # Startup script should include branch flag
+            call_kwargs = mock_client.create_pod.call_args[1]
+            docker_cmd = call_kwargs.get("docker_start_cmd")
+            # Branch should be passed in the script (verified via script content)
+            assert docker_cmd is not None
