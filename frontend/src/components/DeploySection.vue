@@ -200,6 +200,21 @@
               placeholder="my-comfyui-deploy"
             />
           </div>
+
+          <!-- Import Source -->
+          <div class="config-row">
+            <label class="config-label">
+              Environment Source
+              <span class="info-tooltip" title="Git repository URL containing a ComfyGit environment (pyproject.toml with comfyui dependency)">ⓘ</span>
+            </label>
+            <input
+              v-model="importSource"
+              type="text"
+              class="config-input"
+              placeholder="https://github.com/user/comfyui-env.git"
+            />
+            <span class="field-help">Git URL of your ComfyGit environment repository</span>
+          </div>
         </div>
       </SectionGroup>
 
@@ -413,10 +428,64 @@
       </div>
     </template>
   </InfoPopover>
+
+  <!-- Deployment Progress Modal -->
+  <BaseModal
+    v-if="showProgressModal"
+    title="Deploying to RunPod"
+    size="sm"
+    :show-close-button="deploymentStatus?.phase === 'READY' || deploymentStatus?.phase === 'ERROR' || deploymentStatus?.phase === 'STOPPED'"
+    :close-on-overlay-click="false"
+    @close="handleCloseProgressModal"
+  >
+    <template #body>
+      <div class="progress-content">
+        <!-- Phase indicator -->
+        <div class="phase-indicator">
+          <div :class="['phase-icon', deploymentStatus?.phase?.toLowerCase()]">
+            <span v-if="deploymentStatus?.phase === 'READY'">✓</span>
+            <span v-else-if="deploymentStatus?.phase === 'ERROR'">✕</span>
+            <span v-else-if="deploymentStatus?.phase === 'STOPPED'">○</span>
+            <span v-else class="spinner">⟳</span>
+          </div>
+          <div class="phase-text">
+            <div class="phase-name">{{ getPhaseLabel(deploymentStatus?.phase) }}</div>
+            <div class="phase-detail">{{ deploymentStatus?.phase_detail || 'Starting...' }}</div>
+          </div>
+        </div>
+
+        <!-- Progress bar -->
+        <ProgressBar
+          :progress="getProgressPercent(deploymentStatus?.phase)"
+          :variant="deploymentStatus?.phase === 'ERROR' ? 'error' : deploymentStatus?.phase === 'READY' ? 'success' : 'default'"
+        />
+
+        <!-- Ready state actions -->
+        <div v-if="deploymentStatus?.phase === 'READY'" class="ready-actions">
+          <ActionButton variant="primary" size="md" @click="openComfyUIFromModal">
+            Open ComfyUI
+          </ActionButton>
+        </div>
+
+        <!-- Console link -->
+        <div class="console-link">
+          <a v-if="deploymentStatus?.console_url" :href="deploymentStatus.console_url" target="_blank" rel="noopener">
+            View in RunPod Console →
+          </a>
+        </div>
+      </div>
+    </template>
+
+    <template v-if="deploymentStatus?.phase === 'READY' || deploymentStatus?.phase === 'ERROR' || deploymentStatus?.phase === 'STOPPED'" #footer>
+      <ActionButton variant="ghost" size="sm" @click="handleCloseProgressModal">
+        Close
+      </ActionButton>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import type {
   DataCenter,
@@ -424,7 +493,8 @@ import type {
   NetworkVolume,
   RunPodGpuType,
   RunPodInstance,
-  DeployResult
+  DeployResult,
+  DeploymentStatus
 } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
@@ -433,6 +503,8 @@ import ItemCard from '@/components/base/molecules/ItemCard.vue'
 import DetailRow from '@/components/base/molecules/DetailRow.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
+import BaseModal from '@/components/base/BaseModal.vue'
+import ProgressBar from '@/components/base/atoms/ProgressBar.vue'
 
 const emit = defineEmits<{
   toast: [message: string, type: 'info' | 'success' | 'warning' | 'error']
@@ -447,6 +519,7 @@ const {
   deployToRunPod,
   getRunPodPods,
   terminateRunPodPod,
+  getDeploymentStatus,
   getStoredRunPodKey,
   clearRunPodKey
 } = useComfyGitService()
@@ -469,6 +542,7 @@ const selectedGpu = ref('')
 const selectedCloudType = ref<'SECURE' | 'COMMUNITY'>('SECURE')
 const selectedPricingType = ref<'ON_DEMAND' | 'SPOT'>('ON_DEMAND')
 const podName = ref('my-comfyui-deploy')
+const importSource = ref('')  // Git URL for cg import
 
 // Data State
 const dataCenters = ref<DataCenter[]>([])
@@ -487,6 +561,12 @@ const isDeploying = ref(false)
 const deployResult = ref<DeployResult | null>(null)
 const terminatingPodId = ref<string | null>(null)
 
+// Progress Modal State
+const showProgressModal = ref(false)
+const currentPodId = ref<string | null>(null)
+const deploymentStatus = ref<DeploymentStatus | null>(null)
+const pollIntervalId = ref<number | null>(null)
+
 // Computed
 const selectedVolume = computed(() => {
   return networkVolumes.value.find(v => v.id === selectedVolumeId.value) || null
@@ -499,7 +579,7 @@ const filteredVolumes = computed(() => {
 })
 
 const canDeploy = computed(() => {
-  return isConnected.value && selectedVolumeId.value && selectedGpu.value && !isDeploying.value
+  return isConnected.value && selectedVolumeId.value && selectedGpu.value && importSource.value && !isDeploying.value
 })
 
 const getSelectedGpuPrice = (cloudType: 'SECURE' | 'COMMUNITY') => {
@@ -702,7 +782,7 @@ async function loadPods() {
 }
 
 async function handleDeploy() {
-  if (!selectedGpu.value || !selectedVolumeId.value) return
+  if (!selectedGpu.value || !selectedVolumeId.value || !importSource.value) return
 
   isDeploying.value = true
   deployResult.value = null
@@ -713,13 +793,17 @@ async function handleDeploy() {
       pod_name: podName.value || 'my-comfyui-deploy',
       network_volume_id: selectedVolumeId.value,
       cloud_type: selectedCloudType.value,
-      pricing_type: selectedPricingType.value
+      pricing_type: selectedPricingType.value,
+      import_source: importSource.value
     })
 
     deployResult.value = result
 
-    if (result.status === 'success') {
-      emit('toast', 'Deployment started!', 'success')
+    if (result.status === 'success' && result.pod_id) {
+      // Show progress modal and start polling
+      currentPodId.value = result.pod_id
+      showProgressModal.value = true
+      startStatusPolling(result.pod_id)
       // Refresh pods list
       await loadPods()
     } else {
@@ -734,6 +818,80 @@ async function handleDeploy() {
   } finally {
     isDeploying.value = false
   }
+}
+
+function startStatusPolling(podId: string) {
+  // Poll immediately
+  pollDeploymentStatus(podId)
+  // Then poll every 3 seconds
+  pollIntervalId.value = window.setInterval(() => pollDeploymentStatus(podId), 3000)
+}
+
+function stopStatusPolling() {
+  if (pollIntervalId.value) {
+    clearInterval(pollIntervalId.value)
+    pollIntervalId.value = null
+  }
+}
+
+async function pollDeploymentStatus(podId: string) {
+  try {
+    const status = await getDeploymentStatus(podId)
+    deploymentStatus.value = status
+
+    // Stop polling on terminal states
+    if (status.phase === 'READY' || status.phase === 'ERROR' || status.phase === 'STOPPED') {
+      stopStatusPolling()
+      if (status.phase === 'READY') {
+        emit('toast', 'ComfyUI is ready!', 'success')
+      }
+      // Refresh pods list
+      await loadPods()
+    }
+  } catch (err) {
+    console.error('Failed to poll deployment status:', err)
+  }
+}
+
+function handleCloseProgressModal() {
+  showProgressModal.value = false
+  stopStatusPolling()
+  currentPodId.value = null
+  deploymentStatus.value = null
+}
+
+function openComfyUIFromModal() {
+  if (deploymentStatus.value?.comfyui_url) {
+    window.open(deploymentStatus.value.comfyui_url, '_blank', 'noopener,noreferrer')
+  }
+}
+
+function openConsoleFromModal() {
+  if (deploymentStatus.value?.console_url) {
+    window.open(deploymentStatus.value.console_url, '_blank', 'noopener,noreferrer')
+  }
+}
+
+function getPhaseLabel(phase: string | undefined): string {
+  const labels: Record<string, string> = {
+    'STARTING_POD': 'Starting Pod',
+    'SETTING_UP': 'Setting Up Environment',
+    'READY': 'Ready',
+    'STOPPED': 'Stopped',
+    'ERROR': 'Error'
+  }
+  return labels[phase || ''] || 'Initializing...'
+}
+
+function getProgressPercent(phase: string | undefined): number {
+  const progress: Record<string, number> = {
+    'STARTING_POD': 25,
+    'SETTING_UP': 60,
+    'READY': 100,
+    'STOPPED': 0,
+    'ERROR': 0
+  }
+  return progress[phase || ''] ?? 10
 }
 
 async function handleTerminatePod(podId: string) {
@@ -780,6 +938,11 @@ onMounted(async () => {
   } catch {
     // Ignore errors checking for stored key
   }
+})
+
+// Cleanup on unmount
+onUnmounted(() => {
+  stopStatusPolling()
 })
 </script>
 
@@ -1293,5 +1456,100 @@ onMounted(async () => {
   color: var(--cg-color-warning);
   font-size: var(--cg-font-size-xs);
   margin-top: var(--cg-space-2);
+}
+
+/* Field Help Text */
+.field-help {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  margin-top: var(--cg-space-1);
+}
+
+/* Progress Modal */
+.progress-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-4);
+}
+
+.phase-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-3);
+}
+
+.phase-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  border-radius: 50%;
+  background: var(--cg-color-bg-tertiary);
+  border: 2px solid var(--cg-color-border);
+}
+
+.phase-icon.ready {
+  background: var(--cg-color-success-muted);
+  border-color: var(--cg-color-success);
+  color: var(--cg-color-success);
+}
+
+.phase-icon.error {
+  background: var(--cg-color-error-muted);
+  border-color: var(--cg-color-error);
+  color: var(--cg-color-error);
+}
+
+.phase-icon.stopped {
+  background: var(--cg-color-bg-tertiary);
+  border-color: var(--cg-color-border);
+  color: var(--cg-color-text-muted);
+}
+
+.phase-icon .spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.phase-text {
+  flex: 1;
+}
+
+.phase-name {
+  font-size: var(--cg-font-size-md);
+  font-weight: var(--cg-font-weight-semibold);
+  color: var(--cg-color-text-primary);
+}
+
+.phase-detail {
+  font-size: var(--cg-font-size-sm);
+  color: var(--cg-color-text-muted);
+  margin-top: var(--cg-space-1);
+}
+
+.ready-actions {
+  display: flex;
+  justify-content: center;
+  padding: var(--cg-space-2) 0;
+}
+
+.console-link {
+  text-align: center;
+}
+
+.console-link a {
+  color: var(--cg-color-accent);
+  font-size: var(--cg-font-size-xs);
+  text-decoration: none;
+}
+
+.console-link a:hover {
+  text-decoration: underline;
 }
 </style>

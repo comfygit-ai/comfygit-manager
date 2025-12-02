@@ -51,7 +51,8 @@ import type {
   RunPodConnectionResult,
   DeployResult,
   DeployPackageResult,
-  DeployConfig
+  DeployConfig,
+  DeploymentStatus
 } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
 import { useMockControls } from '@/composables/useMockControls'
@@ -1345,6 +1346,11 @@ export function useComfyGitService() {
     })
   }
 
+  async function getDeploymentStatus(podId: string): Promise<DeploymentStatus> {
+    if (USE_MOCK) return mockApi.getDeploymentStatus(podId)
+    return fetchApi<DeploymentStatus>(`/v2/comfygit/deploy/runpod/${encodeURIComponent(podId)}/status`)
+  }
+
   async function exportDeployPackage(outputPath?: string): Promise<DeployPackageResult> {
     if (USE_MOCK) return mockApi.exportDeployPackage(outputPath)
     return fetchApi<DeployPackageResult>('/v2/comfygit/deploy/package', {
@@ -1461,6 +1467,7 @@ export function useComfyGitService() {
     deployToRunPod,
     getRunPodPods,
     terminateRunPodPod,
+    getDeploymentStatus,
     exportDeployPackage,
     getStoredRunPodKey,
     clearRunPodKey

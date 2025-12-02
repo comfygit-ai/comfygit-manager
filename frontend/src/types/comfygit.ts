@@ -883,6 +883,8 @@ export interface DeployConfig {
   network_volume_id: string  // Network volume ID instead of ephemeral storage
   cloud_type: 'SECURE' | 'COMMUNITY'
   pricing_type: 'ON_DEMAND' | 'SPOT'
+  import_source: string       // Git URL or tarball path for cg import
+  branch?: string             // Optional git branch/tag
 }
 
 export interface EnvironmentDeploySummary {
@@ -898,6 +900,7 @@ export interface EnvironmentDeploySummary {
 export interface DeployResult {
   status: 'success' | 'error'
   pod_id?: string
+  deployment_id?: string
   message: string
 }
 
@@ -927,6 +930,15 @@ export interface RunPodConnectionResult {
   status: 'success' | 'error'
   message: string
   credit_balance?: number
+}
+
+export type DeployPhase = 'STARTING_POD' | 'SETTING_UP' | 'READY' | 'STOPPED' | 'ERROR'
+
+export interface DeploymentStatus {
+  phase: DeployPhase
+  phase_detail: string
+  comfyui_url: string | null
+  console_url: string
 }
 
 // First-Time Setup Types

@@ -83,7 +83,9 @@ import type {
   RunPodConnectionResult,
   DeployResult,
   DeployPackageResult,
-  DeployConfig
+  DeployConfig,
+  DeploymentStatus,
+  DeployPhase
 } from '@/types/comfygit'
 import { useMockControls } from '@/composables/useMockControls'
 
@@ -2205,10 +2207,30 @@ export const mockApi = {
   deployToRunPod: async (config: DeployConfig): Promise<DeployResult> => {
     await delay(2000)
     console.log('[MOCK] Deploying to RunPod:', config)
+    const podId = 'mock_pod_' + Date.now()
     return {
       status: 'success',
-      pod_id: 'mock_pod_' + Date.now(),
+      pod_id: podId,
+      deployment_id: `deploy-env-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${podId.slice(-6)}`,
       message: 'Pod created. Starting ComfyUI setup...'
+    }
+  },
+
+  getDeploymentStatus: async (podId: string): Promise<DeploymentStatus> => {
+    await delay(500)
+    // Simulate progression based on pod ID hash
+    const hash = podId.split('').reduce((a, b) => a + b.charCodeAt(0), 0)
+    const phases: DeployPhase[] = ['STARTING_POD', 'SETTING_UP', 'READY']
+    const phaseIndex = Math.min(Math.floor((Date.now() / 10000) % 3), 2)
+    const phase = phases[phaseIndex]
+
+    return {
+      phase,
+      phase_detail: phase === 'STARTING_POD' ? 'Waiting for pod to start...'
+        : phase === 'SETTING_UP' ? 'Installing ComfyGit and importing environment...'
+        : 'ComfyUI is running',
+      comfyui_url: phase === 'READY' ? `https://${podId}-8188.proxy.runpod.net` : null,
+      console_url: `https://www.runpod.io/console/pods/${podId}`
     }
   },
 

@@ -51,12 +51,13 @@ async def test_runpod_connection(request: web.Request, workspace) -> web.Respons
         return web.json_response({
             "status": "success",
             "message": "Connected to RunPod",
+            "credit_balance": result.get("credit_balance"),
         })
     else:
         return web.json_response(
             {
                 "status": "error",
-                "error": result.get("error", "Connection failed"),
+                "message": result.get("error", "Connection failed"),
             },
             status=401,
         )
@@ -335,20 +336,20 @@ async def get_runpod_key_status(request: web.Request, workspace) -> web.Response
     """Check if RunPod API key is configured.
 
     Returns:
-        configured: True if key is set
-        key_suffix: Last 4 characters of key (for display)
+        has_key: True if key is set
+        key_preview: Last 4 characters of key (for display)
     """
     api_key = workspace.workspace_config_manager.get_runpod_token()
 
     if api_key:
         return web.json_response({
-            "configured": True,
-            "key_suffix": api_key[-4:] if len(api_key) >= 4 else api_key,
+            "has_key": True,
+            "key_preview": api_key[-4:] if len(api_key) >= 4 else api_key,
         })
     else:
         return web.json_response({
-            "configured": False,
-            "key_suffix": None,
+            "has_key": False,
+            "key_preview": None,
         })
 
 
@@ -408,13 +409,13 @@ async def get_runpod_data_centers(request: web.Request, workspace) -> web.Respon
 @routes.get("/v2/comfygit/deploy/runpod/gpu-types")
 @requires_workspace
 async def get_runpod_gpu_types(request: web.Request, workspace) -> web.Response:
-    """Get available GPU types.
+    """Get available GPU types with live pricing from GraphQL API.
 
     Query params:
-        data_center_id: Optional filter by data center
+        data_center_id: Optional filter by data center (not yet implemented)
 
     Returns:
-        gpu_types: List of GPU type objects
+        gpu_types: List of GPU type objects with pricing
     """
     api_key = workspace.workspace_config_manager.get_runpod_token()
     if not api_key:
@@ -423,9 +424,35 @@ async def get_runpod_gpu_types(request: web.Request, workspace) -> web.Response:
             status=400,
         )
 
-    data_center_id = request.query.get("data_center_id")
-
     client = RunPodClient(api_key)
-    gpu_types = await client.get_gpu_types(data_center_id=data_center_id)
+
+    try:
+        raw_gpu_types = await client.get_gpu_types_with_pricing()
+    except Exception as e:
+        return web.json_response(
+            {"status": "error", "error": f"Failed to fetch GPU types: {e}"},
+            status=500,
+        )
+
+    # Transform to frontend-expected format
+    gpu_types = []
+    for gpu in raw_gpu_types:
+        # Skip GPUs with no pricing available
+        secure_price = gpu.get("securePrice")
+        community_price = gpu.get("communityPrice")
+        if not secure_price and not community_price:
+            continue
+
+        gpu_types.append({
+            "id": gpu.get("id"),
+            "displayName": gpu.get("displayName"),
+            "memoryInGb": gpu.get("memoryInGb"),
+            "securePrice": secure_price or 0,
+            "communityPrice": community_price or 0,
+            "available": gpu.get("secureCloud") or gpu.get("communityCloud") or False,
+        })
+
+    # Sort by price (community, ascending)
+    gpu_types.sort(key=lambda g: g.get("communityPrice") or g.get("securePrice") or 999)
 
     return web.json_response({"gpu_types": gpu_types})
