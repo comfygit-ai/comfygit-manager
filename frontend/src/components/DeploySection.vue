@@ -145,15 +145,14 @@
             >
               <option v-if="!selectedVolumeId" value="">Select a volume first</option>
               <option v-else-if="isLoadingGpus" value="">Loading GPUs...</option>
-              <option v-else-if="gpuTypes.length === 0" value="">No GPUs available in this region</option>
+              <option v-else-if="availableGpus.length === 0" value="">No GPUs available in this region</option>
               <option
-                v-for="gpu in gpuTypes"
+                v-for="gpu in availableGpus"
                 :key="gpu.id"
                 :value="gpu.id"
-                :disabled="!gpu.available"
               >
                 {{ gpu.displayName }} ({{ gpu.memoryInGb }}GB) - ${{ selectedCloudType === 'SECURE' ? gpu.securePrice.toFixed(2) : gpu.communityPrice.toFixed(2) }}/hr
-                {{ gpu.stockStatus ? `[${gpu.stockStatus}]` : '' }}{{ !gpu.available ? ' [Unavailable]' : '' }}
+                {{ gpu.stockStatus ? `[${gpu.stockStatus}]` : '' }}
               </option>
             </select>
           </div>
@@ -302,7 +301,7 @@
         <ActionButton
           variant="primary"
           size="md"
-          :loading="isDeploying"
+          :loading="isValidating || isDeploying"
           :disabled="!canDeploy"
           @click="handleDeploy"
         >
@@ -310,7 +309,7 @@
             <path d="M8 1L3 6h3v5h4V6h3L8 1z"/>
             <path d="M14 12v2H2v-2H0v4h16v-4h-2z"/>
           </svg>
-          Deploy to RunPod
+          {{ isValidating ? 'Validating...' : isDeploying ? 'Deploying...' : 'Deploy to RunPod' }}
         </ActionButton>
       </div>
 
@@ -503,6 +502,22 @@
       </ActionButton>
     </template>
   </BaseModal>
+
+  <!-- Export Blocked Modal (reused for deploy validation) -->
+  <ExportBlockedModal
+    v-if="showBlockedModal && validationResult"
+    :issues="validationResult.blocking_issues"
+    @close="showBlockedModal = false"
+  />
+
+  <!-- Export Warnings Modal (reused for deploy validation) -->
+  <ExportWarningsModal
+    v-if="showWarningsModal && validationResult"
+    :models="validationResult.warnings.models_without_sources"
+    @confirm="handleDeployConfirmed"
+    @cancel="showWarningsModal = false"
+    @revalidate="handleRevalidate"
+  />
 </template>
 
 <script setup lang="ts">
@@ -515,7 +530,8 @@ import type {
   RunPodGpuType,
   RunPodInstance,
   DeployResult,
-  DeploymentStatus
+  DeploymentStatus,
+  ExportValidationResult
 } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
@@ -526,6 +542,8 @@ import ActionButton from '@/components/base/atoms/ActionButton.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import BaseModal from '@/components/base/BaseModal.vue'
 import ProgressBar from '@/components/base/atoms/ProgressBar.vue'
+import ExportBlockedModal from '@/components/ExportBlockedModal.vue'
+import ExportWarningsModal from '@/components/ExportWarningsModal.vue'
 
 const emit = defineEmits<{
   toast: [message: string, type: 'info' | 'success' | 'warning' | 'error']
@@ -544,7 +562,8 @@ const {
   startRunPodPod,
   getDeploymentStatus,
   getStoredRunPodKey,
-  clearRunPodKey
+  clearRunPodKey,
+  validateExport
 } = useComfyGitService()
 
 // UI State
@@ -592,6 +611,12 @@ const currentPodId = ref<string | null>(null)
 const deploymentStatus = ref<DeploymentStatus | null>(null)
 const pollIntervalId = ref<number | null>(null)
 
+// Validation State
+const isValidating = ref(false)
+const validationResult = ref<ExportValidationResult | null>(null)
+const showBlockedModal = ref(false)
+const showWarningsModal = ref(false)
+
 // Computed
 const selectedVolume = computed(() => {
   return networkVolumes.value.find(v => v.id === selectedVolumeId.value) || null
@@ -603,8 +628,11 @@ const filteredVolumes = computed(() => {
   return networkVolumes.value.filter(v => v.data_center_id === selectedRegion.value)
 })
 
+// Filter to only available GPUs
+const availableGpus = computed(() => gpuTypes.value.filter(g => g.available))
+
 const canDeploy = computed(() => {
-  return isConnected.value && selectedVolumeId.value && selectedGpu.value && importSource.value && !isDeploying.value
+  return isConnected.value && selectedVolumeId.value && selectedGpu.value && !isDeploying.value
 })
 
 const getSelectedGpuPrice = (type: 'SECURE' | 'COMMUNITY' | 'ON_DEMAND' | 'SPOT') => {
@@ -878,10 +906,53 @@ async function loadPods() {
 }
 
 async function handleDeploy() {
-  if (!selectedGpu.value || !selectedVolumeId.value || !importSource.value) return
+  if (!selectedGpu.value || !selectedVolumeId.value) return
 
-  isDeploying.value = true
+  // Validate environment before deploying (same as export)
+  isValidating.value = true
   deployResult.value = null
+
+  try {
+    const result = await validateExport()
+    validationResult.value = result
+
+    if (!result.can_export) {
+      // Show blocking issues modal
+      showBlockedModal.value = true
+    } else if (result.warnings.models_without_sources.length > 0) {
+      // Show warnings modal for confirmation
+      showWarningsModal.value = true
+    } else {
+      // No issues, proceed directly
+      await executeDeploy()
+    }
+  } catch (err) {
+    deployResult.value = {
+      status: 'error',
+      message: err instanceof Error ? err.message : 'Validation failed'
+    }
+    emit('toast', 'Validation failed', 'error')
+  } finally {
+    isValidating.value = false
+  }
+}
+
+async function handleDeployConfirmed() {
+  showWarningsModal.value = false
+  await executeDeploy()
+}
+
+async function handleRevalidate() {
+  try {
+    const result = await validateExport()
+    validationResult.value = result
+  } catch (err) {
+    console.error('Re-validation failed:', err)
+  }
+}
+
+async function executeDeploy() {
+  isDeploying.value = true
 
   try {
     // Get spot bid price if using spot pricing
@@ -900,7 +971,7 @@ async function handleDeploy() {
       cloud_type: selectedCloudType.value,
       pricing_type: selectedPricingType.value,
       spot_bid: spotBid,
-      import_source: importSource.value
+      ...(importSource.value && { import_source: importSource.value })
     })
 
     deployResult.value = result
@@ -1302,6 +1373,7 @@ onUnmounted(() => {
   color: var(--cg-color-accent);
   font-size: var(--cg-font-size-xs);
   text-decoration: none;
+  width: fit-content;
 }
 
 .create-volume-inline-link:hover {
