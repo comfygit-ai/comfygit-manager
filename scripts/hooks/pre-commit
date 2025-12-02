@@ -1,0 +1,28 @@
+#!/bin/bash
+# Pre-commit hook for comfygit-manager
+# Checks that frontend build version matches pyproject.toml
+#
+# Install: cp scripts/hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+# Or run: scripts/install-hooks.sh
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Handle both installed location (.git/hooks/) and source location (scripts/hooks/)
+if [[ "$SCRIPT_DIR" == *".git/hooks"* ]]; then
+    PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+else
+    PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+fi
+
+# Only run version check if frontend files are staged
+if git diff --cached --name-only | grep -qE '^(pyproject\.toml|js/|frontend/)'; then
+    echo "Checking frontend version..."
+    if ! "$PROJECT_ROOT/scripts/check-frontend-version.sh"; then
+        echo ""
+        echo "Commit blocked. Please rebuild the frontend before committing."
+        echo "Run: cd frontend && npm run build"
+        exit 1
+    fi
+fi
+
+exit 0

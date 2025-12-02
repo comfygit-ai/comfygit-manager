@@ -16,3 +16,8 @@ dev = [
     "pytest-aiohttp>=1.1.0",
     "pytest-mock>=3.15.1",
 ]
+
+[tool.comfy]
+PublisherId = "akatz"
+DisplayName = "ComfyGit Manager"
+Icon = "https://github.com/comfyhub-org.png"

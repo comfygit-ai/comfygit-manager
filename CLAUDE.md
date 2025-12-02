@@ -11,6 +11,19 @@
 - `uv pip list` - View dependencies
 - `uv run <command>` - Run cli tools locally installed (e.g. uv run comfydock)
 
+## Frontend Development
+
+- Frontend source is in `frontend/src/` (Vue 3 + TypeScript)
+- Built assets go to `js/` directory (committed to repo)
+- `cd frontend && npm run build` - Rebuild frontend after changes
+- `cd frontend && npm run dev` - Start dev server with hot reload
+- **IMPORTANT**: Always rebuild frontend before committing if you changed:
+  - Any file in `frontend/src/`
+  - The `version` in `pyproject.toml`
+- Version displayed in UI is injected from `pyproject.toml` at build time
+- Pre-commit hook will block commits if frontend version doesn't match pyproject.toml
+- Install hooks: `./scripts/install-hooks.sh`
+
 ## Testing
 
 - New tests should go under testing/ under their respective category.
