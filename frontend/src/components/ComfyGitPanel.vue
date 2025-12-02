@@ -269,6 +269,7 @@
           <DeploySection
             v-else-if="currentView === 'deploy'"
             @toast="handleToast"
+            @navigate="handleNavigate"
           />
 
           <!-- Export View -->
@@ -537,7 +538,8 @@ function selectView(view: ViewName, section: SectionName) {
 
 function handleNavigate(view: string) {
   const viewMap: Record<string, { view: ViewName; section: SectionName }> = {
-    'model-index': { view: 'model-index', section: 'all-envs' }
+    'model-index': { view: 'model-index', section: 'all-envs' },
+    'remotes': { view: 'remotes', section: 'sharing' }
   }
   const target = viewMap[view]
   if (target) {

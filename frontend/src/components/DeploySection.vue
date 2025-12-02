@@ -201,21 +201,74 @@
             />
           </div>
 
-          <!-- Import Source -->
-          <div class="config-row">
-            <label class="config-label">
-              Environment Source
-              <span class="info-tooltip" title="Git repository URL containing a ComfyGit environment (pyproject.toml with comfyui dependency)">ⓘ</span>
-            </label>
-            <input
-              v-model="importSource"
-              type="text"
-              class="config-input"
-              placeholder="https://github.com/user/comfyui-env.git"
-            />
-            <span class="field-help">Git URL of your ComfyGit environment repository</span>
-          </div>
         </div>
+      </SectionGroup>
+
+      <!-- Deploy Source (Remote Selection) -->
+      <SectionGroup v-if="isConnected" title="DEPLOY SOURCE">
+        <!-- Loading state -->
+        <div v-if="isLoadingRemotes" class="loading-text">
+          Loading remotes...
+        </div>
+
+        <!-- Empty state -->
+        <div v-else-if="remotes.length === 0" class="empty-remotes">
+          <div class="empty-message">
+            <span class="empty-icon">🌐</span>
+            <span class="empty-text">No Git remotes configured</span>
+            <p class="empty-help">
+              Configure a remote repository to deploy your environment.
+            </p>
+          </div>
+          <ActionButton variant="primary" size="sm" @click="emit('navigate', 'remotes')">
+            Go to Remotes Tab →
+          </ActionButton>
+        </div>
+
+        <!-- Remote cards -->
+        <template v-else>
+          <div class="remotes-list">
+            <DeployRemoteCard
+              v-for="remote in remotes"
+              :key="remote.name"
+              :remote="remote"
+              :sync-status="syncStatuses[remote.name]"
+              :is-selected="selectedRemote === remote.name"
+              :is-fetching="fetchingRemote === remote.name"
+              :is-pushing="pushingRemote === remote.name"
+              @fetch="handleFetchRemote"
+              @push="handlePushRemote"
+              @select="handleSelectRemote"
+            />
+          </div>
+
+          <!-- Warning if selected remote has unpushed commits -->
+          <div
+            v-if="selectedRemoteStatus && selectedRemoteStatus.ahead > 0"
+            class="sync-warning"
+          >
+            <span class="warning-icon">⚠</span>
+            <div class="warning-content">
+              <strong>{{ selectedRemoteStatus.ahead }} unpushed commit{{ selectedRemoteStatus.ahead !== 1 ? 's' : '' }}</strong>
+              <p>Push to '{{ selectedRemote }}' before deploying to include your latest changes.</p>
+            </div>
+            <ActionButton
+              variant="primary"
+              size="sm"
+              :loading="pushingRemote === selectedRemote"
+              @click="selectedRemote && handlePushRemote(selectedRemote)"
+            >
+              Push to {{ selectedRemote }}
+            </ActionButton>
+          </div>
+
+          <!-- Link to add more remotes -->
+          <div class="remotes-footer">
+            <ActionButton variant="link" size="sm" @click="emit('navigate', 'remotes')">
+              Manage remotes →
+            </ActionButton>
+          </div>
+        </template>
       </SectionGroup>
 
       <!-- Environment Summary (only show when connected) -->
@@ -531,7 +584,9 @@ import type {
   RunPodInstance,
   DeployResult,
   DeploymentStatus,
-  ExportValidationResult
+  ExportValidationResult,
+  RemoteInfo,
+  RemoteSyncStatus
 } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
@@ -544,9 +599,11 @@ import BaseModal from '@/components/base/BaseModal.vue'
 import ProgressBar from '@/components/base/atoms/ProgressBar.vue'
 import ExportBlockedModal from '@/components/ExportBlockedModal.vue'
 import ExportWarningsModal from '@/components/ExportWarningsModal.vue'
+import DeployRemoteCard from '@/components/base/molecules/DeployRemoteCard.vue'
 
 const emit = defineEmits<{
   toast: [message: string, type: 'info' | 'success' | 'warning' | 'error']
+  navigate: [tab: string]
 }>()
 
 const {
@@ -563,7 +620,11 @@ const {
   getDeploymentStatus,
   getStoredRunPodKey,
   clearRunPodKey,
-  validateExport
+  validateExport,
+  getRemotes,
+  getRemoteSyncStatus,
+  fetchRemote,
+  pushToRemote
 } = useComfyGitService()
 
 // UI State
@@ -584,7 +645,14 @@ const selectedGpu = ref('')
 const selectedCloudType = ref<'SECURE' | 'COMMUNITY'>('SECURE')
 const selectedPricingType = ref<'ON_DEMAND' | 'SPOT'>('ON_DEMAND')
 const podName = ref('my-comfyui-deploy')
-const importSource = ref('')  // Git URL for cg import
+
+// Remote Selection State
+const remotes = ref<RemoteInfo[]>([])
+const syncStatuses = ref<Record<string, RemoteSyncStatus>>({})
+const isLoadingRemotes = ref(false)
+const selectedRemote = ref<string | null>(null)
+const fetchingRemote = ref<string | null>(null)
+const pushingRemote = ref<string | null>(null)
 
 // Data State
 const dataCenters = ref<DataCenter[]>([])
@@ -631,8 +699,25 @@ const filteredVolumes = computed(() => {
 // Filter to only available GPUs
 const availableGpus = computed(() => gpuTypes.value.filter(g => g.available))
 
+// Remote selection computed properties
+const selectedRemoteStatus = computed(() => {
+  if (!selectedRemote.value) return null
+  return syncStatuses.value[selectedRemote.value] || null
+})
+
+const selectedRemoteUrl = computed(() => {
+  if (!selectedRemote.value) return null
+  const remote = remotes.value.find(r => r.name === selectedRemote.value)
+  return remote?.fetch_url || null
+})
+
 const canDeploy = computed(() => {
-  return isConnected.value && selectedVolumeId.value && selectedGpu.value && !isDeploying.value
+  return isConnected.value &&
+         selectedVolumeId.value &&
+         selectedGpu.value &&
+         selectedRemoteUrl.value &&
+         !isDeploying.value &&
+         !isValidating.value
 })
 
 const getSelectedGpuPrice = (type: 'SECURE' | 'COMMUNITY' | 'ON_DEMAND' | 'SPOT') => {
@@ -696,8 +781,74 @@ async function loadDeployData() {
   await loadNetworkVolumes()
   console.log('[Deploy] Volumes loaded, region:', selectedRegion.value, 'GPUs:', gpuTypes.value.length)
 
-  // Summary and pods can load in parallel
-  await Promise.all([loadSummary(), loadPods()])
+  // Summary, pods, and remotes can load in parallel
+  await Promise.all([loadSummary(), loadPods(), loadRemotes()])
+}
+
+async function loadRemotes() {
+  isLoadingRemotes.value = true
+  try {
+    const result = await getRemotes()
+    remotes.value = result.remotes
+
+    // Load sync status for each remote
+    await Promise.all(
+      result.remotes.map(async (remote) => {
+        const status = await getRemoteSyncStatus(remote.name)
+        if (status) {
+          syncStatuses.value[remote.name] = status
+        }
+      })
+    )
+
+    // Auto-select default remote or first one
+    const defaultRemote = result.remotes.find(r => r.is_default)
+    if (defaultRemote) {
+      selectedRemote.value = defaultRemote.name
+    } else if (result.remotes.length > 0) {
+      selectedRemote.value = result.remotes[0].name
+    }
+  } catch (err) {
+    emit('toast', 'Failed to load remotes', 'error')
+  } finally {
+    isLoadingRemotes.value = false
+  }
+}
+
+async function handleFetchRemote(remoteName: string) {
+  fetchingRemote.value = remoteName
+  try {
+    await fetchRemote(remoteName)
+    const status = await getRemoteSyncStatus(remoteName)
+    if (status) {
+      syncStatuses.value[remoteName] = status
+    }
+    emit('toast', `Fetched from ${remoteName}`, 'success')
+  } catch (err) {
+    emit('toast', 'Fetch failed', 'error')
+  } finally {
+    fetchingRemote.value = null
+  }
+}
+
+async function handlePushRemote(remoteName: string) {
+  pushingRemote.value = remoteName
+  try {
+    await pushToRemote(remoteName, { force: false })
+    const status = await getRemoteSyncStatus(remoteName)
+    if (status) {
+      syncStatuses.value[remoteName] = status
+    }
+    emit('toast', `Pushed to ${remoteName}`, 'success')
+  } catch (err) {
+    emit('toast', 'Push failed', 'error')
+  } finally {
+    pushingRemote.value = null
+  }
+}
+
+function handleSelectRemote(remoteName: string) {
+  selectedRemote.value = remoteName
 }
 
 async function handleTestConnection() {
@@ -971,7 +1122,7 @@ async function executeDeploy() {
       cloud_type: selectedCloudType.value,
       pricing_type: selectedPricingType.value,
       spot_bid: spotBid,
-      ...(importSource.value && { import_source: importSource.value })
+      import_source: selectedRemoteUrl.value!
     })
 
     deployResult.value = result
@@ -1785,5 +1936,84 @@ onUnmounted(() => {
 
 .console-link a:hover {
   text-decoration: underline;
+}
+
+/* Remotes List */
+.remotes-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-2);
+}
+
+/* Sync Warning */
+.sync-warning {
+  display: flex;
+  gap: var(--cg-space-3);
+  align-items: flex-start;
+  padding: var(--cg-space-3);
+  background: var(--cg-color-warning-muted);
+  border: 1px solid var(--cg-color-warning);
+  margin-top: var(--cg-space-3);
+}
+
+.sync-warning .warning-icon {
+  flex-shrink: 0;
+  font-size: var(--cg-font-size-lg);
+}
+
+.sync-warning .warning-content {
+  flex: 1;
+}
+
+.sync-warning .warning-content strong {
+  color: var(--cg-color-text-primary);
+  font-size: var(--cg-font-size-sm);
+}
+
+.sync-warning .warning-content p {
+  margin: var(--cg-space-1) 0 0 0;
+  color: var(--cg-color-text-secondary);
+  font-size: var(--cg-font-size-xs);
+}
+
+/* Empty remotes state */
+.empty-remotes {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--cg-space-4);
+  padding: var(--cg-space-6);
+  background: var(--cg-color-bg-tertiary);
+  border: 1px solid var(--cg-color-border-subtle);
+  text-align: center;
+}
+
+.empty-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--cg-space-2);
+}
+
+.empty-icon {
+  font-size: var(--cg-font-size-2xl);
+}
+
+.empty-text {
+  color: var(--cg-color-text-primary);
+  font-size: var(--cg-font-size-sm);
+  font-weight: var(--cg-font-weight-medium);
+}
+
+.empty-help {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  margin: 0;
+}
+
+/* Remotes footer */
+.remotes-footer {
+  margin-top: var(--cg-space-3);
+  text-align: right;
 }
 </style>
