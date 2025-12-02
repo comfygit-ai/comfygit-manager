@@ -41,6 +41,10 @@ ENV/
 .DS_Store
 Thumbs.db
 
+# ENV
+.env
+.env.*
+
 # Legacy reference repos (large, don't need to track)
 legacy/
 
