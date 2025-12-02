@@ -279,6 +279,9 @@ class RunPodClient:
 
         Returns:
             Dict with id, clientBalance, currentSpendPerHr, spendLimit
+
+        Raises:
+            RunPodAPIError: If API key is invalid or unauthorized
         """
         query = """
         query {
@@ -292,10 +295,19 @@ class RunPodClient:
         """
         result = await self._graphql_query(query)
         self._handle_graphql_errors(result)
+
+        # Handle null data (happens with invalid/truncated API keys)
+        if not result.get("data") or not result["data"].get("myself"):
+            raise RunPodAPIError("Invalid API key or unauthorized", 401)
+
         return result["data"]["myself"]
 
-    async def get_gpu_types_with_pricing(self) -> list[dict]:
-        """Get GPU types with real pricing, availability, and data center info.
+    async def get_gpu_types_with_pricing(self, data_center_id: str | None = None) -> list[dict]:
+        """Get GPU types with real pricing and availability for a specific region.
+
+        Args:
+            data_center_id: Data center ID (e.g., "US-IL-1") to get region-specific
+                           stock status and pricing. If None, returns global data.
 
         Returns:
             List of GPU types with pricing fields:
@@ -304,11 +316,16 @@ class RunPodClient:
             - securePrice, communityPrice (on-demand $/hr)
             - secureSpotPrice, communitySpotPrice (spot $/hr)
             - lowestPrice: {minimumBidPrice, uninterruptablePrice, stockStatus}
-            - nodeGroupDatacenters: [{id, name}] (data centers where GPU is available)
         """
-        query = """
-        query {
-            gpuTypes {
+        # Build lowestPrice input - dataCenterId is the key for regional availability!
+        if data_center_id:
+            lowest_price_input = f'input: {{ gpuCount: 1, dataCenterId: "{data_center_id}" }}'
+        else:
+            lowest_price_input = "input: { gpuCount: 1 }"
+
+        query = f"""
+        query {{
+            gpuTypes {{
                 id
                 displayName
                 memoryInGb
@@ -318,17 +335,13 @@ class RunPodClient:
                 communityPrice
                 secureSpotPrice
                 communitySpotPrice
-                lowestPrice(input: { gpuCount: 1 }) {
+                lowestPrice({lowest_price_input}) {{
                     minimumBidPrice
                     uninterruptablePrice
                     stockStatus
-                }
-                nodeGroupDatacenters {
-                    id
-                    name
-                }
-            }
-        }
+                }}
+            }}
+        }}
         """
         result = await self._graphql_query(query)
         self._handle_graphql_errors(result)

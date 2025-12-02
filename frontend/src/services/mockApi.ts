@@ -81,6 +81,7 @@ import type {
   RunPodGpuType,
   RunPodInstance,
   RunPodConnectionResult,
+  RunPodKeyStatus,
   DeployResult,
   DeployPackageResult,
   DeployConfig,
@@ -2185,23 +2186,17 @@ export const mockApi = {
     }
   },
 
-  getRunPodGpuTypes: async (dataCenterId?: string): Promise<{ gpu_types: RunPodGpuType[] }> => {
+  getRunPodGpuTypes: async (): Promise<{ gpu_types: RunPodGpuType[] }> => {
     await delay(400)
 
-    const allGpus: RunPodGpuType[] = [
-      { id: 'NVIDIA RTX 4090', displayName: 'RTX 4090', memoryInGb: 24, securePrice: 0.44, communityPrice: 0.34, secureSpotPrice: 0.22, communitySpotPrice: 0.17, stockStatus: 'HIGH', available: true, data_center_id: 'US-IL-1' },
-      { id: 'NVIDIA RTX 3090', displayName: 'RTX 3090', memoryInGb: 24, securePrice: 0.22, communityPrice: 0.16, secureSpotPrice: 0.11, communitySpotPrice: 0.08, stockStatus: 'MEDIUM', available: true, data_center_id: 'US-IL-1' },
-      { id: 'NVIDIA A100 80GB', displayName: 'A100 80GB', memoryInGb: 80, securePrice: 1.89, communityPrice: 1.49, secureSpotPrice: 0.95, communitySpotPrice: 0.75, stockStatus: 'LOW', available: true, data_center_id: 'US-IL-1' },
-      { id: 'NVIDIA RTX 4090', displayName: 'RTX 4090', memoryInGb: 24, securePrice: 0.44, communityPrice: 0.34, secureSpotPrice: 0.22, communitySpotPrice: 0.17, stockStatus: 'HIGH', available: true, data_center_id: 'EU-CZ-1' },
-      { id: 'NVIDIA RTX A6000', displayName: 'RTX A6000', memoryInGb: 48, securePrice: 0.79, communityPrice: 0.59, secureSpotPrice: 0.40, communitySpotPrice: 0.30, stockStatus: 'MEDIUM', available: true, data_center_id: 'EU-CZ-1' }
-    ]
-
-    // Filter by data center if specified
-    if (dataCenterId) {
-      return { gpu_types: allGpus.filter(g => g.data_center_id === dataCenterId) }
+    return {
+      gpu_types: [
+        { id: 'NVIDIA RTX 4090', displayName: 'RTX 4090', memoryInGb: 24, securePrice: 0.44, communityPrice: 0.34, secureSpotPrice: 0.22, communitySpotPrice: 0.17, stockStatus: 'HIGH', available: true },
+        { id: 'NVIDIA RTX 3090', displayName: 'RTX 3090', memoryInGb: 24, securePrice: 0.22, communityPrice: 0.16, secureSpotPrice: 0.11, communitySpotPrice: 0.08, stockStatus: 'MEDIUM', available: true },
+        { id: 'NVIDIA A100 80GB', displayName: 'A100 80GB', memoryInGb: 80, securePrice: 1.89, communityPrice: 1.49, secureSpotPrice: 0.95, communitySpotPrice: 0.75, stockStatus: 'LOW', available: true },
+        { id: 'NVIDIA RTX A6000', displayName: 'RTX A6000', memoryInGb: 48, securePrice: 0.79, communityPrice: 0.59, secureSpotPrice: 0.40, communitySpotPrice: 0.30, stockStatus: null, available: false }
+      ]
     }
-
-    return { gpu_types: allGpus }
   },
 
   deployToRunPod: async (config: DeployConfig): Promise<DeployResult> => {
@@ -2296,7 +2291,7 @@ export const mockApi = {
     }
   },
 
-  getStoredRunPodKey: async (): Promise<{ has_key: boolean; key_preview?: string }> => {
+  getStoredRunPodKey: async (): Promise<RunPodKeyStatus> => {
     await delay(200)
     // Simulate stored key state - toggle this to test different states
     return {

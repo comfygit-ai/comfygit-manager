@@ -8,7 +8,18 @@ import logging
 
 from server import PromptServer
 
-from comfygit_server import get_environment_from_cwd, _workspace
+from comfygit_server import get_environment_from_cwd
+
+
+def get_workspace_from_cwd():
+    """Get workspace from the current environment.
+
+    This is a getter function that lazily loads the workspace,
+    avoiding the issue where workspace would be None at import time.
+    """
+    env = get_environment_from_cwd()
+    return env.workspace if env else None
+
 
 # Import panel-specific logging infrastructure
 try:
@@ -36,7 +47,7 @@ PromptServer.instance.app.middlewares.append(error_handler_middleware)
 
 # Setup app state for context access
 PromptServer.instance.app['get_environment'] = get_environment_from_cwd
-PromptServer.instance.app['workspace'] = _workspace
+PromptServer.instance.app['get_workspace'] = get_workspace_from_cwd
 
 # Register all routes (iterate since PromptServer routes don't have add_routes)
 for route_def in [status.routes, git.routes, workflows.routes, operations.routes, environments.routes, debug.routes, models.routes, config.routes, nodes.routes, remotes.routes, import_ops.routes, setup.routes, deploy.routes]:

@@ -79,6 +79,77 @@ class TestRunPodClientTestConnection:
 
 
 @pytest.mark.unit
+class TestRunPodClientGetUserInfo:
+    """Test get_user_info GraphQL error handling.
+
+    Bug: When RunPod returns {"data": null} (invalid key), get_user_info raises
+    KeyError/TypeError with unhelpful message "'data'" instead of proper error.
+
+    Fix: Check for null data before accessing fields, raise proper RunPodAPIError.
+    """
+
+    @pytest.mark.asyncio
+    async def test_get_user_info_returns_null_data(self):
+        """Should raise proper error when GraphQL returns null data.
+
+        This happens when API key is invalid/truncated - RunPod returns
+        {"data": null} instead of an errors array.
+        """
+        from server.deploy.runpod_client import RunPodClient, RunPodAPIError
+
+        client = RunPodClient(api_key="truncated_4char_key")
+
+        # Mock GraphQL returning null data (what happens with bad key)
+        mock_response = {"data": None}
+
+        with patch.object(client, '_graphql_query', AsyncMock(return_value=mock_response)):
+            with pytest.raises(RunPodAPIError) as exc_info:
+                await client.get_user_info()
+
+            # Should have meaningful error message, not "'data'" or "'myself'"
+            assert "invalid" in exc_info.value.message.lower() or "unauthorized" in exc_info.value.message.lower()
+
+    @pytest.mark.asyncio
+    async def test_get_user_info_returns_null_myself(self):
+        """Should raise proper error when GraphQL returns null myself field."""
+        from server.deploy.runpod_client import RunPodClient, RunPodAPIError
+
+        client = RunPodClient(api_key="bad_key")
+
+        # Mock GraphQL returning data but null myself
+        mock_response = {"data": {"myself": None}}
+
+        with patch.object(client, '_graphql_query', AsyncMock(return_value=mock_response)):
+            with pytest.raises(RunPodAPIError) as exc_info:
+                await client.get_user_info()
+
+            assert "invalid" in exc_info.value.message.lower() or "unauthorized" in exc_info.value.message.lower()
+
+    @pytest.mark.asyncio
+    async def test_test_connection_null_data_returns_clean_error(self):
+        """test_connection should return clean error message when data is null.
+
+        The frontend displays this error, so it should be human-readable.
+        """
+        from server.deploy.runpod_client import RunPodClient
+
+        client = RunPodClient(api_key="bad_key")
+
+        # Mock GraphQL returning null data
+        mock_response = {"data": None}
+
+        with patch.object(client, '_graphql_query', AsyncMock(return_value=mock_response)):
+            result = await client.test_connection()
+
+        assert result["success"] is False
+        # Should NOT be "'data'" - should be readable
+        assert result["error"] != "'data'"
+        assert result["error"] != "'myself'"
+        # Should mention invalid key or unauthorized
+        assert "invalid" in result["error"].lower() or "unauthorized" in result["error"].lower()
+
+
+@pytest.mark.unit
 class TestRunPodClientListPods:
     """Test listing pods."""
 

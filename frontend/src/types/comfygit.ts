@@ -878,8 +878,7 @@ export interface RunPodGpuType {
   secureSpotPrice: number       // $/hr for secure cloud (spot)
   communitySpotPrice: number    // $/hr for community cloud (spot)
   stockStatus: 'HIGH' | 'MEDIUM' | 'LOW' | null  // GPU availability level
-  available: boolean
-  dataCenterIds?: string[]      // Data centers where this GPU is available
+  available: boolean            // true if has stock (HIGH/MEDIUM/LOW)
 }
 
 export interface DeployConfig {
@@ -936,6 +935,14 @@ export interface RunPodConnectionResult {
   status: 'success' | 'error'
   message: string
   credit_balance?: number
+}
+
+export interface RunPodKeyStatus {
+  has_key: boolean
+  key_preview?: string
+  valid?: boolean
+  credit_balance?: number
+  error?: string
 }
 
 export type DeployPhase = 'STARTING_POD' | 'SETTING_UP' | 'READY' | 'STOPPED' | 'ERROR'

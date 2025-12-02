@@ -49,6 +49,7 @@ import type {
   RunPodGpuType,
   RunPodInstance,
   RunPodConnectionResult,
+  RunPodKeyStatus,
   DeployResult,
   DeployPackageResult,
   DeployConfig,
@@ -1318,7 +1319,7 @@ export function useComfyGitService() {
   }
 
   async function getRunPodGpuTypes(dataCenterId?: string): Promise<{ gpu_types: RunPodGpuType[] }> {
-    if (USE_MOCK) return mockApi.getRunPodGpuTypes(dataCenterId)
+    if (USE_MOCK) return mockApi.getRunPodGpuTypes()
     const url = dataCenterId
       ? `/v2/comfygit/deploy/runpod/gpu-types?data_center_id=${encodeURIComponent(dataCenterId)}`
       : '/v2/comfygit/deploy/runpod/gpu-types'
@@ -1374,9 +1375,12 @@ export function useComfyGitService() {
     })
   }
 
-  async function getStoredRunPodKey(): Promise<{ has_key: boolean; key_preview?: string }> {
+  async function getStoredRunPodKey(verify = false): Promise<RunPodKeyStatus> {
     if (USE_MOCK) return mockApi.getStoredRunPodKey()
-    return fetchApi<{ has_key: boolean; key_preview?: string }>('/v2/comfygit/deploy/runpod/key')
+    const url = verify
+      ? '/v2/comfygit/deploy/runpod/key?verify=true'
+      : '/v2/comfygit/deploy/runpod/key'
+    return fetchApi<RunPodKeyStatus>(url)
   }
 
   async function clearRunPodKey(): Promise<{ status: 'success' }> {

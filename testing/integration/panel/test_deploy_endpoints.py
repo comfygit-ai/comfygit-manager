@@ -8,27 +8,147 @@ from unittest.mock import Mock, AsyncMock, patch
 
 @pytest.fixture
 def mock_workspace_context(mock_environment, monkeypatch):
-    """Fixture to properly mock workspace for @requires_workspace endpoints."""
+    """Fixture to properly mock workspace for @requires_workspace endpoints.
+
+    This patches get_workspace_from_cwd() which is called by the app context
+    getter, ensuring @requires_workspace can access the mock workspace.
+    """
     mock_workspace = Mock()
     mock_workspace.workspace_config_manager = Mock()
     mock_workspace.workspace_config_manager.set_runpod_token = Mock()
     mock_workspace.workspace_config_manager.get_runpod_token = Mock(return_value=None)
     mock_environment.workspace = mock_workspace
 
-    # Patch get_workspace_from_request to return our mock
-    def get_workspace(request):
-        return mock_workspace
-
+    # Patch get_workspace_from_cwd in comfygit_panel to return our mock
     monkeypatch.setattr(
-        "cgm_core.context.get_workspace_from_request",
-        get_workspace
-    )
-    monkeypatch.setattr(
-        "cgm_core.decorators.get_workspace_from_request",
-        get_workspace
+        "comfygit_panel.get_workspace_from_cwd",
+        lambda: mock_workspace
     )
 
     return mock_workspace
+
+
+# ============================================================================
+# Bug Regression Tests - These ensure the fixes remain in place
+# ============================================================================
+
+@pytest.mark.integration
+class TestWorkspaceContextSetup:
+    """Tests for workspace context being properly available in app state.
+
+    Bug: app['workspace'] was set at import time when _workspace was None,
+    causing all @requires_workspace endpoints to fail with 500.
+    Fix: Use a getter function like get_environment does.
+    """
+
+    async def test_workspace_accessible_via_app_context(self, client, mock_workspace_context):
+        """Workspace should be accessible via request.app['workspace'] getter.
+
+        This tests the fix for the bug where app['workspace'] was captured
+        as None at import time.
+        """
+        # The mock_workspace_context fixture patches get_workspace_from_request,
+        # but we want to verify the real app context flow works.
+        # If this test passes, it means the workspace is accessible through
+        # whatever mechanism @requires_workspace uses.
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.test_connection.return_value = {"success": True}
+            MockClient.return_value = mock_client
+
+            resp = await client.post(
+                "/v2/comfygit/deploy/runpod/test",
+                json={"api_key": "rpa_test123", "save_key": False},
+            )
+
+            # Should NOT get 500 "No workspace detected"
+            assert resp.status != 500, "Got 500 - workspace context not working"
+            assert resp.status == 200
+
+
+@pytest.mark.integration
+class TestKeyStatusEndpointAliases:
+    """Tests for endpoint URL aliases to match frontend expectations.
+
+    Bug: Frontend calls GET /v2/comfygit/deploy/runpod/key but backend
+    only defined /v2/comfygit/deploy/runpod/key-status.
+    Fix: Add /key as alias that redirects to or duplicates key-status behavior.
+    """
+
+    async def test_get_key_status_via_key_endpoint(self, client, mock_workspace_context):
+        """GET /v2/comfygit/deploy/runpod/key should return key status.
+
+        Frontend uses this shorter URL. Should behave same as /key-status.
+        """
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123456"
+
+        resp = await client.get("/v2/comfygit/deploy/runpod/key")
+
+        # Should NOT return 404
+        assert resp.status != 404, "Got 404 - /key endpoint not registered"
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["has_key"] is True
+        assert data["key_preview"] == "3456"
+
+    async def test_get_key_status_via_key_status_endpoint(self, client, mock_workspace_context):
+        """GET /v2/comfygit/deploy/runpod/key-status should still work."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123456"
+
+        resp = await client.get("/v2/comfygit/deploy/runpod/key-status")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["has_key"] is True
+        assert data["key_preview"] == "3456"
+
+    async def test_delete_key_via_key_endpoint(self, client, mock_workspace_context):
+        """DELETE /v2/comfygit/deploy/runpod/key should clear the key."""
+        resp = await client.delete("/v2/comfygit/deploy/runpod/key")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "success"
+        mock_workspace_context.workspace_config_manager.set_runpod_token.assert_called_once_with(None)
+
+
+@pytest.mark.integration
+class TestDeploySummary:
+    """GET /v2/comfygit/deploy/summary - Get environment summary for deployment."""
+
+    async def test_returns_summary(self, client, mock_get_environment):
+        """Should return environment summary with node/model/workflow counts."""
+        # Setup mock pyproject
+        mock_model_with_source = Mock()
+        mock_model_with_source.sources = ["http://example.com/model.safetensors"]
+        mock_model_without_source = Mock()
+        mock_model_without_source.sources = []
+
+        mock_pyproject = Mock()
+        mock_pyproject.models.get_all.return_value = [mock_model_with_source, mock_model_without_source]
+        mock_pyproject.nodes.get_existing.return_value = [Mock(), Mock(), Mock()]
+        mock_pyproject.workflows.get_all_with_resolutions.return_value = {"wf1": {}, "wf2": {}}
+        # Mock load() to return proper dict for comfyui_version extraction
+        mock_pyproject.load.return_value = {
+            "tool": {
+                "comfygit": {
+                    "comfyui_version": "v0.3.50"
+                }
+            }
+        }
+
+        mock_get_environment.pyproject = mock_pyproject
+
+        resp = await client.get("/v2/comfygit/deploy/summary")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["comfyui_version"] == "v0.3.50"
+        assert data["node_count"] == 3
+        assert data["model_count"] == 2
+        assert data["models_with_sources"] == 1
+        assert data["models_without_sources"] == 1
+        assert data["workflow_count"] == 2
 
 
 @pytest.mark.integration
@@ -267,6 +387,95 @@ class TestRunPodKeyStatus:
         data = await resp.json()
         assert data["has_key"] is False
         assert data.get("key_preview") is None
+
+
+@pytest.mark.integration
+class TestRunPodKeyVerify:
+    """GET /v2/comfygit/deploy/runpod/key?verify=true - Verify stored key against RunPod.
+
+    Bug: Frontend sets apiKey=key_preview (last 4 chars) then calls handleTestConnection(),
+    which sends the 4-char preview to /test endpoint. RunPod rejects with 401.
+
+    Fix: Add verify=true param to /key endpoint that tests the stored key server-side
+    without requiring the key in the request body.
+    """
+
+    async def test_verify_valid_key_returns_balance(self, client, mock_workspace_context):
+        """Should verify stored key and return credit balance when valid."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_full_valid_key"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.test_connection.return_value = {
+                "success": True,
+                "credit_balance": 42.50,
+            }
+            MockClient.return_value = mock_client
+
+            resp = await client.get("/v2/comfygit/deploy/runpod/key?verify=true")
+
+            assert resp.status == 200
+            data = await resp.json()
+            assert data["has_key"] is True
+            assert data["valid"] is True
+            assert data["key_preview"] == "_key"  # Last 4 chars
+            assert data["credit_balance"] == 42.50
+
+    async def test_verify_invalid_key_returns_error(self, client, mock_workspace_context):
+        """Should return valid=false with error when stored key is invalid/expired."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_expired_key"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.test_connection.return_value = {
+                "success": False,
+                "error": "Invalid API key",
+            }
+            MockClient.return_value = mock_client
+
+            resp = await client.get("/v2/comfygit/deploy/runpod/key?verify=true")
+
+            assert resp.status == 200
+            data = await resp.json()
+            assert data["has_key"] is True
+            assert data["valid"] is False
+            assert data["key_preview"] == "_key"
+            assert "error" in data
+
+    async def test_verify_no_key_stored(self, client, mock_workspace_context):
+        """Should return has_key=false when no key is stored."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = None
+
+        resp = await client.get("/v2/comfygit/deploy/runpod/key?verify=true")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["has_key"] is False
+        # Should not have valid/error fields when no key exists
+        assert "valid" not in data
+
+    async def test_verify_false_or_missing_skips_validation(self, client, mock_workspace_context):
+        """Should not call RunPod API when verify=false or missing."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123456"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            # verify=false - should not call RunPod
+            resp = await client.get("/v2/comfygit/deploy/runpod/key?verify=false")
+
+            assert resp.status == 200
+            data = await resp.json()
+            assert data["has_key"] is True
+            assert "valid" not in data  # Should not validate
+            MockClient.assert_not_called()
+
+            # No verify param - should not call RunPod
+            resp2 = await client.get("/v2/comfygit/deploy/runpod/key")
+
+            assert resp2.status == 200
+            data2 = await resp2.json()
+            assert data2["has_key"] is True
+            assert "valid" not in data2
+            MockClient.assert_not_called()
 
 
 @pytest.mark.integration

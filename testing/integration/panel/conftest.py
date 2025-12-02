@@ -195,14 +195,18 @@ async def app(panel_routes, mock_environment):
     app = web.Application()
 
     # Setup app state for context access (like comfygit_panel.py does)
-    # Use a lambda that calls through to the module function
+    # Use functions that call through to the module functions
     # This allows tests to monkeypatch comfygit_panel.get_environment_from_cwd
     def get_env_from_module():
         import comfygit_panel
         return comfygit_panel.get_environment_from_cwd()
 
+    def get_workspace_from_module():
+        import comfygit_panel
+        return comfygit_panel.get_workspace_from_cwd()
+
     app['get_environment'] = get_env_from_module
-    app['workspace'] = None  # Will be set by tests that need it
+    app['get_workspace'] = get_workspace_from_module
 
     # Register all captured routes
     for method, path, handler in panel_routes:

@@ -2,7 +2,8 @@
 import aiohttp
 from aiohttp import web
 
-from cgm_core.decorators import requires_workspace
+from cgm_core.decorators import requires_workspace, requires_environment
+from cgm_utils.async_helpers import run_sync
 from deploy.runpod_client import RunPodClient
 from deploy.startup_script import generate_startup_script, generate_deployment_id
 
@@ -17,6 +18,52 @@ def get_comfyui_url(pod_id: str, port: int = 8188) -> str:
 def get_runpod_console_url(pod_id: str) -> str:
     """Get the RunPod console URL for debugging."""
     return f"https://www.runpod.io/console/pods/{pod_id}"
+
+
+def _get_deploy_summary(env):
+    """Get environment summary for deployment (sync helper)."""
+    pyproject = env.pyproject
+
+    # Get all models and count those with/without sources
+    all_models = list(pyproject.models.get_all())
+    models_with_sources = sum(1 for m in all_models if m.sources)
+    models_without_sources = len(all_models) - models_with_sources
+
+    # Get node count
+    nodes = list(pyproject.nodes.get_existing())
+
+    # Get workflow count
+    workflows = pyproject.workflows.get_all_with_resolutions()
+
+    # Get ComfyUI version from tool.comfygit section
+    comfyui_version = "unknown"
+    try:
+        config = pyproject.load()
+        comfyui_version = config.get('tool', {}).get('comfygit', {}).get('comfyui_version', 'unknown')
+    except Exception:
+        pass
+
+    return {
+        "comfyui_version": comfyui_version,
+        "node_count": len(nodes),
+        "model_count": len(all_models),
+        "models_with_sources": models_with_sources,
+        "models_without_sources": models_without_sources,
+        "workflow_count": len(workflows),
+        "estimated_package_size_mb": 0.0,  # TODO: Calculate actual size
+    }
+
+
+@routes.get("/v2/comfygit/deploy/summary")
+@requires_environment
+async def get_deploy_summary(request: web.Request, env) -> web.Response:
+    """Get environment summary for deployment planning.
+
+    Returns info about what will be deployed: ComfyUI version, node count,
+    model count (with/without sources), workflow count.
+    """
+    summary = await run_sync(_get_deploy_summary, env)
+    return web.json_response(summary)
 
 
 @routes.post("/v2/comfygit/deploy/runpod/test")
@@ -424,26 +471,56 @@ async def clear_runpod_key(request: web.Request, workspace) -> web.Response:
 
 
 @routes.get("/v2/comfygit/deploy/runpod/key-status")
+@routes.get("/v2/comfygit/deploy/runpod/key")  # Alias for frontend compatibility
 @requires_workspace
 async def get_runpod_key_status(request: web.Request, workspace) -> web.Response:
-    """Check if RunPod API key is configured.
+    """Check if RunPod API key is configured, optionally verifying it.
+
+    Query params:
+        verify: If "true", test the stored key against RunPod API
 
     Returns:
         has_key: True if key is set
         key_preview: Last 4 characters of key (for display)
+        valid: (only if verify=true) True if key is valid with RunPod
+        credit_balance: (only if verify=true and valid) Account balance
+        error: (only if verify=true and invalid) Error message
     """
     api_key = workspace.workspace_config_manager.get_runpod_token()
 
-    if api_key:
-        return web.json_response({
-            "has_key": True,
-            "key_preview": api_key[-4:] if len(api_key) >= 4 else api_key,
-        })
-    else:
+    if not api_key:
         return web.json_response({
             "has_key": False,
             "key_preview": None,
         })
+
+    key_preview = api_key[-4:] if len(api_key) >= 4 else api_key
+
+    # If verify=true, test the stored key against RunPod
+    if request.query.get("verify") == "true":
+        client = RunPodClient(api_key)
+        result = await client.test_connection()
+
+        if result.get("success"):
+            return web.json_response({
+                "has_key": True,
+                "valid": True,
+                "key_preview": key_preview,
+                "credit_balance": result.get("credit_balance"),
+            })
+        else:
+            return web.json_response({
+                "has_key": True,
+                "valid": False,
+                "key_preview": key_preview,
+                "error": result.get("error", "Connection failed"),
+            })
+
+    # Default: just check existence, don't validate
+    return web.json_response({
+        "has_key": True,
+        "key_preview": key_preview,
+    })
 
 
 @routes.get("/v2/comfygit/deploy/runpod/volumes")
@@ -470,7 +547,8 @@ async def get_runpod_volumes(request: web.Request, workspace) -> web.Response:
             "id": vol.get("id"),
             "name": vol.get("name"),
             "size_gb": vol.get("size"),
-            "data_center_id": vol.get("dataCenterId"),
+            "data_center_id": vol.get("dataCenterId") or vol.get("dataCenter"),  # Handle both field names
+            "data_center_name": vol.get("dataCenterName", ""),
         }
         for vol in volumes
     ]
@@ -505,10 +583,11 @@ async def get_runpod_gpu_types(request: web.Request, workspace) -> web.Response:
     """Get available GPU types with live pricing from GraphQL API.
 
     Query params:
-        data_center_id: Optional filter by data center (filters GPUs to those available in region)
+        data_center_id: Filter by data center (e.g., "US-IL-1") for region-specific
+                       stock status. Required for accurate availability info.
 
     Returns:
-        gpu_types: List of GPU type objects with pricing
+        gpu_types: List of GPU type objects with pricing and stock status
     """
     api_key = workspace.workspace_config_manager.get_runpod_token()
     if not api_key:
@@ -517,13 +596,13 @@ async def get_runpod_gpu_types(request: web.Request, workspace) -> web.Response:
             status=400,
         )
 
-    # Get optional data center filter
+    # Get data center filter - this is passed to lowestPrice for regional availability
     data_center_id = request.query.get("data_center_id")
 
     client = RunPodClient(api_key)
 
     try:
-        raw_gpu_types = await client.get_gpu_types_with_pricing()
+        raw_gpu_types = await client.get_gpu_types_with_pricing(data_center_id)
     except Exception as e:
         return web.json_response(
             {"status": "error", "error": f"Failed to fetch GPU types: {e}"},
@@ -539,17 +618,12 @@ async def get_runpod_gpu_types(request: web.Request, workspace) -> web.Response:
         if not secure_price and not community_price:
             continue
 
-        # Filter by data center if specified
-        node_group_dcs = gpu.get("nodeGroupDatacenters") or []
-        dc_ids = [dc.get("id") for dc in node_group_dcs]
-
-        # If data center filter provided, skip GPUs not available in that region
-        if data_center_id and dc_ids and data_center_id not in dc_ids:
-            continue
-
         # Extract lowest price info (contains stock status)
         lowest_price = gpu.get("lowestPrice") or {}
+        stock_status = lowest_price.get("stockStatus")  # HIGH, MEDIUM, LOW, or None
 
+        # Note: nodeGroupDatacenters is often empty and doesn't reliably indicate
+        # regional availability. We show all GPUs and use stockStatus for availability.
         gpu_types.append({
             "id": gpu.get("id"),
             "displayName": gpu.get("displayName"),
@@ -558,9 +632,8 @@ async def get_runpod_gpu_types(request: web.Request, workspace) -> web.Response:
             "communityPrice": community_price or 0,
             "secureSpotPrice": gpu.get("secureSpotPrice") or 0,
             "communitySpotPrice": gpu.get("communitySpotPrice") or 0,
-            "stockStatus": lowest_price.get("stockStatus"),  # HIGH, MEDIUM, LOW, or None
-            "available": gpu.get("secureCloud") or gpu.get("communityCloud") or False,
-            "dataCenterIds": dc_ids,  # List of data centers where GPU is available
+            "stockStatus": stock_status,
+            "available": bool(stock_status),  # Available if has stock (HIGH/MEDIUM/LOW)
         })
 
     # Sort by price (community, ascending)

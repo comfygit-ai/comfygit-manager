@@ -13,5 +13,12 @@ def get_environment_from_request(request: web.Request) -> Environment | None:
 
 
 def get_workspace_from_request(request: web.Request) -> Workspace | None:
-    """Get workspace from request context."""
-    return request.app.get('workspace')
+    """Get workspace from request context.
+
+    Uses a getter function stored in app['get_workspace'] to ensure
+    lazy loading works correctly (workspace may be None at import time).
+    """
+    get_ws_fn = request.app.get('get_workspace')
+    if get_ws_fn:
+        return get_ws_fn()
+    return None

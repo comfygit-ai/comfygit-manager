@@ -80,6 +80,7 @@
               :disabled="isLoadingDataCenters"
             >
               <option v-if="isLoadingDataCenters" value="">Loading...</option>
+              <option v-else-if="!selectedRegion" value="" disabled>Select a region</option>
               <option
                 v-for="dc in dataCenters"
                 :key="dc.id"
@@ -656,6 +657,21 @@ const pricingSummary = computed(() => {
 })
 
 // Methods
+
+/**
+ * Load all deploy data. Volumes drive everything - data centers are derived from volumes.
+ */
+async function loadDeployData() {
+  console.log('[Deploy] Loading deploy data...')
+
+  // Load volumes first - they determine available regions
+  await loadNetworkVolumes()
+  console.log('[Deploy] Volumes loaded, region:', selectedRegion.value, 'GPUs:', gpuTypes.value.length)
+
+  // Summary and pods can load in parallel
+  await Promise.all([loadSummary(), loadPods()])
+}
+
 async function handleTestConnection() {
   if (!apiKey.value) return
 
@@ -670,13 +686,7 @@ async function handleTestConnection() {
       creditBalance.value = result.credit_balance ?? null
       connectionStatus.value = { type: 'success', message: result.message }
 
-      // Load additional data
-      await Promise.all([
-        loadDataCenters(),
-        loadNetworkVolumes(),
-        loadSummary(),
-        loadPods()
-      ])
+      await loadDeployData()
     } else {
       connectionStatus.value = { type: 'error', message: result.message }
     }
@@ -716,11 +726,8 @@ async function loadDataCenters() {
   try {
     const result = await getDataCenters()
     dataCenters.value = result.data_centers
-    // Auto-select first available data center
-    const firstAvailable = dataCenters.value.find(dc => dc.available)
-    if (firstAvailable) {
-      selectedRegion.value = firstAvailable.id
-    }
+    // Don't auto-select region - let volume selection drive it
+    // The volume watcher will set region when a volume is selected
   } catch (err) {
     emit('toast', 'Failed to load data centers', 'error')
   } finally {
@@ -730,31 +737,66 @@ async function loadDataCenters() {
 
 async function loadNetworkVolumes() {
   isLoadingVolumes.value = true
+  isLoadingDataCenters.value = true
   try {
     const result = await getNetworkVolumes()
     networkVolumes.value = result.volumes
-    // Auto-select first volume if available
+    console.log('[Deploy] Network volumes:', result.volumes.map(v => ({ id: v.id, name: v.name, dc: v.data_center_id })))
+
+    // Build data centers list from volumes (users can only deploy where they have volumes)
+    const dcMap = new Map<string, DataCenter>()
+    for (const vol of result.volumes) {
+      if (vol.data_center_id && !dcMap.has(vol.data_center_id)) {
+        dcMap.set(vol.data_center_id, {
+          id: vol.data_center_id,
+          name: vol.data_center_name || vol.data_center_id,
+          available: true
+        })
+      }
+    }
+    dataCenters.value = Array.from(dcMap.values())
+    console.log('[Deploy] Data centers from volumes:', dataCenters.value)
+
+    // Auto-select first volume if available and set region from it
     if (networkVolumes.value.length > 0) {
-      selectedVolumeId.value = networkVolumes.value[0].id
+      const firstVolume = networkVolumes.value[0]
+      selectedVolumeId.value = firstVolume.id
+      console.log('[Deploy] Auto-selected volume:', firstVolume.name, 'data_center_id:', firstVolume.data_center_id)
+
+      // Explicitly set region and load GPUs (don't rely on watchers during initial load)
+      if (firstVolume.data_center_id) {
+        selectedRegion.value = firstVolume.data_center_id
+        console.log('[Deploy] Set region to:', selectedRegion.value)
+        await loadGpuTypes(firstVolume.data_center_id)
+      } else {
+        console.warn('[Deploy] Volume has no data_center_id!')
+      }
     }
   } catch (err) {
     emit('toast', 'Failed to load network volumes', 'error')
   } finally {
     isLoadingVolumes.value = false
+    isLoadingDataCenters.value = false
   }
 }
 
 async function loadGpuTypes(dataCenterId?: string) {
+  console.log('[Deploy] loadGpuTypes called with dataCenterId:', dataCenterId)
   isLoadingGpus.value = true
   try {
     const result = await getRunPodGpuTypes(dataCenterId)
     gpuTypes.value = result.gpu_types
+    console.log('[Deploy] GPU types loaded:', result.gpu_types.length, 'GPUs,',
+      result.gpu_types.filter(g => g.available).length, 'available')
+
     // Auto-select first available GPU
     const firstAvailable = gpuTypes.value.find(g => g.available)
     if (firstAvailable) {
       selectedGpu.value = firstAvailable.id
+      console.log('[Deploy] Auto-selected GPU:', firstAvailable.displayName)
     } else {
       selectedGpu.value = ''
+      console.log('[Deploy] No available GPUs in this region')
     }
   } catch (err) {
     emit('toast', 'Failed to load GPU types', 'error')
@@ -764,8 +806,16 @@ async function loadGpuTypes(dataCenterId?: string) {
 }
 
 // Watch for region changes: filter volumes, clear GPU if region changes, reload GPUs
+// Skip during initial load (isLoadingVolumes) to prevent double GPU loads
 watch(selectedRegion, async (newRegion) => {
+  console.log('[Deploy] Region watcher fired:', newRegion, '(loading volumes:', isLoadingVolumes.value, ')')
   if (!newRegion) return
+
+  // Skip GPU reload during initial volume load - loadNetworkVolumes handles it
+  if (isLoadingVolumes.value) {
+    console.log('[Deploy] Skipping GPU load - volumes still loading')
+    return
+  }
 
   // If current volume is in a different region, clear it
   const currentVolume = networkVolumes.value.find(v => v.id === selectedVolumeId.value)
@@ -778,10 +828,19 @@ watch(selectedRegion, async (newRegion) => {
 })
 
 // Watch for volume changes: update region to match volume's data center
+// Skip during initial load (isLoadingVolumes) to prevent double GPU loads
 watch(selectedVolumeId, async (volumeId) => {
+  console.log('[Deploy] Volume watcher fired:', volumeId, '(loading volumes:', isLoadingVolumes.value, ')')
+
   if (!volumeId) {
     gpuTypes.value = []
     selectedGpu.value = ''
+    return
+  }
+
+  // Skip during initial volume load - loadNetworkVolumes handles region/GPU setup
+  if (isLoadingVolumes.value) {
+    console.log('[Deploy] Skipping - volumes still loading')
     return
   }
 
@@ -790,7 +849,7 @@ watch(selectedVolumeId, async (volumeId) => {
     // Update region to match volume's data center (will trigger loadGpuTypes via region watcher)
     selectedRegion.value = volume.data_center_id
   } else if (volume) {
-    // Same region, just load GPUs
+    // Same region, just load GPUs for this region
     await loadGpuTypes(volume.data_center_id)
   }
 })
@@ -1011,14 +1070,28 @@ function formatUptime(seconds: number): string {
   return `${minutes}m`
 }
 
-// Check for stored key on mount
+// Check for stored key on mount and verify it server-side
 onMounted(async () => {
   try {
-    const stored = await getStoredRunPodKey()
+    // Use verify=true to test the stored key server-side
+    // This avoids sending the 4-char preview as the API key
+    const stored = await getStoredRunPodKey(true)
+
     if (stored.has_key && stored.key_preview) {
-      apiKey.value = stored.key_preview
-      // Auto-connect with stored key
-      await handleTestConnection()
+      // Display masked key for UI
+      apiKey.value = `****${stored.key_preview}`
+
+      if (stored.valid) {
+        // Key is valid - set connected state
+        isConnected.value = true
+        creditBalance.value = stored.credit_balance ?? null
+        connectionStatus.value = { type: 'success', message: 'Connected to RunPod' }
+
+        await loadDeployData()
+      } else if (stored.error) {
+        // Key exists but is invalid/expired
+        connectionStatus.value = { type: 'error', message: stored.error }
+      }
     }
   } catch {
     // Ignore errors checking for stored key
