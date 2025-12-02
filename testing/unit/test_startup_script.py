@@ -158,7 +158,7 @@ class TestStartupScriptGenerator:
         assert "set -e" in script or "set_error" in script
 
     def test_uses_uv_for_cli_installation(self):
-        """Should use uv tool install for comfygit CLI (RunPod template has uv)."""
+        """Should use uv tool install for comfygit CLI."""
         from deploy.startup_script import generate_startup_script
 
         script = generate_startup_script(
@@ -166,8 +166,85 @@ class TestStartupScriptGenerator:
             import_source="https://github.com/user/repo.git",
         )
 
-        # Template has uv pre-installed, just need to ensure comfygit is installed
-        assert "uv tool install comfygit" in script or "comfygit" in script
+        # Should install comfygit via uv
+        assert "uv tool install comfygit" in script
+
+    def test_installs_uv_before_using_it(self):
+        """Should install uv before trying to use uv tool install.
+
+        The default RunPod PyTorch template does NOT have uv pre-installed.
+        The script must install uv first using the official install script.
+        """
+        from deploy.startup_script import generate_startup_script
+
+        script = generate_startup_script(
+            deployment_id="deploy-test-20250101-120000-abc1",
+            import_source="https://github.com/user/repo.git",
+        )
+
+        # Must install uv using official astral.sh script
+        assert "astral.sh/uv/install.sh" in script
+
+        # uv install MUST come BEFORE uv tool install comfygit
+        uv_install_pos = script.find("astral.sh/uv/install.sh")
+        uv_tool_pos = script.find("uv tool install comfygit")
+
+        assert uv_install_pos != -1, "uv install script not found"
+        assert uv_tool_pos != -1, "uv tool install comfygit not found"
+        assert uv_install_pos < uv_tool_pos, "uv must be installed BEFORE using uv tool"
+
+    def test_sources_uv_env_after_install(self):
+        """Should source uv's env file after installing uv.
+
+        The uv installer creates ~/.local/bin/env which sets up PATH properly.
+        We must source this file after installing uv to ensure uv and uv-installed
+        tools are available in PATH.
+        """
+        from deploy.startup_script import generate_startup_script
+
+        script = generate_startup_script(
+            deployment_id="deploy-test-20250101-120000-abc1",
+            import_source="https://github.com/user/repo.git",
+        )
+
+        # Should source the env file that uv creates
+        assert "source" in script and ".local/bin/env" in script
+
+        # Source should come AFTER uv install and BEFORE uv tool install
+        uv_install_pos = script.find("astral.sh/uv/install.sh")
+        source_env_pos = script.find(".local/bin/env")
+        uv_tool_pos = script.find("uv tool install comfygit")
+
+        assert uv_install_pos < source_env_pos < uv_tool_pos, \
+            "env file must be sourced after uv install and before uv tool install"
+
+    def test_verifies_cg_available_after_install(self):
+        """Should verify cg command is available after uv tool install.
+
+        After installing comfygit via uv, we must verify the cg command
+        is actually available before trying to use it. This catches PATH
+        issues that would otherwise cause silent failures.
+        """
+        from deploy.startup_script import generate_startup_script
+
+        script = generate_startup_script(
+            deployment_id="deploy-test-20250101-120000-abc1",
+            import_source="https://github.com/user/repo.git",
+        )
+
+        # Should have an explicit check that cg is available after installation
+        # Look for pattern like: command -v cg ... || set_error
+        uv_tool_pos = script.find("uv tool install comfygit")
+        cg_init_pos = script.find("cg init")
+
+        # Find verification between uv tool install and cg init
+        verification_section = script[uv_tool_pos:cg_init_pos]
+
+        # Should verify cg is available (with error on failure)
+        assert "command -v cg" in verification_section or "which cg" in verification_section, \
+            "Must verify cg is available after uv tool install"
+        assert "set_error" in verification_section or "Failed" in verification_section, \
+            "Must error if cg is not available"
 
     def test_handles_tarball_import_source(self):
         """Should handle tarball (.tar.gz) import source."""

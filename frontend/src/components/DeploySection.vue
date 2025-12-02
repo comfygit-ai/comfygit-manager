@@ -151,7 +151,7 @@
                 :key="gpu.id"
                 :value="gpu.id"
               >
-                {{ gpu.displayName }} ({{ gpu.memoryInGb }}GB) - ${{ selectedCloudType === 'SECURE' ? gpu.securePrice.toFixed(2) : gpu.communityPrice.toFixed(2) }}/hr
+                {{ gpu.displayName }} ({{ gpu.memoryInGb }}GB) - ${{ selectedCloudType === 'SECURE' ? (gpu.securePrice ?? 0).toFixed(2) : (gpu.communityPrice ?? 0).toFixed(2) }}/hr
                 {{ gpu.stockStatus ? `[${gpu.stockStatus}]` : '' }}
               </option>
             </select>
@@ -426,7 +426,7 @@
               <span class="pod-separator">•</span>
               <span class="pod-uptime">{{ formatUptime(pod.uptime_seconds) }}</span>
               <span class="pod-separator">•</span>
-              <span class="pod-cost">${{ pod.total_cost.toFixed(2) }}</span>
+              <span class="pod-cost">${{ (pod.total_cost ?? 0).toFixed(2) }}</span>
             </div>
             <div class="pod-actions">
               <ActionButton
@@ -725,16 +725,16 @@ const getSelectedGpuPrice = (type: 'SECURE' | 'COMMUNITY' | 'ON_DEMAND' | 'SPOT'
   if (!gpu) return '0.00'
 
   // Handle cloud type selection (SECURE/COMMUNITY)
-  if (type === 'SECURE') return gpu.securePrice.toFixed(2)
-  if (type === 'COMMUNITY') return gpu.communityPrice.toFixed(2)
+  if (type === 'SECURE') return (gpu.securePrice ?? 0).toFixed(2)
+  if (type === 'COMMUNITY') return (gpu.communityPrice ?? 0).toFixed(2)
 
   // Handle pricing type selection (ON_DEMAND/SPOT) - uses current cloud type
   const isSecure = selectedCloudType.value === 'SECURE'
   if (type === 'ON_DEMAND') {
-    return isSecure ? gpu.securePrice.toFixed(2) : gpu.communityPrice.toFixed(2)
+    return isSecure ? (gpu.securePrice ?? 0).toFixed(2) : (gpu.communityPrice ?? 0).toFixed(2)
   }
   // SPOT pricing
-  return isSecure ? gpu.secureSpotPrice.toFixed(2) : gpu.communitySpotPrice.toFixed(2)
+  return isSecure ? (gpu.secureSpotPrice ?? 0).toFixed(2) : (gpu.communitySpotPrice ?? 0).toFixed(2)
 }
 
 // Pricing summary for deployment
@@ -747,12 +747,12 @@ const pricingSummary = computed(() => {
   const isSecure = selectedCloudType.value === 'SECURE'
   const isSpot = selectedPricingType.value === 'SPOT'
 
-  // Use actual spot prices from API
+  // Use actual spot prices from API (with fallbacks for undefined)
   let gpuPrice: number
   if (isSpot) {
-    gpuPrice = isSecure ? gpu.secureSpotPrice : gpu.communitySpotPrice
+    gpuPrice = isSecure ? (gpu.secureSpotPrice ?? 0) : (gpu.communitySpotPrice ?? 0)
   } else {
-    gpuPrice = isSecure ? gpu.securePrice : gpu.communityPrice
+    gpuPrice = isSecure ? (gpu.securePrice ?? 0) : (gpu.communityPrice ?? 0)
   }
 
   // Network volume: ~$0.10/GB/month = ~$0.00014/GB/hr
@@ -1283,9 +1283,10 @@ function openComfyUI(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
-function formatUptime(seconds: number): string {
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
+function formatUptime(seconds: number | undefined): string {
+  const secs = seconds ?? 0
+  const hours = Math.floor(secs / 3600)
+  const minutes = Math.floor((secs % 3600) / 60)
   if (hours > 0) {
     return `${hours}h ${minutes}m`
   }

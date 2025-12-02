@@ -132,12 +132,27 @@ update_status "INITIALIZING" "Setting up environment..." 5
 export COMFYGIT_HOME=/workspace/comfygit
 export PATH="$HOME/.local/bin:$PATH"
 
-update_status "INITIALIZING" "Installing ComfyGit CLI..." 10
+update_status "INITIALIZING" "Installing uv package manager..." 10
 
-# Install comfygit CLI via uv (uv is pre-installed on ComfyGit template)
+# Install uv if not present (default RunPod template doesn't include it)
+if ! command -v uv &> /dev/null; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh || set_error "Failed to install uv"
+fi
+
+# Source uv's env file to ensure PATH is configured correctly
+# This is created by the uv installer and sets up PATH for uv and uv-installed tools
+source "$HOME/.local/bin/env" 2>/dev/null || true
+export PATH="$HOME/.local/bin:$PATH"
+
+update_status "INITIALIZING" "Installing ComfyGit CLI..." 12
+
+# Install comfygit CLI via uv
 if ! command -v cg &> /dev/null; then
     uv tool install comfygit || set_error "Failed to install comfygit CLI"
 fi
+
+# Verify cg is available after installation (catch PATH issues early)
+command -v cg &> /dev/null || set_error "cg command not found after installation - check PATH"
 
 # =============================================================================
 # Phase: WORKSPACE_INIT

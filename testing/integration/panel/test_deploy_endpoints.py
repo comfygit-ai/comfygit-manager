@@ -250,6 +250,55 @@ class TestRunPodGetPods:
             assert len(data["pods"]) == 1
             assert data["pods"][0]["id"] == "pod123"
 
+    async def test_returns_all_required_fields(self, client, mock_workspace_context):
+        """Should return all fields required by frontend RunPodInstance type.
+
+        Frontend expects: id, name, gpu_type, gpu_count, status, created_at,
+        cost_per_hour, uptime_seconds, total_cost, comfyui_url
+
+        Bug: Backend was missing uptime_seconds, total_cost, gpu_count, created_at
+        which caused TypeError: Cannot read properties of undefined (reading 'toFixed')
+        """
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.list_pods.return_value = [
+                {
+                    "id": "pod123",
+                    "name": "test-pod",
+                    "desiredStatus": "RUNNING",
+                    "costPerHr": 0.44,
+                    "uptimeSeconds": 3600,
+                    "gpuCount": 1,
+                    "machine": {"gpuDisplayName": "RTX 4090"},
+                }
+            ]
+            MockClient.return_value = mock_client
+            MockClient.get_comfyui_url.return_value = "https://pod123-8188.proxy.runpod.net"
+
+            resp = await client.get("/v2/comfygit/deploy/runpod/pods")
+
+            assert resp.status == 200
+            data = await resp.json()
+            pod = data["pods"][0]
+
+            # All required fields must be present and not None
+            assert pod["id"] == "pod123"
+            assert pod["name"] == "test-pod"
+            assert pod["status"] == "RUNNING"
+            assert pod["gpu_type"] == "RTX 4090"
+            assert pod["cost_per_hour"] == 0.44
+            assert pod["comfyui_url"] == "https://pod123-8188.proxy.runpod.net"
+
+            # These fields were missing and caused .toFixed() crashes
+            assert "uptime_seconds" in pod
+            assert pod["uptime_seconds"] == 3600
+            assert "total_cost" in pod
+            assert isinstance(pod["total_cost"], (int, float))
+            assert "gpu_count" in pod
+            assert pod["gpu_count"] == 1
+
     async def test_success_empty_pods(self, client, mock_workspace_context):
         """Should return 200 with empty pods list."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"

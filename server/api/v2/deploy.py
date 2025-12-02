@@ -128,15 +128,23 @@ async def get_runpod_pods(request: web.Request, workspace) -> web.Response:
     client = RunPodClient(api_key)
     pods = await client.list_pods()
 
-    # Transform pods to include ComfyUI URLs
+    # Transform pods to include all fields expected by frontend RunPodInstance type
     result_pods = []
     for pod in pods:
+        uptime_seconds = pod.get("uptimeSeconds", 0)
+        cost_per_hour = pod.get("costPerHr", 0)
+        # Calculate total cost from uptime and hourly rate
+        total_cost = (uptime_seconds / 3600) * cost_per_hour
+
         result_pod = {
             "id": pod.get("id"),
             "name": pod.get("name"),
             "gpu_type": pod.get("machine", {}).get("gpuDisplayName", "Unknown"),
+            "gpu_count": pod.get("gpuCount", 1),
             "status": pod.get("desiredStatus"),
-            "cost_per_hour": pod.get("costPerHr", 0),
+            "cost_per_hour": cost_per_hour,
+            "uptime_seconds": uptime_seconds,
+            "total_cost": round(total_cost, 4),
             "comfyui_url": RunPodClient.get_comfyui_url(pod),
         }
         result_pods.append(result_pod)

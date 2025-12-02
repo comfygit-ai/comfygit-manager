@@ -1984,7 +1984,7 @@ const _C = [
 function os() {
   return !1;
 }
-function He() {
+function Ke() {
   const t = h(!1), c = h(null);
   async function n(H, ve) {
     var Ne;
@@ -2323,7 +2323,7 @@ function He() {
       method: "DELETE"
     });
   }
-  async function je(H, ve, Se) {
+  async function He(H, ve, Se) {
     return n(`/v2/comfygit/remotes/${encodeURIComponent(H)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -2603,7 +2603,7 @@ function He() {
     getRemotes: $e,
     addRemote: tt,
     removeRemote: Ye,
-    updateRemoteUrl: je,
+    updateRemoteUrl: He,
     fetchRemote: rt,
     getRemoteSyncStatus: _e,
     // Push/Pull
@@ -2964,7 +2964,7 @@ const Tl = { class: "base-modal-header" }, Dl = {
   },
   emits: ["close", "resolve", "refresh"],
   setup(t, { emit: c }) {
-    const n = t, i = c, { getWorkflowDetails: f, setModelImportance: v, openFileLocation: u } = He(), m = h(null), d = h(!1), p = h(null), w = h(!1), k = h({}), _ = h(!1), b = h(/* @__PURE__ */ new Set()), T = [
+    const n = t, i = c, { getWorkflowDetails: f, setModelImportance: v, openFileLocation: u } = Ke(), m = h(null), d = h(!1), p = h(null), w = h(!1), k = h({}), _ = h(!1), b = h(/* @__PURE__ */ new Set()), T = [
       { label: "Required", value: "required" },
       { label: "Flexible", value: "flexible" },
       { label: "Optional", value: "optional" }
@@ -5139,7 +5139,7 @@ const xi = { class: "resolution-stepper" }, Si = { class: "stepper-header" }, Ii
   },
   emits: ["close", "install", "refresh", "restart"],
   setup(t, { emit: c }) {
-    const n = t, i = c, { analyzeWorkflow: f, applyResolution: v, installNodes: u, queueModelDownloads: m, progress: d, resetProgress: p } = oo(), { loadPendingDownloads: w } = us(), { openFileLocation: k } = He(), _ = h(null), b = h(!1), T = h(!1), R = h(null), $ = h("analysis"), C = h([]), B = h(/* @__PURE__ */ new Map()), x = h(/* @__PURE__ */ new Map()), M = h(/* @__PURE__ */ new Set()), Z = U(() => {
+    const n = t, i = c, { analyzeWorkflow: f, applyResolution: v, installNodes: u, queueModelDownloads: m, progress: d, resetProgress: p } = oo(), { loadPendingDownloads: w } = us(), { openFileLocation: k } = Ke(), _ = h(null), b = h(!1), T = h(!1), R = h(null), $ = h("analysis"), C = h([]), B = h(/* @__PURE__ */ new Map()), x = h(/* @__PURE__ */ new Map()), M = h(/* @__PURE__ */ new Set()), Z = U(() => {
       const J = [
         { id: "analysis", label: "Analysis" }
       ];
@@ -5317,7 +5317,7 @@ const xi = { class: "resolution-stepper" }, Si = { class: "stepper-header" }, Ii
     function Ye(J) {
       M.value.has(J) ? M.value.delete(J) : M.value.add(J);
     }
-    function je(J) {
+    function He(J) {
       x.value.set(J, { action: "optional" });
     }
     function rt(J) {
@@ -5532,7 +5532,7 @@ const xi = { class: "resolution-stepper" }, Si = { class: "stepper-header" }, Ii
             key: 2,
             models: ee.value,
             "model-choices": x.value,
-            onMarkOptional: je,
+            onMarkOptional: He,
             onSkip: rt,
             onOptionSelected: _e,
             onDownloadUrl: Re,
@@ -5883,7 +5883,7 @@ const xi = { class: "resolution-stepper" }, Si = { class: "stepper-header" }, Ii
   __name: "WorkflowsSection",
   emits: ["refresh"],
   setup(t, { expose: c, emit: n }) {
-    const i = n, { getWorkflows: f } = He();
+    const i = n, { getWorkflows: f } = Ke();
     to();
     const v = h([]), u = h(!1), m = h(null), d = h(""), p = h(!0), w = h(!1), k = h(!1), _ = h(!1), b = h(null), T = U(
       () => v.value.filter((O) => O.status === "broken")
@@ -6214,7 +6214,7 @@ const xi = { class: "resolution-stepper" }, Si = { class: "stepper-header" }, Ii
   },
   emits: ["close"],
   setup(t, { emit: c }) {
-    const n = t, { getModelDetails: i, addModelSource: f, removeModelSource: v, openFileLocation: u } = He(), m = h(null), d = h(!0), p = h(null), w = h(""), k = h(!1), _ = h(null), b = h(null), T = h(null), R = h(null);
+    const n = t, { getModelDetails: i, addModelSource: f, removeModelSource: v, openFileLocation: u } = Ke(), m = h(null), d = h(!0), p = h(null), w = h(""), k = h(!1), _ = h(null), b = h(null), T = h(null), R = h(null);
     let $ = null;
     function C(E, D = "success", A = 2e3) {
       $ && clearTimeout($), R.value = { message: E, type: D }, $ = setTimeout(() => {
@@ -6404,7 +6404,7 @@ const xi = { class: "resolution-stepper" }, Si = { class: "stepper-header" }, Ii
   __name: "ModelsEnvSection",
   emits: ["navigate"],
   setup(t, { emit: c }) {
-    const n = c, { getEnvironmentModels: i, getStatus: f } = He(), v = h([]), u = h([]), m = h("production"), d = h(!1), p = h(null), w = h(""), k = h(!1), _ = h(null);
+    const n = c, { getEnvironmentModels: i, getStatus: f } = Ke(), v = h([]), u = h([]), m = h("production"), d = h(!1), p = h(null), w = h(""), k = h(!1), _ = h(null);
     function b() {
       k.value = !1, n("navigate", "model-index");
     }
@@ -6649,7 +6649,7 @@ const xi = { class: "resolution-stepper" }, Si = { class: "stepper-header" }, Ii
       scanWorkspaceModels: i,
       getModelsDirectory: f,
       setModelsDirectory: v
-    } = He(), { addToQueue: u } = us(), m = c, d = h([]), p = h(!1), w = h(!1), k = h(null), _ = h(""), b = h(!1), T = h(null), R = h(!1), $ = h(null), C = h(""), B = h(!1), x = h(!1), M = h(""), Z = h(""), F = h(null), G = U(
+    } = Ke(), { addToQueue: u } = us(), m = c, d = h([]), p = h(!1), w = h(!1), k = h(null), _ = h(""), b = h(!1), T = h(null), R = h(!1), $ = h(null), C = h(""), B = h(!1), x = h(!1), M = h(""), Z = h(""), F = h(null), G = U(
       () => d.value.reduce((z, I) => z + (I.size || 0), 0)
     ), E = U(() => {
       if (!_.value.trim()) return d.value;
@@ -7201,7 +7201,7 @@ const xi = { class: "resolution-stepper" }, Si = { class: "stepper-header" }, Ii
   },
   emits: ["open-node-manager", "repair-environment", "toast"],
   setup(t, { emit: c }) {
-    const n = t, i = c, { getNodes: f, trackNodeAsDev: v, installNode: u, uninstallNode: m } = He(), d = h({
+    const n = t, i = c, { getNodes: f, trackNodeAsDev: v, installNode: u, uninstallNode: m } = Ke(), d = h({
       nodes: [],
       total_count: 0,
       installed_count: 0,
@@ -8833,7 +8833,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
       getPushPreview: k,
       pushToRemote: _,
       validateMerge: b
-    } = He(), T = h([]), R = h(null), $ = h({}), C = h(!1), B = h(null), x = h(""), M = h(!1), Z = h(null), F = h(!1), G = h("add"), E = h({
+    } = Ke(), T = h([]), R = h(null), $ = h({}), C = h(!1), B = h(null), x = h(""), M = h(!1), Z = h(null), F = h(!1), G = h("add"), E = h({
       name: "",
       fetchUrl: "",
       pushUrl: ""
@@ -8940,7 +8940,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
     function Ye() {
       Ze.value && (I.value = "resolving", ze.value = null);
     }
-    function je(V, ne) {
+    function He(V, ne) {
       ae.value.set(V, { name: V, resolution: ne });
     }
     function rt() {
@@ -9170,7 +9170,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
         validating: I.value === "validating",
         error: ze.value,
         onClose: rt,
-        onResolve: je,
+        onResolve: He,
         onApply: _e
       }, null, 8, ["workflow-conflicts", "resolutions", "validating", "error"])) : r("", !0),
       be.value && we.value ? (s(), S(Og, {
@@ -9240,7 +9240,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
   },
   emits: ["saved", "error"],
   setup(t, { expose: c, emit: n }) {
-    const i = t, f = n, { getConfig: v, updateConfig: u } = He(), m = h(!1), d = h(null), p = h(null), w = h(null), k = h(null), _ = h(""), b = h(""), T = h(!1);
+    const i = t, f = n, { getConfig: v, updateConfig: u } = Ke(), m = h(!1), d = h(null), p = h(null), w = h(null), k = h(null), _ = h(""), b = h(""), T = h(!1);
     function R(F) {
       return F.join(" ");
     }
@@ -9466,7 +9466,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
 }), dh = /* @__PURE__ */ le({
   __name: "WorkspaceDebugSection",
   setup(t) {
-    const { getWorkspaceLogs: c, getWorkspaceLogPath: n, openFile: i } = He(), f = h([]), v = h(!1), u = h(null), m = h(!1), d = h(null), p = h(null), w = h(!1), k = U(() => f.value.length === 0 ? [] : f.value.map((R) => ({
+    const { getWorkspaceLogs: c, getWorkspaceLogPath: n, openFile: i } = Ke(), f = h([]), v = h(!1), u = h(null), m = h(!1), d = h(null), p = h(null), w = h(!1), k = U(() => f.value.length === 0 ? [] : f.value.map((R) => ({
       text: `${R.timestamp} - ${R.name} - ${R.level} - ${R.func}:${R.line} - ${R.message}`,
       level: R.level
     })));
@@ -9611,7 +9611,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
 }), ch = /* @__PURE__ */ re(dh, [["__scopeId", "data-v-7f05352a"]]), uh = /* @__PURE__ */ le({
   __name: "DebugEnvSection",
   setup(t) {
-    const { getEnvironmentLogs: c, getStatus: n, getEnvironmentLogPath: i, openFile: f } = He(), v = h([]), u = h(!1), m = h(null), d = h(!1), p = h("production"), w = h(null), k = h(null), _ = h(!1), b = U(() => v.value.length === 0 ? [] : v.value.map((C) => ({
+    const { getEnvironmentLogs: c, getStatus: n, getEnvironmentLogPath: i, openFile: f } = Ke(), v = h([]), u = h(!1), m = h(null), d = h(!1), p = h("production"), w = h(null), k = h(null), _ = h(!1), b = U(() => v.value.length === 0 ? [] : v.value.map((C) => ({
       text: `${C.timestamp} - ${C.name} - ${C.level} - ${C.func}:${C.line} - ${C.message}`,
       level: C.level
     })));
@@ -10071,7 +10071,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
   __name: "CreateEnvironmentModal",
   emits: ["close", "created"],
   setup(t, { emit: c }) {
-    const n = c, { getComfyUIReleases: i, createEnvironment: f, getCreateProgress: v } = He(), u = h(""), m = h(co), d = h("latest"), p = h(uo), w = h(!1), k = h([{ tag_name: "latest", name: "Latest", published_at: "" }]), _ = h(!1), b = h(!1), T = h({
+    const n = c, { getComfyUIReleases: i, createEnvironment: f, getCreateProgress: v } = Ke(), u = h(""), m = h(co), d = h("latest"), p = h(uo), w = h(!1), k = h([{ tag_name: "latest", name: "Latest", published_at: "" }]), _ = h(!1), b = h(!1), T = h({
       progress: 0,
       message: ""
     });
@@ -10290,7 +10290,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
   __name: "EnvironmentsSection",
   emits: ["switch", "created", "delete"],
   setup(t, { expose: c, emit: n }) {
-    const i = n, { getEnvironments: f } = He(), v = h([]), u = h(!1), m = h(null), d = h(""), p = h(!1), w = h(!1), k = h(null), _ = U(() => {
+    const i = n, { getEnvironments: f } = Ke(), v = h([]), u = h(!1), m = h(null), d = h(""), p = h(!1), w = h(!1), k = h(null), _ = U(() => {
       if (!d.value.trim()) return v.value;
       const B = d.value.toLowerCase();
       return v.value.filter(
@@ -10713,7 +10713,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
 }, G1 = /* @__PURE__ */ le({
   __name: "ExportSection",
   setup(t) {
-    const { validateExport: c, exportEnvWithForce: n } = He(), i = h(""), f = h(!1), v = h(!1), u = h(!1), m = h(null), d = h(!1), p = h(null), w = h(!1), k = h(!1), _ = U(() => f.value ? "Validating..." : v.value ? "Exporting..." : "Export Environment");
+    const { validateExport: c, exportEnvWithForce: n } = Ke(), i = h(""), f = h(!1), v = h(!1), u = h(!1), m = h(null), d = h(!1), p = h(null), w = h(!1), k = h(!1), _ = U(() => f.value ? "Validating..." : v.value ? "Exporting..." : "Export Environment");
     async function b() {
       f.value = !0, m.value = null;
       try {
@@ -11498,7 +11498,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
   emits: ["import-complete", "import-started", "source-cleared"],
   setup(t, { expose: c, emit: n }) {
     var Ae, ce, ge, xe;
-    const i = t, f = n, { previewTarballImport: v, previewGitImport: u, validateEnvironmentName: m, executeImport: d, executeGitImport: p, getImportProgress: w } = He();
+    const i = t, f = n, { previewTarballImport: v, previewGitImport: u, validateEnvironmentName: m, executeImport: d, executeGitImport: p, getImportProgress: w } = Ke();
     let k = null;
     const _ = h(null), b = h(i.resumeImport ?? !1), T = h(!1), R = h(!1), $ = h(""), C = h(!1), B = h(null), x = h(""), M = h(null), Z = h(!1), F = h(null), G = h(null), E = h({
       name: ((Ae = i.initialProgress) == null ? void 0 : Ae.environmentName) ?? "",
@@ -12083,23 +12083,23 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
       getRemoteSyncStatus: C,
       fetchRemote: B,
       pushToRemote: x
-    } = He(), M = h(!1), Z = h(!1), F = h(""), G = h(!1), E = h(!1), D = h(null), A = h(null), de = h(""), te = h(""), Y = h(""), ue = h("SECURE"), Q = h("ON_DEMAND"), O = h("my-comfyui-deploy"), z = h([]), I = h({}), me = h(!1), ee = h(null), be = h(null), Ie = h(null), Te = h([]), Ae = h(!1), ce = h([]), ge = h(!1), xe = h([]), se = h(!1), ae = h(null), we = h(!1), ze = h([]), Ze = h(!1), et = h(!1), $e = h(null), tt = h(null), Ye = h(null), je = h(null), rt = h(!1), _e = h(null), Re = h(null), st = h(null), Je = h(!1), Le = h(null), fe = h(!1), K = h(!1), J = U(() => ce.value.find((q) => q.id === te.value) || null), P = U(() => de.value ? ce.value.filter((q) => q.data_center_id === de.value) : ce.value), V = U(() => xe.value.filter((q) => q.available)), ne = U(() => ee.value && I.value[ee.value] || null), ke = U(() => {
+    } = Ke(), M = h(!1), Z = h(!1), F = h(""), G = h(!1), E = h(!1), D = h(null), A = h(null), de = h(""), te = h(""), Y = h(""), ue = h("SECURE"), Q = h("ON_DEMAND"), O = h("my-comfyui-deploy"), z = h([]), I = h({}), me = h(!1), ee = h(null), be = h(null), Ie = h(null), Te = h([]), Ae = h(!1), ce = h([]), ge = h(!1), xe = h([]), se = h(!1), ae = h(null), we = h(!1), ze = h([]), Ze = h(!1), et = h(!1), $e = h(null), tt = h(null), Ye = h(null), He = h(null), rt = h(!1), _e = h(null), Re = h(null), st = h(null), Je = h(!1), Le = h(null), fe = h(!1), K = h(!1), J = U(() => ce.value.find((q) => q.id === te.value) || null), P = U(() => de.value ? ce.value.filter((q) => q.data_center_id === de.value) : ce.value), V = U(() => xe.value.filter((q) => q.available)), ne = U(() => ee.value && I.value[ee.value] || null), ke = U(() => {
       if (!ee.value) return null;
       const q = z.value.find((L) => L.name === ee.value);
       return (q == null ? void 0 : q.fetch_url) || null;
     }), Ge = U(() => G.value && te.value && Y.value && ke.value && !et.value && !Je.value), it = (q) => {
-      const L = xe.value.find((qe) => qe.id === Y.value);
+      const L = xe.value.find((je) => je.id === Y.value);
       if (!L) return "0.00";
-      if (q === "SECURE") return L.securePrice.toFixed(2);
-      if (q === "COMMUNITY") return L.communityPrice.toFixed(2);
+      if (q === "SECURE") return (L.securePrice ?? 0).toFixed(2);
+      if (q === "COMMUNITY") return (L.communityPrice ?? 0).toFixed(2);
       const Ce = ue.value === "SECURE";
-      return q === "ON_DEMAND" ? Ce ? L.securePrice.toFixed(2) : L.communityPrice.toFixed(2) : Ce ? L.secureSpotPrice.toFixed(2) : L.communitySpotPrice.toFixed(2);
+      return q === "ON_DEMAND" ? Ce ? (L.securePrice ?? 0).toFixed(2) : (L.communityPrice ?? 0).toFixed(2) : Ce ? (L.secureSpotPrice ?? 0).toFixed(2) : (L.communitySpotPrice ?? 0).toFixed(2);
     }, Xe = U(() => {
       const q = xe.value.find((It) => It.id === Y.value), L = ce.value.find((It) => It.id === te.value);
       if (!q) return null;
-      const Ce = ue.value === "SECURE", qe = Q.value === "SPOT";
+      const Ce = ue.value === "SECURE", je = Q.value === "SPOT";
       let kt;
-      qe ? kt = Ce ? q.secureSpotPrice : q.communitySpotPrice : kt = Ce ? q.securePrice : q.communityPrice;
+      je ? kt = Ce ? q.secureSpotPrice ?? 0 : q.communitySpotPrice ?? 0 : kt = Ce ? q.securePrice ?? 0 : q.communityPrice ?? 0;
       const Dt = L ? L.size_gb * 14e-5 : 0, Lt = 4e-3;
       return {
         gpu: kt,
@@ -12117,8 +12117,8 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
         const q = await $();
         z.value = q.remotes, await Promise.all(
           q.remotes.map(async (Ce) => {
-            const qe = await C(Ce.name);
-            qe && (I.value[Ce.name] = qe);
+            const je = await C(Ce.name);
+            je && (I.value[Ce.name] = je);
           })
         );
         const L = q.remotes.find((Ce) => Ce.is_default);
@@ -12209,10 +12209,10 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
           "[Deploy] GPU types loaded:",
           L.gpu_types.length,
           "GPUs,",
-          L.gpu_types.filter((qe) => qe.available).length,
+          L.gpu_types.filter((je) => je.available).length,
           "available"
         );
-        const Ce = xe.value.find((qe) => qe.available);
+        const Ce = xe.value.find((je) => je.available);
         Ce ? (Y.value = Ce.id, console.log("[Deploy] Auto-selected GPU:", Ce.displayName)) : (Y.value = "", console.log("[Deploy] No available GPUs in this region"));
       } catch {
         n("toast", "Failed to load GPU types", "error");
@@ -12293,7 +12293,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
       try {
         let q;
         if (Q.value === "SPOT") {
-          const Ce = xe.value.find((qe) => qe.id === Y.value);
+          const Ce = xe.value.find((je) => je.id === Y.value);
           Ce && (q = ue.value === "SECURE" ? Ce.secureSpotPrice : Ce.communitySpotPrice);
         }
         const L = await m({
@@ -12377,22 +12377,22 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
       }
     }
     async function Ee(q) {
-      je.value = q;
+      He.value = q;
       try {
         const L = await k(q);
         L.status === "success" ? (n("toast", "Pod starting...", "success"), await ft()) : n("toast", L.message, "error");
       } catch {
         n("toast", "Failed to start pod", "error");
       } finally {
-        je.value = null;
+        He.value = null;
       }
     }
     function Fe(q) {
       window.open(q, "_blank", "noopener,noreferrer");
     }
-    function Ke(q) {
-      const L = Math.floor(q / 3600), Ce = Math.floor(q % 3600 / 60);
-      return L > 0 ? `${L}h ${Ce}m` : `${Ce}m`;
+    function qe(q) {
+      const L = q ?? 0, Ce = Math.floor(L / 3600), je = Math.floor(L % 3600 / 60);
+      return Ce > 0 ? `${Ce}h ${je}m` : `${je}m`;
     }
     return We(async () => {
       try {
@@ -12403,7 +12403,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
     }), Ps(() => {
       At();
     }), (q, L) => {
-      var Ce, qe, kt, Dt, Lt, It;
+      var Ce, je, kt, Dt, Lt, It;
       return s(), o(W, null, [
         y(nt, null, {
           header: l(() => [
@@ -12551,7 +12551,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
                       (s(!0), o(W, null, ie(V.value, (X) => (s(), o("option", {
                         key: X.id,
                         value: X.id
-                      }, a(X.displayName) + " (" + a(X.memoryInGb) + "GB) - $" + a(ue.value === "SECURE" ? X.securePrice.toFixed(2) : X.communityPrice.toFixed(2)) + "/hr " + a(X.stockStatus ? `[${X.stockStatus}]` : ""), 9, $w))), 128))
+                      }, a(X.displayName) + " (" + a(X.memoryInGb) + "GB) - $" + a(ue.value === "SECURE" ? (X.securePrice ?? 0).toFixed(2) : (X.communityPrice ?? 0).toFixed(2)) + "/hr " + a(X.stockStatus ? `[${X.stockStatus}]` : ""), 9, $w))), 128))
                     ], 8, ww), [
                       [Et, Y.value]
                     ])
@@ -12887,9 +12887,9 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
                     e("div", Ek, [
                       e("span", Pk, a(X.gpu_type), 1),
                       L[52] || (L[52] = e("span", { class: "pod-separator" }, "•", -1)),
-                      e("span", Rk, a(Ke(X.uptime_seconds)), 1),
+                      e("span", Rk, a(qe(X.uptime_seconds)), 1),
                       L[53] || (L[53] = e("span", { class: "pod-separator" }, "•", -1)),
-                      e("span", Mk, "$" + a(X.total_cost.toFixed(2)), 1)
+                      e("span", Mk, "$" + a((X.total_cost ?? 0).toFixed(2)), 1)
                     ]),
                     e("div", Tk, [
                       X.comfyui_url && X.status === "RUNNING" ? (s(), S(oe, {
@@ -12920,7 +12920,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
                         key: 2,
                         variant: "secondary",
                         size: "sm",
-                        loading: je.value === X.id,
+                        loading: He.value === X.id,
                         onClick: (bt) => Ee(X.id),
                         title: "Start stopped pod"
                       }, {
@@ -12993,7 +12993,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
           key: 0,
           title: "Deploying to RunPod",
           size: "sm",
-          "show-close-button": ((Ce = Re.value) == null ? void 0 : Ce.phase) === "READY" || ((qe = Re.value) == null ? void 0 : qe.phase) === "ERROR" || ((kt = Re.value) == null ? void 0 : kt.phase) === "STOPPED",
+          "show-close-button": ((Ce = Re.value) == null ? void 0 : Ce.phase) === "READY" || ((je = Re.value) == null ? void 0 : je.phase) === "ERROR" || ((kt = Re.value) == null ? void 0 : kt.phase) === "STOPPED",
           "close-on-overlay-click": !1,
           onClose: ve
         }, Vt({
@@ -13073,7 +13073,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
       ], 64);
     };
   }
-}), Hk = /* @__PURE__ */ re(jk, [["__scopeId", "data-v-894179c5"]]), Kk = { class: "header-info" }, qk = { class: "commit-hash" }, Yk = {
+}), Hk = /* @__PURE__ */ re(jk, [["__scopeId", "data-v-a2121442"]]), Kk = { class: "header-info" }, qk = { class: "commit-hash" }, Yk = {
   key: 0,
   class: "commit-refs"
 }, Jk = { class: "commit-message" }, Xk = { class: "commit-date" }, Qk = {
@@ -13101,7 +13101,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
   },
   emits: ["close", "checkout", "createBranch"],
   setup(t) {
-    const c = t, { getCommitDetail: n } = He(), i = h(null), f = h(!0), v = U(() => {
+    const c = t, { getCommitDetail: n } = Ke(), i = h(null), f = h(!0), v = U(() => {
       if (!i.value) return !1;
       const m = i.value.changes.workflows;
       return m.added.length > 0 || m.modified.length > 0 || m.deleted.length > 0;
@@ -13406,7 +13406,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
   },
   emits: ["close", "committed"],
   setup(t, { emit: c }) {
-    const n = t, i = c, { commit: f } = He(), v = h(""), u = h(!1), m = h(!1), d = U(() => {
+    const n = t, i = c, { commit: f } = Ke(), v = h(""), u = h(!1), m = h(!1), d = U(() => {
       if (!n.status) return !1;
       const T = n.status.workflows;
       return T.new.length > 0 || T.modified.length > 0 || T.deleted.length > 0 || n.status.has_changes;
@@ -14106,7 +14106,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
       getCreateProgress: d,
       getImportProgress: p,
       getComfyUIReleases: w
-    } = He(), k = h(n.initialStep || 1), _ = h(null), b = h("landing"), T = h(!1), R = h(!1), $ = h(!1), C = h(!1), B = h(null), x = h(n.initialStep === 2), M = h(n.defaultPath), Z = h(!!n.detectedModelsDir), F = h(n.detectedModelsDir || ""), G = h(null), E = h(null), D = h(null), A = h(null), de = h("my-new-env"), te = h(co), Y = h("latest"), ue = h(uo), Q = h(!0), O = h(null), z = h(null), I = h([{ tag_name: "latest", name: "Latest", published_at: "" }]), me = h(!1), ee = h(!1), be = h(!1), Ie = h({ progress: 0, message: "" }), Te = h({ progress: 0, message: "" }), Ae = [
+    } = Ke(), k = h(n.initialStep || 1), _ = h(null), b = h("landing"), T = h(!1), R = h(!1), $ = h(!1), C = h(!1), B = h(null), x = h(n.initialStep === 2), M = h(n.defaultPath), Z = h(!!n.detectedModelsDir), F = h(n.detectedModelsDir || ""), G = h(null), E = h(null), D = h(null), A = h(null), de = h("my-new-env"), te = h(co), Y = h("latest"), ue = h(uo), Q = h(!0), O = h(null), z = h(null), I = h([{ tag_name: "latest", name: "Latest", published_at: "" }]), me = h(!1), ee = h(!1), be = h(!1), Ie = h({ progress: 0, message: "" }), Te = h({ progress: 0, message: "" }), Ae = [
       { id: "init_structure", label: "Initialize structure", progressThreshold: 5 },
       { id: "resolve_version", label: "Resolve ComfyUI version", progressThreshold: 10 },
       { id: "clone_comfyui", label: "Clone/restore ComfyUI", progressThreshold: 25 },
@@ -14153,7 +14153,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
     async function tt() {
       var fe, K, J, P, V;
       if (G.value = null, E.value = null, await et(), (fe = G.value) != null && fe.includes("already exists")) {
-        G.value = null, z.value = ((K = M.value) == null ? void 0 : K.trim()) || n.defaultPath, k.value = 2, je();
+        G.value = null, z.value = ((K = M.value) == null ? void 0 : K.trim()) || n.defaultPath, k.value = 2, He();
         return;
       }
       if (!G.value && !(Z.value && ((J = F.value) != null && J.trim()) && (await $e(), E.value))) {
@@ -14175,7 +14175,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
                 clearInterval(ne), ee.value = !1, G.value = "Workspace creation was interrupted. Please try again.";
                 return;
               }
-              Ie.value = { progress: Ge.progress, message: Ge.message }, Ge.state === "complete" ? (clearInterval(ne), ee.value = !1, z.value = ((ke = M.value) == null ? void 0 : ke.trim()) || n.defaultPath, k.value = 2, je()) : Ge.state === "error" && (clearInterval(ne), ee.value = !1, G.value = Ge.error || "Workspace creation failed");
+              Ie.value = { progress: Ge.progress, message: Ge.message }, Ge.state === "complete" ? (clearInterval(ne), ee.value = !1, z.value = ((ke = M.value) == null ? void 0 : ke.trim()) || n.defaultPath, k.value = 2, He()) : Ge.state === "error" && (clearInterval(ne), ee.value = !1, G.value = Ge.error || "Workspace creation failed");
             } catch (Ge) {
               ce.value++, console.warn(`Polling failure ${ce.value}/${Kt}:`, Ge), ce.value >= Kt && (clearInterval(ne), ee.value = !1, G.value = "Lost connection to server. Please refresh the page and try again.");
             }
@@ -14228,7 +14228,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
         be.value = !1, O.value = fe instanceof Error ? fe.message : "Unknown error";
       }
     }
-    async function je() {
+    async function He() {
       me.value = !0;
       try {
         I.value = await w();
@@ -14251,7 +14251,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
     }
     We(async () => {
       if (n.detectedModelsDir && (F.value = n.detectedModelsDir), n.workspacePath && (z.value = n.workspacePath), k.value === 2) {
-        je();
+        He();
         const fe = setTimeout(() => {
           x.value = !1;
         }, 3e3);
@@ -14687,7 +14687,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
       syncEnvironmentManually: R,
       repairWorkflowModels: $,
       getSetupStatus: C
-    } = He(), B = to(), x = h(null), M = h([]), Z = h([]), F = h([]), G = U(() => F.value.find((j) => j.is_current)), E = h(null), D = h(!1), A = h(1), de = U(() => {
+    } = Ke(), B = to(), x = h(null), M = h([]), Z = h([]), F = h([]), G = U(() => F.value.find((j) => j.is_current)), E = h(null), D = h(!1), A = h(1), de = U(() => {
       var j;
       return ((j = E.value) == null ? void 0 : j.state) || "managed";
     }), te = h(!1), Y = h(null), ue = h(null), Q = h(!1), O = h(null), z = h(null), I = h(null), me = h(!1), ee = h(!1), be = h(""), Ie = h(null), Te = h({ state: "idle", progress: 0, message: "" });
@@ -14722,16 +14722,16 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
         console.warn("[ComfyGit] Manager button not found in toolbar");
       }, 100);
     }
-    const $e = h(null), tt = h(!1), Ye = h(!1), je = h([]);
+    const $e = h(null), tt = h(!1), Ye = h(!1), He = h([]);
     let rt = 0;
     function _e(j, N = "info", he = 3e3) {
       const Ee = ++rt;
-      return je.value.push({ id: Ee, message: j, type: N }), he > 0 && setTimeout(() => {
-        je.value = je.value.filter((Fe) => Fe.id !== Ee);
+      return He.value.push({ id: Ee, message: j, type: N }), he > 0 && setTimeout(() => {
+        He.value = He.value.filter((Fe) => Fe.id !== Ee);
       }, he), Ee;
     }
     function Re(j) {
-      je.value = je.value.filter((N) => N.id !== j);
+      He.value = He.value.filter((N) => N.id !== j);
     }
     function st(j, N) {
       _e(j, N);
@@ -14774,9 +14774,9 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
         cancelLabel: "Cancel",
         destructive: N,
         onConfirm: async () => {
-          var Ke;
+          var qe;
           $e.value = null, ke();
-          const Ee = _e(`Checking out ${j.short_hash || ((Ke = j.hash) == null ? void 0 : Ke.slice(0, 7))}...`, "info", 0), Fe = await m(j.hash, N);
+          const Ee = _e(`Checking out ${j.short_hash || ((qe = j.hash) == null ? void 0 : qe.slice(0, 7))}...`, "info", 0), Fe = await m(j.hash, N);
           Re(Ee), Fe.status === "success" ? _e("Restarting ComfyUI...", "success") : _e(Fe.message || "Checkout failed", "error");
         }
       };
@@ -14803,11 +14803,11 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
     }
     async function V(j, N = !1) {
       const he = async (Ee) => {
-        var Ke;
+        var qe;
         const Fe = _e(`Deleting branch ${j}...`, "info", 0);
         try {
           const q = await w(j, Ee);
-          Re(Fe), q.status === "success" ? (_e(`Branch "${j}" deleted`, "success"), await Le()) : (Ke = q.message) != null && Ke.includes("not fully merged") ? $e.value = {
+          Re(Fe), q.status === "success" ? (_e(`Branch "${j}" deleted`, "success"), await Le()) : (qe = q.message) != null && qe.includes("not fully merged") ? $e.value = {
             title: "Branch Not Fully Merged",
             message: `The branch "${j}" has commits that haven't been merged.`,
             warning: "Force deleting will permanently lose any unmerged commits.",
@@ -14921,11 +14921,11 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
       const N = 60, he = 5e3, Ee = 100, Fe = (N - j) / (he / Ee);
       ce = window.setInterval(() => {
         if (j += Fe, j >= N && (j = N, vt()), Te.value.progress < N) {
-          const Ke = Math.floor(j);
+          const qe = Math.floor(j);
           Te.value = {
-            progress: Ke,
-            state: mt(Ke),
-            message: Tt(Ke)
+            progress: qe,
+            state: mt(qe),
+            message: Tt(qe)
           };
         }
       }, Ee);
@@ -14941,11 +14941,11 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
             return;
           const N = j.progress || 0;
           N >= 60 && vt();
-          const he = Math.max(N, Te.value.progress), Ee = j.state && j.state !== "idle" && j.state !== "unknown", Fe = Ee ? j.state : mt(he), Ke = Ee && j.message || Tt(he);
+          const he = Math.max(N, Te.value.progress), Ee = j.state && j.state !== "idle" && j.state !== "unknown", Fe = Ee ? j.state : mt(he), qe = Ee && j.message || Tt(he);
           Te.value = {
             state: Fe,
             progress: he,
-            message: Ke
+            message: qe
           }, j.state === "complete" ? (vt(), Nt(), ee.value = !1, _e(`✓ Switched to ${be.value}`, "success"), await Le(), be.value = "") : j.state === "rolled_back" ? (vt(), Nt(), ee.value = !1, _e("Switch failed, restored previous environment", "warning"), be.value = "") : j.state === "critical_failure" && (vt(), Nt(), ee.value = !1, _e(`Critical error during switch: ${j.message}`, "error"), be.value = "");
         } catch (j) {
           console.error("Failed to poll switch progress:", j);
@@ -14999,8 +14999,8 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
         if (Re(j), Ee.status === "success") {
           const Fe = [];
           Ee.nodes_installed.length && Fe.push(`${Ee.nodes_installed.length} installed`), Ee.nodes_removed.length && Fe.push(`${Ee.nodes_removed.length} removed`);
-          const Ke = Fe.length ? `: ${Fe.join(", ")}` : "";
-          _e(`✓ Environment repaired${Ke}`, "success"), (N = I.value) == null || N.closeDetailModal(), await Le();
+          const qe = Fe.length ? `: ${Fe.join(", ")}` : "";
+          _e(`✓ Environment repaired${qe}`, "success"), (N = I.value) == null || N.closeDetailModal(), await Le();
         } else {
           const Fe = Ee.errors.length ? Ee.errors.join(", ") : Ee.message || "Unknown error";
           _e(`Repair failed: ${Fe}`, "error");
@@ -15088,7 +15088,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
       }
       await Le();
     }), (j, N) => {
-      var he, Ee, Fe, Ke, q, L, Ce, qe, kt, Dt, Lt, It;
+      var he, Ee, Fe, qe, q, L, Ce, je, kt, Dt, Lt, It;
       return s(), o("div", D2, [
         e("div", L2, [
           e("div", z2, [
@@ -15276,7 +15276,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
                 onCheckout: K
               }, null, 8, ["commits"])) : se.value === "nodes" ? (s(), S(nf, {
                 key: 5,
-                "version-mismatches": ((q = (Ke = x.value) == null ? void 0 : Ke.comparison) == null ? void 0 : q.version_mismatches) || [],
+                "version-mismatches": ((q = (qe = x.value) == null ? void 0 : qe.comparison) == null ? void 0 : q.version_mismatches) || [],
                 onOpenNodeManager: et,
                 onRepairEnvironment: Gt,
                 onToast: st
@@ -15407,7 +15407,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
         D.value ? (s(), S(T2, {
           key: 5,
           "default-path": ((Ce = E.value) == null ? void 0 : Ce.default_path) || "~/comfygit",
-          "detected-models-dir": ((qe = E.value) == null ? void 0 : qe.detected_models_dir) || null,
+          "detected-models-dir": ((je = E.value) == null ? void 0 : je.detected_models_dir) || null,
           "initial-step": A.value,
           "existing-environments": ((kt = E.value) == null ? void 0 : kt.environments) || [],
           "cli-installed": ((Dt = E.value) == null ? void 0 : Dt.cli_installed) ?? !0,
@@ -15421,7 +15421,7 @@ const af = { class: "remote-url-display" }, lf = ["title"], rf = ["title"], df =
         e("div", d$, [
           y(Io, { name: "toast" }, {
             default: l(() => [
-              (s(!0), o(W, null, ie(je.value, (X) => (s(), o("div", {
+              (s(!0), o(W, null, ie(He.value, (X) => (s(), o("div", {
                 key: X.id,
                 class: pe(["toast", X.type])
               }, [
