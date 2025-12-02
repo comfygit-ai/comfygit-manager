@@ -1,4 +1,5 @@
 """Deploy API endpoints for RunPod cloud deployment."""
+import aiohttp
 from aiohttp import web
 
 from cgm_core.decorators import requires_workspace
@@ -6,6 +7,16 @@ from deploy.runpod_client import RunPodClient
 from deploy.startup_script import generate_startup_script, generate_deployment_id
 
 routes = web.RouteTableDef()
+
+
+def get_comfyui_url(pod_id: str, port: int = 8188) -> str:
+    """Get the ComfyUI proxy URL for a pod."""
+    return f"https://{pod_id}-{port}.proxy.runpod.net"
+
+
+def get_runpod_console_url(pod_id: str) -> str:
+    """Get the RunPod console URL for debugging."""
+    return f"https://www.runpod.io/console/pods/{pod_id}"
 
 
 @routes.post("/v2/comfygit/deploy/runpod/test")
@@ -117,6 +128,103 @@ async def terminate_runpod_pod(request: web.Request, workspace) -> web.Response:
             {"status": "error", "error": str(e)},
             status=500,
         )
+
+
+@routes.get("/v2/comfygit/deploy/runpod/{pod_id}/status")
+@requires_workspace
+async def get_deployment_status(request: web.Request, workspace) -> web.Response:
+    """Get deployment status for a pod.
+
+    Checks pod status via RunPod API and probes ComfyUI endpoint to determine readiness.
+    Does not require SSH or exec access - uses HTTP probe only.
+
+    Path params:
+        pod_id: Pod identifier
+
+    Returns:
+        phase: STARTING_POD | SETTING_UP | READY | STOPPED | ERROR
+        phase_detail: Human-readable status description
+        comfyui_url: URL when ready, null otherwise
+        console_url: RunPod console URL for debugging
+    """
+    pod_id = request.match_info["pod_id"]
+
+    api_key = workspace.workspace_config_manager.get_runpod_token()
+    if not api_key:
+        return web.json_response(
+            {"status": "error", "error": "RunPod API key not configured"},
+            status=400,
+        )
+
+    client = RunPodClient(api_key)
+
+    try:
+        pod = await client.get_pod(pod_id)
+    except Exception as e:
+        return web.json_response(
+            {"status": "error", "error": f"Failed to get pod: {e}"},
+            status=500,
+        )
+
+    if not pod:
+        return web.json_response(
+            {"status": "error", "error": "Pod not found"},
+            status=404,
+        )
+
+    console_url = get_runpod_console_url(pod_id)
+    desired_status = pod.get("desiredStatus", "UNKNOWN")
+
+    # Pod not running yet
+    if desired_status in ("CREATED", "PENDING"):
+        return web.json_response({
+            "phase": "STARTING_POD",
+            "phase_detail": "Waiting for pod to start...",
+            "comfyui_url": None,
+            "console_url": console_url,
+        })
+
+    # Pod stopped or terminated
+    if desired_status in ("EXITED", "TERMINATED", "STOPPED"):
+        return web.json_response({
+            "phase": "STOPPED",
+            "phase_detail": f"Pod is {desired_status.lower()}",
+            "comfyui_url": None,
+            "console_url": console_url,
+        })
+
+    # Pod is running - probe ComfyUI to check if it's ready
+    if desired_status == "RUNNING":
+        comfyui_url = get_comfyui_url(pod_id)
+
+        try:
+            timeout = aiohttp.ClientTimeout(total=5)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(comfyui_url) as resp:
+                    if resp.status == 200:
+                        return web.json_response({
+                            "phase": "READY",
+                            "phase_detail": "ComfyUI is running",
+                            "comfyui_url": comfyui_url,
+                            "console_url": console_url,
+                        })
+        except Exception:
+            pass  # ComfyUI not responding yet
+
+        return web.json_response({
+            "phase": "SETTING_UP",
+            "phase_detail": "Pod running, waiting for ComfyUI...",
+            "comfyui_url": None,
+            "console_url": console_url,
+        })
+
+    # Unknown status
+    return web.json_response({
+        "phase": "ERROR",
+        "phase_detail": f"Unknown pod status: {desired_status}",
+        "comfyui_url": None,
+        "console_url": console_url,
+    })
 
 
 @routes.post("/v2/comfygit/deploy/runpod")

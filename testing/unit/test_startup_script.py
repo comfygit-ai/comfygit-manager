@@ -72,10 +72,11 @@ class TestStartupScriptGenerator:
             import_source=import_source,
         )
 
-        # Should run cg import with --name and --yes flags
+        # Should run cg import with --name, --yes, --use, and --models all flags
         assert "cg import" in script
         assert f"--name {deployment_id}" in script or f'--name "{deployment_id}"' in script
         assert "--yes" in script or "-y" in script
+        assert "--models all" in script
         # Import source should be in the script
         assert import_source in script
 

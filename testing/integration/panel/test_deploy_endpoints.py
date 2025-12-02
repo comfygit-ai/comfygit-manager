@@ -690,3 +690,127 @@ class TestRunPodDeployWithStartupScript:
             docker_cmd = call_kwargs.get("docker_start_cmd")
             # Branch should be passed in the script (verified via script content)
             assert docker_cmd is not None
+
+
+@pytest.mark.integration
+class TestRunPodDeploymentStatus:
+    """GET /v2/comfygit/deploy/runpod/{pod_id}/status - Get deployment status."""
+
+    async def test_returns_starting_pod_when_pending(self, client, mock_workspace_context):
+        """Should return STARTING_POD phase when pod is not yet running."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.get_pod.return_value = {
+                "id": "pod123",
+                "desiredStatus": "CREATED",
+            }
+            MockClient.return_value = mock_client
+
+            resp = await client.get("/v2/comfygit/deploy/runpod/pod123/status")
+
+            assert resp.status == 200
+            data = await resp.json()
+            assert data["phase"] == "STARTING_POD"
+            assert data["comfyui_url"] is None
+            assert "console_url" in data
+
+    async def test_returns_stopped_when_exited(self, client, mock_workspace_context):
+        """Should return STOPPED phase when pod has exited."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.get_pod.return_value = {
+                "id": "pod123",
+                "desiredStatus": "EXITED",
+            }
+            MockClient.return_value = mock_client
+
+            resp = await client.get("/v2/comfygit/deploy/runpod/pod123/status")
+
+            assert resp.status == 200
+            data = await resp.json()
+            assert data["phase"] == "STOPPED"
+            assert "exited" in data["phase_detail"].lower()
+
+    async def test_returns_setting_up_when_comfyui_not_responding(self, client, mock_workspace_context):
+        """Should return SETTING_UP when pod running but ComfyUI not responding."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.get_pod.return_value = {
+                "id": "pod123",
+                "desiredStatus": "RUNNING",
+            }
+            MockClient.return_value = mock_client
+
+            # Mock aiohttp to simulate ComfyUI not responding
+            with patch("api.v2.deploy.aiohttp.ClientSession") as MockSession:
+                mock_session = AsyncMock()
+                mock_session.__aenter__.return_value = mock_session
+                mock_session.get.side_effect = Exception("Connection refused")
+                MockSession.return_value = mock_session
+
+                resp = await client.get("/v2/comfygit/deploy/runpod/pod123/status")
+
+                assert resp.status == 200
+                data = await resp.json()
+                assert data["phase"] == "SETTING_UP"
+                assert data["comfyui_url"] is None
+
+    async def test_url_formats_correct(self, client, mock_workspace_context):
+        """Should format ComfyUI and console URLs correctly."""
+        # Test the URL helper functions directly since mocking aiohttp is complex
+        from api.v2.deploy import get_comfyui_url, get_runpod_console_url
+
+        assert get_comfyui_url("abc123") == "https://abc123-8188.proxy.runpod.net"
+        assert get_comfyui_url("xyz789", port=8080) == "https://xyz789-8080.proxy.runpod.net"
+        assert get_runpod_console_url("abc123") == "https://www.runpod.io/console/pods/abc123"
+
+    async def test_returns_404_when_pod_not_found(self, client, mock_workspace_context):
+        """Should return 404 when pod doesn't exist."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.get_pod.return_value = None
+            MockClient.return_value = mock_client
+
+            resp = await client.get("/v2/comfygit/deploy/runpod/nonexistent/status")
+
+            assert resp.status == 404
+
+    async def test_error_no_api_key(self, client, mock_workspace_context):
+        """Should return 400 when no API key configured."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = None
+
+        resp = await client.get("/v2/comfygit/deploy/runpod/pod123/status")
+
+        assert resp.status == 400
+
+    async def test_includes_console_url(self, client, mock_workspace_context):
+        """Should always include RunPod console URL for debugging."""
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
+
+        with patch("api.v2.deploy.RunPodClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client.get_pod.return_value = {
+                "id": "mypod456",
+                "desiredStatus": "RUNNING",
+            }
+            MockClient.return_value = mock_client
+
+            with patch("api.v2.deploy.aiohttp.ClientSession") as MockSession:
+                mock_session = AsyncMock()
+                mock_session.__aenter__.return_value = mock_session
+                mock_session.get.side_effect = Exception("timeout")
+                MockSession.return_value = mock_session
+
+                resp = await client.get("/v2/comfygit/deploy/runpod/mypod456/status")
+
+                assert resp.status == 200
+                data = await resp.json()
+                assert data["console_url"] == "https://www.runpod.io/console/pods/mypod456"

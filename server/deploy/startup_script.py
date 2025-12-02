@@ -156,9 +156,9 @@ update_status "IMPORTING" "Preparing import source..." 25
 {package_extraction}
 update_status "IMPORTING" "Importing environment {deployment_id}..." 30
 
-# Import the environment
+# Import the environment (--models all downloads all models with sources)
 cd "$COMFYGIT_HOME"
-cg import "$IMPORT_SOURCE"{branch_flag} --name {deployment_id} --yes --use || set_error "Failed to import environment"
+cg import "$IMPORT_SOURCE"{branch_flag} --name {deployment_id} --yes --use --models all || set_error "Failed to import environment"
 
 update_status "IMPORTING" "Environment imported successfully" 60
 
