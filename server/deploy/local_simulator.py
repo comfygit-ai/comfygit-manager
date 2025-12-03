@@ -310,6 +310,15 @@ class LocalSimulatorClient:
             self.docker.volumes.create(volume_name)
             volumes[volume_name] = {"bind": "/workspace", "mode": "rw"}
 
+        # Mount local models folder for easy testing
+        # Set COMFYGIT_SIMULATOR_MODELS to override, defaults to ~/comfyui/ComfyUI/models
+        models_path = os.environ.get("COMFYGIT_SIMULATOR_MODELS", "")
+        if not models_path:
+            models_path = os.path.expanduser("~/comfyui/ComfyUI/models")
+        if os.path.isdir(models_path):
+            volumes[models_path] = {"bind": "/workspace/comfygit/models", "mode": "ro"}
+            logging.getLogger(__name__).info(f"Models mount: {models_path} -> /workspace/comfygit/models")
+
         # Dev mode: add bind mounts from environment variable
         # Format: "host_path=container_path:host_path2=container_path2"
         # Example: COMFYGIT_DEV_CUSTOM_NODES="/home/user/dev=/workspace/dev_nodes"
