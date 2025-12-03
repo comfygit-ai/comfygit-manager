@@ -165,17 +165,28 @@ cd "$COMFYGIT_HOME"
 cg init --yes "$COMFYGIT_HOME" 2>/dev/null || true
 
 # =============================================================================
-# Phase: IMPORTING
+# Phase: ENVIRONMENT_CHECK (handles restart vs fresh deploy)
 # =============================================================================
-update_status "IMPORTING" "Preparing import source..." 25
+ENV_PATH="$COMFYGIT_HOME/environments/{deployment_id}"
+
+if [ -d "$ENV_PATH" ] && [ -d "$ENV_PATH/ComfyUI" ]; then
+    # Restart case: environment already exists from previous run
+    update_status "RESTARTING" "Environment exists, skipping import..." 60
+    echo "🔄 Detected existing environment: {deployment_id}"
+    echo "   Skipping import, proceeding to start ComfyUI..."
+    cg use {deployment_id} 2>/dev/null || true
+else
+    # Fresh deploy: import the environment
+    update_status "IMPORTING" "Preparing import source..." 25
 {package_extraction}
-update_status "IMPORTING" "Importing environment {deployment_id}..." 30
+    update_status "IMPORTING" "Importing environment {deployment_id}..." 30
 
-# Import the environment (--models all downloads all models with sources)
-cd "$COMFYGIT_HOME"
-cg import "$IMPORT_SOURCE"{branch_flag} --name {deployment_id} --yes --use --models all || set_error "Failed to import environment"
+    # Import the environment (--models all downloads all models with sources)
+    cd "$COMFYGIT_HOME"
+    cg import "$IMPORT_SOURCE"{branch_flag} --name {deployment_id} --yes --use --models all || set_error "Failed to import environment"
 
-update_status "IMPORTING" "Environment imported successfully" 60
+    update_status "IMPORTING" "Environment imported successfully" 60
+fi
 
 # =============================================================================
 # Phase: STARTING_COMFYUI

@@ -319,6 +319,87 @@ class TestStartupScriptWithPackage:
         assert "base64" in script
 
 
+class TestStartupScriptRestartDetection:
+    """Test restart detection logic in startup script."""
+
+    def test_detects_existing_environment(self):
+        """Script should check for existing environment directory."""
+        from deploy.startup_script import generate_startup_script
+
+        deployment_id = "deploy-test-20250101-120000-abc1"
+        script = generate_startup_script(
+            deployment_id=deployment_id,
+            import_source="https://github.com/user/repo.git",
+        )
+
+        # Should check if environment exists before importing
+        assert 'ENV_PATH="$COMFYGIT_HOME/environments/' in script
+        assert f'environments/{deployment_id}"' in script
+        assert '[ -d "$ENV_PATH" ]' in script
+
+    def test_skips_import_on_restart(self):
+        """Script should skip import if environment already exists."""
+        from deploy.startup_script import generate_startup_script
+
+        script = generate_startup_script(
+            deployment_id="deploy-test-20250101-120000-abc1",
+            import_source="https://github.com/user/repo.git",
+        )
+
+        # Should have conditional logic to skip import
+        assert "Skipping import" in script
+        assert "existing environment" in script.lower() or "RESTARTING" in script
+
+    def test_imports_on_fresh_deploy(self):
+        """Script should import on fresh deploy (environment doesn't exist)."""
+        from deploy.startup_script import generate_startup_script
+
+        script = generate_startup_script(
+            deployment_id="deploy-test-20250101-120000-abc1",
+            import_source="https://github.com/user/repo.git",
+        )
+
+        # Should still have import command for fresh case
+        assert "cg import" in script
+
+    def test_restart_uses_cg_use_command(self):
+        """Script should set active environment on restart."""
+        from deploy.startup_script import generate_startup_script
+
+        deployment_id = "deploy-test-20250101-120000-abc1"
+        script = generate_startup_script(
+            deployment_id=deployment_id,
+            import_source="https://github.com/user/repo.git",
+        )
+
+        # Should activate the existing environment on restart
+        assert f"cg use {deployment_id}" in script
+
+    def test_checks_comfyui_dir_exists(self):
+        """Script should verify ComfyUI directory exists for restart."""
+        from deploy.startup_script import generate_startup_script
+
+        script = generate_startup_script(
+            deployment_id="deploy-test-20250101-120000-abc1",
+            import_source="https://github.com/user/repo.git",
+        )
+
+        # Should check both environment dir AND ComfyUI subdir
+        assert "$ENV_PATH/ComfyUI" in script
+
+    def test_restarting_phase_in_status(self):
+        """Script should report RESTARTING phase on restart."""
+        from deploy.startup_script import generate_startup_script
+
+        script = generate_startup_script(
+            deployment_id="deploy-test-20250101-120000-abc1",
+            import_source="https://github.com/user/repo.git",
+        )
+
+        # Should have RESTARTING phase for status tracking
+        assert 'update_status "RESTARTING"' in script
+
+
 class TestGenerateDeploymentId:
     """Test deployment ID generation."""
 
