@@ -897,6 +897,7 @@ async function executeDeploy() {
       currentPodId.value = result.pod_id
       showProgressModal.value = true
       startStatusPolling(result.pod_id)
+      emit('toast', 'Deployment started', 'success')
       emit('deployed')
     } else {
       emit('toast', result.message, 'error')

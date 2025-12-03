@@ -1,6 +1,93 @@
-"""Unit tests for Instance type conversion functions."""
+"""Unit tests for Instance type conversion and deployment tracking."""
 import pytest
+import time
 from unittest.mock import Mock
+
+
+class TestDeploymentTracking:
+    """Test deployment tracking functions."""
+
+    def test_track_deployment_creates_entry(self):
+        """Should add deployment to tracking dict."""
+        from api.v2.deploy import track_deployment, _active_deployments, complete_deployment
+
+        # Clean slate
+        _active_deployments.clear()
+
+        track_deployment(
+            instance_id="test123",
+            provider="runpod",
+            name="test-pod",
+            gpu_type="RTX 4090",
+            cost_per_hour=0.44,
+        )
+
+        assert "test123" in _active_deployments
+        dep = _active_deployments["test123"]
+        assert dep.instance_id == "test123"
+        assert dep.provider == "runpod"
+        assert dep.name == "test-pod"
+        assert dep.phase == "STARTING"
+        assert dep.progress == 0
+
+        # Cleanup
+        complete_deployment("test123")
+
+    def test_update_deployment_status(self):
+        """Should update existing deployment status."""
+        from api.v2.deploy import track_deployment, update_deployment_status, _active_deployments, complete_deployment
+
+        _active_deployments.clear()
+
+        track_deployment("pod1", "runpod", "test", "RTX 4090", 0.44)
+        update_deployment_status("pod1", "SETTING_UP", "Installing ComfyGit...", 50)
+
+        dep = _active_deployments["pod1"]
+        assert dep.phase == "SETTING_UP"
+        assert dep.message == "Installing ComfyGit..."
+        assert dep.progress == 50
+
+        complete_deployment("pod1")
+
+    def test_complete_deployment_removes_entry(self):
+        """Should remove deployment from tracking."""
+        from api.v2.deploy import track_deployment, complete_deployment, _active_deployments
+
+        _active_deployments.clear()
+
+        track_deployment("pod2", "runpod", "test", "RTX 4090", 0.44)
+        assert "pod2" in _active_deployments
+
+        complete_deployment("pod2")
+        assert "pod2" not in _active_deployments
+
+    def test_active_deployment_to_instance_dict(self):
+        """Should convert ActiveDeployment to Instance dict format."""
+        from api.v2.deploy import ActiveDeployment
+
+        dep = ActiveDeployment(
+            instance_id="pod123",
+            provider="runpod",
+            name="my-pod",
+            gpu_type="RTX 4090",
+            cost_per_hour=0.44,
+            phase="SETTING_UP",
+            message="Installing dependencies...",
+            progress=75,
+        )
+
+        instance = dep.to_instance_dict()
+
+        assert instance["id"] == "pod123"
+        assert instance["provider"] == "runpod"
+        assert instance["name"] == "my-pod"
+        assert instance["status"] == "deploying"
+        assert instance["deployment_phase"] == "SETTING_UP"
+        assert instance["deployment_message"] == "Installing dependencies..."
+        assert instance["deployment_progress"] == 75
+        assert instance["gpu_type"] == "RTX 4090"
+        assert instance["cost_per_hour"] == 0.44
+        assert instance["console_url"] == "https://www.runpod.io/console/pods/pod123"
 
 
 class TestRunPodToInstanceConversion:

@@ -20,6 +20,7 @@
         v-if="activeTab === 'instances'"
         :instances="instances"
         :is-loading="isLoading"
+        :action-loading-id="actionLoadingId"
         @refresh="refreshInstances"
         @stop="handleStopInstance"
         @start="handleStartInstance"
@@ -97,6 +98,7 @@ const {
 // UI State
 const showInfo = ref(false)
 const activeTab = ref('instances')
+const actionLoadingId = ref<string | null>(null)
 
 // Tabs with dynamic badge
 const tabs = computed(() => [
@@ -111,31 +113,40 @@ const tabs = computed(() => [
   }
 ])
 
-// Action handlers
+// Action handlers with loading state
 async function handleStopInstance(id: string) {
+  actionLoadingId.value = id
   try {
     await stopInstance(id)
     emit('toast', 'Instance stopped', 'success')
   } catch (err) {
     emit('toast', err instanceof Error ? err.message : 'Failed to stop instance', 'error')
+  } finally {
+    actionLoadingId.value = null
   }
 }
 
 async function handleStartInstance(id: string) {
+  actionLoadingId.value = id
   try {
     await startInstance(id)
     emit('toast', 'Instance starting...', 'success')
   } catch (err) {
     emit('toast', err instanceof Error ? err.message : 'Failed to start instance', 'error')
+  } finally {
+    actionLoadingId.value = null
   }
 }
 
 async function handleTerminateInstance(id: string) {
+  actionLoadingId.value = id
   try {
     await terminateInstance(id)
     emit('toast', 'Instance terminated', 'success')
   } catch (err) {
     emit('toast', err instanceof Error ? err.message : 'Failed to terminate instance', 'error')
+  } finally {
+    actionLoadingId.value = null
   }
 }
 

@@ -32,19 +32,17 @@
         v-for="instance in sortedInstances"
         :key="instance.id"
         :instance="instance"
-        :is-stopping-id="stoppingId"
-        :is-starting-id="startingId"
-        :is-terminating-id="terminatingId"
-        @stop="handleStop"
-        @start="handleStart"
-        @terminate="handleTerminate"
+        :is-loading="actionLoadingId === instance.id"
+        @stop="id => $emit('stop', id)"
+        @start="id => $emit('start', id)"
+        @terminate="id => $emit('terminate', id)"
       />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import type { Instance } from '@/types/comfygit'
 import InstanceCard from '../base/molecules/InstanceCard.vue'
 import ActionButton from '../base/atoms/ActionButton.vue'
@@ -53,18 +51,16 @@ import SectionTitle from '../base/atoms/SectionTitle.vue'
 const props = defineProps<{
   instances: Instance[]
   isLoading: boolean
+  // Action loading states (managed by parent)
+  actionLoadingId?: string | null
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   refresh: []
   stop: [id: string]
   start: [id: string]
   terminate: [id: string]
 }>()
-
-const stoppingId = ref<string | null>(null)
-const startingId = ref<string | null>(null)
-const terminatingId = ref<string | null>(null)
 
 // Sort: deploying first, then running, then stopped
 const sortedInstances = computed(() => {
@@ -79,33 +75,6 @@ const sortedInstances = computed(() => {
     (order[a.status] ?? 5) - (order[b.status] ?? 5)
   )
 })
-
-async function handleStop(id: string) {
-  stoppingId.value = id
-  try {
-    emit('stop', id)
-  } finally {
-    stoppingId.value = null
-  }
-}
-
-async function handleStart(id: string) {
-  startingId.value = id
-  try {
-    emit('start', id)
-  } finally {
-    startingId.value = null
-  }
-}
-
-async function handleTerminate(id: string) {
-  terminatingId.value = id
-  try {
-    emit('terminate', id)
-  } finally {
-    terminatingId.value = null
-  }
-}
 </script>
 
 <style scoped>

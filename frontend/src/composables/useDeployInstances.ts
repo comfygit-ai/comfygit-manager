@@ -1,11 +1,19 @@
 import { ref, computed, watch } from 'vue'
 import type { Instance, InstancesResponse } from '@/types/comfygit'
-import { useComfyGitService } from '@/composables/useComfyGitService'
 import { mockApi, isMockApi } from '@/services/mockApi'
 
-const USE_MOCK = isMockApi()
-const { api } = useComfyGitService()
+// Access ComfyUI's API directly (same pattern as other composables)
+declare global {
+  interface Window {
+    app?: {
+      api: {
+        fetchApi: (endpoint: string, options?: RequestInit) => Promise<Response>
+      }
+    }
+  }
+}
 
+const USE_MOCK = isMockApi()
 const POLL_INTERVAL_MS = 5000
 
 // Shared state across all consumers
@@ -13,6 +21,16 @@ const instances = ref<Instance[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 let pollIntervalId: number | null = null
+
+/**
+ * Fetch from ComfyUI API. Throws if API not available.
+ */
+async function fetchApi(endpoint: string, options?: RequestInit): Promise<Response> {
+  if (!window.app?.api) {
+    throw new Error('ComfyUI API not available')
+  }
+  return window.app.api.fetchApi(endpoint, options)
+}
 
 /**
  * Composable for managing deploy instances across all providers.
@@ -61,7 +79,7 @@ export function useDeployInstances(options?: { autoStart?: boolean }) {
       if (USE_MOCK) {
         data = await mockApi.getInstances()
       } else {
-        const response = await api.fetchApi('/v2/comfygit/deploy/instances')
+        const response = await fetchApi('/v2/comfygit/deploy/instances')
         if (!response.ok) {
           throw new Error(`Failed to fetch instances: ${response.status}`)
         }
@@ -82,7 +100,7 @@ export function useDeployInstances(options?: { autoStart?: boolean }) {
       if (USE_MOCK) {
         await mockApi.stopRunPodPod(id)
       } else {
-        const response = await api.fetchApi(`/v2/comfygit/deploy/runpod/pods/${id}/stop`, {
+        const response = await fetchApi(`/v2/comfygit/deploy/runpod/pods/${id}/stop`, {
           method: 'POST'
         })
         if (!response.ok) {
@@ -103,7 +121,7 @@ export function useDeployInstances(options?: { autoStart?: boolean }) {
       if (USE_MOCK) {
         await mockApi.startRunPodPod(id)
       } else {
-        const response = await api.fetchApi(`/v2/comfygit/deploy/runpod/pods/${id}/start`, {
+        const response = await fetchApi(`/v2/comfygit/deploy/runpod/pods/${id}/start`, {
           method: 'POST'
         })
         if (!response.ok) {
@@ -123,7 +141,7 @@ export function useDeployInstances(options?: { autoStart?: boolean }) {
       if (USE_MOCK) {
         await mockApi.terminateRunPodPod(id)
       } else {
-        const response = await api.fetchApi(`/v2/comfygit/deploy/runpod/pods/${id}`, {
+        const response = await fetchApi(`/v2/comfygit/deploy/runpod/pods/${id}`, {
           method: 'DELETE'
         })
         if (!response.ok) {

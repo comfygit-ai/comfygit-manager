@@ -4,6 +4,8 @@ Uses Docker SDK to create/manage containers that mimic RunPod pods.
 Supports both GPU (NVIDIA runtime) and CPU-only modes.
 """
 
+import logging
+import os
 import secrets
 from datetime import datetime, timezone
 from typing import Any
@@ -263,6 +265,23 @@ class LocalSimulatorClient:
             volume_name = f"{self.VOLUME_PREFIX}{pod_id}"
             self.docker.volumes.create(volume_name)
             volumes[volume_name] = {"bind": "/workspace", "mode": "rw"}
+
+        # Dev mode: add bind mounts from environment variable
+        # Format: "host_path=container_path:host_path2=container_path2"
+        # Example: COMFYGIT_DEV_CUSTOM_NODES="/home/user/dev=/workspace/dev_nodes"
+        dev_mounts = os.environ.get("COMFYGIT_DEV_CUSTOM_NODES", "")
+        if dev_mounts:
+            logger = logging.getLogger(__name__)
+            for mount_spec in dev_mounts.split(":"):
+                if "=" in mount_spec:
+                    src, dst = mount_spec.split("=", 1)
+                    src = os.path.expanduser(src.strip())
+                    dst = dst.strip()
+                    if os.path.exists(src):
+                        volumes[src] = {"bind": dst, "mode": "rw"}
+                        logger.info(f"Dev mount: {src} -> {dst}")
+                    else:
+                        logger.warning(f"Dev mount source does not exist: {src}")
 
         # Environment variables
         container_env = {

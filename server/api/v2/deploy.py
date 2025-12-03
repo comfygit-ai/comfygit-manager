@@ -1,4 +1,8 @@
 """Deploy API endpoints for RunPod cloud deployment."""
+import time
+from dataclasses import dataclass, field
+from typing import Dict
+
 import aiohttp
 from aiohttp import web
 
@@ -9,6 +13,73 @@ from deploy.client_factory import get_deploy_client, is_simulator_mode
 from deploy.startup_script import generate_startup_script, generate_deployment_id
 
 routes = web.RouteTableDef()
+
+
+# =============================================================================
+# Active Deployment Tracking
+# =============================================================================
+# In-memory tracking for deployments. Survives within process lifetime.
+# Cleared when ComfyUI restarts, which is acceptable for MVP.
+
+@dataclass
+class ActiveDeployment:
+    """Tracks an in-progress deployment."""
+    instance_id: str
+    provider: str
+    name: str
+    gpu_type: str
+    cost_per_hour: float
+    created_at: float = field(default_factory=time.time)
+    phase: str = "STARTING"
+    message: str = "Pod starting..."
+    progress: int = 0
+
+    def to_instance_dict(self) -> dict:
+        """Convert to unified Instance format for API response."""
+        return {
+            "id": self.instance_id,
+            "provider": self.provider,
+            "name": self.name,
+            "status": "deploying",
+            "deployment_phase": self.phase,
+            "deployment_message": self.message,
+            "deployment_progress": self.progress,
+            "gpu_type": self.gpu_type,
+            "cost_per_hour": self.cost_per_hour,
+            "uptime_seconds": int(time.time() - self.created_at),
+            "total_cost": 0.0,
+            "created_at": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(self.created_at)),
+            "console_url": get_runpod_console_url(self.instance_id) if self.provider == "runpod" else None,
+        }
+
+
+# Global store for active deployments
+_active_deployments: Dict[str, ActiveDeployment] = {}
+
+
+def track_deployment(instance_id: str, provider: str, name: str, gpu_type: str, cost_per_hour: float) -> None:
+    """Start tracking a new deployment."""
+    _active_deployments[instance_id] = ActiveDeployment(
+        instance_id=instance_id,
+        provider=provider,
+        name=name,
+        gpu_type=gpu_type,
+        cost_per_hour=cost_per_hour,
+    )
+
+
+def update_deployment_status(instance_id: str, phase: str, message: str, progress: int) -> None:
+    """Update the status of a tracked deployment."""
+    if instance_id in _active_deployments:
+        dep = _active_deployments[instance_id]
+        dep.phase = phase
+        dep.message = message
+        dep.progress = progress
+
+
+def complete_deployment(instance_id: str) -> None:
+    """Remove a deployment from tracking (it's now visible from provider API)."""
+    _active_deployments.pop(instance_id, None)
 
 
 def get_comfyui_url(pod_id: str, port: int = 8188) -> str:
@@ -239,20 +310,34 @@ async def get_all_instances(request: web.Request, workspace) -> web.Response:
     """Get all instances from all configured providers.
 
     Returns a unified Instance format that's provider-agnostic.
+    Includes both provider API instances and locally-tracked deploying instances.
     Currently supports RunPod; future: Vast, Custom.
 
     Returns:
         instances: List of Instance objects
     """
     instances = []
+    seen_ids = set()
 
-    # RunPod instances (if key configured)
+    # 1. Add tracked deployments first (they have the most accurate status)
+    for dep in _active_deployments.values():
+        instances.append(dep.to_instance_dict())
+        seen_ids.add(dep.instance_id)
+
+    # 2. RunPod instances (if key configured)
     api_key = workspace.workspace_config_manager.get_runpod_token()
     if api_key or is_simulator_mode():
         try:
             client = get_deploy_client(api_key)
             pods = await client.list_pods()
             for pod in pods:
+                pod_id = pod.get("id")
+                # Skip if already added from tracked deployments
+                if pod_id in seen_ids:
+                    # If pod is now RUNNING, remove from tracking
+                    if pod.get("desiredStatus") == "RUNNING":
+                        complete_deployment(pod_id)
+                    continue
                 instances.append(_convert_runpod_pod_to_instance(pod, client))
         except Exception:
             # Graceful degradation - if RunPod API fails, just return empty
@@ -262,6 +347,67 @@ async def get_all_instances(request: web.Request, workspace) -> web.Response:
     # Future: Custom instances
 
     return web.json_response({"instances": instances})
+
+
+@routes.post("/v2/comfygit/deploy/instances/status")
+@requires_workspace
+async def batch_instance_status(request: web.Request, workspace) -> web.Response:
+    """Batch poll status for specific instances.
+
+    More efficient than fetching all instances when you only need
+    status updates for a few deploying instances.
+
+    Request body:
+        instance_ids: List of instance IDs to check
+
+    Returns:
+        statuses: Dict mapping instance_id to status info
+    """
+    data = await request.json()
+    instance_ids = data.get("instance_ids", [])
+
+    if not instance_ids:
+        return web.json_response({"statuses": {}})
+
+    statuses = {}
+
+    # Check tracked deployments first
+    for instance_id in instance_ids:
+        if instance_id in _active_deployments:
+            dep = _active_deployments[instance_id]
+            statuses[instance_id] = {
+                "status": "deploying",
+                "phase": dep.phase,
+                "message": dep.message,
+                "progress": dep.progress,
+            }
+
+    # For any not in tracked deployments, check RunPod API
+    remaining_ids = [id for id in instance_ids if id not in statuses]
+    if remaining_ids:
+        api_key = workspace.workspace_config_manager.get_runpod_token()
+        if api_key or is_simulator_mode():
+            try:
+                client = get_deploy_client(api_key)
+                pods = await client.list_pods()
+                pods_by_id = {pod.get("id"): pod for pod in pods}
+
+                for instance_id in remaining_ids:
+                    pod = pods_by_id.get(instance_id)
+                    if pod:
+                        runpod_status = pod.get("desiredStatus", "UNKNOWN")
+                        status = RUNPOD_STATUS_MAP.get(runpod_status, "error")
+                        statuses[instance_id] = {
+                            "status": status,
+                            "comfyui_url": client.get_comfyui_url(pod) if status == "running" else None,
+                        }
+                        # If running, complete the tracked deployment
+                        if status == "running":
+                            complete_deployment(instance_id)
+            except Exception:
+                pass
+
+    return web.json_response({"statuses": statuses})
 
 
 @routes.get("/v2/comfygit/deploy/runpod/pods")
@@ -607,9 +753,20 @@ async def deploy_to_runpod(request: web.Request, workspace) -> web.Response:
                 docker_start_cmd=["/bin/bash", "-c", startup_script],
             )
 
+        pod_id = pod.get("id")
+
+        # Track this deployment for the Instances tab
+        track_deployment(
+            instance_id=pod_id,
+            provider="runpod",
+            name=pod_name,
+            gpu_type=gpu_type_id,  # Use the ID; real name comes from polling
+            cost_per_hour=pod.get("costPerHr", 0),
+        )
+
         return web.json_response({
             "status": "success",
-            "pod_id": pod.get("id"),
+            "pod_id": pod_id,
             "deployment_id": deployment_id,
             "message": "Pod created. Environment setup in progress...",
         })

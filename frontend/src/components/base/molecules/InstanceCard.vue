@@ -48,7 +48,8 @@
         v-if="instance.status === 'running'"
         variant="secondary"
         size="xs"
-        :loading="isStoppingId === instance.id"
+        :loading="isLoading"
+        :disabled="isLoading"
         @click="$emit('stop', instance.id)"
       >
         Stop
@@ -58,7 +59,8 @@
         v-if="instance.status === 'stopped'"
         variant="secondary"
         size="xs"
-        :loading="isStartingId === instance.id"
+        :loading="isLoading"
+        :disabled="isLoading"
         @click="$emit('start', instance.id)"
       >
         Start
@@ -67,7 +69,8 @@
       <ActionButton
         variant="destructive"
         size="xs"
-        :loading="isTerminatingId === instance.id"
+        :loading="isLoading"
+        :disabled="isLoading"
         @click="$emit('terminate', instance.id)"
       >
         Terminate
@@ -84,9 +87,7 @@ import ProgressBar from '../atoms/ProgressBar.vue'
 
 const props = defineProps<{
   instance: Instance
-  isStoppingId?: string | null
-  isStartingId?: string | null
-  isTerminatingId?: string | null
+  isLoading?: boolean  // True when any action is in progress for this instance
 }>()
 
 defineEmits<{

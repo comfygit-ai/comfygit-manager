@@ -1216,3 +1216,68 @@ class TestUnifiedInstancesEndpoint:
         assert isinstance(data, dict)
         assert "instances" in data
         assert isinstance(data["instances"], list)
+
+    async def test_includes_tracked_deployments(self, client, mock_workspace_context):
+        """Should include locally-tracked deploying instances."""
+        from api.v2.deploy import track_deployment, complete_deployment, _active_deployments
+
+        mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = None
+
+        # Track a deployment
+        _active_deployments.clear()
+        track_deployment("tracked123", "runpod", "my-deploy", "RTX 4090", 0.44)
+
+        try:
+            resp = await client.get("/v2/comfygit/deploy/instances")
+            assert resp.status == 200
+            data = await resp.json()
+
+            assert len(data["instances"]) == 1
+            instance = data["instances"][0]
+            assert instance["id"] == "tracked123"
+            assert instance["status"] == "deploying"
+            assert instance["deployment_phase"] == "STARTING"
+        finally:
+            complete_deployment("tracked123")
+
+
+@pytest.mark.integration
+class TestBatchStatusEndpoint:
+    """POST /v2/comfygit/deploy/instances/status - Batch status polling."""
+
+    async def test_returns_empty_dict_for_empty_request(self, client, mock_workspace_context):
+        """Should return empty statuses when no IDs provided."""
+        resp = await client.post("/v2/comfygit/deploy/instances/status", json={
+            "instance_ids": []
+        })
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["statuses"] == {}
+
+    async def test_returns_tracked_deployment_status(self, client, mock_workspace_context):
+        """Should return status for tracked deploying instances."""
+        from api.v2.deploy import track_deployment, update_deployment_status, complete_deployment, _active_deployments
+
+        _active_deployments.clear()
+        track_deployment("batch123", "runpod", "test", "RTX 4090", 0.44)
+        update_deployment_status("batch123", "INSTALLING", "Installing nodes...", 60)
+
+        try:
+            resp = await client.post("/v2/comfygit/deploy/instances/status", json={
+                "instance_ids": ["batch123", "unknown456"]
+            })
+
+            assert resp.status == 200
+            data = await resp.json()
+
+            assert "batch123" in data["statuses"]
+            status = data["statuses"]["batch123"]
+            assert status["status"] == "deploying"
+            assert status["phase"] == "INSTALLING"
+            assert status["progress"] == 60
+
+            # Unknown ID not in results
+            assert "unknown456" not in data["statuses"]
+        finally:
+            complete_deployment("batch123")
