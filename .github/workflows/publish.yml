@@ -57,6 +57,8 @@ jobs:
 
       - name: Generate changelog
         id: changelog
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           VERSION="v${{ needs.publish-node.outputs.version }}"
 
@@ -71,8 +73,48 @@ jobs:
             COMMITS=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
           fi
 
+          # Generate AI summary if API key is available
+          AI_SUMMARY=""
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            echo "Generating AI summary with Claude Haiku..."
+
+            # Escape commits for JSON
+            COMMITS_ESCAPED=$(echo "$COMMITS" | jq -Rs .)
+
+            # Call Anthropic API
+            RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+              -H "Content-Type: application/json" \
+              -H "x-api-key: $ANTHROPIC_API_KEY" \
+              -H "anthropic-version: 2023-06-01" \
+              -d "{
+                \"model\": \"claude-haiku-4-20250514\",
+                \"max_tokens\": 300,
+                \"messages\": [{
+                  \"role\": \"user\",
+                  \"content\": \"You are writing release notes for ComfyGit Manager, a git-based environment manager for ComfyUI. Given these git commits, write a brief 2-3 sentence summary of the key changes in this release. Be concise and focus on user-facing improvements. Do not use bullet points, just prose. Commits:\\n${COMMITS_ESCAPED}\"
+                }]
+              }" 2>/dev/null)
+
+            # Extract the summary from response
+            AI_SUMMARY=$(echo "$RESPONSE" | jq -r '.content[0].text // empty' 2>/dev/null)
+
+            if [ -n "$AI_SUMMARY" ]; then
+              echo "AI summary generated successfully"
+            else
+              echo "Failed to generate AI summary, continuing without it"
+            fi
+          else
+            echo "No ANTHROPIC_API_KEY found, skipping AI summary"
+          fi
+
           # Build changelog body
           {
+            if [ -n "$AI_SUMMARY" ]; then
+              echo "## Summary"
+              echo ""
+              echo "$AI_SUMMARY"
+              echo ""
+            fi
             echo "## What's Changed"
             echo ""
             echo "$COMMITS"
