@@ -53,7 +53,14 @@ import type {
   DeployResult,
   DeployPackageResult,
   DeployConfig,
-  DeploymentStatus
+  DeploymentStatus,
+  CustomWorkersResponse,
+  AddWorkerRequest,
+  WorkerScanResponse,
+  WorkerTestResult,
+  CustomWorkerSystemInfo,
+  WorkerInstancesResponse,
+  DeployToWorkerRequest
 } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
 import { useMockControls } from '@/composables/useMockControls'
@@ -1430,6 +1437,79 @@ export function useComfyGitService() {
     })
   }
 
+  // Custom Worker Operations
+  async function getCustomWorkers(): Promise<CustomWorkersResponse> {
+    if (USE_MOCK) {
+      return { workers: [] }
+    }
+    return fetchApi<CustomWorkersResponse>('/v2/comfygit/deploy/custom/workers')
+  }
+
+  async function addCustomWorker(request: AddWorkerRequest): Promise<{ status: 'success' }> {
+    return fetchApi('/v2/comfygit/deploy/custom/workers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request)
+    })
+  }
+
+  async function removeCustomWorker(name: string): Promise<{ status: 'success' }> {
+    return fetchApi(`/v2/comfygit/deploy/custom/workers/${encodeURIComponent(name)}`, {
+      method: 'DELETE'
+    })
+  }
+
+  async function testWorkerConnection(params: { host: string; port: number; api_key: string }): Promise<WorkerTestResult> {
+    return fetchApi<WorkerTestResult>('/v2/comfygit/deploy/custom/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    })
+  }
+
+  async function scanForWorkers(): Promise<WorkerScanResponse> {
+    if (USE_MOCK) {
+      return { discovered: [] }
+    }
+    return fetchApi<WorkerScanResponse>('/v2/comfygit/deploy/custom/scan', {
+      method: 'POST'
+    })
+  }
+
+  async function getWorkerSystemInfo(workerName: string): Promise<CustomWorkerSystemInfo> {
+    return fetchApi<CustomWorkerSystemInfo>(`/v2/comfygit/deploy/custom/${encodeURIComponent(workerName)}/info`)
+  }
+
+  async function getWorkerInstances(workerName: string): Promise<WorkerInstancesResponse> {
+    return fetchApi<WorkerInstancesResponse>(`/v2/comfygit/deploy/custom/${encodeURIComponent(workerName)}/instances`)
+  }
+
+  async function deployToWorker(workerName: string, request: DeployToWorkerRequest): Promise<DeployResult> {
+    return fetchApi<DeployResult>(`/v2/comfygit/deploy/custom/${encodeURIComponent(workerName)}/instances`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request)
+    })
+  }
+
+  async function startWorkerInstance(workerName: string, instanceId: string): Promise<{ status: 'success' }> {
+    return fetchApi(`/v2/comfygit/deploy/custom/${encodeURIComponent(workerName)}/instances/${encodeURIComponent(instanceId)}/start`, {
+      method: 'POST'
+    })
+  }
+
+  async function stopWorkerInstance(workerName: string, instanceId: string): Promise<{ status: 'success' }> {
+    return fetchApi(`/v2/comfygit/deploy/custom/${encodeURIComponent(workerName)}/instances/${encodeURIComponent(instanceId)}/stop`, {
+      method: 'POST'
+    })
+  }
+
+  async function terminateWorkerInstance(workerName: string, instanceId: string): Promise<{ status: 'success' }> {
+    return fetchApi(`/v2/comfygit/deploy/custom/${encodeURIComponent(workerName)}/instances/${encodeURIComponent(instanceId)}`, {
+      method: 'DELETE'
+    })
+  }
+
   return {
     isLoading,
     error,
@@ -1533,6 +1613,18 @@ export function useComfyGitService() {
     getDeploymentStatus,
     exportDeployPackage,
     getStoredRunPodKey,
-    clearRunPodKey
+    clearRunPodKey,
+    // Custom Worker Operations
+    getCustomWorkers,
+    addCustomWorker,
+    removeCustomWorker,
+    testWorkerConnection,
+    scanForWorkers,
+    getWorkerSystemInfo,
+    getWorkerInstances,
+    deployToWorker,
+    startWorkerInstance,
+    stopWorkerInstance,
+    terminateWorkerInstance
   }
 }

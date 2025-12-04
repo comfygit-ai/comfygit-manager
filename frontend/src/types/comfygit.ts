@@ -1028,3 +1028,111 @@ export interface ValidatePathResult {
   suggestion?: string
   model_count?: number
 }
+
+// =============================================================================
+// Custom Worker Types (for self-hosted GPU workers)
+// =============================================================================
+
+/** Registered custom worker */
+export interface CustomWorker {
+  name: string
+  host: string
+  port: number
+  api_key_preview: string  // Last 4 chars only for display
+  added_at: string
+
+  // Runtime info (from health check)
+  status: 'online' | 'offline' | 'unknown'
+  gpu_info?: string
+  mode?: 'docker' | 'native'
+  instance_count?: number
+  running_count?: number
+}
+
+/** System info returned by worker health endpoint */
+export interface CustomWorkerSystemInfo {
+  worker_version: string
+  workspace_path: string
+  default_mode: 'docker' | 'native'
+  gpu: {
+    name: string
+    driver_version: string
+    memory_total_mb: number
+    memory_free_mb: number
+  }
+  docker: {
+    available: boolean
+    nvidia_runtime: boolean
+  }
+  instances: {
+    total: number
+    running: number
+    stopped: number
+  }
+  ports: {
+    range_start: number
+    range_end: number
+    allocated: number[]
+    available: number
+  }
+}
+
+/** Worker discovered via mDNS scan */
+export interface DiscoveredWorker {
+  name: string
+  host: string
+  port: number
+  gpu_info?: string
+  mode?: string
+}
+
+/** Instance running on a custom worker */
+export interface WorkerInstance {
+  id: string
+  name: string
+  environment_name: string
+  status: 'deploying' | 'running' | 'stopped' | 'error'
+  mode: 'docker' | 'native'
+  assigned_port: number
+  comfyui_url?: string
+  uptime_seconds?: number
+  created_at: string
+}
+
+/** Request to add a new worker */
+export interface AddWorkerRequest {
+  name: string
+  host: string
+  port: number
+  api_key: string
+}
+
+/** Request to deploy to a worker */
+export interface DeployToWorkerRequest {
+  import_source: string
+  branch?: string
+  mode: 'docker' | 'native'
+  name?: string
+}
+
+/** API Responses */
+export interface CustomWorkersResponse {
+  workers: CustomWorker[]
+}
+
+export interface WorkerScanResponse {
+  discovered: DiscoveredWorker[]
+}
+
+export interface WorkerInstancesResponse {
+  instances: WorkerInstance[]
+  port_range: { start: number; end: number }
+  ports_available: number
+}
+
+export interface WorkerTestResult {
+  status: 'success' | 'error'
+  message: string
+  gpu_info?: string
+  mode?: string
+}

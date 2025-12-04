@@ -36,6 +36,13 @@
         @navigate="(tab) => emit('navigate', tab)"
         @deployed="handleDeployed"
       />
+
+      <!-- Custom Workers Tab -->
+      <CustomTab
+        v-if="activeTab === 'custom'"
+        @toast="(msg, type) => emit('toast', msg, type)"
+        @deployed="handleDeployed"
+      />
     </template>
   </PanelLayout>
 
@@ -90,6 +97,7 @@ import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import BaseTabs from '@/components/base/atoms/BaseTabs.vue'
 import InstancesTab from '@/components/deploy/InstancesTab.vue'
 import RunPodTab from '@/components/deploy/RunPodTab.vue'
+import CustomTab from '@/components/deploy/CustomTab.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const emit = defineEmits<{
@@ -126,6 +134,10 @@ const tabs = computed(() => [
   {
     id: 'runpod',
     label: 'RunPod'
+  },
+  {
+    id: 'custom',
+    label: 'Custom'
   }
 ])
 

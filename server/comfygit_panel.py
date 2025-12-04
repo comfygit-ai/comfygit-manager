@@ -37,7 +37,7 @@ except Exception as e:
 from api.middleware.error_handler import error_handler_middleware  # noqa: E402
 
 # Import all endpoint modules
-from api.v2 import status, git, workflows, operations, environments, debug, models, config, nodes, remotes, import_ops, setup, deploy  # noqa: E402
+from api.v2 import status, git, workflows, operations, environments, debug, models, config, nodes, remotes, import_ops, setup, deploy, custom_workers  # noqa: E402
 
 # Get routes object from ComfyUI
 routes = PromptServer.instance.routes
@@ -50,7 +50,7 @@ PromptServer.instance.app['get_environment'] = get_environment_from_cwd
 PromptServer.instance.app['get_workspace'] = get_workspace_from_cwd
 
 # Register all routes (iterate since PromptServer routes don't have add_routes)
-for route_def in [status.routes, git.routes, workflows.routes, operations.routes, environments.routes, debug.routes, models.routes, config.routes, nodes.routes, remotes.routes, import_ops.routes, setup.routes, deploy.routes]:
+for route_def in [status.routes, git.routes, workflows.routes, operations.routes, environments.routes, debug.routes, models.routes, config.routes, nodes.routes, remotes.routes, import_ops.routes, setup.routes, deploy.routes, custom_workers.routes]:
     for route in route_def:
         # Route is a tuple-like (method, path, handler)
         method = route.method
