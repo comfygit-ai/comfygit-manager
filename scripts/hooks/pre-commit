@@ -1,6 +1,7 @@
 #!/bin/bash
 # Pre-commit hook for comfygit-manager
-# Checks that frontend build version matches pyproject.toml
+# - Checks that frontend build version matches pyproject.toml
+# - Syncs requirements.txt from pyproject.toml dependencies
 #
 # Install: cp scripts/hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 # Or run: scripts/install-hooks.sh
@@ -12,6 +13,18 @@ if [[ "$SCRIPT_DIR" == *".git/hooks"* ]]; then
     PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 else
     PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+fi
+
+# Sync requirements.txt if pyproject.toml is staged
+if git diff --cached --name-only | grep -qE '^pyproject\.toml$'; then
+    echo "Syncing requirements.txt from pyproject.toml..."
+    if command -v uv &> /dev/null; then
+        (cd "$PROJECT_ROOT" && uv run scripts/sync-requirements.py)
+        git add "$PROJECT_ROOT/requirements.txt"
+        echo "requirements.txt updated and staged"
+    else
+        echo "Warning: uv not found, skipping requirements.txt sync"
+    fi
 fi
 
 # Only run version check if frontend files are staged

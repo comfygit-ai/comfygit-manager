@@ -375,7 +375,7 @@ wheels = [
 
 [[package]]
 name = "comfygit-core"
-version = "0.3.2"
+version = "0.3.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -389,9 +389,9 @@ dependencies = [
     { name = "uv" },
     { name = "xxhash" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8d/aa/186093e5455a6069a9fafe7a57556f731a6f51ec99703e032c95c7f24be2/comfygit_core-0.3.2.tar.gz", hash = "sha256:49db25e491527c174121713d2815f703bd66d74fbf8f572f61342d175db2d1d0", size = 544273, upload-time = "2025-12-02T07:40:33.885Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/77/f6/cbb520f31290c13820171e9235aaa254ef6b3d4e2a106490cb866ebe70ac/comfygit_core-0.3.4.tar.gz", hash = "sha256:d4e5f05aedbf3863d8912a13bcf70215bc18f95ec52ddb9baecff88272c6041b", size = 545764, upload-time = "2025-12-08T01:16:11.558Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e7/08/94c74265c57be02aed9ef3249edd7b750ab10d659f793514a11066831ce7/comfygit_core-0.3.2-py3-none-any.whl", hash = "sha256:6ae7babff4a0ebae6c8531db1cbb4f6c0c2f72a391f67fa2e890d75cc9198604", size = 312031, upload-time = "2025-12-02T07:40:32.598Z" },
+    { url = "https://files.pythonhosted.org/packages/81/64/83016a0f7dac26dd255eafb97097a774bea9e6b2509bab07d32a59c7c143/comfygit_core-0.3.4-py3-none-any.whl", hash = "sha256:dcb399ebea04989e18a75bd5a2f260ebfce3d538c152edf804017f194b4a3886", size = 313537, upload-time = "2025-12-08T01:16:10.042Z" },
 ]
 
 [[package]]
@@ -400,13 +400,13 @@ version = "0.0.4"
 source = { virtual = "." }
 dependencies = [
     { name = "comfygit-core" },
-    { name = "docker" },
     { name = "watchdog" },
     { name = "zeroconf" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "docker" },
     { name = "pytest" },
     { name = "pytest-aiohttp" },
     { name = "pytest-mock" },
@@ -415,14 +415,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "comfygit-core", specifier = ">=0.3.2" },
-    { name = "docker", specifier = ">=7.1.0" },
+    { name = "comfygit-core", specifier = ">=0.3.4" },
     { name = "watchdog", specifier = ">=6.0.0" },
     { name = "zeroconf", specifier = ">=0.131.0" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "docker", specifier = ">=7.1.0" },
     { name = "pytest", specifier = ">=8.4.1" },
     { name = "pytest-aiohttp", specifier = ">=1.1.0" },
     { name = "pytest-mock", specifier = ">=3.15.1" },

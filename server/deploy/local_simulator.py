@@ -12,8 +12,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import docker
-from docker.errors import APIError
+try:
+    import docker
+    from docker.errors import APIError
+    DOCKER_AVAILABLE = True
+except ImportError:
+    docker = None  # type: ignore
+    APIError = Exception  # type: ignore
+    DOCKER_AVAILABLE = False
 
 
 class LocalSimulatorError(Exception):
@@ -53,6 +59,11 @@ class LocalSimulatorClient:
             docker_client: Optional Docker client (for testing)
             gpu_mode: "gpu" to use NVIDIA runtime, "cpu" for CPU-only
         """
+        if not DOCKER_AVAILABLE:
+            raise LocalSimulatorError(
+                "Docker SDK not installed. Install with: pip install docker",
+                status_code=501
+            )
         self.docker = docker_client or docker.from_env()
         self.gpu_mode = gpu_mode.lower()
 
