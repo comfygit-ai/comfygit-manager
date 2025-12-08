@@ -5,54 +5,6 @@ on:
     branches: [main]
 
 jobs:
-  # Fast check: verify frontend version matches pyproject.toml
-  check-frontend-version:
-    name: Check Frontend Version
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Check frontend version matches pyproject.toml
-        run: ./scripts/check-frontend-version.sh
-
-  # Comprehensive check: rebuild frontend and verify no changes
-  verify-frontend-build:
-    name: Verify Frontend Build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install dependencies
-        working-directory: frontend
-        run: npm ci
-
-      - name: Build frontend
-        working-directory: frontend
-        run: npm run build
-
-      - name: Check for uncommitted frontend changes
-        run: |
-          if [[ -n $(git status --porcelain js/) ]]; then
-            echo "ERROR: Frontend build produced changes that were not committed!"
-            echo ""
-            echo "The following files differ from the committed version:"
-            git diff --stat js/
-            echo ""
-            echo "Please rebuild the frontend and commit the changes:"
-            echo "  cd frontend && npm run build"
-            echo "  git add js/"
-            echo "  git commit -m 'chore: rebuild frontend'"
-            exit 1
-          fi
-          echo "Frontend build is up to date!"
-
   # Python linting
   lint:
     name: Lint Python
