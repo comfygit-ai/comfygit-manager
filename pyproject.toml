@@ -16,6 +16,7 @@ dev = [
     "pytest>=8.4.1",
     "pytest-aiohttp>=1.1.0",
     "pytest-mock>=3.15.1",
+    "ruff>=0.14.8",
     "tomlkit>=0.12.0",
 ]
 
