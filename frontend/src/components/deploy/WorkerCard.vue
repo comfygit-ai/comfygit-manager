@@ -16,15 +16,6 @@
           Deploy
         </ActionButton>
         <ActionButton
-          v-if="worker.status === 'online'"
-          variant="ghost"
-          size="xs"
-          :disabled="isActionLoading"
-          @click="$emit('manage', worker)"
-        >
-          Manage
-        </ActionButton>
-        <ActionButton
           variant="ghost"
           size="xs"
           :loading="isActionLoading"
@@ -78,7 +69,6 @@ defineProps<{
 
 defineEmits<{
   deploy: [worker: CustomWorker]
-  manage: [worker: CustomWorker]
   remove: [name: string]
 }>()
 </script>

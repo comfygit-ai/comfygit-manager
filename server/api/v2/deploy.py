@@ -284,9 +284,10 @@ RUNPOD_STATUS_MAP = {
 
 # Status mapping from custom worker instance status to unified Instance status
 WORKER_STATUS_MAP = {
+    'deploying': 'deploying',
+    'starting': 'deploying',
     'running': 'running',
     'stopped': 'stopped',
-    'starting': 'deploying',
     'error': 'error',
 }
 

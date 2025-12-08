@@ -56,7 +56,6 @@
           :worker="worker"
           :is-action-loading="actionLoadingWorker === worker.name"
           @deploy="handleDeploy"
-          @manage="handleManage"
           @remove="handleRemove"
         />
       </div>
@@ -93,14 +92,6 @@
       @deployed="handleDeployed"
     />
 
-    <!-- Worker Details Modal -->
-    <WorkerDetailsModal
-      v-if="managingWorker"
-      :worker="managingWorker"
-      @close="managingWorker = null"
-      @toast="(msg, type) => emit('toast', msg, type)"
-      @refresh="loadWorkers"
-    />
   </div>
 </template>
 
@@ -113,7 +104,6 @@ import WorkerCard from './WorkerCard.vue'
 import AddWorkerModal from './AddWorkerModal.vue'
 import DiscoveredWorkersModal from './DiscoveredWorkersModal.vue'
 import DeployToWorkerModal from './DeployToWorkerModal.vue'
-import WorkerDetailsModal from './WorkerDetailsModal.vue'
 
 const emit = defineEmits<{
   toast: [message: string, type: 'info' | 'success' | 'warning' | 'error']
@@ -138,7 +128,6 @@ const actionLoadingWorker = ref<string | null>(null)
 const showAddModal = ref(false)
 const showDiscoveredModal = ref(false)
 const deployingToWorker = ref<CustomWorker | null>(null)
-const managingWorker = ref<CustomWorker | null>(null)
 
 // Scan feedback
 const scanResult = ref<{ type: 'success' | 'info'; message: string } | null>(null)
@@ -226,10 +215,6 @@ async function handleRemove(workerName: string) {
 
 function handleDeploy(worker: CustomWorker) {
   deployingToWorker.value = worker
-}
-
-function handleManage(worker: CustomWorker) {
-  managingWorker.value = worker
 }
 
 function handleDeployed() {

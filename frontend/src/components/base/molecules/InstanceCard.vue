@@ -5,7 +5,7 @@
       <span class="provider-badge">{{ providerLabel }}</span>
       <span class="instance-name">{{ instance.name }}</span>
       <span :class="['status-indicator', instance.status]">
-        <span v-if="instance.status === 'deploying'" class="spinner"></span>
+        <span v-if="instance.status === 'deploying' || instance.status === 'starting'" class="spinner"></span>
         {{ statusLabel }}
       </span>
     </div>
@@ -113,6 +113,7 @@ const providerLabel = computed(() => {
 const statusLabel = computed(() => {
   const labels: Record<string, string> = {
     deploying: 'Deploying',
+    starting: 'Starting',
     running: 'Running',
     stopped: 'Stopped',
     error: 'Error',
@@ -157,7 +158,8 @@ function formatUptime(seconds: number): string {
   border-left-color: var(--cg-color-success);
 }
 
-.instance-card.status-deploying {
+.instance-card.status-deploying,
+.instance-card.status-starting {
   border-left-color: var(--cg-color-info);
 }
 
@@ -218,7 +220,8 @@ function formatUptime(seconds: number): string {
   color: var(--cg-color-success);
 }
 
-.status-indicator.deploying {
+.status-indicator.deploying,
+.status-indicator.starting {
   color: var(--cg-color-info);
 }
 
