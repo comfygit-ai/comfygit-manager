@@ -151,7 +151,7 @@ class TestExtraArgsFromConfig:
         import json
 
         # Write workspace config with extra_args
-        config_file = mock_workspace / ".metadata" / "workspace_config.json"
+        config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
         config_file.write_text(json.dumps({
             "version": "1.0",
             "orchestrator": {
@@ -190,7 +190,7 @@ class TestExtraArgsFromConfig:
         from server.orchestrator import Orchestrator
         import json
 
-        config_file = mock_workspace / ".metadata" / "workspace_config.json"
+        config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
         config_file.write_text(json.dumps({
             "version": "1.0",
             "orchestrator": {"enable_control_server": True},
@@ -225,7 +225,7 @@ class TestExtraArgsFromConfig:
         from server.orchestrator import Orchestrator
         import json
 
-        config_file = mock_workspace / ".metadata" / "workspace_config.json"
+        config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
         config_file.write_text(json.dumps({
             "version": "1.0",
             "orchestrator": {"enable_control_server": True},
@@ -255,7 +255,7 @@ class TestExtraArgsFromConfig:
         from server.orchestrator import Orchestrator
         import json
 
-        config_file = mock_workspace / ".metadata" / "workspace_config.json"
+        config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
         config_file.write_text(json.dumps({
             "version": "1.0",
             "orchestrator": {"enable_control_server": True},
@@ -313,7 +313,7 @@ class TestConfigReloadOnRestart:
         import json
 
         # Write initial config with no extra_args
-        config_file = mock_workspace / ".metadata" / "workspace_config.json"
+        config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
         config_file.write_text(json.dumps({
             "version": "1.0",
             "orchestrator": {"enable_control_server": True},
@@ -397,7 +397,7 @@ class TestCrashRecoveryExtraArgsTracking:
         from server.orchestrator import Orchestrator
         import json
 
-        config_file = mock_workspace / ".metadata" / "workspace_config.json"
+        config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
         config_file.write_text(json.dumps({
             "version": "1.0",
             "orchestrator": {"enable_control_server": True},
@@ -427,7 +427,7 @@ class TestCrashRecoveryExtraArgsTracking:
         from server.orchestrator import Orchestrator
         import json
 
-        config_file = mock_workspace / ".metadata" / "workspace_config.json"
+        config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
         config_file.write_text(json.dumps({
             "version": "1.0",
             "orchestrator": {"enable_control_server": True},
@@ -462,7 +462,7 @@ class TestCrashRecoverySkipExtraArgs:
         from server.orchestrator import Orchestrator
         import json
 
-        config_file = mock_workspace / ".metadata" / "workspace_config.json"
+        config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
         config_file.write_text(json.dumps({
             "version": "1.0",
             "orchestrator": {"enable_control_server": True},
@@ -501,7 +501,7 @@ class TestCrashRecoverySkipExtraArgs:
         from server.orchestrator import Orchestrator
         import json
 
-        config_file = mock_workspace / ".metadata" / "workspace_config.json"
+        config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
         config_file.write_text(json.dumps({
             "version": "1.0",
             "orchestrator": {"enable_control_server": True},
@@ -541,7 +541,7 @@ class TestCrashRecoveryInRunForever:
         from server.orchestrator import Orchestrator
         import json
 
-        config_file = mock_workspace / ".metadata" / "workspace_config.json"
+        config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
         config_file.write_text(json.dumps({
             "version": "1.0",
             "orchestrator": {"enable_control_server": False},
@@ -576,7 +576,7 @@ class TestCrashRecoveryInRunForever:
         from server.orchestrator import Orchestrator
         import json
 
-        config_file = mock_workspace / ".metadata" / "workspace_config.json"
+        config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
         config_file.write_text(json.dumps({
             "version": "1.0",
             "orchestrator": {"enable_control_server": False},
@@ -602,7 +602,7 @@ class TestCrashRecoveryInRunForever:
         from server.orchestrator import Orchestrator
         import json
 
-        config_file = mock_workspace / ".metadata" / "workspace_config.json"
+        config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
         config_file.write_text(json.dumps({
             "version": "1.0",
             "orchestrator": {"enable_control_server": False},
@@ -628,7 +628,7 @@ class TestCrashRecoveryInRunForever:
         from server.orchestrator import Orchestrator
         import json
 
-        config_file = mock_workspace / ".metadata" / "workspace_config.json"
+        config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
         config_file.write_text(json.dumps({
             "version": "1.0",
             "orchestrator": {"enable_control_server": False},

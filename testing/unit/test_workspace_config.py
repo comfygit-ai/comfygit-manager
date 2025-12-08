@@ -19,7 +19,7 @@ class TestWorkspaceConfiguration:
         from server.orchestrator import load_workspace_config, DEFAULT_CONFIG
 
         # Ensure file doesn't exist
-        config_file = metadata_dir / "workspace_config.json"
+        config_file = metadata_dir / "orchestrator_config.json"
         assert not config_file.exists()
 
         config = load_workspace_config(metadata_dir)
@@ -65,7 +65,7 @@ class TestWorkspaceConfiguration:
         from server.orchestrator import load_workspace_config, DEFAULT_CONFIG
 
         # Write partial user config
-        config_file = metadata_dir / "workspace_config.json"
+        config_file = metadata_dir / "orchestrator_config.json"
         user_config = {
             "orchestrator": {
                 "control_port": 9999,
@@ -92,7 +92,7 @@ class TestWorkspaceConfiguration:
         from server.orchestrator import load_workspace_config, DEFAULT_CONFIG
 
         # Write invalid JSON
-        config_file = metadata_dir / "workspace_config.json"
+        config_file = metadata_dir / "orchestrator_config.json"
         config_file.write_text("{invalid json")
 
         config = load_workspace_config(metadata_dir)
@@ -105,7 +105,7 @@ class TestWorkspaceConfiguration:
         from server.orchestrator import load_workspace_config, DEFAULT_CONFIG
 
         # Write empty JSON object
-        config_file = metadata_dir / "workspace_config.json"
+        config_file = metadata_dir / "orchestrator_config.json"
         with open(config_file, 'w') as f:
             json.dump({}, f)
 
@@ -120,7 +120,7 @@ class TestWorkspaceConfiguration:
         from server.orchestrator import load_workspace_config
 
         # Write config with nested values
-        config_file = metadata_dir / "workspace_config.json"
+        config_file = metadata_dir / "orchestrator_config.json"
         user_config = {
             "orchestrator": {
                 "control_port_range": [9000, 9010]
@@ -176,7 +176,7 @@ class TestWorkspaceConfiguration:
         original_port = DEFAULT_CONFIG["orchestrator"]["control_port"]
 
         # Write custom config
-        config_file = metadata_dir / "workspace_config.json"
+        config_file = metadata_dir / "orchestrator_config.json"
         with open(config_file, 'w') as f:
             json.dump({"orchestrator": {"control_port": 7777}}, f)
 
@@ -199,7 +199,7 @@ class TestConfigurationInOrchestrator:
         from unittest.mock import Mock
 
         # Create default config
-        config_file = metadata_dir / "workspace_config.json"
+        config_file = metadata_dir / "orchestrator_config.json"
         config_file.write_text('{"orchestrator": {"control_port": 8888}}')
 
         # Create mock workspace object with path attribute
@@ -227,7 +227,7 @@ class TestConfigurationInOrchestrator:
         from unittest.mock import Mock
 
         # Create config with custom port range
-        config_file = metadata_dir / "workspace_config.json"
+        config_file = metadata_dir / "orchestrator_config.json"
         config = {
             "orchestrator": {
                 "control_port_range": [9100, 9110],
@@ -266,7 +266,7 @@ class TestConfigurationInOrchestrator:
         from unittest.mock import Mock
 
         # Create config with control server disabled
-        config_file = metadata_dir / "workspace_config.json"
+        config_file = metadata_dir / "orchestrator_config.json"
         config = {
             "orchestrator": {
                 "enable_control_server": False

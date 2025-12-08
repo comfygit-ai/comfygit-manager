@@ -33,8 +33,8 @@ def _get_workspace_from_request(request: web.Request) -> Workspace | None:
 
 
 def _get_orchestrator_config_path(workspace_path: Path) -> Path:
-    """Get path to orchestrator's workspace_config.json."""
-    return workspace_path / ".metadata" / "workspace_config.json"
+    """Get path to orchestrator_config.json."""
+    return workspace_path / ".metadata" / "orchestrator_config.json"
 
 
 def _load_orchestrator_config(workspace_path: Path) -> dict:

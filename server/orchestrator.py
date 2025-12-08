@@ -464,8 +464,8 @@ def cleanup_stale_temp_files(metadata_dir: Path) -> None:
 DEFAULT_CONFIG = {
     "version": "1.0",
     "orchestrator": {
-        "control_port": 8189,
-        "control_port_range": [8189, 8199],
+        "control_port": 5050,
+        "control_port_range": [5050, 5100],
         "enable_control_server": True,
         "log_level": "info",
         "health_check_timeout_s": 180,
@@ -485,7 +485,7 @@ DEFAULT_CONFIG = {
 
 def load_workspace_config(metadata_dir: Path) -> dict:
     """Load workspace configuration, falling back to defaults."""
-    config_file = metadata_dir / "workspace_config.json"
+    config_file = metadata_dir / "orchestrator_config.json"
 
     if not config_file.exists():
         # Create default config
