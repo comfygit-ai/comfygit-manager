@@ -1,12 +1,9 @@
 /**
- * Orchestrator Service Composable (Phase 2 - Control Endpoints)
+ * Orchestrator Service Composable (Refactored for Remote Access)
  *
- * Provides methods to interact with the orchestrator control server,
- * which runs on port 8189-8199 and survives ComfyUI restarts.
+ * Uses ComfyUI API proxy routes instead of direct orchestrator connections.
+ * Works with cloud proxies (RunPod, Vast.ai) and local development.
  */
-
-import { ref } from 'vue'
-import { fetchWithTimeout } from '@/utils/fetchWithTimeout'
 
 export interface OrchestratorHealth {
   status: string
@@ -31,82 +28,52 @@ export interface OrchestratorStatus {
   recovery_command?: string
 }
 
-export function useOrchestratorService() {
-  const controlPort = ref<number | null>(null)
-
-  /**
-   * Discover the orchestrator control port.
-   * First tries to read from backend, then falls back to default.
-   */
-  async function discoverControlPort(): Promise<number | null> {
-    // Try to read port from backend
-    try {
-      const response = await fetchWithTimeout(
-        'http://127.0.0.1:8188/api/v2/comfygit/orchestrator_port',
-        {},
-        5000
-      )
-      if (response.ok) {
-        const data = await response.json()
-        return data.port
+// Access ComfyUI's API
+declare global {
+  interface Window {
+    app?: {
+      api: {
+        fetchApi: (endpoint: string, options?: RequestInit) => Promise<Response>
       }
-    } catch {
-      // Backend not responding, try default
     }
+  }
+}
 
-    // Fall back to default
-    return 8189
+async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  if (!window.app?.api) {
+    throw new Error('ComfyUI API not available')
   }
 
+  const response = await window.app.api.fetchApi(endpoint, options)
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    throw new Error(errorData.error || errorData.message || `Request failed: ${response.status}`)
+  }
+
+  return response.json()
+}
+
+export function useOrchestratorService() {
   /**
-   * Check orchestrator health.
-   * Returns null if orchestrator is not responding.
+   * Check orchestrator health via proxy.
    */
   async function checkHealth(): Promise<OrchestratorHealth | null> {
-    if (!controlPort.value) {
-      controlPort.value = await discoverControlPort()
-    }
-
-    if (!controlPort.value) {
-      return null
-    }
-
     try {
-      const response = await fetchWithTimeout(
-        `http://127.0.0.1:${controlPort.value}/health`,
-        {},
-        5000
-      )
-      if (!response.ok) throw new Error('Health check failed')
-      return await response.json()
-    } catch (error) {
-      // Try re-discovering port
-      controlPort.value = await discoverControlPort()
+      return await fetchApi<OrchestratorHealth>('/v2/comfygit/orchestrator/health')
+    } catch {
       return null
     }
   }
 
   /**
-   * Get current switch status from orchestrator.
+   * Get current switch status via proxy.
+   * Falls back to file-based status if orchestrator unreachable.
    */
   async function getStatus(): Promise<OrchestratorStatus | null> {
-    if (!controlPort.value) {
-      controlPort.value = await discoverControlPort()
-    }
-
-    if (!controlPort.value) {
-      return null
-    }
-
     try {
-      const response = await fetchWithTimeout(
-        `http://127.0.0.1:${controlPort.value}/status`,
-        {},
-        5000
-      )
-      if (!response.ok) throw new Error('Failed to get status')
-      return await response.json()
-    } catch (error) {
+      return await fetchApi<OrchestratorStatus>('/v2/comfygit/orchestrator/status')
+    } catch {
       return null
     }
   }
@@ -115,51 +82,17 @@ export function useOrchestratorService() {
    * Request orchestrator to restart current environment.
    */
   async function restart(): Promise<void> {
-    if (!controlPort.value) {
-      controlPort.value = await discoverControlPort()
-    }
-
-    if (!controlPort.value) {
-      throw new Error('Control port not available')
-    }
-
-    const response = await fetchWithTimeout(
-      `http://127.0.0.1:${controlPort.value}/restart`,
-      { method: 'POST' },
-      10000
-    )
-
-    if (!response.ok) {
-      throw new Error('Failed to restart')
-    }
+    await fetchApi('/v2/comfygit/orchestrator/restart', { method: 'POST' })
   }
 
   /**
    * Request orchestrator to shutdown completely.
    */
   async function kill(): Promise<void> {
-    if (!controlPort.value) {
-      controlPort.value = await discoverControlPort()
-    }
-
-    if (!controlPort.value) {
-      throw new Error('Control port not available')
-    }
-
-    const response = await fetchWithTimeout(
-      `http://127.0.0.1:${controlPort.value}/kill`,
-      { method: 'POST' },
-      10000
-    )
-
-    if (!response.ok) {
-      throw new Error('Failed to kill orchestrator')
-    }
+    await fetchApi('/v2/comfygit/orchestrator/kill', { method: 'POST' })
   }
 
   return {
-    controlPort,
-    discoverControlPort,
     checkHealth,
     getStatus,
     restart,
