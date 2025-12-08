@@ -230,6 +230,9 @@ class TestSerializeEnvironmentStatus:
         mock_status.comparison.is_synced = True
         mock_status.comparison.missing_nodes = set()
         mock_status.comparison.extra_nodes = set()
+        mock_status.comparison.disabled_nodes = set()
+        mock_status.comparison.version_mismatches = {}
+        mock_status.comparison.packages_in_sync = True
 
         mock_status.is_synced = True
         mock_status.missing_models = []

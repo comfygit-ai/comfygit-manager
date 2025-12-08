@@ -1474,15 +1474,13 @@ class Orchestrator:
     def _handle_sigterm(self, signum, frame):
         """Handle SIGTERM gracefully."""
         print("[Orchestrator] Received SIGTERM, shutting down...")
-        self._kill_supervised_process()
-        self._cleanup()
+        self._cleanup()  # _cleanup() handles killing the supervised process
         sys.exit(0)
 
     def _handle_sigint(self, signum, frame):
         """Handle SIGINT (Ctrl+C) gracefully."""
         print("[Orchestrator] Received SIGINT, shutting down...")
-        self._kill_supervised_process()
-        self._cleanup()
+        self._cleanup()  # _cleanup() handles killing the supervised process
         sys.exit(0)
 
     def _kill_supervised_process(self):

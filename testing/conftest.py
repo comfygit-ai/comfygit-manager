@@ -21,12 +21,14 @@ server_dir = parent_dir / "server"
 if str(server_dir) not in sys.path:
     sys.path.insert(0, str(server_dir))
 
-# Mock the ComfyUI 'server' module before any imports that depend on it.
-# This is required because comfygit_panel.py imports from server.PromptServer.
-if 'server' not in sys.modules:
-    mock_server_module = MagicMock()
-    mock_server_module.PromptServer = MagicMock()
-    sys.modules['server'] = mock_server_module
+# Import the real server package first (from parent_dir/server/)
+# This prevents the mock from shadowing it
+import server as real_server_package
+
+# Now add a mock PromptServer to it for ComfyUI compatibility
+# This allows comfygit_panel.py to import from server.PromptServer
+if not hasattr(real_server_package, 'PromptServer'):
+    real_server_package.PromptServer = MagicMock()
 
 # Pre-import deploy modules to ensure they're cached before tests run.
 # This fixes an issue where running unit and integration tests together
@@ -242,4 +244,6 @@ def mock_workspace_factory(mocker, temp_dir):
     mock_workspace_obj.paths.metadata = test_workspace / ".metadata"
 
     mocker.patch("server.orchestrator.WorkspaceFactory.find", return_value=mock_workspace_obj)
+    # Also mock the control server to avoid port binding issues in tests
+    mocker.patch("server.orchestrator.Orchestrator._start_control_server")
     return mock_workspace_obj

@@ -1,0 +1,1 @@
+"""ComfyGit Manager test suite."""

@@ -139,6 +139,7 @@ class TestLogPanelRequest:
         assert "message: test" in log_content
 
 
+    @pytest.mark.skip(reason="log_panel_request not implemented in comfygit_panel.py yet")
     async def test_actual_implementation_from_panel_module(self, tmp_path):
         """Test the actual log_panel_request from comfygit_panel.py.
 

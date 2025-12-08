@@ -101,7 +101,7 @@ class TestRuntimeEnvironmentSwitch:
         # Verify it was called on the NEW environment's process
         checked_proc, timeout = health_check_called[0]
         assert checked_proc == mock_proc2, "Health check was not called on the new environment's process!"
-        assert timeout == 90, "Health check timeout should be 90s for new environment"
+        assert timeout == 180, "Health check timeout should be 180s (default config value) for new environment"
 
         # Verify environment actually switched
         assert orch.current_env_name == "env2"

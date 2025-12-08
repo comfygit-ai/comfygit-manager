@@ -147,7 +147,9 @@ class LocalSimulatorClient:
         if stored_ports.get(pod_id):
             # Use stored port (consistent across restarts)
             port_mappings["8188"] = stored_ports[pod_id]
-            public_ip = "localhost"
+            # Only show localhost when container is running
+            if desired_status == "RUNNING":
+                public_ip = "localhost"
         elif desired_status == "RUNNING":
             # Fallback to reading from container (first start)
             ports = container.ports or {}
@@ -397,6 +399,8 @@ class LocalSimulatorClient:
         # Create and start container
         try:
             container = self.docker.containers.run(**container_config)
+            # Reload container to get updated status (run() returns immediately)
+            container.reload()
         except docker.errors.ImageNotFound:
             raise LocalSimulatorError(
                 f"Image not found: {actual_image}. Run: docker pull {actual_image}",

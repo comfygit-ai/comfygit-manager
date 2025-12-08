@@ -437,11 +437,11 @@ class TestWorkspaceConfiguration:
         config = load_workspace_config(metadata_dir)
 
         # Should have created file
-        config_file = metadata_dir / "workspace_config.json"
+        config_file = metadata_dir / "orchestrator_config.json"
         assert config_file.exists()
 
         # Should have default values
-        assert config["orchestrator"]["control_port"] == 8189
+        assert config["orchestrator"]["control_port"] == 5050
         assert config["orchestrator"]["enable_control_server"] is True
 
     def test_load_workspace_config_merges_user_values(self, metadata_dir):
@@ -449,7 +449,7 @@ class TestWorkspaceConfiguration:
         from server.orchestrator import load_workspace_config
 
         # Write partial user config
-        config_file = metadata_dir / "workspace_config.json"
+        config_file = metadata_dir / "orchestrator_config.json"
         with open(config_file, 'w') as f:
             json.dump({
                 "orchestrator": {
@@ -470,14 +470,14 @@ class TestWorkspaceConfiguration:
         from server.orchestrator import load_workspace_config
 
         # Write invalid JSON
-        config_file = metadata_dir / "workspace_config.json"
+        config_file = metadata_dir / "orchestrator_config.json"
         config_file.write_text("{invalid json")
 
         # Should not raise, should return defaults
         config = load_workspace_config(metadata_dir)
 
         # Should return defaults
-        assert config["orchestrator"]["control_port"] == 8189
+        assert config["orchestrator"]["control_port"] == 5050
 
 
 @pytest.mark.unit

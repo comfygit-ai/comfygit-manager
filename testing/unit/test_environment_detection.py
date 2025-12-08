@@ -9,8 +9,16 @@ from unittest.mock import Mock
 class TestEnvironmentDetection:
     """Test environment detection (managed vs unmanaged)."""
 
-    def test_detect_managed_environment(self, mock_workspace, mock_environment, monkeypatch):
+    def test_detect_managed_environment(self, mock_workspace, mock_environment, monkeypatch, temp_dir):
         """Should detect managed environment when CWD is in workspace/environments/*/ComfyUI."""
+        # Clear env var to test upward search
+        monkeypatch.delenv("COMFYGIT_HOME", raising=False)
+
+        # Mock Path.home() to prevent finding real ~/comfygit
+        fake_home = temp_dir / "fake_home"
+        fake_home.mkdir()
+        monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
+
         comfyui_path = mock_environment / "ComfyUI"
         monkeypatch.chdir(comfyui_path)
 
@@ -30,6 +38,12 @@ class TestEnvironmentDetection:
         comfyui_path = temp_dir / "standalone" / "ComfyUI"
         comfyui_path.mkdir(parents=True)
         (comfyui_path / "main.py").touch()
+
+        # Isolate from real workspace at ~/comfygit
+        monkeypatch.delenv("COMFYGIT_HOME", raising=False)
+        fake_home = temp_dir / "fake_home"
+        fake_home.mkdir()
+        monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
 
         monkeypatch.chdir(comfyui_path)
 
@@ -71,15 +85,19 @@ class TestEnvironmentDetection:
 
     def test_find_workspace_root_via_default_location(self, mock_workspace, monkeypatch, temp_dir):
         """Should find workspace at ~/comfygit default location."""
+        # Clear env var to test default location
+        monkeypatch.delenv("COMFYGIT_HOME", raising=False)
+
         # Create mock home with comfygit
         fake_home = temp_dir / "home"
         fake_home.mkdir()
         default_workspace = fake_home / "comfygit"
         default_workspace.mkdir()
-        (default_workspace / "pyproject.toml").touch()
-        (default_workspace / "environments").mkdir()
+        # Need .metadata dir for find_workspace_root to detect it
+        (default_workspace / ".metadata").mkdir()
 
-        monkeypatch.setenv("HOME", str(fake_home))
+        # Mock Path.home() to return our fake home
+        monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
         monkeypatch.chdir(temp_dir)
 
         from server.orchestrator import find_workspace_root
@@ -88,8 +106,16 @@ class TestEnvironmentDetection:
 
         assert root == default_workspace
 
-    def test_find_workspace_root_via_upward_search(self, mock_workspace, mock_environment, monkeypatch):
+    def test_find_workspace_root_via_upward_search(self, mock_workspace, mock_environment, monkeypatch, temp_dir):
         """Should find workspace by searching upward from CWD."""
+        # Clear env var to test upward search
+        monkeypatch.delenv("COMFYGIT_HOME", raising=False)
+
+        # Mock Path.home() to prevent finding real ~/comfygit
+        fake_home = temp_dir / "fake_home"
+        fake_home.mkdir()
+        monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
+
         comfyui_path = mock_environment / "ComfyUI"
         monkeypatch.chdir(comfyui_path)
 
@@ -103,6 +129,11 @@ class TestEnvironmentDetection:
         """Should return None when no workspace found."""
         monkeypatch.chdir(temp_dir)
         monkeypatch.delenv("COMFYGIT_HOME", raising=False)
+
+        # Mock Path.home() to prevent finding real ~/comfygit
+        fake_home = temp_dir / "fake_home"
+        fake_home.mkdir()
+        monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
 
         from server.orchestrator import find_workspace_root
 
