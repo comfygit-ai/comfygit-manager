@@ -330,8 +330,8 @@ class TestWorkflowInstallEndpoint:
         # Setup: Mock get_uninstalled_nodes to return list of nodes to install
         mock_environment.get_uninstalled_nodes.return_value = ["node1", "node2"]
 
-        # Mock install_node to succeed
-        mock_environment.install_node.return_value = None
+        # Mock add_node to succeed (endpoint uses add_node not install_node)
+        mock_environment.add_node.return_value = None
 
         # Execute
         resp = await client.post("/v2/comfygit/workflow/test.json/install", json={})
@@ -345,8 +345,8 @@ class TestWorkflowInstallEndpoint:
         assert "node1" in data["nodes_installed"]
         assert "node2" in data["nodes_installed"]
 
-        # Verify install_node was called for each node
-        assert mock_environment.install_node.call_count == 2
+        # Verify add_node was called for each node
+        assert mock_environment.add_node.call_count == 2
 
     async def test_error_no_environment(self, client, monkeypatch):
         """Should return 500 when no environment detected."""

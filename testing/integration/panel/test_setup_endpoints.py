@@ -329,6 +329,20 @@ class TestInitializeWorkspaceEndpoint:
 
     async def test_error_already_in_progress(self, client, monkeypatch, tmp_path):
         """Should return 409 when initialization already in progress."""
+        # Reset state first to ensure we start clean
+        import api.v2.setup as setup_module
+        monkeypatch.setattr(
+            setup_module, "_init_task_state",
+            {
+                "state": "idle",
+                "task_id": None,
+                "progress": 0,
+                "message": "No initialization in progress",
+                "models_found": None,
+                "error": None
+            }
+        )
+
         # First call succeeds
         resp1 = await client.post("/v2/setup/initialize_workspace", json={
             "workspace_path": str(tmp_path / "comfygit1")
@@ -336,7 +350,6 @@ class TestInitializeWorkspaceEndpoint:
         assert resp1.status == 200
 
         # Mock state to show in progress
-        import api.v2.setup as setup_module
         monkeypatch.setattr(
             setup_module, "_init_task_state",
             {"state": "scanning_models", "progress": 50, "message": "...", "task_id": "test"}
@@ -351,8 +364,22 @@ class TestInitializeWorkspaceEndpoint:
         data = await resp2.json()
         assert "already in progress" in data["error"]
 
-    async def test_validation_invalid_json(self, client):
+    async def test_validation_invalid_json(self, client, monkeypatch):
         """Should return 400 for invalid JSON body."""
+        # Reset init state to idle so we don't get 409 from previous tests
+        import api.v2.setup as setup_module
+        monkeypatch.setattr(
+            setup_module, "_init_task_state",
+            {
+                "state": "idle",
+                "task_id": None,
+                "progress": 0,
+                "message": "No initialization in progress",
+                "models_found": None,
+                "error": None
+            }
+        )
+
         resp = await client.post(
             "/v2/setup/initialize_workspace",
             data=b"not json",

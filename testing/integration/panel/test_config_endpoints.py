@@ -343,7 +343,7 @@ class TestGetConfigWithoutEnvironment:
         metadata_dir = tmp_path / ".metadata"
         metadata_dir.mkdir()
         import json
-        with open(metadata_dir / "workspace_config.json", "w") as f:
+        with open(metadata_dir / "orchestrator_config.json", "w") as f:
             json.dump({"comfyui": {"extra_args": ["--lowvram", "--listen", "0.0.0.0"]}}, f)
 
         # Create mock workspace
@@ -414,7 +414,7 @@ class TestUpdateConfigWithoutEnvironment:
 
         # Verify file was written
         import json
-        with open(metadata_dir / "workspace_config.json") as f:
+        with open(metadata_dir / "orchestrator_config.json") as f:
             config = json.load(f)
         assert config["comfyui"]["extra_args"] == ["--lowvram"]
 

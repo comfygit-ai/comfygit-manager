@@ -1,6 +1,5 @@
 """Unit tests for Instance type conversion and deployment tracking."""
 import pytest
-import time
 from unittest.mock import Mock
 
 

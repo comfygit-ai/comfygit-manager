@@ -46,7 +46,7 @@ if str(server_dir) not in sys.path:
 
 # Import the real server package first (from parent_dir/server/)
 # This prevents the mock from shadowing it
-import server as real_server_package
+import server as real_server_package  # noqa: E402
 
 # Now add a mock PromptServer to it for ComfyUI compatibility
 # This allows comfygit_panel.py to import from server.PromptServer

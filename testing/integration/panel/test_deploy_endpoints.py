@@ -3,7 +3,7 @@
 Tests for RunPod deployment and package export functionality.
 """
 import pytest
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
+from unittest.mock import Mock, AsyncMock, patch
 
 
 @pytest.fixture
@@ -309,9 +309,10 @@ class TestRunPodGetPods:
         """Should return 200 with empty pods list."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.list_pods.return_value = []
+            mock_client.get_comfyui_url = Mock(return_value=None)
             MockClient.return_value = mock_client
 
             resp = await client.get("/v2/comfygit/deploy/runpod/pods")
@@ -339,7 +340,7 @@ class TestRunPodTerminatePod:
         """Should return 200 on successful termination."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.delete_pod.return_value = True
             MockClient.return_value = mock_client
@@ -367,7 +368,7 @@ class TestRunPodDeployEndpoint:
         """Should return 200 with pod_id on success."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.create_pod.return_value = {"id": "newpod123", "name": "test"}
             MockClient.return_value = mock_client
@@ -541,7 +542,7 @@ class TestRunPodGetNetworkVolumes:
         """Should return 200 with volumes list."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.list_network_volumes.return_value = [
                 {
@@ -569,7 +570,7 @@ class TestRunPodGetNetworkVolumes:
         """Should return 200 with empty volumes list."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.list_network_volumes.return_value = []
             MockClient.return_value = mock_client
@@ -599,7 +600,7 @@ class TestRunPodGetGpuTypes:
         """Should return 200 with all GPU types when no filter."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.get_gpu_types_with_pricing.return_value = [
                 {
@@ -644,55 +645,37 @@ class TestRunPodGetGpuTypes:
             assert gpu["communitySpotPrice"] == 0.17
             assert gpu["stockStatus"] == "HIGH"
 
-    async def test_success_filtered_by_data_center(self, client, mock_workspace_context):
-        """Should filter GPUs by data center availability."""
+    async def test_passes_data_center_filter_to_client(self, client, mock_workspace_context):
+        """Should pass data_center_id to client for regional stock status."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
+            # Endpoint no longer does client-side filtering - it passes data_center_id
+            # to the API for regional stock status info
             mock_client.get_gpu_types_with_pricing.return_value = [
                 {
                     "id": "NVIDIA RTX 4090",
                     "displayName": "RTX 4090",
                     "memoryInGb": 24,
-                    "secureCloud": True,
-                    "communityCloud": True,
                     "securePrice": 0.44,
                     "communityPrice": 0.34,
                     "secureSpotPrice": 0.22,
                     "communitySpotPrice": 0.17,
                     "lowestPrice": {"minimumBidPrice": 0.34, "stockStatus": "HIGH"},
-                    "nodeGroupDatacenters": [
-                        {"id": "US-IL-1", "name": "Illinois"},
-                        {"id": "US-TX-3", "name": "Texas"},
-                    ],
-                },
-                {
-                    "id": "NVIDIA RTX A6000",
-                    "displayName": "RTX A6000",
-                    "memoryInGb": 48,
-                    "secureCloud": True,
-                    "communityCloud": True,
-                    "securePrice": 0.79,
-                    "communityPrice": 0.59,
-                    "secureSpotPrice": 0.40,
-                    "communitySpotPrice": 0.30,
-                    "lowestPrice": {"minimumBidPrice": 0.59, "stockStatus": "MEDIUM"},
-                    "nodeGroupDatacenters": [
-                        {"id": "EU-CZ-1", "name": "Czech Republic"},
-                    ],
                 },
             ]
             MockClient.return_value = mock_client
 
-            # Filter by US-IL-1 - should only return RTX 4090
             resp = await client.get("/v2/comfygit/deploy/runpod/gpu-types?data_center_id=US-IL-1")
 
             assert resp.status == 200
             data = await resp.json()
             assert len(data["gpu_types"]) == 1
-            assert data["gpu_types"][0]["id"] == "NVIDIA RTX 4090"
-            assert data["gpu_types"][0]["dataCenterIds"] == ["US-IL-1", "US-TX-3"]
+            assert data["gpu_types"][0]["stockStatus"] == "HIGH"
+
+            # Verify data_center_id was passed to the client
+            mock_client.get_gpu_types_with_pricing.assert_called_once_with("US-IL-1")
 
     async def test_error_no_api_key(self, client, mock_workspace_context):
         """Should return 400 when no API key configured."""
@@ -713,7 +696,7 @@ class TestRunPodDeployWithNetworkVolume:
         """Should deploy with network_volume_id."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.create_pod.return_value = {"id": "newpod123", "name": "test"}
             MockClient.return_value = mock_client
@@ -746,7 +729,7 @@ class TestRunPodGetDataCenters:
         """Should return 200 with data centers list."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.get_data_centers.return_value = [
                 {"id": "US-IL-1", "name": "United States", "available": True},
@@ -785,7 +768,7 @@ class TestRunPodDeployWithPricingType:
         """Should deploy with pricing_type=SPOT using GraphQL create_spot_pod."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.create_spot_pod.return_value = {"id": "spotpod123", "name": "spot-test"}
             MockClient.return_value = mock_client
@@ -815,7 +798,7 @@ class TestRunPodDeployWithPricingType:
         """Should deploy with pricing_type=ON_DEMAND using REST create_pod."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.create_pod.return_value = {"id": "odpod123", "name": "ondemand-test"}
             MockClient.return_value = mock_client
@@ -843,7 +826,7 @@ class TestRunPodDeployWithPricingType:
         """Should default to ON_DEMAND when pricing_type not specified."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.create_pod.return_value = {"id": "defpod123", "name": "default-test"}
             MockClient.return_value = mock_client
@@ -874,7 +857,7 @@ class TestRunPodDeployWithStartupScript:
         """Should set COMFYGIT_HOME=/workspace/comfygit in pod env."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.create_pod.return_value = {"id": "pod123", "name": "test"}
             MockClient.return_value = mock_client
@@ -900,7 +883,7 @@ class TestRunPodDeployWithStartupScript:
         """Should include startup script in docker_start_cmd."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.create_pod.return_value = {"id": "pod123", "name": "test"}
             MockClient.return_value = mock_client
@@ -928,7 +911,7 @@ class TestRunPodDeployWithStartupScript:
         """Should return deployment_id in response."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.create_pod.return_value = {"id": "pod123", "name": "test"}
             MockClient.return_value = mock_client
@@ -971,7 +954,7 @@ class TestRunPodDeployWithStartupScript:
         """Should pass branch to startup script when provided."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.create_pod.return_value = {"id": "pod123", "name": "test"}
             MockClient.return_value = mock_client
@@ -1003,7 +986,7 @@ class TestRunPodStopPod:
         """Should return 200 on successful stop."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.stop_pod.return_value = {"id": "pod123", "desiredStatus": "EXITED"}
             MockClient.return_value = mock_client
@@ -1033,7 +1016,7 @@ class TestRunPodStartPod:
         """Should return 200 on successful start."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.start_pod.return_value = {
                 "id": "pod123",
@@ -1068,12 +1051,13 @@ class TestRunPodDeploymentStatus:
         """Should return STARTING_POD phase when pod is not yet running."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.get_pod.return_value = {
                 "id": "pod123",
                 "desiredStatus": "CREATED",
             }
+            mock_client.get_comfyui_url = Mock(return_value=None)
             MockClient.return_value = mock_client
 
             resp = await client.get("/v2/comfygit/deploy/runpod/pod123/status")
@@ -1088,12 +1072,13 @@ class TestRunPodDeploymentStatus:
         """Should return STOPPED phase when pod has exited."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.get_pod.return_value = {
                 "id": "pod123",
                 "desiredStatus": "EXITED",
             }
+            mock_client.get_comfyui_url = Mock(return_value=None)
             MockClient.return_value = mock_client
 
             resp = await client.get("/v2/comfygit/deploy/runpod/pod123/status")
@@ -1107,12 +1092,13 @@ class TestRunPodDeploymentStatus:
         """Should return SETTING_UP when pod running but ComfyUI not responding."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.get_pod.return_value = {
                 "id": "pod123",
                 "desiredStatus": "RUNNING",
             }
+            mock_client.get_comfyui_url = Mock(return_value="https://pod123-8188.proxy.runpod.net")
             MockClient.return_value = mock_client
 
             # Mock aiohttp to simulate ComfyUI not responding
@@ -1142,7 +1128,7 @@ class TestRunPodDeploymentStatus:
         """Should return 404 when pod doesn't exist."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.get_pod.return_value = None
             MockClient.return_value = mock_client
@@ -1163,12 +1149,13 @@ class TestRunPodDeploymentStatus:
         """Should always include RunPod console URL for debugging."""
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = "rpa_test123"
 
-        with patch("api.v2.deploy.RunPodClient") as MockClient:
+        with patch("deploy.runpod_client.RunPodClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.get_pod.return_value = {
                 "id": "mypod456",
                 "desiredStatus": "RUNNING",
             }
+            mock_client.get_comfyui_url = Mock(return_value="https://mypod456-8188.proxy.runpod.net")
             MockClient.return_value = mock_client
 
             with patch("api.v2.deploy.aiohttp.ClientSession") as MockSession:
@@ -1202,6 +1189,10 @@ class TestUnifiedInstancesEndpoint:
 
     async def test_returns_empty_list_when_no_providers_configured(self, client, mock_workspace_context):
         """Should return empty instances list when no API key configured."""
+        # Clear any tracked deployments from previous tests
+        from api.v2.deploy import _active_deployments
+        _active_deployments.clear()
+
         mock_workspace_context.workspace_config_manager.get_runpod_token.return_value = None
 
         resp = await client.get("/v2/comfygit/deploy/instances")
