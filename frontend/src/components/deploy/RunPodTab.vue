@@ -156,8 +156,8 @@
               <input type="radio" v-model="selectedCloudType" value="SECURE" />
               <span class="radio-label">Secure (${{ getSelectedGpuPrice('SECURE') }}/hr)</span>
             </label>
-            <label class="radio-option">
-              <input type="radio" v-model="selectedCloudType" value="COMMUNITY" />
+            <label class="radio-option disabled">
+              <input type="radio" v-model="selectedCloudType" value="COMMUNITY" disabled />
               <span class="radio-label">Community (${{ getSelectedGpuPrice('COMMUNITY') }}/hr)</span>
             </label>
           </div>
@@ -174,8 +174,8 @@
               <input type="radio" v-model="selectedPricingType" value="ON_DEMAND" />
               <span class="radio-label">On-Demand (${{ getSelectedGpuPrice('ON_DEMAND') }}/hr)</span>
             </label>
-            <label class="radio-option">
-              <input type="radio" v-model="selectedPricingType" value="SPOT" />
+            <label class="radio-option disabled">
+              <input type="radio" v-model="selectedPricingType" value="SPOT" disabled />
               <span class="radio-label">Spot (${{ getSelectedGpuPrice('SPOT') }}/hr)</span>
             </label>
           </div>
@@ -1253,6 +1253,15 @@ onUnmounted(() => {
 
 .radio-option input {
   accent-color: var(--cg-color-accent);
+}
+
+.radio-option.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.radio-option.disabled input {
+  cursor: not-allowed;
 }
 
 .radio-label {

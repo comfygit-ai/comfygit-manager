@@ -17313,7 +17313,7 @@ const A3 = { class: "instance-header" }, U3 = { class: "provider-badge" }, z3 = 
 }, V5 = {
   key: 2,
   value: ""
-}, W5 = ["value"], G5 = { class: "config-row" }, j5 = { class: "radio-group" }, H5 = { class: "radio-option" }, K5 = { class: "radio-label" }, q5 = { class: "radio-option" }, Y5 = { class: "radio-label" }, J5 = { class: "config-row" }, X5 = { class: "radio-group" }, Q5 = { class: "radio-option" }, Z5 = { class: "radio-label" }, ex = { class: "radio-option" }, tx = { class: "radio-label" }, sx = { class: "config-row" }, ox = {
+}, W5 = ["value"], G5 = { class: "config-row" }, j5 = { class: "radio-group" }, H5 = { class: "radio-option" }, K5 = { class: "radio-label" }, q5 = { class: "radio-option disabled" }, Y5 = { class: "radio-label" }, J5 = { class: "config-row" }, X5 = { class: "radio-group" }, Q5 = { class: "radio-option" }, Z5 = { class: "radio-label" }, ex = { class: "radio-option disabled" }, tx = { class: "radio-label" }, sx = { class: "config-row" }, ox = {
   key: 0,
   class: "loading-text"
 }, nx = {
@@ -17788,7 +17788,8 @@ const A3 = { class: "instance-header" }, U3 = { class: "provider-badge" }, z3 = 
                       He(t("input", {
                         type: "radio",
                         "onUpdate:modelValue": Q[6] || (Q[6] = (Le) => O.value = Le),
-                        value: "COMMUNITY"
+                        value: "COMMUNITY",
+                        disabled: ""
                       }, null, 512), [
                         [Yt, O.value]
                       ]),
@@ -17819,7 +17820,8 @@ const A3 = { class: "instance-header" }, U3 = { class: "provider-badge" }, z3 = 
                       He(t("input", {
                         type: "radio",
                         "onUpdate:modelValue": Q[8] || (Q[8] = (Le) => re.value = Le),
-                        value: "SPOT"
+                        value: "SPOT",
+                        disabled: ""
                       }, null, 512), [
                         [Yt, re.value]
                       ]),
@@ -18152,7 +18154,7 @@ const A3 = { class: "instance-header" }, U3 = { class: "provider-badge" }, z3 = 
       ], 64);
     };
   }
-}), t8 = /* @__PURE__ */ pe(e8, [["__scopeId", "data-v-925ec410"]]), s8 = { class: "worker-header" }, o8 = { class: "worker-status" }, n8 = { class: "worker-name" }, a8 = { class: "worker-actions" }, l8 = { class: "worker-details" }, i8 = { class: "detail-item" }, r8 = { class: "detail-value" }, c8 = {
+}), t8 = /* @__PURE__ */ pe(e8, [["__scopeId", "data-v-522cd4d9"]]), s8 = { class: "worker-header" }, o8 = { class: "worker-status" }, n8 = { class: "worker-name" }, a8 = { class: "worker-actions" }, l8 = { class: "worker-details" }, i8 = { class: "detail-item" }, r8 = { class: "detail-value" }, c8 = {
   key: 0,
   class: "detail-item"
 }, u8 = { class: "detail-value" }, d8 = {
