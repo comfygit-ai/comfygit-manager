@@ -10,7 +10,7 @@ Workflows. Models. Custom nodes. Environments. All tracked, all switchable, all 
 [![Docs](https://img.shields.io/badge/docs-comfyhub.org-green)](https://docs.comfyhub.org/comfygit/)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/2h5rSTeh6Y)
 
-<img width="2400" height="813" alt="Gemini_Generated_Image_gg9thvgg9thvgg9t - Copy" src="https://github.com/user-attachments/assets/62f61462-a707-4d88-8879-81be4af0c5e4" />
+<img width="2400" height="944" alt="Gemini_Generated_Image_47nqq547nqq547nq" src="https://github.com/user-attachments/assets/eba259a1-241b-4ef4-ba30-a089a98c9c60" />
 
 ---
 
