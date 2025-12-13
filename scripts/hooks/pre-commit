@@ -1,5 +1,6 @@
 #!/bin/bash
 # Pre-commit hook for comfygit-manager
+# - Blocks mock API builds from being committed (most critical)
 # - Checks that frontend build version matches pyproject.toml
 # - Syncs requirements.txt from pyproject.toml dependencies
 #
@@ -27,8 +28,29 @@ if git diff --cached --name-only | grep -qE '^pyproject\.toml$'; then
     fi
 fi
 
-# Only run version check if frontend files are staged
+# Only run checks if frontend files are staged
 if git diff --cached --name-only | grep -qE '^(pyproject\.toml|js/|frontend/)'; then
+    JS_FILE="$PROJECT_ROOT/js/comfygit-panel.js"
+
+    # Check for mock API enabled in built JS (most critical - check first)
+    if [ -f "$JS_FILE" ]; then
+        # When mock is disabled, isMockApi() compiles to: ==="true" (returns false for undefined)
+        # When mock is enabled, it compiles to the full mock implementation (~55KB larger)
+        # Simple heuristic: file size > 850KB likely has mock code bundled
+        FILE_SIZE=$(wc -c < "$JS_FILE")
+        if [ "$FILE_SIZE" -gt 850000 ]; then
+            echo ""
+            echo "ERROR: Frontend has mock API enabled!"
+            echo "File size: $FILE_SIZE bytes (expected < 850KB without mock)"
+            echo ""
+            echo "Rebuild with mock disabled:"
+            echo "  1. Set VITE_USE_MOCK_API=false in frontend/.env (or delete .env)"
+            echo "  2. cd frontend && npm run build"
+            exit 1
+        fi
+    fi
+
+    # Check version match
     echo "Checking frontend version..."
     if ! "$PROJECT_ROOT/scripts/check-frontend-version.sh"; then
         echo ""

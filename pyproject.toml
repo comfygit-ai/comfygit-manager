@@ -1,6 +1,6 @@
 [project]
 name = "comfygit-manager"
-version = "0.0.10"
+version = "0.0.11"
 description = "ComfyGit Manager - Node for managing comfygit environments in ComfyUI"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,10 +21,10 @@ dev = [
 ]
 
 [project.urls]
-Repository = "https://github.com/comfyhub-org/comfygit-manager"
+Repository = "https://github.com/comfygit-ai/comfygit-manager"
 #  Used by Comfy Registry https://comfyregistry.org
 
 [tool.comfy]
 PublisherId = "akatz"
 DisplayName = "ComfyGit Manager"
-Icon = "https://github.com/comfyhub-org.png"
+Icon = "https://github.com/comfygit-ai.png"
