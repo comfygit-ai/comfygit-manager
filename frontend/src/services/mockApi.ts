@@ -2370,7 +2370,8 @@ function delay(ms: number): Promise<void> {
 
 /**
  * Helper to detect if we're using mock or real API
+ * Default: disabled. Set VITE_USE_MOCK_API=true to enable for development.
  */
 export function isMockApi(): boolean {
-  return import.meta.env.VITE_USE_MOCK_API !== 'false'
+  return import.meta.env.VITE_USE_MOCK_API === 'true'
 }
