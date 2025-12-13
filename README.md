@@ -66,7 +66,7 @@ For installation and setup instructions, visit the **[ComfyGit Documentation](ht
 
 | Package | Description |
 |---------|-------------|
-| [comfygit](https://github.com/comfyhub-org/comfygit) | CLI tool for terminal workflows |
+| [comfygit](https://github.com/comfygit-ai/comfygit) | CLI tool for terminal workflows |
 | comfygit-core | Core Python library |
 | **comfygit-manager** | Visual control panel (this repo) |
 
@@ -74,10 +74,10 @@ For installation and setup instructions, visit the **[ComfyGit Documentation](ht
 
 ## Community
 
-[![Sponsor](https://img.shields.io/badge/Sponsor-ComfyHub-ea4aaa?logo=github-sponsors)](https://github.com/sponsors/comfyhub-org)
+[![Sponsor](https://img.shields.io/badge/Sponsor-ComfyGit-ea4aaa?logo=github-sponsors)](https://github.com/sponsors/comfygit-ai)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/2h5rSTeh6Y)
 [![X](https://img.shields.io/badge/X-@akatz__ai-000000?logo=x)](https://x.com/akatz_ai)
-[![GitHub](https://img.shields.io/badge/GitHub-comfyhub--org-181717?logo=github)](https://github.com/comfyhub-org/comfygit)
+[![GitHub](https://img.shields.io/badge/GitHub-comfygit--ai-181717?logo=github)](https://github.com/comfygit-ai/comfygit)
 
 ---
 
