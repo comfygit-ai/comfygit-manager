@@ -154,9 +154,9 @@ async function loadSettings() {
     civitaiToken.value = config.value.civitai_api_key || ''
     comfyuiExtraArgs.value = argsToString(config.value.comfyui_extra_args || [])
 
-    // Load UI settings from localStorage
+    // Load UI settings from localStorage (default to true if not set)
     const storedAutoRefresh = localStorage.getItem('ComfyGit.Settings.AutoRefresh')
-    autoRefresh.value = storedAutoRefresh === 'true'
+    autoRefresh.value = storedAutoRefresh !== 'false'
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load settings'
   } finally {

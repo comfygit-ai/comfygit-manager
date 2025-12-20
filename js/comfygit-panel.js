@@ -14143,7 +14143,7 @@ const Jw = { class: "remote-url-display" }, Xw = ["title"], Qw = ["title"], Zw =
       try {
         v.value = await i(n.workspacePath || void 0), h.value = { ...v.value }, w.value = v.value.civitai_api_key || "", p.value = x(v.value.comfyui_extra_args || []);
         const B = localStorage.getItem("ComfyGit.Settings.AutoRefresh");
-        _.value = B === "true";
+        _.value = B !== "false";
       } catch (B) {
         d.value = B instanceof Error ? B.message : "Failed to load settings";
       } finally {
@@ -14293,7 +14293,7 @@ const Jw = { class: "remote-url-display" }, Xw = ["title"], Qw = ["title"], Zw =
       ], 64))
     ]));
   }
-}), br = /* @__PURE__ */ pe(e2, [["__scopeId", "data-v-9f44552d"]]), t2 = /* @__PURE__ */ me({
+}), br = /* @__PURE__ */ pe(e2, [["__scopeId", "data-v-004ef04f"]]), t2 = /* @__PURE__ */ me({
   __name: "WorkspaceSettingsSection",
   setup(e) {
     const t = k(null);
@@ -20153,8 +20153,8 @@ const MS = { class: "settings-content" }, DS = { class: "settings-section" }, LS
   {
     id: "sponsor",
     url: "https://github.com/sponsors/comfygit-ai",
-    title: "Sponsor ComfyHub",
-    ariaLabel: "Sponsor ComfyHub on GitHub",
+    title: "Sponsor ComfyGit",
+    ariaLabel: "Sponsor ComfyGit on GitHub",
     iconPath: "M8 14s-5.5-3.5-5.5-7A3.5 3.5 0 0 1 6 3.5c1.1 0 2 .5 2 .5s.9-.5 2-.5a3.5 3.5 0 0 1 3.5 3.5c0 3.5-5.5 7-5.5 7z",
     label: "Sponsor"
   },
@@ -20162,7 +20162,7 @@ const MS = { class: "settings-content" }, DS = { class: "settings-section" }, LS
     id: "discord",
     url: "https://discord.gg/2h5rSTeh6Y",
     title: "Join Discord",
-    ariaLabel: "Join ComfyHub Discord",
+    ariaLabel: "Join ComfyGit Discord",
     iconPath: "M13.545 2.907a13.227 13.227 0 0 0-3.257-1.011.05.05 0 0 0-.052.025c-.141.25-.297.577-.406.833a12.19 12.19 0 0 0-3.658 0 8.258 8.258 0 0 0-.412-.833.051.051 0 0 0-.052-.025c-1.125.194-2.22.534-3.257 1.011a.041.041 0 0 0-.021.018C.356 6.024-.213 9.047.066 12.032c.001.014.01.028.021.037a13.276 13.276 0 0 0 3.995 2.02.05.05 0 0 0 .056-.019c.308-.42.582-.863.818-1.329a.05.05 0 0 0-.027-.07 8.735 8.735 0 0 1-1.248-.595.05.05 0 0 1-.005-.083c.084-.063.168-.129.248-.195a.05.05 0 0 1 .051-.007c2.619 1.196 5.454 1.196 8.041 0a.052.052 0 0 1 .053.007c.08.066.164.132.248.195a.051.051 0 0 1-.004.085c-.399.233-.813.44-1.249.594a.05.05 0 0 0-.027.07c.24.465.515.909.817 1.329a.05.05 0 0 0 .056.019 13.235 13.235 0 0 0 4.001-2.02.049.049 0 0 0 .021-.037c.334-3.451-.559-6.449-2.366-9.106a.034.034 0 0 0-.02-.019zM5.347 10.64c-.79 0-1.44-.724-1.44-1.612 0-.889.637-1.613 1.44-1.613.807 0 1.451.733 1.44 1.613 0 .888-.637 1.612-1.44 1.612zm5.316 0c-.788 0-1.44-.724-1.44-1.612 0-.889.637-1.613 1.44-1.613.808 0 1.451.733 1.44 1.613 0 .888-.632 1.612-1.44 1.612z"
   },
   {
@@ -20186,7 +20186,7 @@ const MS = { class: "settings-content" }, DS = { class: "settings-section" }, LS
     ariaLabel: "View ComfyGit Documentation",
     iconPath: "M8 1.783C7.015.936 5.587.81 4.287.94c-1.514.153-3.042.672-3.994 1.105A.5.5 0 0 0 0 2.5v11a.5.5 0 0 0 .707.455c.882-.4 2.303-.881 3.68-1.02 1.409-.142 2.59.087 3.223.877a.5.5 0 0 0 .78 0c.633-.79 1.814-1.019 3.222-.877 1.378.139 2.8.62 3.681 1.02A.5.5 0 0 0 16 13.5v-11a.5.5 0 0 0-.293-.455c-.952-.433-2.48-.952-3.994-1.105C10.413.809 8.985.936 8 1.783z"
   }
-], E6 = "v0.0.11", T6 = "Akatz", P6 = { class: "social-buttons" }, R6 = ["title", "aria-label", "onClick"], M6 = {
+], E6 = "v0.0.13.dev1", T6 = "Akatz", P6 = { class: "social-buttons" }, R6 = ["title", "aria-label", "onClick"], M6 = {
   width: "14",
   height: "14",
   viewBox: "0 0 16 16",
@@ -22412,7 +22412,7 @@ Os.registerExtension({
       let m = !1;
       n.addEventListener("status", async (v) => {
         const h = v.detail != null;
-        h && !m && sessionStorage.getItem("ComfyGit.PendingRefresh") && (sessionStorage.removeItem("ComfyGit.PendingRefresh"), localStorage.getItem("ComfyGit.Settings.AutoRefresh") === "true" ? (console.log("[ComfyGit] Auto-refresh enabled, reloading page..."), r()) : u()), m = h;
+        h && !m && sessionStorage.getItem("ComfyGit.PendingRefresh") && (sessionStorage.removeItem("ComfyGit.PendingRefresh"), localStorage.getItem("ComfyGit.Settings.AutoRefresh") !== "false" ? (console.log("[ComfyGit] Auto-refresh enabled, reloading page..."), r()) : u()), m = h;
       }), console.log("[ComfyGit] Refresh notification system initialized"), n.addEventListener("cm-task-completed", (v) => {
         const h = fT(v.detail);
         h && d(h);

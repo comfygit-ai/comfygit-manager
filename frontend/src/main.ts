@@ -571,8 +571,8 @@ app.registerExtension({
           if (pendingRefresh) {
             sessionStorage.removeItem('ComfyGit.PendingRefresh')
 
-            // Check if auto-refresh is enabled
-            const autoRefresh = localStorage.getItem('ComfyGit.Settings.AutoRefresh') === 'true'
+            // Check if auto-refresh is enabled (default to true if not set)
+            const autoRefresh = localStorage.getItem('ComfyGit.Settings.AutoRefresh') !== 'false'
 
             if (autoRefresh) {
               console.log('[ComfyGit] Auto-refresh enabled, reloading page...')
