@@ -19,7 +19,8 @@ if [[ ! -f "$JS_FILE" ]]; then
 fi
 
 # The version is embedded as "v0.0.X" (with quotes) - use this to avoid matching Vue's version
-JS_VERSION=$(grep -oE '"v[0-9]+\.[0-9]+\.[0-9]+"' "$JS_FILE" | head -1 | sed 's/"//g; s/^v//')
+# Supports PEP 440 versions: X.Y.Z, X.Y.Z.devN, X.Y.ZaN, X.Y.ZbN, X.Y.ZrcN
+JS_VERSION=$(grep -oE '"v[0-9]+\.[0-9]+\.[0-9]+[^"]*"' "$JS_FILE" | head -1 | sed 's/"//g; s/^v//')
 
 if [[ -z "$JS_VERSION" ]]; then
     echo "ERROR: Could not extract version from $JS_FILE"
