@@ -1,11 +1,11 @@
 [project]
 name = "comfygit-manager"
-version = "0.0.12.dev1"
+version = "0.0.14"
 description = "ComfyGit Manager - Node for managing comfygit environments in ComfyUI"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "comfygit-core>=0.3.8.dev1",
+    "comfygit-core>=0.3.9",
     "watchdog>=6.0.0",
     "zeroconf>=0.131.0",
 ]
@@ -26,5 +26,5 @@ Repository = "https://github.com/comfygit-ai/comfygit-manager"
 
 [tool.comfy]
 PublisherId = "akatz"
-DisplayName = "ComfyGit Manager"
+DisplayName = "comfygit-manager"
 Icon = "https://github.com/comfygit-ai.png"
