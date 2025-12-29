@@ -47,14 +47,16 @@
             Loading...
           </div>
 
-          <div v-if="hasUncommittedIssues" class="issues-error">
+          <div v-if="hasWorkflowIssues" class="issues-error">
             <div class="error-header">
               <span class="error-icon">⚠</span>
-              <span class="error-title">{{ uncommittedWorkflowsWithIssues.length }} workflow(s) can't run</span>
+              <span class="error-title">{{ workflowsWithIssues.length }} workflow(s) have issues</span>
             </div>
             <div class="issues-list">
-              <div v-for="workflow in uncommittedWorkflowsWithIssues" :key="workflow.name" class="issue-item">
-                <strong>{{ workflow.name }}</strong>: {{ workflow.issue_summary }}
+              <div v-for="workflow in workflowsWithIssues" :key="workflow.name" class="issue-item">
+                <strong>{{ workflow.name }}</strong>
+                <span class="workflow-state">({{ workflow.sync_state }})</span>:
+                {{ workflow.issue_summary }}
               </div>
             </div>
             <BaseCheckbox v-model="allowIssues" class="allow-issues-toggle">
@@ -138,14 +140,16 @@
         Loading...
       </div>
 
-      <div v-if="hasUncommittedIssues" class="issues-error">
+      <div v-if="hasWorkflowIssues" class="issues-error">
         <div class="error-header">
           <span class="error-icon">⚠</span>
-          <span class="error-title">{{ uncommittedWorkflowsWithIssues.length }} workflow(s) can't run</span>
+          <span class="error-title">{{ workflowsWithIssues.length }} workflow(s) have issues</span>
         </div>
         <div class="issues-list">
-          <div v-for="workflow in uncommittedWorkflowsWithIssues" :key="workflow.name" class="issue-item">
-            <strong>{{ workflow.name }}</strong>: {{ workflow.issue_summary }}
+          <div v-for="workflow in workflowsWithIssues" :key="workflow.name" class="issue-item">
+            <strong>{{ workflow.name }}</strong>
+            <span class="workflow-state">({{ workflow.sync_state }})</span>:
+            {{ workflow.issue_summary }}
           </div>
         </div>
         <BaseCheckbox v-model="allowIssues" class="allow-issues-toggle">
@@ -223,20 +227,19 @@ const hasSpecificChanges = computed(() => {
          gc.nodes_added.length > 0 || gc.nodes_removed.length > 0
 })
 
-const uncommittedWorkflowsWithIssues = computed(() => {
+// Show ALL workflows with issues - is_commit_safe checks all workflows, not just uncommitted
+const workflowsWithIssues = computed(() => {
   if (!props.status?.workflows.analyzed) return []
-  return props.status.workflows.analyzed.filter(
-    w => w.has_issues && (w.sync_state === 'new' || w.sync_state === 'modified')
-  )
+  return props.status.workflows.analyzed.filter(w => w.has_issues)
 })
 
-const hasUncommittedIssues = computed(() => uncommittedWorkflowsWithIssues.value.length > 0)
+const hasWorkflowIssues = computed(() => workflowsWithIssues.value.length > 0)
 
-const isBlockedByIssues = computed(() => hasUncommittedIssues.value && !allowIssues.value)
+const isBlockedByIssues = computed(() => hasWorkflowIssues.value && !allowIssues.value)
 
 async function handleCommit() {
   // Guard: prevent commit if there are unresolved issues and user hasn't explicitly allowed
-  if (hasUncommittedIssues.value && !allowIssues.value) return
+  if (hasWorkflowIssues.value && !allowIssues.value) return
   if (!hasChanges.value || !message.value.trim() || isLoading.value) return
 
   isLoading.value = true
@@ -250,7 +253,9 @@ async function handleCommit() {
     } else if (res.status === 'no_changes') {
       emit('committed', { success: false, message: 'No changes to commit' })
     } else if (res.status === 'blocked') {
-      emit('committed', { success: false, message: 'Commit blocked - enable "Allow issues" to force commit' })
+      // Include actual issues from the API response
+      const issuesList = res.issues?.map(i => `${i.name}: ${i.issue}`).join('; ') || 'Unknown issues'
+      emit('committed', { success: false, message: `Commit blocked - ${issuesList}. Enable "Allow issues" to force.` })
     } else {
       emit('committed', { success: false, message: res.message || 'Commit failed' })
     }
@@ -427,6 +432,12 @@ async function handleCommit() {
 
 .issue-item strong {
   color: var(--cg-color-text-primary);
+}
+
+.workflow-state {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  margin-left: 4px;
 }
 
 .allow-issues-toggle {

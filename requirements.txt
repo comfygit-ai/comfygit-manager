@@ -1,3 +1,3 @@
-comfygit-core>=0.3.8.dev1
+comfygit-core>=0.3.11
 watchdog>=6.0.0
 zeroconf>=0.131.0

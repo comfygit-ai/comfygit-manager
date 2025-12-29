@@ -63,6 +63,10 @@ Before starting any work, familiarize yourself with the codebase by reviewing th
 ### Additional Documentation
 - **frontend/THEMES.md** - Theme system documentation
 
+## Dependencies
+
+- **Pin comfygit-core to exact versions** - Always use `==X.Y.Z` (not `>=`) for the core dependency in pyproject.toml. This ensures reproducible builds and prevents unexpected breakage from core updates.
+
 ## General
 Don't make any implementation overly complex. This is a one-person dev MVP project.
 We are still pre-customer - any unnecessary fallbacks, unnecessary versioning, testing overkill should be avoided.
