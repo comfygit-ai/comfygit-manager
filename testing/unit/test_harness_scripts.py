@@ -5,6 +5,7 @@ import os
 import socket
 import subprocess
 import sys
+import tarfile
 import time
 from pathlib import Path
 
@@ -82,9 +83,14 @@ class TestHarnessScripts:
         """Workspace helpers should manage templated workspaces."""
         template_root = tmp_path / "templates"
         workspace_root = tmp_path / "workspaces"
-        template_dir = template_root / "basic"
-        template_dir.mkdir(parents=True)
-        (template_dir / "marker.txt").write_text("ok")
+        template_source = tmp_path / "template_source"
+        template_source.mkdir(parents=True)
+        (template_source / "marker.txt").write_text("ok")
+
+        template_root.mkdir(parents=True)
+        template_tarball = template_root / "basic.tar.gz"
+        with tarfile.open(template_tarball, "w:gz") as tar:
+            tar.add(template_source, arcname=".")
 
         env = {
             "HARNESS_TEMPLATE_ROOT": str(template_root),
