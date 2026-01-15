@@ -70,4 +70,4 @@ frontend/dist/
 server/.orchestrator_venv
 
 # Built frontend output (served by ComfyUI)
-web/
+web/.meow/
