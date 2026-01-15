@@ -137,7 +137,8 @@ if __name__ == "__main__":
 """
         )
 
-        _, port = reserve_port()
+        sock, port = reserve_port()
+        sock.close()
         start = run_bash(
             f'source "{COMFYUI_SCRIPT}"; pid=$(start_comfyui "{workspace}" {port}); echo $pid'
         )
