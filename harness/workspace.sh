@@ -7,7 +7,7 @@ harness_workspace_root() {
 }
 
 harness_template_root() {
-    echo "${HARNESS_TEMPLATE_ROOT:-${PWD}/.harness/templates}"
+    echo "${HARNESS_TEMPLATE_ROOT:-${PWD}/testing/fixtures/templates}"
 }
 
 create_workspace() {
@@ -23,11 +23,11 @@ create_workspace() {
     template_root=$(harness_template_root)
     local workspace_root
     workspace_root=$(harness_workspace_root)
-    local template_path="${template_root}/${template_name}"
+    local template_tarball="${template_root}/${template_name}.tar.gz"
     local workspace_path="${workspace_root}/${test_name}"
 
-    if [ ! -d "$template_path" ]; then
-        echo "Template not found: ${template_path}" >&2
+    if [ ! -f "$template_tarball" ]; then
+        echo "Template not found: ${template_tarball}" >&2
         return 1
     fi
 
@@ -37,7 +37,8 @@ create_workspace() {
     fi
 
     mkdir -p "$workspace_root"
-    cp -a "$template_path" "$workspace_path"
+    mkdir -p "$workspace_path"
+    tar xzf "$template_tarball" -C "$workspace_path"
 
     echo "$workspace_path"
 }
