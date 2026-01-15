@@ -1,0 +1,12 @@
+name: view-remotes
+template: with-remotes
+steps:
+  - action: open_panel
+    target: "ComfyGit panel"
+  - action: navigate
+    target: "Remotes section"
+  - action: wait_for
+    target: "Remote list"
+    state: populated
+expected_outcomes:
+  - "Remote list displays configured remotes"

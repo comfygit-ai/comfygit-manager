@@ -1,0 +1,10 @@
+name: open-panel
+template: minimal
+steps:
+  - action: click
+    target: "Open ComfyGit panel button"
+  - action: wait_for
+    target: "ComfyGit panel"
+    state: visible
+expected_outcomes:
+  - "ComfyGit panel is visible"
