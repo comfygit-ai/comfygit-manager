@@ -1,0 +1,140 @@
+version: 2
+name: panel-navigation
+description: |
+  Smoke test for ComfyGit panel navigation.
+  Verifies all main sections load correctly without errors.
+  Catches regressions in routing, component mounting, or API connectivity.
+
+base_url: http://localhost:8188
+timeout: 2m
+priority: high
+tags: [navigation, smoke, panel]
+
+steps:
+  # === PANEL OPEN ===
+  - id: open-comfygit-panel
+    name: Open Panel
+    action: click
+    target:
+      query: "ComfyGit button in the toolbar"
+    description: Click the ComfyGit button in ComfyUI's top toolbar to open the panel.
+    why: Entry point for all ComfyGit functionality. Panel opens with STATUS tab selected by default.
+
+  # === WORKFLOWS SECTION ===
+  - id: nav-workflows
+    name: Go to Workflows
+    action: click
+    target:
+      text: "WORKFLOWS"
+    description: Navigate to Workflows section to see tracked workflow files.
+    why: Core feature - users manage workflow versions here.
+
+  - id: verify-workflows-loaded
+    name: Verify Workflows
+    action: expect
+    checks:
+      - visible: { target: { query: "workflows section content or empty state" } }
+    description: Verify workflows section renders (may show empty state if no workflows tracked).
+    why: Confirms API endpoint /v2/comfygit/workflows responds and UI renders.
+
+  # === MODELS SECTION ===
+  - id: nav-models
+    name: Go to Models
+    action: click
+    target:
+      text: "MODELS"
+    description: Navigate to Models section showing model availability per environment.
+    why: Users need to verify which models are available before switching environments.
+
+  - id: verify-models-loaded
+    name: Verify Models
+    action: expect
+    checks:
+      - visible: { target: { query: "models section content or loading indicator" } }
+    description: Verify models section renders with model list or loading state.
+    why: Confirms model index API connectivity and UI rendering.
+
+  # === BRANCHES SECTION ===
+  - id: nav-branches
+    name: Go to Branches
+    action: click
+    target:
+      text: "BRANCHES"
+    description: Navigate to Branches section for git branch management.
+    why: Core git feature - users create, checkout, and manage branches here.
+
+  - id: verify-branches-loaded
+    name: Verify Branches
+    action: expect
+    checks:
+      - visible: { target: { query: "branches list or current branch indicator" } }
+    description: Verify branches section shows branch list with current branch highlighted.
+    why: Confirms git branch API works and branch state is readable.
+
+  # === HISTORY SECTION ===
+  - id: nav-history
+    name: Go to History
+    action: click
+    target:
+      text: "HISTORY"
+    description: Navigate to History section showing git commit log.
+    why: Users review changes and can checkout previous commits.
+
+  - id: verify-history-loaded
+    name: Verify History
+    action: expect
+    checks:
+      - visible: { target: { query: "commit list or history entries" } }
+    description: Verify history section shows commit log entries.
+    why: Confirms git log API responds and commit history renders.
+
+  # === NODES SECTION ===
+  - id: nav-nodes
+    name: Go to Nodes
+    action: click
+    target:
+      text: "NODES"
+    description: Navigate to Nodes section listing installed custom nodes.
+    why: Users manage custom node dependencies per environment.
+
+  - id: verify-nodes-loaded
+    name: Verify Nodes
+    action: expect
+    checks:
+      - visible: { target: { query: "nodes list or empty state" } }
+    description: Verify nodes section renders with installed nodes or empty state.
+    why: Confirms custom node scanning works and list renders.
+
+  # === REMOTES SECTION ===
+  - id: nav-remotes
+    name: Go to Remotes
+    action: click
+    target:
+      text: "REMOTES"
+    description: Navigate to Remotes section for git remote configuration.
+    why: Users configure push/pull targets for collaboration.
+
+  - id: verify-remotes-loaded
+    name: Verify Remotes
+    action: expect
+    checks:
+      - visible: { target: { query: "remotes list or add remote button" } }
+    description: Verify remotes section shows configured remotes or add button.
+    why: Confirms git remote API works and remote config is accessible.
+
+  # === EXPORT SECTION ===
+  - id: nav-export
+    name: Go to Export
+    action: click
+    target:
+      text: "EXPORT"
+    description: Navigate to Export section for exporting workflows/environments.
+    why: Users export portable bundles for sharing or backup.
+
+  - id: verify-export-loaded
+    name: Verify Export
+    action: expect
+    checks:
+      - visible: { target: { query: "export options or export button" } }
+    description: Verify export section renders with export configuration options.
+    why: Confirms export UI is accessible and functional.
