@@ -102,13 +102,15 @@ async function startComfyUI(): Promise<number> {
     // Not running, proceed with startup
   }
 
-  // Start via cg run with --no-sync flag
+  // Start via cg run with --no-sync flag and --cpu to avoid CUDA issues
   // Note: -e flag must come before the subcommand
-  const proc = spawn('cg', ['-e', 'default', 'run', '--no-sync'], {
+  const proc = spawn('cg', ['-e', 'default', 'run', '--no-sync', '--cpu'], {
     cwd: FIXTURE_PATH,
     env: {
       ...process.env,
       COMFYGIT_HOME: FIXTURE_PATH,
+      // Disable CUDA to avoid driver version mismatches in test fixtures
+      CUDA_VISIBLE_DEVICES: '',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: true, // Run in own process group for clean teardown
