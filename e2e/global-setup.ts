@@ -103,7 +103,8 @@ async function startComfyUI(): Promise<number> {
   }
 
   // Start via cg run with --no-sync flag
-  const proc = spawn('cg', ['run', '-e', 'default', '--no-sync'], {
+  // Note: -e flag must come before the subcommand
+  const proc = spawn('cg', ['-e', 'default', 'run', '--no-sync'], {
     cwd: FIXTURE_PATH,
     env: {
       ...process.env,
