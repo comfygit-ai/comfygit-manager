@@ -85,7 +85,7 @@ populate_comfyui_cache() {
   "version": "$COMFYUI_VERSION",
   "version_type": "release",
   "commit_sha": "$commit_sha",
-  "cached_at": "$(date -Iseconds)"
+  "cached_at": "$(date -u +"%Y-%m-%dT%H:%M:%S%z")"
 }
 EOF
 
@@ -94,7 +94,7 @@ EOF
 {
   "version": "1.0",
   "content_type": "comfyui",
-  "updated_at": "$(date -Iseconds)",
+  "updated_at": "$(date -u +"%Y-%m-%dT%H:%M:%S%z")",
   "items": {
     "release_$COMFYUI_VERSION": {
       "cache_key": "release_$COMFYUI_VERSION",
@@ -142,7 +142,7 @@ setup_git_history() {
     # Return to main/master
     git checkout -
 
-    echo "  ✓ Git history setup (2 commits, 2 branches)"
+    echo "  ✓ Git history setup (3 commits, 2 branches)"
 }
 
 # === MAIN ===
