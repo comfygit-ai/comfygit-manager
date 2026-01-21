@@ -2,3 +2,6 @@
 .cache/
 .comfyui-base/
 fixtures/
+
+# Runtime files
+.comfyui-pid
