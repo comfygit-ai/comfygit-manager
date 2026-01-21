@@ -1503,3 +1503,202 @@ class TestCategoryMismatchInResolvedModel:
         assert model["has_category_mismatch"] is True
         assert model["expected_categories"] == ["loras"]
         assert model["actual_category"] == "checkpoints"
+
+
+@pytest.mark.integration
+class TestPropertyDownloadIntentRegression:
+    """Regression tests for property_download_intent handling in analyze endpoint.
+
+    Bug: Workflows with models that have download URLs embedded in node properties
+    (match_type="property_download_intent") were incorrectly reported as "fully resolved"
+    because only "download_intent" was being checked.
+
+    This caused the resolve modal to show "All dependencies resolved!" when models
+    still needed downloading.
+    """
+
+    async def test_is_fully_resolved_false_for_property_download_intent(self, client, mock_environment):
+        """is_fully_resolved should be False when models have property_download_intent.
+
+        Property download intents come from node properties (auto-detected URLs) rather than
+        pyproject.toml. They indicate models that need downloading and should prevent
+        the workflow from being considered "fully resolved".
+        """
+        # Setup: Model with property_download_intent (from node properties)
+        mock_model_ref = Mock()
+        mock_model_ref.node_id = "1"
+        mock_model_ref.node_type = "VAELoader"
+        mock_model_ref.widget_name = "vae_name"
+        mock_model_ref.widget_value = "qwen_image_vae.safetensors"
+
+        mock_resolved_model = Mock()
+        mock_resolved_model.workflow = "test.json"
+        mock_resolved_model.reference = mock_model_ref
+        mock_resolved_model.resolved_model = None  # Not downloaded yet
+        mock_resolved_model.model_source = "https://huggingface.co/example/model.safetensors"
+        mock_resolved_model.match_confidence = 1.0
+        mock_resolved_model.match_type = "property_download_intent"  # From node properties
+        mock_resolved_model.needs_path_sync = False
+        mock_resolved_model.is_optional = False
+        mock_resolved_model.has_category_mismatch = False
+
+        mock_result = create_mock_resolution(
+            nodes_resolved=[],
+            nodes_unresolved=[],
+            nodes_ambiguous=[],
+            models_resolved=[mock_resolved_model],
+            models_unresolved=[],
+            models_ambiguous=[]
+        )
+        mock_environment.workflow_manager.analyze_and_resolve_workflow.return_value = (Mock(), mock_result)
+
+        # Mock env.status() with no uninstalled nodes
+        mock_wf_status = Mock()
+        mock_wf_status.name = "test.json"
+        mock_wf_status.uninstalled_nodes = []
+        mock_status = Mock()
+        mock_status.workflow = Mock()
+        mock_status.workflow.analyzed_workflows = [mock_wf_status]
+        mock_environment.status.return_value = mock_status
+
+        # Execute
+        resp = await client.post("/v2/comfygit/workflow/test.json/analyze")
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+
+        # KEY ASSERTION: is_fully_resolved should be False due to property_download_intent
+        assert data["stats"]["is_fully_resolved"] is False, \
+            "is_fully_resolved should be False when models have property_download_intent"
+        assert data["stats"]["download_intents"] == 1, \
+            "download_intents should count property_download_intent models"
+
+    async def test_download_intents_counts_both_intent_types(self, client, mock_environment):
+        """download_intents stat should include both download_intent and property_download_intent."""
+        # Setup: Mix of download intent types
+        mock_model_ref1 = Mock()
+        mock_model_ref1.node_id = "1"
+        mock_model_ref1.node_type = "CheckpointLoaderSimple"
+        mock_model_ref1.widget_name = "ckpt_name"
+        mock_model_ref1.widget_value = "model1.safetensors"
+
+        mock_model_ref2 = Mock()
+        mock_model_ref2.node_id = "2"
+        mock_model_ref2.node_type = "VAELoader"
+        mock_model_ref2.widget_name = "vae_name"
+        mock_model_ref2.widget_value = "model2.safetensors"
+
+        # Standard download_intent (from pyproject.toml)
+        mock_standard_intent = Mock()
+        mock_standard_intent.workflow = "test.json"
+        mock_standard_intent.reference = mock_model_ref1
+        mock_standard_intent.resolved_model = None
+        mock_standard_intent.model_source = "https://civitai.com/api/download/123"
+        mock_standard_intent.match_type = "download_intent"
+        mock_standard_intent.match_confidence = 1.0
+        mock_standard_intent.needs_path_sync = False
+        mock_standard_intent.is_optional = False
+        mock_standard_intent.has_category_mismatch = False
+
+        # Property download_intent (from node properties)
+        mock_property_intent = Mock()
+        mock_property_intent.workflow = "test.json"
+        mock_property_intent.reference = mock_model_ref2
+        mock_property_intent.resolved_model = None
+        mock_property_intent.model_source = "https://huggingface.co/example/model.safetensors"
+        mock_property_intent.match_type = "property_download_intent"
+        mock_property_intent.match_confidence = 1.0
+        mock_property_intent.needs_path_sync = False
+        mock_property_intent.is_optional = False
+        mock_property_intent.has_category_mismatch = False
+
+        mock_result = create_mock_resolution(
+            nodes_resolved=[],
+            nodes_unresolved=[],
+            nodes_ambiguous=[],
+            models_resolved=[mock_standard_intent, mock_property_intent],
+            models_unresolved=[],
+            models_ambiguous=[]
+        )
+        mock_environment.workflow_manager.analyze_and_resolve_workflow.return_value = (Mock(), mock_result)
+
+        # Mock env.status()
+        mock_wf_status = Mock()
+        mock_wf_status.name = "test.json"
+        mock_wf_status.uninstalled_nodes = []
+        mock_status = Mock()
+        mock_status.workflow = Mock()
+        mock_status.workflow.analyzed_workflows = [mock_wf_status]
+        mock_environment.status.return_value = mock_status
+
+        # Execute
+        resp = await client.post("/v2/comfygit/workflow/test.json/analyze")
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+
+        # KEY ASSERTION: Both intent types should be counted
+        assert data["stats"]["download_intents"] == 2, \
+            "download_intents should count both download_intent and property_download_intent"
+        assert data["stats"]["is_fully_resolved"] is False, \
+            "is_fully_resolved should be False with any pending downloads"
+
+    async def test_is_fully_resolved_true_when_no_download_intents(self, client, mock_environment):
+        """is_fully_resolved should be True only when there are no download intents of any type."""
+        # Setup: Resolved model (not a download intent)
+        mock_model_ref = Mock()
+        mock_model_ref.node_id = "1"
+        mock_model_ref.node_type = "CheckpointLoaderSimple"
+        mock_model_ref.widget_name = "ckpt_name"
+        mock_model_ref.widget_value = "model.safetensors"
+
+        mock_resolved_model_data = Mock()
+        mock_resolved_model_data.filename = "model.safetensors"
+        mock_resolved_model_data.hash = "abc123"
+        mock_resolved_model_data.file_size = 4000000000
+        mock_resolved_model_data.category = "checkpoints"
+        mock_resolved_model_data.relative_path = "checkpoints/model.safetensors"
+        mock_resolved_model_data.base_directory = "/models"
+
+        mock_resolved_model = Mock()
+        mock_resolved_model.workflow = "test.json"
+        mock_resolved_model.reference = mock_model_ref
+        mock_resolved_model.resolved_model = mock_resolved_model_data  # Has resolved model
+        mock_resolved_model.model_source = None  # No download needed
+        mock_resolved_model.match_type = "exact"  # Not a download intent
+        mock_resolved_model.match_confidence = 1.0
+        mock_resolved_model.needs_path_sync = False
+        mock_resolved_model.is_optional = False
+        mock_resolved_model.has_category_mismatch = False
+
+        mock_result = create_mock_resolution(
+            nodes_resolved=[],
+            nodes_unresolved=[],
+            nodes_ambiguous=[],
+            models_resolved=[mock_resolved_model],
+            models_unresolved=[],
+            models_ambiguous=[]
+        )
+        mock_environment.workflow_manager.analyze_and_resolve_workflow.return_value = (Mock(), mock_result)
+
+        # Mock env.status()
+        mock_wf_status = Mock()
+        mock_wf_status.name = "test.json"
+        mock_wf_status.uninstalled_nodes = []
+        mock_status = Mock()
+        mock_status.workflow = Mock()
+        mock_status.workflow.analyzed_workflows = [mock_wf_status]
+        mock_environment.status.return_value = mock_status
+
+        # Execute
+        resp = await client.post("/v2/comfygit/workflow/test.json/analyze")
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+
+        # is_fully_resolved should be True - no download intents
+        assert data["stats"]["download_intents"] == 0
+        assert data["stats"]["is_fully_resolved"] is True
