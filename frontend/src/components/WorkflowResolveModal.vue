@@ -428,8 +428,8 @@ const wizardSteps = computed(() => {
     steps.push({ id: 'nodes', label: 'Nodes' })
   }
 
-  // Show Models step if there are unresolved/ambiguous OR download intents to review
-  if (needsModelResolution.value || hasDownloadIntents.value) {
+  // Show Models step ONLY if user needs to make choices (unresolved/ambiguous)
+  if (needsModelResolution.value) {
     steps.push({ id: 'models', label: 'Models' })
   }
 
