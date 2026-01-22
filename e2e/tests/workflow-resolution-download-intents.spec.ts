@@ -4,9 +4,14 @@
  * Tests the UX flow where workflows with only download intents
  * skip the Models step and show accurate counts in Review.
  *
- * Scenario: A workflow has models that are resolved via download_intent
+ * Scenario: A workflow has models that are resolved via download intents
  * (they exist in pyproject.toml with download sources but aren't downloaded yet).
  * No unresolved/ambiguous nodes or models exist, so no user input is needed.
+ *
+ * IMPORTANT: Backend returns TWO match types for download intents:
+ *   - 'download_intent': from pyproject.toml model entries
+ *   - 'property_download_intent': from workflow node properties (embedded URLs)
+ * This test covers BOTH types to prevent regression.
  *
  * Expected flow:
  * 1. Analysis step shows "X pending download" count
@@ -81,7 +86,7 @@ const MOCK_ANALYZE_RESPONSE = {
         match_type: 'exact',
         has_category_mismatch: false
       },
-      // Model 2: Download intent (queued but not downloaded yet)
+      // Model 2: Download intent from pyproject.toml (queued but not downloaded yet)
       {
         reference: {
           workflow: MOCK_WORKFLOW_NAME,
@@ -102,7 +107,8 @@ const MOCK_ANALYZE_RESPONSE = {
         download_source: 'https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/ae.safetensors',
         target_path: 'vae/ae.safetensors'
       },
-      // Model 3: Another download intent
+      // Model 3: Property download intent from workflow node properties (embedded URL)
+      // Tests that frontend handles BOTH match types: 'download_intent' and 'property_download_intent'
       {
         reference: {
           workflow: MOCK_WORKFLOW_NAME,
@@ -119,7 +125,7 @@ const MOCK_ANALYZE_RESPONSE = {
           relative_path: 'loras/detail-enhancer.safetensors'
         },
         match_confidence: 1.0,
-        match_type: 'download_intent',
+        match_type: 'property_download_intent',
         download_source: 'https://civitai.com/api/download/models/123456',
         target_path: 'loras/detail-enhancer.safetensors'
       }

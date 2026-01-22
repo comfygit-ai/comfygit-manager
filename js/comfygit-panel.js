@@ -10044,7 +10044,9 @@ const gp = { class: "resolution-stepper" }, hp = { class: "stepper-header" }, yp
         });
       }
       return Array.from(z.values());
-    }), U = F(() => Q.value.filter((W) => !x.value.has(W.package.package_id))), M = F(() => w.value ? w.value.models.resolved.filter((W) => W.match_type === "download_intent").map((W) => ({
+    }), U = F(() => Q.value.filter((W) => !x.value.has(W.package.package_id))), M = F(() => w.value ? w.value.models.resolved.filter(
+      (W) => W.match_type === "download_intent" || W.match_type === "property_download_intent"
+    ).map((W) => ({
       filename: W.reference.widget_value,
       reference: W.reference,
       is_download_intent: !0,
@@ -10614,7 +10616,7 @@ const gp = { class: "resolution-stepper" }, hp = { class: "stepper-header" }, yp
       _: 1
     }, 8, ["title", "loading", "error"]));
   }
-}), e0 = /* @__PURE__ */ me(Z1, [["__scopeId", "data-v-7d3d3ea4"]]), t0 = { class: "search-input-wrapper" }, s0 = ["value", "placeholder"], o0 = /* @__PURE__ */ fe({
+}), e0 = /* @__PURE__ */ me(Z1, [["__scopeId", "data-v-40d8d5a8"]]), t0 = { class: "search-input-wrapper" }, s0 = ["value", "placeholder"], o0 = /* @__PURE__ */ fe({
   __name: "SearchInput",
   props: {
     modelValue: {},

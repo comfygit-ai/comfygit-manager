@@ -561,10 +561,15 @@ const finalNodesToInstall = computed(() => {
 })
 
 // Download intents from resolved models - user can edit these
+// Note: Backend returns two match types for download intents:
+//   - 'download_intent': from pyproject.toml model entries
+//   - 'property_download_intent': from workflow node properties (embedded URLs)
 const downloadIntentModels = computed(() => {
   if (!analysisResult.value) return []
   return analysisResult.value.models.resolved
-    .filter((m: { match_type: string }) => m.match_type === 'download_intent')
+    .filter((m: { match_type: string }) =>
+      m.match_type === 'download_intent' || m.match_type === 'property_download_intent'
+    )
     .map((m: { reference: { widget_value: string; node_id: string; node_type: string }; model: { filename: string; hash: string; size: number; category: string; relative_path: string } | null; download_source?: string; target_path?: string }) => ({
       filename: m.reference.widget_value,
       reference: m.reference,
