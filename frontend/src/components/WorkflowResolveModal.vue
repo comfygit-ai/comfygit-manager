@@ -245,6 +245,29 @@
               </div>
             </div>
 
+            <!-- Download Intent Details Section -->
+            <div v-if="pendingDownloadsForReview.length > 0" class="review-section">
+              <h4 class="section-title">Models to Download ({{ pendingDownloadsForReview.length }})</h4>
+              <div class="review-items download-details">
+                <div
+                  v-for="download in pendingDownloadsForReview"
+                  :key="download.filename"
+                  class="review-item download-item"
+                >
+                  <div class="download-info">
+                    <code class="item-name">{{ download.filename }}</code>
+                    <div class="download-meta">
+                      <span class="download-path">→ {{ download.target_path }}</span>
+                      <span v-if="download.url" class="download-url" :title="download.url">
+                        {{ truncateUrl(download.url) }}
+                      </span>
+                    </div>
+                  </div>
+                  <span class="choice-badge download">Will Download</span>
+                </div>
+              </div>
+            </div>
+
             <!-- Model Choices Review -->
             <div v-if="allEditableModels.length > 0" class="review-section">
               <h4 class="section-title">Models ({{ allEditableModels.length }})</h4>
@@ -617,6 +640,27 @@ const allEditableModels = computed(() => {
 
   return [...base, ...downloadIntents]
 })
+
+// Download intents that will actually be downloaded (for Review step details)
+const pendingDownloadsForReview = computed(() => {
+  return downloadIntentModels.value.filter(model => {
+    const choice = modelChoices.value.get(model.filename)
+    // Include if no choice (default = download) or explicit download action
+    // Exclude if cancelled/skipped/optional
+    if (!choice) return true
+    return choice.action === 'download'
+  }).map(model => ({
+    filename: model.filename,
+    url: model.download_source,
+    target_path: model.target_path
+  }))
+})
+
+// Helper to truncate long URLs for display
+function truncateUrl(url: string, maxLen = 50): string {
+  if (url.length <= maxLen) return url
+  return url.slice(0, maxLen - 3) + '...'
+}
 
 // Review step computed counts
 const installCount = computed(() => {
@@ -1247,6 +1291,43 @@ onMounted(loadAnalysis)
   color: var(--cg-color-text-muted);
   font-size: var(--cg-font-size-sm);
   text-align: center;
+}
+
+/* Download Intent Details */
+.download-details .download-item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--cg-space-2);
+}
+
+.download-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-1);
+  width: 100%;
+}
+
+.download-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cg-space-2);
+  font-size: var(--cg-font-size-xs);
+  color: var(--cg-color-text-muted);
+}
+
+.download-path {
+  font-family: var(--cg-font-mono);
+  color: var(--cg-color-text-secondary);
+}
+
+.download-url {
+  font-family: var(--cg-font-mono);
+  color: var(--cg-color-info);
+  cursor: help;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 /* Footer layout */
