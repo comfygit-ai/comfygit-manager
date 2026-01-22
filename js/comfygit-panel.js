@@ -10614,7 +10614,7 @@ const gp = { class: "resolution-stepper" }, hp = { class: "stepper-header" }, yp
       _: 1
     }, 8, ["title", "loading", "error"]));
   }
-}), e0 = /* @__PURE__ */ ve(Z1, [["__scopeId", "data-v-01590d42"]]), t0 = { class: "search-input-wrapper" }, s0 = ["value", "placeholder"], o0 = /* @__PURE__ */ fe({
+}), e0 = /* @__PURE__ */ ve(Z1, [["__scopeId", "data-v-ce39a3d0"]]), t0 = { class: "search-input-wrapper" }, s0 = ["value", "placeholder"], o0 = /* @__PURE__ */ fe({
   __name: "SearchInput",
   props: {
     modelValue: {},

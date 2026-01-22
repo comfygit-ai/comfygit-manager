@@ -814,6 +814,8 @@ function handleContinueFromAnalysis() {
   if (needsNodeResolution.value || hasNodesToInstall.value) {
     currentStep.value = 'nodes'
   } else if (needsModelResolution.value) {
+    // Only go to models if user needs to make choices
+    // Download intents don't need user input - skip to review
     currentStep.value = 'models'
   } else {
     currentStep.value = 'review'
