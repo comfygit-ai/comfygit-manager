@@ -363,7 +363,7 @@
         variant="primary"
         @click="navigateToNextSection"
       >
-        {{ (needsModelResolution || hasDownloadIntents) ? 'Continue to Models →' : 'Continue to Review →' }}
+        {{ needsModelResolution ? 'Continue to Models →' : 'Continue to Review →' }}
       </BaseButton>
 
       <!-- Models Step: Continue to Review -->
@@ -451,8 +451,8 @@ const wizardSteps = computed(() => {
     steps.push({ id: 'nodes', label: 'Nodes' })
   }
 
-  // Show Models step if there are unresolved/ambiguous OR download intents to review
-  if (needsModelResolution.value || hasDownloadIntents.value) {
+  // Show Models step ONLY if user needs to make choices (unresolved/ambiguous)
+  if (needsModelResolution.value) {
     steps.push({ id: 'models', label: 'Models' })
   }
 
@@ -749,8 +749,8 @@ const stepStats = computed(() => {
     stats['nodes'] = { resolved, total }
   }
 
-  // Model stats - includes download intents
-  if (needsModelResolution.value || hasDownloadIntents.value) {
+  // Model stats - only for models needing user choices
+  if (needsModelResolution.value) {
     const total = allEditableModels.value.length
     // For download intents without changes, consider them "resolved" (keeping current state)
     const resolved = allEditableModels.value.filter(
@@ -813,7 +813,7 @@ function handleContinueFromAnalysis() {
   // Always show nodes step if there are packages to install (for override capability)
   if (needsNodeResolution.value || hasNodesToInstall.value) {
     currentStep.value = 'nodes'
-  } else if (needsModelResolution.value || hasDownloadIntents.value) {
+  } else if (needsModelResolution.value) {
     currentStep.value = 'models'
   } else {
     currentStep.value = 'review'

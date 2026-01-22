@@ -10027,7 +10027,7 @@ const gp = { class: "resolution-stepper" }, hp = { class: "stepper-header" }, yp
       const F = [
         { id: "analysis", label: "Analysis" }
       ];
-      return (A.value || O.value) && F.push({ id: "nodes", label: "Nodes" }), (I.value || E.value) && F.push({ id: "models", label: "Models" }), F.push({ id: "review", label: "Review" }), $.value === "applying" && F.push({ id: "applying", label: "Applying" }), F;
+      return (A.value || O.value) && F.push({ id: "nodes", label: "Nodes" }), I.value && F.push({ id: "models", label: "Models" }), F.push({ id: "review", label: "Review" }), $.value === "applying" && F.push({ id: "applying", label: "Applying" }), F;
     }), V = B(() => w.value ? w.value.stats.needs_user_input : !1), A = B(() => w.value ? w.value.nodes.unresolved.length > 0 || w.value.nodes.ambiguous.length > 0 : !1), I = B(() => w.value ? w.value.models.unresolved.length > 0 || w.value.models.ambiguous.length > 0 : !1), E = B(() => w.value ? w.value.stats.download_intents > 0 : !1), O = B(() => w.value ? w.value.stats.nodes_needing_installation > 0 : !1), re = B(() => w.value ? w.value.nodes.resolved.length : 0), Y = B(() => w.value ? w.value.models.resolved.filter((F) => F.has_category_mismatch) : []), H = B(() => Y.value.length > 0), te = B(() => {
       if (!w.value) return [];
       const F = w.value.nodes.resolved.filter((Z) => !Z.is_installed), D = /* @__PURE__ */ new Set();
@@ -10152,7 +10152,7 @@ const gp = { class: "resolution-stepper" }, hp = { class: "stepper-header" }, yp
         ).length;
         F.nodes = { resolved: Z, total: D };
       }
-      if (I.value || E.value) {
+      if (I.value) {
         const D = me.value.length, Z = me.value.filter(
           (Me) => T.value.has(Me.filename) || Me.is_download_intent
         ).length;
@@ -10186,7 +10186,7 @@ const gp = { class: "resolution-stepper" }, hp = { class: "stepper-header" }, yp
       }
     }
     function L() {
-      P.value.includes("analysis") || P.value.push("analysis"), A.value || O.value ? $.value = "nodes" : I.value || E.value ? $.value = "models" : $.value = "review";
+      P.value.includes("analysis") || P.value.push("analysis"), A.value || O.value ? $.value = "nodes" : I.value ? $.value = "models" : $.value = "review";
     }
     function W(F) {
       N.value.set(F, { action: "optional" });
@@ -10584,7 +10584,7 @@ const gp = { class: "resolution-stepper" }, hp = { class: "stepper-header" }, yp
           onClick: Fe
         }, {
           default: g(() => [
-            b(f(I.value || E.value ? "Continue to Models →" : "Continue to Review →"), 1)
+            b(f(I.value ? "Continue to Models →" : "Continue to Review →"), 1)
           ]),
           _: 1
         })) : y("", !0),
@@ -10614,7 +10614,7 @@ const gp = { class: "resolution-stepper" }, hp = { class: "stepper-header" }, yp
       _: 1
     }, 8, ["title", "loading", "error"]));
   }
-}), e0 = /* @__PURE__ */ ve(Z1, [["__scopeId", "data-v-90605150"]]), t0 = { class: "search-input-wrapper" }, s0 = ["value", "placeholder"], o0 = /* @__PURE__ */ fe({
+}), e0 = /* @__PURE__ */ ve(Z1, [["__scopeId", "data-v-01590d42"]]), t0 = { class: "search-input-wrapper" }, s0 = ["value", "placeholder"], o0 = /* @__PURE__ */ fe({
   __name: "SearchInput",
   props: {
     modelValue: {},
