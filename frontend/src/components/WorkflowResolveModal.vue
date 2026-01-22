@@ -106,7 +106,7 @@
             </div>
             <div v-else-if="hasDownloadIntents" class="status-message info">
               <span class="status-icon">⬇</span>
-              <span class="status-text">{{ analysisResult.stats.download_intents }} model{{ analysisResult.stats.download_intents > 1 ? 's' : '' }} pending download - click Continue to review</span>
+              <span class="status-text">{{ analysisResult.stats.download_intents }} model{{ analysisResult.stats.download_intents > 1 ? 's' : '' }} pending download - click Continue to Review to proceed</span>
             </div>
             <!-- Category mismatch warning - shown even when "resolved" -->
             <div v-else-if="hasCategoryMismatch" class="status-message warning">
@@ -354,7 +354,7 @@
         :disabled="loading"
         @click="handleContinueFromAnalysis"
       >
-        Continue
+        {{ nextStepFromAnalysis === 'review' ? 'Continue to Review →' : 'Continue' }}
       </BaseButton>
 
       <!-- Nodes Step: Continue to Models or Review -->
@@ -509,6 +509,16 @@ const categoryMismatchModels = computed(() => {
 })
 
 const hasCategoryMismatch = computed(() => categoryMismatchModels.value.length > 0)
+
+// Determine next step from Analysis
+const nextStepFromAnalysis = computed(() => {
+  if (needsNodeResolution.value || hasNodesToInstall.value) {
+    return 'nodes'
+  } else if (needsModelResolution.value) {
+    return 'models'
+  }
+  return 'review'
+})
 
 // Packages that are resolved but not installed (for review/installation)
 // Deduplicated by package_id since multiple node types can come from one package
