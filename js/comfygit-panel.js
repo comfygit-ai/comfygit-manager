@@ -10136,7 +10136,7 @@ const gp = { class: "resolution-stepper" }, hp = { class: "stepper-header" }, yp
         ).length;
         X.nodes = { resolved: W, total: D };
       }
-      if (I.value || E.value) {
+      if (I.value) {
         const D = ve.value.length, W = ve.value.filter(
           (ce) => T.value.has(ce.filename) || ce.is_download_intent
         ).length;
@@ -10170,7 +10170,7 @@ const gp = { class: "resolution-stepper" }, hp = { class: "stepper-header" }, yp
       }
     }
     function Fe() {
-      P.value.includes("analysis") || P.value.push("analysis"), A.value || O.value ? $.value = "nodes" : I.value || E.value ? $.value = "models" : $.value = "review";
+      P.value.includes("analysis") || P.value.push("analysis"), A.value || O.value ? $.value = "nodes" : I.value ? $.value = "models" : $.value = "review";
     }
     function Ie(X) {
       N.value.set(X, { action: "optional" });
@@ -10546,7 +10546,7 @@ const gp = { class: "resolution-stepper" }, hp = { class: "stepper-header" }, yp
           onClick: ye
         }, {
           default: g(() => [
-            b(f(I.value || E.value ? "Continue to Models →" : "Continue to Review →"), 1)
+            b(f(I.value ? "Continue to Models →" : "Continue to Review →"), 1)
           ]),
           _: 1
         })) : y("", !0),
@@ -10576,7 +10576,7 @@ const gp = { class: "resolution-stepper" }, hp = { class: "stepper-header" }, yp
       _: 1
     }, 8, ["title", "loading", "error"]));
   }
-}), H1 = /* @__PURE__ */ pe(j1, [["__scopeId", "data-v-ec81b13c"]]), K1 = { class: "search-input-wrapper" }, q1 = ["value", "placeholder"], Y1 = /* @__PURE__ */ me({
+}), H1 = /* @__PURE__ */ pe(j1, [["__scopeId", "data-v-61641618"]]), K1 = { class: "search-input-wrapper" }, q1 = ["value", "placeholder"], Y1 = /* @__PURE__ */ me({
   __name: "SearchInput",
   props: {
     modelValue: {},
