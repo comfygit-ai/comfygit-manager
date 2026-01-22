@@ -635,9 +635,23 @@ const installCount = computed(() => {
 
 const downloadCount = computed(() => {
   let count = 0
+
+  // Count explicit user download choices
   for (const choice of modelChoices.value.values()) {
     if (choice.action === 'download') count++
   }
+
+  // Count download intents that haven't been cancelled or modified by user
+  // These will be downloaded even without explicit user action
+  for (const model of downloadIntentModels.value) {
+    const choice = modelChoices.value.get(model.filename)
+
+    // Only count if no choice was made (intent is preserved and will be downloaded)
+    if (!choice) {
+      count++
+    }
+  }
+
   return count
 })
 
