@@ -271,9 +271,6 @@ def reset_init_task_state():
     """Reset _init_task_state before each test to prevent state leakage."""
     import api.v2.setup as setup_module
 
-    # Store original state
-    original_state = setup_module._init_task_state.copy()
-
     # Reset to idle state before test
     setup_module._init_task_state.update({
         "state": "idle",
