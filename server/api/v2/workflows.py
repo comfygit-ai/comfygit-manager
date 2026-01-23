@@ -709,6 +709,108 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
     return web.json_response(response)
 
 
+@routes.post("/v2/comfygit/workflow/analyze-json")
+@requires_environment
+async def analyze_workflow_json(request: web.Request, env) -> web.Response:
+    """Analyze workflow JSON directly without requiring file on disk.
+
+    Used for analyzing workflows loaded in browser before save.
+    Request body: { "workflow": <workflow_json_object>, "name": "optional_name" }
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+
+    workflow_data = body.get("workflow")
+    workflow_name = body.get("name", "unsaved")
+
+    if not workflow_data:
+        return web.json_response({"error": "Missing workflow data"}, status=400)
+
+    # Parse workflow from JSON (no file needed)
+    from comfygit_core.models.workflow import Workflow
+    try:
+        workflow = Workflow.from_json(workflow_data)
+    except Exception as e:
+        return web.json_response({"error": f"Invalid workflow format: {e}"}, status=400)
+
+    # Use WorkflowDependencyParser with Workflow object (requires cg-2ro refactor)
+    from comfygit_core.analyzers.workflow_dependency_parser import WorkflowDependencyParser
+    parser = WorkflowDependencyParser(
+        workflow=workflow,
+        workflow_name=workflow_name,
+        cec_path=env.cec_path
+    )
+    dependencies = parser.analyze_dependencies()
+
+    # Use the same resolution logic as analyze_workflow
+    result = await run_sync(
+        env.workflow_manager.resolve_workflow,
+        dependencies
+    )
+
+    # Determine uninstalled nodes (same logic as analyze_workflow lines 641-648)
+    # For unsaved workflows, check against environment's installed packages
+    installed_packages = set(env.pyproject.nodes.get_existing().keys())
+    uninstalled_set = {
+        n.package_id for n in result.nodes_resolved
+        if n.package_id and n.package_id not in installed_packages
+    }
+
+    # Same stats calculation as analyze_workflow (lines 652-676)
+    nodes_needing_installation = sum(
+        1 for n in result.nodes_resolved if n.package_id in uninstalled_set
+    )
+    packages_needing_installation = len(uninstalled_set)
+    needs_user_input = bool(
+        result.nodes_unresolved or result.nodes_ambiguous or
+        result.models_unresolved or result.models_ambiguous
+    )
+    download_intents_count = sum(
+        1 for m in result.models_resolved
+        if m.match_type in ("download_intent", "property_download_intent")
+    )
+    is_fully_resolved = (
+        not needs_user_input
+        and nodes_needing_installation == 0
+        and download_intents_count == 0
+    )
+
+    # Transform to frontend format (same structure as analyze_workflow lines 678-707)
+    response = {
+        "workflow": workflow_name,
+        "nodes": {
+            "resolved": [_serialize_resolved_node(n, workflow_name, uninstalled_set) for n in result.nodes_resolved],
+            "unresolved": [_serialize_unresolved_node(n, workflow_name) for n in result.nodes_unresolved],
+            "ambiguous": [
+                amb for amb in [_serialize_ambiguous_node(opts, workflow_name, uninstalled_set) for opts in result.nodes_ambiguous]
+                if amb is not None
+            ]
+        },
+        "models": {
+            "resolved": [_serialize_resolved_model(m) for m in result.models_resolved],
+            "unresolved": [_serialize_unresolved_model(m, workflow_name) for m in result.models_unresolved],
+            "ambiguous": [
+                amb for amb in [_serialize_ambiguous_model(opts) for opts in result.models_ambiguous]
+                if amb is not None
+            ]
+        },
+        "stats": {
+            "total_nodes": len(result.nodes_resolved) + len(result.nodes_unresolved) + len(result.nodes_ambiguous),
+            "total_models": len(result.models_resolved) + len(result.models_unresolved) + len(result.models_ambiguous),
+            "download_intents": download_intents_count,
+            "nodes_needing_installation": nodes_needing_installation,
+            "packages_needing_installation": packages_needing_installation,
+            "needs_user_input": needs_user_input,
+            "is_fully_resolved": is_fully_resolved,
+            "models_with_category_mismatch": sum(1 for m in result.models_resolved if getattr(m, 'has_category_mismatch', False))
+        }
+    }
+
+    return web.json_response(response)
+
+
 @routes.post("/v2/comfygit/workflow/search-nodes")
 @requires_environment
 async def search_nodes(request: web.Request, env) -> web.Response:

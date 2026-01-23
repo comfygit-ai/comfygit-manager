@@ -1561,11 +1561,13 @@ class TestAnalyzeWorkflowJsonEndpoint:
             models_ambiguous=[]
         )
 
-        # This endpoint will use a different method (analyze_workflow_json)
-        mock_environment.workflow_manager.analyze_workflow_json = Mock(return_value=(Mock(), mock_result))
+        # Mock resolve_workflow (used by the endpoint)
+        mock_environment.workflow_manager.resolve_workflow = Mock(return_value=mock_result)
 
-        # Mock installed packages for is_installed checks
-        mock_environment.workflow_manager.get_installed_package_ids = Mock(return_value={"comfyui-core"})
+        # Mock pyproject.nodes.get_existing (returns dict of installed packages)
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {"comfyui-core": Mock()}
 
         # Execute
         resp = await client.post(
@@ -1598,8 +1600,10 @@ class TestAnalyzeWorkflowJsonEndpoint:
         workflow_json = {"nodes": {}}
 
         mock_result = create_mock_resolution()
-        mock_environment.workflow_manager.analyze_workflow_json = Mock(return_value=(Mock(), mock_result))
-        mock_environment.workflow_manager.get_installed_package_ids = Mock(return_value=set())
+        mock_environment.workflow_manager.resolve_workflow = Mock(return_value=mock_result)
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {}
 
         resp = await client.post(
             "/v2/comfygit/workflow/analyze-json",
@@ -1667,13 +1671,9 @@ class TestAnalyzeWorkflowJsonEndpoint:
         The workflow parser expects specific fields. Invalid structure should
         result in a clear error message.
         """
-        # Setup: Workflow with invalid structure (missing required 'nodes' field)
-        malformed_workflow = {"version": "1.0"}  # Missing nodes
-
-        # Mock the parser to raise an exception
-        mock_environment.workflow_manager.analyze_workflow_json = Mock(
-            side_effect=ValueError("Invalid workflow format: missing nodes field")
-        )
+        # Setup: Workflow with invalid structure (nodes must be a dict, not a string)
+        # Workflow.from_json will raise AttributeError when trying to iterate nodes
+        malformed_workflow = {"nodes": "not_a_dict"}
 
         resp = await client.post(
             "/v2/comfygit/workflow/analyze-json",
@@ -1683,6 +1683,7 @@ class TestAnalyzeWorkflowJsonEndpoint:
         assert resp.status == 400
         data = await resp.json()
         assert "error" in data
+        # The error message should mention format/workflow
         assert "workflow" in data["error"].lower() or "format" in data["error"].lower()
 
     async def test_response_format_matches_analyze_endpoint(
@@ -1738,8 +1739,10 @@ class TestAnalyzeWorkflowJsonEndpoint:
             models_ambiguous=[]
         )
 
-        mock_environment.workflow_manager.analyze_workflow_json = Mock(return_value=(Mock(), mock_result))
-        mock_environment.workflow_manager.get_installed_package_ids = Mock(return_value={"test-pkg"})
+        mock_environment.workflow_manager.resolve_workflow = Mock(return_value=mock_result)
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {"test-pkg": Mock()}
 
         resp = await client.post(
             "/v2/comfygit/workflow/analyze-json",
@@ -1807,8 +1810,10 @@ class TestAnalyzeWorkflowJsonEndpoint:
         }
 
         mock_result = create_mock_resolution()
-        mock_environment.workflow_manager.analyze_workflow_json = Mock(return_value=(Mock(), mock_result))
-        mock_environment.workflow_manager.get_installed_package_ids = Mock(return_value=set())
+        mock_environment.workflow_manager.resolve_workflow = Mock(return_value=mock_result)
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {}
 
         resp = await client.post(
             "/v2/comfygit/workflow/analyze-json",
@@ -1869,8 +1874,10 @@ class TestAnalyzeWorkflowJsonEndpoint:
         mock_result = create_mock_resolution(
             models_resolved=[mock_resolved_model]
         )
-        mock_environment.workflow_manager.analyze_workflow_json = Mock(return_value=(Mock(), mock_result))
-        mock_environment.workflow_manager.get_installed_package_ids = Mock(return_value=set())
+        mock_environment.workflow_manager.resolve_workflow = Mock(return_value=mock_result)
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {}
 
         resp = await client.post(
             "/v2/comfygit/workflow/analyze-json",
@@ -1911,10 +1918,12 @@ class TestAnalyzeWorkflowJsonEndpoint:
         mock_result = create_mock_resolution(
             nodes_resolved=[mock_resolved_node]
         )
-        mock_environment.workflow_manager.analyze_workflow_json = Mock(return_value=(Mock(), mock_result))
+        mock_environment.workflow_manager.resolve_workflow = Mock(return_value=mock_result)
 
-        # Package is NOT installed
-        mock_environment.workflow_manager.get_installed_package_ids = Mock(return_value=set())
+        # Package is NOT installed (empty dict)
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {}
 
         resp = await client.post(
             "/v2/comfygit/workflow/analyze-json",
@@ -1949,10 +1958,12 @@ class TestAnalyzeWorkflowJsonEndpoint:
         mock_result = create_mock_resolution(
             nodes_resolved=[mock_resolved_node]
         )
-        mock_environment.workflow_manager.analyze_workflow_json = Mock(return_value=(Mock(), mock_result))
+        mock_environment.workflow_manager.resolve_workflow = Mock(return_value=mock_result)
 
         # Package IS installed
-        mock_environment.workflow_manager.get_installed_package_ids = Mock(return_value={"test-pkg"})
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {"test-pkg": Mock()}
 
         resp = await client.post(
             "/v2/comfygit/workflow/analyze-json",
