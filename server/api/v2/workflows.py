@@ -776,35 +776,74 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
         and download_intents_count == 0
     )
 
-    # Transform to frontend format (same structure as analyze_workflow lines 678-707)
+    # Transform to frontend format (same structure as analyze_workflow)
+    resolved_nodes = [
+        _serialize_resolved_node(n, workflow_name, uninstalled_set)
+        for n in result.nodes_resolved
+    ]
+    unresolved_nodes = [
+        _serialize_unresolved_node(n, workflow_name)
+        for n in result.nodes_unresolved
+    ]
+    ambiguous_nodes = [
+        amb for amb in [
+            _serialize_ambiguous_node(opts, workflow_name, uninstalled_set)
+            for opts in result.nodes_ambiguous
+        ]
+        if amb is not None
+    ]
+    resolved_models = [
+        _serialize_resolved_model(m) for m in result.models_resolved
+    ]
+    unresolved_models = [
+        _serialize_unresolved_model(m, workflow_name)
+        for m in result.models_unresolved
+    ]
+    ambiguous_models = [
+        amb for amb in [
+            _serialize_ambiguous_model(opts)
+            for opts in result.models_ambiguous
+        ]
+        if amb is not None
+    ]
+
+    total_nodes = (
+        len(result.nodes_resolved)
+        + len(result.nodes_unresolved)
+        + len(result.nodes_ambiguous)
+    )
+    total_models = (
+        len(result.models_resolved)
+        + len(result.models_unresolved)
+        + len(result.models_ambiguous)
+    )
+    category_mismatch_count = sum(
+        1 for m in result.models_resolved
+        if getattr(m, 'has_category_mismatch', False)
+    )
+
     response = {
         "workflow": workflow_name,
         "nodes": {
-            "resolved": [_serialize_resolved_node(n, workflow_name, uninstalled_set) for n in result.nodes_resolved],
-            "unresolved": [_serialize_unresolved_node(n, workflow_name) for n in result.nodes_unresolved],
-            "ambiguous": [
-                amb for amb in [_serialize_ambiguous_node(opts, workflow_name, uninstalled_set) for opts in result.nodes_ambiguous]
-                if amb is not None
-            ]
+            "resolved": resolved_nodes,
+            "unresolved": unresolved_nodes,
+            "ambiguous": ambiguous_nodes,
         },
         "models": {
-            "resolved": [_serialize_resolved_model(m) for m in result.models_resolved],
-            "unresolved": [_serialize_unresolved_model(m, workflow_name) for m in result.models_unresolved],
-            "ambiguous": [
-                amb for amb in [_serialize_ambiguous_model(opts) for opts in result.models_ambiguous]
-                if amb is not None
-            ]
+            "resolved": resolved_models,
+            "unresolved": unresolved_models,
+            "ambiguous": ambiguous_models,
         },
         "stats": {
-            "total_nodes": len(result.nodes_resolved) + len(result.nodes_unresolved) + len(result.nodes_ambiguous),
-            "total_models": len(result.models_resolved) + len(result.models_unresolved) + len(result.models_ambiguous),
+            "total_nodes": total_nodes,
+            "total_models": total_models,
             "download_intents": download_intents_count,
             "nodes_needing_installation": nodes_needing_installation,
             "packages_needing_installation": packages_needing_installation,
             "needs_user_input": needs_user_input,
             "is_fully_resolved": is_fully_resolved,
-            "models_with_category_mismatch": sum(1 for m in result.models_resolved if getattr(m, 'has_category_mismatch', False))
-        }
+            "models_with_category_mismatch": category_mismatch_count,
+        },
     }
 
     return web.json_response(response)
