@@ -91,7 +91,6 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 const analysis = ref<any>(null)
 const visible = ref(false)
-let currentWorkflow: any = null
 
 const hasIssues = computed(() => {
   return missingNodes.value.length > 0 || missingModels.value.length > 0
@@ -185,7 +184,6 @@ function dismiss() {
 function handleWorkflowLoaded(event: CustomEvent) {
   const { workflow } = event.detail
   if (workflow) {
-    currentWorkflow = workflow
     analyzeWorkflow(workflow)
   }
 }
