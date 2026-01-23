@@ -1,5 +1,6 @@
 <template>
   <BaseModal
+    v-if="visible"
     title="Missing Dependencies"
     size="md"
     :loading="loading"
@@ -71,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import BaseModal from './base/BaseModal.vue'
 import BaseButton from './base/BaseButton.vue'
 
@@ -86,18 +87,11 @@ interface MissingModel {
   has_download_url: boolean
 }
 
-const props = defineProps<{
-  workflow: any
-}>()
-
-const emit = defineEmits<{
-  close: []
-  openPanel: [initialView?: string]
-}>()
-
-const loading = ref(true)
+const loading = ref(false)
 const error = ref<string | null>(null)
 const analysis = ref<any>(null)
+const visible = ref(false)
+let currentWorkflow: any = null
 
 const hasIssues = computed(() => {
   return missingNodes.value.length > 0 || missingModels.value.length > 0
@@ -141,16 +135,17 @@ const missingModels = computed<MissingModel[]>(() => {
   return [...needsDownload, ...unresolved]
 })
 
-async function analyzeWorkflow() {
+async function analyzeWorkflow(workflow: any) {
   loading.value = true
   error.value = null
+  visible.value = true
 
   try {
     // Call our backend endpoint
     const response = await fetch('/v2/comfygit/workflow/analyze-json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workflow: props.workflow, name: 'unsaved' })
+      body: JSON.stringify({ workflow, name: 'unsaved' })
     })
 
     if (!response.ok) {
@@ -162,30 +157,46 @@ async function analyzeWorkflow() {
 
     // Auto-dismiss if no issues found
     if (!hasIssues.value) {
-      emit('close')
+      dismiss()
     }
   } catch (e) {
     console.error('[ComfyGit] Failed to analyze workflow:', e)
     error.value = e instanceof Error ? e.message : 'Unknown error'
     // Don't show error UI for now - just log and dismiss
-    emit('close')
+    dismiss()
   } finally {
     loading.value = false
   }
 }
 
 function openPanel() {
-  emit('openPanel', 'workflows')
-  emit('close')
+  // Dispatch custom event for main.ts to handle
+  window.dispatchEvent(new CustomEvent('comfygit:open-panel', {
+    detail: { initialView: 'workflows' }
+  }))
+  dismiss()
 }
 
 function dismiss() {
+  visible.value = false
   analysis.value = null
-  emit('close')
+}
+
+function handleWorkflowLoaded(event: CustomEvent) {
+  const { workflow } = event.detail
+  if (workflow) {
+    currentWorkflow = workflow
+    analyzeWorkflow(workflow)
+  }
 }
 
 onMounted(() => {
-  analyzeWorkflow()
+  // Listen for workflow-loaded events
+  window.addEventListener('comfygit:workflow-loaded', handleWorkflowLoaded as EventListener)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('comfygit:workflow-loaded', handleWorkflowLoaded as EventListener)
 })
 </script>
 

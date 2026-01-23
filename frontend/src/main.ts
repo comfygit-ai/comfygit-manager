@@ -341,37 +341,19 @@ function closeMockControlPopover() {
   }
 }
 
-function showMissingResourcesPopup(workflow: any) {
-  if (missingResourcesContainer) return // Already shown
+function mountMissingResourcesPopup() {
+  if (missingResourcesContainer) return // Already mounted
 
   missingResourcesContainer = document.createElement('div')
   missingResourcesContainer.className = 'comfygit-missing-resources-root'
 
   missingResourcesApp = createApp({
-    render: () => h(MissingResourcesPopup, {
-      workflow,
-      onClose: closeMissingResourcesPopup,
-      onOpenPanel: (initialView?: string) => {
-        closeMissingResourcesPopup()
-        showPanel(initialView)
-      }
-    })
+    render: () => h(MissingResourcesPopup)
   })
 
   missingResourcesApp.mount(missingResourcesContainer)
   document.body.appendChild(missingResourcesContainer)
   console.log('[ComfyGit] Missing resources popup mounted')
-}
-
-function closeMissingResourcesPopup() {
-  if (missingResourcesApp) {
-    missingResourcesApp.unmount()
-    missingResourcesApp = null
-  }
-  if (missingResourcesContainer) {
-    missingResourcesContainer.remove()
-    missingResourcesContainer = null
-  }
 }
 
 // Update commit button indicator and disabled state
@@ -548,9 +530,6 @@ app.registerExtension({
     console.log('[ComfyGit] afterConfigureGraph: dispatched workflow-loaded event', {
       missingNodeTypes: missingNodeTypes?.length ?? 0
     })
-
-    // Show missing resources popup
-    showMissingResourcesPopup(pending.graphData)
   },
 
   async setup() {
@@ -595,6 +574,9 @@ app.registerExtension({
 
     // Mount global download queue
     mountDownloadQueue()
+
+    // Mount missing resources popup
+    mountMissingResourcesPopup()
 
     // Listen for panel open requests from other components
     window.addEventListener('comfygit:open-panel', ((event: CustomEvent) => {
