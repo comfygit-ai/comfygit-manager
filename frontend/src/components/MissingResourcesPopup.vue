@@ -345,13 +345,23 @@ function downloadAll() {
   downloadAllModels()
 }
 
+// Simple string hash function (djb2 algorithm)
+function hashString(str: string): string {
+  let hash = 5381
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) ^ str.charCodeAt(i)
+  }
+  return Math.abs(hash).toString(16).padStart(8, '0')
+}
+
 // Generate a hash for the workflow (for "don't show again")
+// Includes node IDs to uniquely identify each workflow, not just node types
 function getWorkflowHash(workflow: any): string {
-  const nodeTypes = (workflow?.nodes || [])
-    .map((n: any) => n.type)
+  const nodeInfo = (workflow?.nodes || [])
+    .map((n: any) => `${n.id}:${n.type}`)
     .sort()
     .join(',')
-  return btoa(nodeTypes).slice(0, 16)
+  return hashString(nodeInfo)
 }
 
 // Check if popup should be shown for this workflow
@@ -360,10 +370,14 @@ function shouldShowPopup(workflow: any): boolean {
   return localStorage.getItem('comfygit:popup-dismissed:' + hash) !== 'true'
 }
 
-// Handle "don't show again" change
+// Handle "don't show again" change (bidirectional)
 function handleDontShowAgainChange() {
-  if (dontShowAgain.value && currentWorkflowHash.value) {
+  if (!currentWorkflowHash.value) return
+
+  if (dontShowAgain.value) {
     localStorage.setItem('comfygit:popup-dismissed:' + currentWorkflowHash.value, 'true')
+  } else {
+    localStorage.removeItem('comfygit:popup-dismissed:' + currentWorkflowHash.value)
   }
 }
 
@@ -373,9 +387,9 @@ async function analyzeWorkflow(workflow: any) {
     return
   }
 
+  // Prepare state but DON'T show modal yet - wait for analysis results
   loading.value = true
   error.value = null
-  visible.value = true
   currentWorkflowHash.value = getWorkflowHash(workflow)
 
   // Reset state
@@ -399,15 +413,13 @@ async function analyzeWorkflow(workflow: any) {
 
     analysis.value = await response.json()
 
-    // Auto-dismiss if no issues found
-    if (!hasIssues.value) {
-      dismiss()
+    // Only show modal if there are actual issues to display
+    if (hasIssues.value) {
+      visible.value = true
     }
   } catch (e) {
     console.error('[ComfyGit] Failed to analyze workflow:', e)
-    error.value = e instanceof Error ? e.message : 'Unknown error'
-    // Don't show error UI for now - just log and dismiss
-    dismiss()
+    // Don't show error UI - just log silently
   } finally {
     loading.value = false
   }

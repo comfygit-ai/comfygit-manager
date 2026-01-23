@@ -69,6 +69,20 @@
           >
             <Toggle v-model="autoRefresh" @update:modelValue="saveAutoRefreshSetting" />
           </SettingRow>
+
+          <SettingRow
+            label="Dismissed Dependency Popups"
+            description="Reset the 'don't show again' state for missing dependency popups when loading workflows."
+          >
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :disabled="dismissedPopupCount === 0"
+              @click="resetDismissedPopups"
+            >
+              {{ dismissedPopupCount > 0 ? `Reset (${dismissedPopupCount})` : 'None Dismissed' }}
+            </BaseButton>
+          </SettingRow>
         </div>
       </SectionGroup>
 
@@ -88,6 +102,7 @@ import SectionGroup from '@/components/base/molecules/SectionGroup.vue'
 import SettingRow from '@/components/base/molecules/SettingRow.vue'
 import TextInput from '@/components/base/atoms/TextInput.vue'
 import Toggle from '@/components/base/atoms/Toggle.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 import SummaryBar from '@/components/base/molecules/SummaryBar.vue'
 import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
@@ -120,6 +135,7 @@ const comfyuiExtraArgs = ref<string>('')  // Space-separated args shown as strin
 
 // UI settings (stored in localStorage)
 const autoRefresh = ref(false)
+const dismissedPopupCount = ref(0)
 
 // Helper to convert args array to space-separated string
 function argsToString(args: string[]): string {
@@ -157,6 +173,9 @@ async function loadSettings() {
     // Load UI settings from localStorage (default to true if not set)
     const storedAutoRefresh = localStorage.getItem('ComfyGit.Settings.AutoRefresh')
     autoRefresh.value = storedAutoRefresh !== 'false'
+
+    // Count dismissed popups
+    dismissedPopupCount.value = countDismissedPopups()
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load settings'
   } finally {
@@ -210,6 +229,32 @@ function resetSettings() {
 function saveAutoRefreshSetting(value: boolean) {
   localStorage.setItem('ComfyGit.Settings.AutoRefresh', String(value))
   console.log('[ComfyGit] Auto-refresh setting saved:', value)
+}
+
+// Count dismissed popup entries in localStorage
+function countDismissedPopups(): number {
+  let count = 0
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key?.startsWith('comfygit:popup-dismissed:')) {
+      count++
+    }
+  }
+  return count
+}
+
+// Reset all dismissed popup entries
+function resetDismissedPopups() {
+  const keysToRemove: string[] = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key?.startsWith('comfygit:popup-dismissed:')) {
+      keysToRemove.push(key)
+    }
+  }
+  keysToRemove.forEach(key => localStorage.removeItem(key))
+  dismissedPopupCount.value = 0
+  console.log(`[ComfyGit] Reset ${keysToRemove.length} dismissed popup(s)`)
 }
 
 // Expose methods for parent components
