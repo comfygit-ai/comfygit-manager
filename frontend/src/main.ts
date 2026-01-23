@@ -857,6 +857,168 @@ app.registerExtension({
       }
 
       console.log('[ComfyGit] Manager error notification system initialized')
+
+      // ========== RESTART REQUIRED TOAST: Show after nodes installed ==========
+      window.addEventListener('comfygit:nodes-installed', (event: Event) => {
+        const customEvent = event as CustomEvent
+        const { count = 1 } = customEvent.detail || {}
+        showRestartRequiredNotification(count)
+      })
+
+      function showRestartRequiredNotification(nodeCount: number) {
+        // Remove any existing restart toast
+        const existing = document.getElementById('comfygit-restart-toast')
+        if (existing) existing.remove()
+
+        const toast = document.createElement('div')
+        toast.id = 'comfygit-restart-toast'
+        toast.style.cssText = `
+          position: fixed;
+          bottom: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: #1e1e1e;
+          border: 1px solid #333;
+          border-radius: 8px;
+          padding: 12px 16px;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+          z-index: 999999;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          font-family: sans-serif;
+          font-size: 14px;
+          color: #fff;
+          max-width: 550px;
+        `
+
+        // Success icon (matches Manager style)
+        const icon = document.createElement('span')
+        icon.textContent = '✅'
+        icon.style.fontSize = '20px'
+        toast.appendChild(icon)
+
+        // Message container
+        const msgContainer = document.createElement('div')
+        msgContainer.style.cssText = 'flex: 1; display: flex; flex-direction: column; gap: 2px;'
+
+        const title = document.createElement('div')
+        title.textContent = 'To apply changes, please restart ComfyUI'
+        title.style.cssText = 'font-weight: 500; color: #fff;'
+        msgContainer.appendChild(title)
+
+        const detail = document.createElement('div')
+        detail.textContent = `${nodeCount} node package${nodeCount > 1 ? 's' : ''} ready to install`
+        detail.style.cssText = 'font-size: 12px; opacity: 0.7;'
+        msgContainer.appendChild(detail)
+
+        toast.appendChild(msgContainer)
+
+        // Restart button (matches Manager's bordered style)
+        const restartBtn = document.createElement('button')
+        restartBtn.textContent = 'Apply Changes'
+        restartBtn.style.cssText = `
+          background: transparent;
+          color: #fff;
+          border: 2px solid #fff;
+          border-radius: 20px;
+          padding: 6px 14px;
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 500;
+          white-space: nowrap;
+          transition: background 0.2s;
+        `
+        restartBtn.onmouseover = () => restartBtn.style.background = 'rgba(255,255,255,0.1)'
+        restartBtn.onmouseout = () => restartBtn.style.background = 'transparent'
+        restartBtn.onclick = async () => {
+          restartBtn.disabled = true
+          restartBtn.textContent = 'Restarting...'
+          restartBtn.style.opacity = '0.7'
+
+          // Update toast appearance for restarting state
+          title.textContent = 'Restarting...'
+          detail.textContent = 'Applying changes, please wait...'
+
+          try {
+            // Set up reconnection handler BEFORE triggering reboot
+            const onReconnect = async () => {
+              console.log('[ComfyGit] Reconnected after restart, refreshing node definitions...')
+
+              try {
+                // Refresh node definitions (like Manager does)
+                if ((app as any).refreshComboInNodes) {
+                  await (app as any).refreshComboInNodes()
+                  console.log('[ComfyGit] Node definitions refreshed successfully')
+                }
+
+                // Update toast to show success
+                icon.textContent = '✅'
+                title.textContent = 'Nodes Installed'
+                title.style.color = '#4caf50'
+                detail.textContent = `${nodeCount} package${nodeCount > 1 ? 's' : ''} installed successfully!`
+                toast.style.borderColor = '#4caf50'
+                restartBtn.style.display = 'none'
+
+                // Auto-close after 3 seconds
+                setTimeout(() => {
+                  toast.remove()
+                }, 3000)
+              } catch (refreshErr) {
+                console.error('[ComfyGit] Failed to refresh nodes:', refreshErr)
+                // Still show success since restart worked
+                icon.textContent = '✅'
+                title.textContent = 'Restart Complete'
+                title.style.color = '#4caf50'
+                detail.textContent = 'Refresh the page to load new nodes.'
+                toast.style.borderColor = '#4caf50'
+                restartBtn.style.display = 'none'
+              }
+            }
+
+            // Listen for reconnection (once)
+            api.addEventListener('reconnected', onReconnect, { once: true } as any)
+
+            // Trigger reboot
+            await fetch('/v2/manager/reboot')
+            // Toast will update when reconnected
+          } catch (err) {
+            console.error('[ComfyGit] Failed to restart:', err)
+            title.textContent = 'Restart Failed'
+            title.style.color = '#e53935'
+            detail.textContent = 'Could not restart server. Try again.'
+            toast.style.borderColor = '#e53935'
+            restartBtn.textContent = 'Try Again'
+            restartBtn.disabled = false
+            restartBtn.style.opacity = '1'
+          }
+        }
+        toast.appendChild(restartBtn)
+
+        // Close button
+        const closeBtn = document.createElement('button')
+        closeBtn.textContent = '×'
+        closeBtn.title = 'Dismiss (restart later)'
+        closeBtn.style.cssText = `
+          background: transparent;
+          border: none;
+          color: #fff;
+          font-size: 24px;
+          line-height: 1;
+          cursor: pointer;
+          padding: 0 4px;
+          opacity: 0.6;
+        `
+        closeBtn.onmouseover = () => closeBtn.style.opacity = '1'
+        closeBtn.onmouseout = () => closeBtn.style.opacity = '0.6'
+        closeBtn.onclick = () => toast.remove()
+        toast.appendChild(closeBtn)
+
+        document.body.appendChild(toast)
+        console.log(`[ComfyGit] Restart required notification displayed (${nodeCount} packages installed)`)
+      }
+
+      console.log('[ComfyGit] Restart notification system initialized')
     }
   }
 })

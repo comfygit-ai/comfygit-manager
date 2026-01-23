@@ -24,10 +24,10 @@
               v-if="missingPackages.length > 1"
               size="sm"
               variant="secondary"
-              :disabled="allPackagesQueued"
+              :disabled="allPackagesInstalled"
               @click="installAllNodes"
             >
-              {{ allPackagesQueued ? 'All Queued' : 'Install All' }}
+              {{ allPackagesInstalled ? 'All Installed' : 'Install All' }}
             </BaseButton>
           </div>
           <div class="item-list">
@@ -37,7 +37,7 @@
                 <span class="node-count">({{ pkg.node_count }} {{ pkg.node_count === 1 ? 'node' : 'nodes' }})</span>
               </div>
               <BaseButton
-                v-if="!queuedPackages.has(pkg.package_id)"
+                v-if="!installedPackages.has(pkg.package_id)"
                 size="sm"
                 variant="secondary"
                 :disabled="installingPackage === pkg.package_id"
@@ -45,7 +45,7 @@
               >
                 {{ installingPackage === pkg.package_id ? 'Installing...' : 'Install' }}
               </BaseButton>
-              <span v-else class="queued-badge">Queued</span>
+              <span v-else class="installed-badge">Installed</span>
             </div>
             <div v-if="missingPackages.length > 5" class="overflow-note">
               ...and {{ missingPackages.length - 5 }} more packages
@@ -121,10 +121,10 @@
       <BaseButton
         v-if="hasDownloadableItems"
         variant="primary"
-        :disabled="allItemsQueued"
+        :disabled="allItemsDone"
         @click="downloadAll"
       >
-        {{ allItemsQueued ? 'All Queued' : 'Download All' }}
+        {{ allItemsDone ? 'All Done' : 'Download All' }}
       </BaseButton>
       <BaseButton v-else variant="primary" @click="openPanel">Open ComfyGit Panel</BaseButton>
     </template>
@@ -162,11 +162,12 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 const analysis = ref<any>(null)
 const visible = ref(false)
-const queuedPackages = ref<Set<string>>(new Set())
-const queuedModels = ref<Set<string>>(new Set())
+const installedPackages = ref<Set<string>>(new Set())  // Packages that have been installed
+const queuedModels = ref<Set<string>>(new Set())       // Models queued for download
 const dontShowAgain = ref(false)
 const installingPackage = ref<string | null>(null)
 const currentWorkflowHash = ref<string | null>(null)
+const installedCount = ref(0)  // Track total installed for restart notification
 
 const { addToQueue } = useModelDownloadQueue()
 const { installNode } = useComfyGitService()
@@ -230,9 +231,10 @@ const missingModels = computed<MissingModelItem[]>(() => {
     .map((m: any) => ({
       filename: m.reference?.widget_value?.split('/').pop() || m.reference?.widget_value || m.widget_value,
       widget_value: m.reference?.widget_value || m.widget_value,
-      url: m.download_source?.url || null,
-      targetPath: m.download_source?.target_path || null,
-      canDownload: !!(m.download_source?.url && m.download_source?.target_path)
+      // Backend returns download_source as URL string directly, and target_path at top level
+      url: m.download_source || null,
+      targetPath: m.target_path || null,
+      canDownload: !!(m.download_source && m.target_path)
     }))
 
   const unresolved = (analysis.value.models.unresolved || []).map((m: any) => ({
@@ -251,10 +253,10 @@ const downloadableModels = computed(() => {
   return missingModels.value.filter(m => m.canDownload)
 })
 
-// Check if all packages are queued
-const allPackagesQueued = computed(() => {
+// Check if all packages are installed
+const allPackagesInstalled = computed(() => {
   return missingPackages.value.length > 0 &&
-    missingPackages.value.every(pkg => queuedPackages.value.has(pkg.package_id))
+    missingPackages.value.every(pkg => installedPackages.value.has(pkg.package_id))
 })
 
 // Check if all downloadable models are queued
@@ -268,21 +270,27 @@ const hasDownloadableItems = computed(() => {
   return missingPackages.value.length > 0 || downloadableModels.value.length > 0
 })
 
-// Check if all items are queued
-const allItemsQueued = computed(() => {
-  const packagesQueued = missingPackages.value.length === 0 || allPackagesQueued.value
-  const modelsQueued = downloadableModels.value.length === 0 || allModelsQueued.value
-  return packagesQueued && modelsQueued
+// Check if all items are done (packages installed, models queued)
+const allItemsDone = computed(() => {
+  const packagesDone = missingPackages.value.length === 0 || allPackagesInstalled.value
+  const modelsDone = downloadableModels.value.length === 0 || allModelsQueued.value
+  return packagesDone && modelsDone
 })
 
 // Install a single package
 async function installPackage(packageId: string) {
-  if (queuedPackages.value.has(packageId)) return
+  if (installedPackages.value.has(packageId)) return
 
   installingPackage.value = packageId
   try {
     await installNode(packageId)
-    queuedPackages.value.add(packageId)
+    installedPackages.value.add(packageId)
+    installedCount.value++
+
+    // Dispatch event to show restart notification
+    window.dispatchEvent(new CustomEvent('comfygit:nodes-installed', {
+      detail: { count: installedCount.value }
+    }))
   } catch (e) {
     console.error('[ComfyGit] Failed to install package:', e)
   } finally {
@@ -306,7 +314,7 @@ function downloadModel(model: MissingModelItem) {
 // Install all missing nodes
 function installAllNodes() {
   for (const pkg of missingPackages.value) {
-    if (!queuedPackages.value.has(pkg.package_id)) {
+    if (!installedPackages.value.has(pkg.package_id)) {
       installPackage(pkg.package_id)
     }
   }
@@ -371,9 +379,10 @@ async function analyzeWorkflow(workflow: any) {
   currentWorkflowHash.value = getWorkflowHash(workflow)
 
   // Reset state
-  queuedPackages.value = new Set()
+  installedPackages.value = new Set()
   queuedModels.value = new Set()
   dontShowAgain.value = false
+  installedCount.value = 0
 
   try {
     // Call our backend endpoint
@@ -549,7 +558,8 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.queued-badge {
+.queued-badge,
+.installed-badge {
   color: var(--cg-color-success);
   font-size: var(--cg-font-size-xs);
   font-weight: var(--cg-font-weight-medium);
