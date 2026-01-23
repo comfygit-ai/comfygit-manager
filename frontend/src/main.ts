@@ -4,6 +4,7 @@ import ComfyGitPanel from '@/components/ComfyGitPanel.vue'
 import CommitPopover from '@/components/CommitPopover.vue'
 import ModelDownloadQueue from '@/components/ModelDownloadQueue.vue'
 import MockControlPopover from '@/components/MockControlPopover.vue'
+import MissingResourcesPopup from '@/components/MissingResourcesPopup.vue'
 import { useModelDownloadQueue } from '@/composables/useModelDownloadQueue'
 import { isMockApi } from '@/services/mockApi'
 import type { ComfyGitStatus } from '@/types/comfygit'
@@ -43,6 +44,8 @@ let downloadQueueContainer: HTMLElement | null = null
 let downloadQueueApp: ReturnType<typeof createApp> | null = null
 let mockControlPopover: HTMLElement | null = null
 let mockControlApp: ReturnType<typeof createApp> | null = null
+let missingResourcesContainer: HTMLElement | null = null
+let missingResourcesApp: ReturnType<typeof createApp> | null = null
 
 // Global status for indicator
 const globalStatus = ref<ComfyGitStatus | null>(null)
@@ -338,6 +341,39 @@ function closeMockControlPopover() {
   }
 }
 
+function showMissingResourcesPopup(workflow: any) {
+  if (missingResourcesContainer) return // Already shown
+
+  missingResourcesContainer = document.createElement('div')
+  missingResourcesContainer.className = 'comfygit-missing-resources-root'
+
+  missingResourcesApp = createApp({
+    render: () => h(MissingResourcesPopup, {
+      workflow,
+      onClose: closeMissingResourcesPopup,
+      onOpenPanel: (initialView?: string) => {
+        closeMissingResourcesPopup()
+        showPanel(initialView)
+      }
+    })
+  })
+
+  missingResourcesApp.mount(missingResourcesContainer)
+  document.body.appendChild(missingResourcesContainer)
+  console.log('[ComfyGit] Missing resources popup mounted')
+}
+
+function closeMissingResourcesPopup() {
+  if (missingResourcesApp) {
+    missingResourcesApp.unmount()
+    missingResourcesApp = null
+  }
+  if (missingResourcesContainer) {
+    missingResourcesContainer.remove()
+    missingResourcesContainer = null
+  }
+}
+
 // Update commit button indicator and disabled state
 let commitButton: HTMLButtonElement | null = null
 let mockButton: HTMLButtonElement | null = null
@@ -512,6 +548,9 @@ app.registerExtension({
     console.log('[ComfyGit] afterConfigureGraph: dispatched workflow-loaded event', {
       missingNodeTypes: missingNodeTypes?.length ?? 0
     })
+
+    // Show missing resources popup
+    showMissingResourcesPopup(pending.graphData)
   },
 
   async setup() {
@@ -556,6 +595,12 @@ app.registerExtension({
 
     // Mount global download queue
     mountDownloadQueue()
+
+    // Listen for panel open requests from other components
+    window.addEventListener('comfygit:open-panel', ((event: CustomEvent) => {
+      const initialView = event.detail?.initialView
+      showPanel(initialView)
+    }) as EventListener)
 
     // Load any pending downloads from previous session
     const { loadPendingDownloads } = useModelDownloadQueue()
