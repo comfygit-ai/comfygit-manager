@@ -9,8 +9,9 @@ from comfygit_core.strategies.auto import AutoNodeStrategy, AutoModelStrategy
 from comfygit_core.models.workflow import (
     NodeResolutionContext, ModelResolutionContext,
     ResolvedNodePackage, ResolvedModel, WorkflowNodeWidgetRef,
-    BatchDownloadCallbacks
+    BatchDownloadCallbacks, Workflow
 )
+from comfygit_core.analyzers.workflow_dependency_parser import WorkflowDependencyParser
 
 from cgm_core.decorators import requires_environment, logged_operation
 from cgm_core.serializers import serialize_workflow_details
@@ -729,14 +730,12 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
         return web.json_response({"error": "Missing workflow data"}, status=400)
 
     # Parse workflow from JSON (no file needed)
-    from comfygit_core.models.workflow import Workflow
     try:
         workflow = Workflow.from_json(workflow_data)
     except Exception as e:
         return web.json_response({"error": f"Invalid workflow format: {e}"}, status=400)
 
     # Use WorkflowDependencyParser with Workflow object (requires cg-2ro refactor)
-    from comfygit_core.analyzers.workflow_dependency_parser import WorkflowDependencyParser
     parser = WorkflowDependencyParser(
         workflow=workflow,
         workflow_name=workflow_name,
