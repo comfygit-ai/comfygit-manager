@@ -893,6 +893,50 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
     except Exception:
         pass  # Continue even if update fails
 
+    # Write property_download_intent models to pyproject (they're in models_resolved, not processed by fix_resolution)
+    try:
+        from comfygit_core.models.manifest import ManifestWorkflowModel
+
+        existing_models = env.pyproject.workflows.get_workflow_models(name)
+        existing_filenames = {m.filename for m in existing_models if m.sources}
+
+        for model in result.models_resolved:
+            if model.match_type == "property_download_intent" and model.model_source:
+                filename = model.reference.widget_value
+
+                # Skip if already in pyproject with sources (avoid duplicates)
+                if filename in existing_filenames:
+                    continue
+
+                # Check if user cancelled this download
+                choice = model_choices.get(filename)
+                if choice and choice.get("action") in ("skip", "cancel_download", "optional"):
+                    continue
+
+                # Use expected_categories from core library's node analysis
+                category = model.expected_categories[0] if model.expected_categories else "models"
+
+                # Use user's URL if they provided one, otherwise use model_source
+                url = model.model_source
+                target_path = str(model.target_path) if model.target_path else None
+                if choice and choice.get("action") == "download" and choice.get("url"):
+                    url = choice["url"]
+                    if choice.get("target_path"):
+                        target_path = choice["target_path"]
+
+                manifest_model = ManifestWorkflowModel(
+                    filename=filename,
+                    category=category,
+                    criticality="required",
+                    status="unresolved",
+                    nodes=[model.reference],
+                    sources=[url],
+                    relative_path=target_path
+                )
+                env.pyproject.workflows.add_workflow_model(name, manifest_model)
+    except Exception:
+        pass  # Continue even if write fails - downloads will still work
+
     # Get models directory for checking if files already exist
     models_dir = env.workspace.workspace_config_manager.get_models_directory()
 
