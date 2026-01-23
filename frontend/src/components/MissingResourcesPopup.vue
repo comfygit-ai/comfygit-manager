@@ -104,16 +104,16 @@ const hasIssues = computed(() => {
 })
 
 const missingNodes = computed<MissingNode[]>(() => {
-  if (!analysis.value) return []
+  if (!analysis.value?.nodes) return []
   // Nodes that aren't installed
-  const resolved = analysis.value.nodes.resolved
+  const resolved = (analysis.value.nodes.resolved || [])
     .filter((n: any) => !n.is_installed)
     .map((n: any) => ({
       node_type: n.reference?.node_type || n.node_type,
       package_id: n.package?.package_id,
       package_title: n.package?.title
     }))
-  const unresolved = analysis.value.nodes.unresolved.map((n: any) => ({
+  const unresolved = (analysis.value.nodes.unresolved || []).map((n: any) => ({
     node_type: n.reference?.node_type || n.node_type,
     package_id: undefined,
     package_title: undefined
@@ -122,9 +122,9 @@ const missingNodes = computed<MissingNode[]>(() => {
 })
 
 const missingModels = computed<MissingModel[]>(() => {
-  if (!analysis.value) return []
+  if (!analysis.value?.models) return []
   // Models that need download or aren't resolved
-  const needsDownload = analysis.value.models.resolved
+  const needsDownload = (analysis.value.models.resolved || [])
     .filter((m: any) =>
       m.match_type === 'download_intent' ||
       m.match_type === 'property_download_intent' ||
@@ -134,7 +134,7 @@ const missingModels = computed<MissingModel[]>(() => {
       widget_value: m.reference?.widget_value || m.widget_value,
       has_download_url: !!m.download_source
     }))
-  const unresolved = analysis.value.models.unresolved.map((m: any) => ({
+  const unresolved = (analysis.value.models.unresolved || []).map((m: any) => ({
     widget_value: m.reference?.widget_value || m.widget_value,
     has_download_url: false
   }))
