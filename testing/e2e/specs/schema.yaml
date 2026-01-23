@@ -1,0 +1,105 @@
+# E2E Spec Schema Definition
+# All specs should follow this structure
+
+# Required fields:
+#   name: unique identifier (kebab-case)
+#   description: human-readable explanation
+#   steps: list of user actions to perform
+#
+# Optional fields:
+#   preconditions: requirements before test runs
+#   expected_outcomes: assertions to verify
+#   tags: categorization labels
+#   timeout: max time for workflow (default: 2m)
+#   priority: critical | high | normal | low
+
+---
+schema_version: "1.0"
+
+example:
+  name: example-workflow
+  description: |
+    Multi-line description of what this workflow tests
+    and why it matters to users.
+
+  # What must be true before test starts
+  preconditions:
+    comfyui_running: true
+    panel_open: false
+    # Custom preconditions with values
+    min_environments: 1
+    has_uncommitted_changes: false
+
+  # Timeout for entire workflow
+  timeout: 120s
+
+  # Priority for test ordering
+  priority: normal  # critical | high | normal | low
+
+  # Steps are executed in order
+  # Each step has an action type and parameters
+  steps:
+    # Action: open_panel - Opens the ComfyGit panel
+    - action: open_panel
+      description: Click the ComfyGit button in the toolbar
+
+    # Action: navigate_section - Click a sidebar tab
+    - action: navigate_section
+      target: STATUS  # Exact tab name
+      description: Navigate to the status section
+
+    # Action: wait - Wait for condition or time
+    - action: wait
+      for: element  # element | time | text | api
+      selector: ".status-section"
+      timeout: 5000
+
+    # Action: click - Click an element
+    - action: click
+      # Can use selector, ref, or query
+      selector: ".commit-button"
+      # OR ref: "@e17"
+      # OR query: "button containing 'Commit'"
+      description: Click the commit button
+
+    # Action: fill - Enter text into input
+    - action: fill
+      selector: "textarea.commit-message"
+      value: "Test commit message"
+
+    # Action: verify_state - Assert UI state
+    - action: verify_state
+      checks:
+        - element_visible: ".success-toast"
+        - text_contains: "committed successfully"
+        - element_count:
+            selector: ".workflow-item"
+            expected: 3
+
+    # Action: screenshot - Capture current state
+    - action: screenshot
+      name: "after-commit"
+      description: Capture state after committing
+
+    # Action: identify_element - Let Claude find element
+    - action: identify_element
+      query: "Find the remote marked as default"
+      save_as: current_default
+
+    # Action: use_saved - Use previously saved element
+    - action: click
+      ref: "{{ current_default }}"
+
+  # Expected outcomes (assertions after all steps)
+  expected_outcomes:
+    - toast_visible: true
+    - toast_type: success
+    - ui_state:
+        panel_open: true
+        current_section: STATUS
+
+  # Tags for filtering/grouping
+  tags:
+    - critical_path
+    - commit
+    - smoke_test

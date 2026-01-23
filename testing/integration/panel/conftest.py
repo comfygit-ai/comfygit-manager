@@ -264,3 +264,31 @@ def mock_loop_executor(monkeypatch):
         "run_in_executor",
         fake_executor
     )
+
+
+@pytest.fixture(autouse=True)
+def reset_init_task_state():
+    """Reset _init_task_state before each test to prevent state leakage."""
+    import api.v2.setup as setup_module
+
+    # Reset to idle state before test
+    setup_module._init_task_state.update({
+        "state": "idle",
+        "task_id": None,
+        "progress": 0,
+        "message": "No initialization in progress",
+        "models_found": None,
+        "error": None
+    })
+
+    yield
+
+    # Restore original state after test (or reset to idle)
+    setup_module._init_task_state.update({
+        "state": "idle",
+        "task_id": None,
+        "progress": 0,
+        "message": "No initialization in progress",
+        "models_found": None,
+        "error": None
+    })

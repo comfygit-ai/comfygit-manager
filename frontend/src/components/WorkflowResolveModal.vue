@@ -106,7 +106,7 @@
             </div>
             <div v-else-if="hasDownloadIntents" class="status-message info">
               <span class="status-icon">⬇</span>
-              <span class="status-text">{{ analysisResult.stats.download_intents }} model{{ analysisResult.stats.download_intents > 1 ? 's' : '' }} pending download - click Continue to review</span>
+              <span class="status-text">{{ analysisResult.stats.download_intents }} model{{ analysisResult.stats.download_intents > 1 ? 's' : '' }} pending download - click Continue to Review to proceed</span>
             </div>
             <!-- Category mismatch warning - shown even when "resolved" -->
             <div v-else-if="hasCategoryMismatch" class="status-message warning">
@@ -245,6 +245,29 @@
               </div>
             </div>
 
+            <!-- Download Intent Details Section -->
+            <div v-if="pendingDownloadsForReview.length > 0" class="review-section">
+              <h4 class="section-title">Models to Download ({{ pendingDownloadsForReview.length }})</h4>
+              <div class="review-items download-details">
+                <div
+                  v-for="download in pendingDownloadsForReview"
+                  :key="download.filename"
+                  class="review-item download-item"
+                >
+                  <div class="download-info">
+                    <code class="item-name">{{ download.filename }}</code>
+                    <div class="download-meta">
+                      <span class="download-path">→ {{ download.target_path }}</span>
+                      <span v-if="download.url" class="download-url" :title="download.url">
+                        {{ truncateUrl(download.url) }}
+                      </span>
+                    </div>
+                  </div>
+                  <span class="choice-badge download">Will Download</span>
+                </div>
+              </div>
+            </div>
+
             <!-- Model Choices Review -->
             <div v-if="allEditableModels.length > 0" class="review-section">
               <h4 class="section-title">Models ({{ allEditableModels.length }})</h4>
@@ -331,7 +354,7 @@
         :disabled="loading"
         @click="handleContinueFromAnalysis"
       >
-        Continue
+        {{ nextStepFromAnalysis === 'review' ? 'Continue to Review →' : 'Continue' }}
       </BaseButton>
 
       <!-- Nodes Step: Continue to Models or Review -->
@@ -340,7 +363,7 @@
         variant="primary"
         @click="navigateToNextSection"
       >
-        {{ (needsModelResolution || hasDownloadIntents) ? 'Continue to Models →' : 'Continue to Review →' }}
+        {{ needsModelResolution ? 'Continue to Models →' : 'Continue to Review →' }}
       </BaseButton>
 
       <!-- Models Step: Continue to Review -->
@@ -428,8 +451,8 @@ const wizardSteps = computed(() => {
     steps.push({ id: 'nodes', label: 'Nodes' })
   }
 
-  // Show Models step if there are unresolved/ambiguous OR download intents to review
-  if (needsModelResolution.value || hasDownloadIntents.value) {
+  // Show Models step ONLY if user needs to make choices (unresolved/ambiguous)
+  if (needsModelResolution.value) {
     steps.push({ id: 'models', label: 'Models' })
   }
 
@@ -487,6 +510,16 @@ const categoryMismatchModels = computed(() => {
 
 const hasCategoryMismatch = computed(() => categoryMismatchModels.value.length > 0)
 
+// Determine next step from Analysis
+const nextStepFromAnalysis = computed(() => {
+  if (needsNodeResolution.value || hasNodesToInstall.value) {
+    return 'nodes'
+  } else if (needsModelResolution.value) {
+    return 'models'
+  }
+  return 'review'
+})
+
 // Packages that are resolved but not installed (for review/installation)
 // Deduplicated by package_id since multiple node types can come from one package
 const nodesToInstall = computed(() => {
@@ -528,10 +561,15 @@ const finalNodesToInstall = computed(() => {
 })
 
 // Download intents from resolved models - user can edit these
+// Note: Backend returns two match types for download intents:
+//   - 'download_intent': from pyproject.toml model entries
+//   - 'property_download_intent': from workflow node properties (embedded URLs)
 const downloadIntentModels = computed(() => {
   if (!analysisResult.value) return []
   return analysisResult.value.models.resolved
-    .filter((m: { match_type: string }) => m.match_type === 'download_intent')
+    .filter((m: { match_type: string }) =>
+      m.match_type === 'download_intent' || m.match_type === 'property_download_intent'
+    )
     .map((m: { reference: { widget_value: string; node_id: string; node_type: string }; model: { filename: string; hash: string; size: number; category: string; relative_path: string } | null; download_source?: string; target_path?: string }) => ({
       filename: m.reference.widget_value,
       reference: m.reference,
@@ -618,6 +656,27 @@ const allEditableModels = computed(() => {
   return [...base, ...downloadIntents]
 })
 
+// Download intents that will actually be downloaded (for Review step details)
+const pendingDownloadsForReview = computed(() => {
+  return downloadIntentModels.value.filter(model => {
+    const choice = modelChoices.value.get(model.filename)
+    // Include if no choice (default = download) or explicit download action
+    // Exclude if cancelled/skipped/optional
+    if (!choice) return true
+    return choice.action === 'download'
+  }).map(model => ({
+    filename: model.filename,
+    url: model.download_source,
+    target_path: model.target_path
+  }))
+})
+
+// Helper to truncate long URLs for display
+function truncateUrl(url: string, maxLen = 50): string {
+  if (url.length <= maxLen) return url
+  return url.slice(0, maxLen - 3) + '...'
+}
+
 // Review step computed counts
 const installCount = computed(() => {
   // Start with auto-install nodes (resolved but not installed, minus skipped)
@@ -635,9 +694,23 @@ const installCount = computed(() => {
 
 const downloadCount = computed(() => {
   let count = 0
+
+  // Count explicit user download choices
   for (const choice of modelChoices.value.values()) {
     if (choice.action === 'download') count++
   }
+
+  // Count download intents that haven't been cancelled or modified by user
+  // These will be downloaded even without explicit user action
+  for (const model of downloadIntentModels.value) {
+    const choice = modelChoices.value.get(model.filename)
+
+    // Only count if no choice was made (intent is preserved and will be downloaded)
+    if (!choice) {
+      count++
+    }
+  }
+
   return count
 })
 
@@ -691,8 +764,8 @@ const stepStats = computed(() => {
     stats['nodes'] = { resolved, total }
   }
 
-  // Model stats - includes download intents
-  if (needsModelResolution.value || hasDownloadIntents.value) {
+  // Model stats - only for models needing user choices
+  if (needsModelResolution.value) {
     const total = allEditableModels.value.length
     // For download intents without changes, consider them "resolved" (keeping current state)
     const resolved = allEditableModels.value.filter(
@@ -755,7 +828,9 @@ function handleContinueFromAnalysis() {
   // Always show nodes step if there are packages to install (for override capability)
   if (needsNodeResolution.value || hasNodesToInstall.value) {
     currentStep.value = 'nodes'
-  } else if (needsModelResolution.value || hasDownloadIntents.value) {
+  } else if (needsModelResolution.value) {
+    // Only go to models if user needs to make choices
+    // Download intents don't need user input - skip to review
     currentStep.value = 'models'
   } else {
     currentStep.value = 'review'
@@ -1247,6 +1322,43 @@ onMounted(loadAnalysis)
   color: var(--cg-color-text-muted);
   font-size: var(--cg-font-size-sm);
   text-align: center;
+}
+
+/* Download Intent Details */
+.download-details .download-item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--cg-space-2);
+}
+
+.download-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-1);
+  width: 100%;
+}
+
+.download-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cg-space-2);
+  font-size: var(--cg-font-size-xs);
+  color: var(--cg-color-text-muted);
+}
+
+.download-path {
+  font-family: var(--cg-font-mono);
+  color: var(--cg-color-text-secondary);
+}
+
+.download-url {
+  font-family: var(--cg-font-mono);
+  color: var(--cg-color-info);
+  cursor: help;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 /* Footer layout */

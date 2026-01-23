@@ -1,0 +1,17 @@
+name: export-environment
+template: minimal
+steps:
+  - action: open_panel
+    target: "ComfyGit panel"
+  - action: navigate
+    target: "Export section"
+  - action: click
+    target: "Export environment button"
+  - action: confirm
+    target: "Export confirmation"
+  - action: wait_for
+    target: "Export success toast"
+    state: visible
+expected_outcomes:
+  - "Export success toast is visible"
+  - "Export file is downloaded"

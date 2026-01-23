@@ -1,0 +1,19 @@
+name: switch-environment
+template: multi-env
+steps:
+  - action: open_panel
+    target: "ComfyGit panel"
+  - action: navigate
+    target: "Environment section"
+  - action: click
+    target: "Environment switcher"
+  - action: select
+    target: "Environment option"
+    value: "Secondary Environment"
+  - action: confirm
+    target: "Switch environment confirmation"
+  - action: wait_for
+    target: "Switch completion indicator"
+    state: success
+expected_outcomes:
+  - "Active environment label shows Secondary Environment"

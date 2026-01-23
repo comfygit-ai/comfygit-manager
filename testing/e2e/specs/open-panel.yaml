@@ -1,0 +1,35 @@
+# Basic smoke test: open the ComfyGit panel
+name: open-panel
+description: |
+  Basic smoke test that opens the ComfyGit panel and verifies
+  it loaded successfully by checking for the STATUS tab.
+
+preconditions:
+  comfyui_running: true
+  panel_open: false
+
+timeout: 30s
+priority: critical
+
+steps:
+  - action: open_panel
+    description: Click the ComfyGit button in the toolbar
+
+  - action: wait
+    for: element
+    selector: ".comfygit-panel"
+    timeout: 5000
+
+  - action: verify_state
+    checks:
+      - element_visible: ".sidebar-item"
+      - text_contains: "STATUS"
+
+expected_outcomes:
+  - panel_open: true
+  - current_section: STATUS
+
+tags:
+  - smoke_test
+  - critical_path
+  - panel

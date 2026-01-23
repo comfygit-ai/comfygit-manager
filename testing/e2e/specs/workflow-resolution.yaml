@@ -1,0 +1,19 @@
+name: workflow-resolution
+template: with-workflows
+steps:
+  - action: open_panel
+    target: "ComfyGit panel"
+  - action: navigate
+    target: "Workflows section"
+  - action: open
+    target: "Broken workflow details"
+  - action: choose
+    target: "Resolution option"
+    value: "Auto resolve"
+  - action: click
+    target: "Resolve workflow button"
+  - action: wait_for
+    target: "Workflow resolution status"
+    state: resolved
+expected_outcomes:
+  - "Workflow shows resolved status"

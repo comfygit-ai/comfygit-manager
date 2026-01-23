@@ -1,0 +1,128 @@
+# Navigate through all panel sections
+name: navigate-all-sections
+description: |
+  Comprehensive navigation test that visits every section
+  in the ComfyGit panel to verify they all load correctly.
+
+preconditions:
+  comfyui_running: true
+  panel_open: false
+
+timeout: 120s
+priority: high
+
+steps:
+  - action: open_panel
+    description: Click the ComfyGit button in the toolbar
+
+  - action: wait
+    for: element
+    selector: ".comfygit-panel"
+    timeout: 5000
+
+  # THIS ENV section
+  - action: navigate_section
+    target: STATUS
+    description: Navigate to STATUS
+
+  - action: wait
+    for: text
+    text: "STATUS"
+    timeout: 2000
+
+  - action: screenshot
+    name: "section-status"
+
+  - action: navigate_section
+    target: WORKFLOWS
+    description: Navigate to WORKFLOWS
+
+  - action: wait
+    for: text
+    text: "WORKFLOWS"
+    timeout: 2000
+
+  - action: screenshot
+    name: "section-workflows"
+
+  - action: navigate_section
+    target: MODELS
+    description: Navigate to MODELS
+
+  - action: wait
+    for: text
+    text: "MODELS"
+    timeout: 2000
+
+  - action: screenshot
+    name: "section-models"
+
+  - action: navigate_section
+    target: BRANCHES
+    description: Navigate to BRANCHES
+
+  - action: wait
+    for: text
+    text: "BRANCHES"
+    timeout: 2000
+
+  - action: screenshot
+    name: "section-branches"
+
+  - action: navigate_section
+    target: HISTORY
+    description: Navigate to HISTORY
+
+  - action: wait
+    for: text
+    text: "HISTORY"
+    timeout: 2000
+
+  - action: screenshot
+    name: "section-history"
+
+  - action: navigate_section
+    target: NODES
+    description: Navigate to NODES
+
+  - action: wait
+    for: text
+    text: "NODES"
+    timeout: 2000
+
+  - action: screenshot
+    name: "section-nodes"
+
+  # SHARING section
+  - action: navigate_section
+    target: REMOTES
+    description: Navigate to REMOTES
+
+  - action: wait
+    for: text
+    text: "REMOTES"
+    timeout: 2000
+
+  - action: screenshot
+    name: "section-remotes"
+
+  - action: navigate_section
+    target: EXPORT
+    description: Navigate to EXPORT
+
+  - action: wait
+    for: text
+    text: "EXPORT"
+    timeout: 2000
+
+  - action: screenshot
+    name: "section-export"
+
+expected_outcomes:
+  - all_sections_loaded: true
+  - no_errors: true
+
+tags:
+  - navigation
+  - comprehensive
+  - smoke_test

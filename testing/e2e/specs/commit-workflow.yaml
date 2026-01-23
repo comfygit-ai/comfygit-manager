@@ -1,0 +1,18 @@
+name: commit-workflow
+template: with-uncommitted
+steps:
+  - action: open_panel
+    target: "ComfyGit panel"
+  - action: navigate
+    target: "Commit section"
+  - action: input
+    target: "Commit message field"
+    value: "Update assets"
+  - action: click
+    target: "Create commit button"
+  - action: wait_for
+    target: "Commit success toast"
+    state: visible
+expected_outcomes:
+  - "Commit success toast is visible"
+  - "New commit appears in recent commits"

@@ -1,0 +1,29 @@
+project:
+  name: comfygit-panel
+  base_url: http://localhost:8188
+
+runtime:
+  browser: chromium
+  headless: true
+  viewport:
+    width: 1280
+    height: 720
+  timeout: 30s
+
+locators:
+  prefer_testid: true
+  testid_attributes:
+    - data-testid
+    - data-test
+
+exploration:
+  adapter: claude-cli
+  max_retries: 3
+
+review:
+  port: 8190
+  auto_open: true
+
+output:
+  tests_dir: e2e/tests
+  baselines_dir: baselines

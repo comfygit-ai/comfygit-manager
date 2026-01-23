@@ -496,6 +496,295 @@ describe('WorkflowResolveModal - Interactive Wizard Flow', () => {
     })
   })
 
+  describe('Download Intent Details in Review Step', () => {
+    const mockAnalysisWithDownloadIntents = {
+      workflow: 'test_workflow',
+      nodes: {
+        resolved: [],
+        unresolved: [],
+        ambiguous: []
+      },
+      models: {
+        resolved: [
+          {
+            reference: {
+              workflow: 'test_workflow',
+              node_id: 'node1',
+              node_type: 'CheckpointLoader',
+              widget_name: 'model',
+              widget_value: 'flux_dev.safetensors'
+            },
+            model: {
+              filename: 'flux_dev.safetensors',
+              hash: 'abc123',
+              size: 1024000000,
+              category: 'checkpoints',
+              relative_path: 'checkpoints/flux_dev.safetensors'
+            },
+            match_type: 'download_intent',
+            match_confidence: 1.0,
+            is_installed: false,
+            download_source: 'https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/flux_dev.safetensors',
+            target_path: 'models/checkpoints/flux_dev.safetensors'
+          },
+          {
+            reference: {
+              workflow: 'test_workflow',
+              node_id: 'node2',
+              node_type: 'VAELoader',
+              widget_name: 'vae',
+              widget_value: 'ae.safetensors'
+            },
+            model: {
+              filename: 'ae.safetensors',
+              hash: 'def456',
+              size: 512000000,
+              category: 'vae',
+              relative_path: 'vae/ae.safetensors'
+            },
+            match_type: 'download_intent',
+            match_confidence: 1.0,
+            is_installed: false,
+            download_source: 'https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/ae.safetensors',
+            target_path: 'models/vae/ae.safetensors'
+          }
+        ],
+        unresolved: [],
+        ambiguous: []
+      },
+      stats: {
+        total_nodes: 0,
+        total_models: 2,
+        nodes_resolved: 0,
+        nodes_unresolved: 0,
+        nodes_ambiguous: 0,
+        nodes_needing_installation: 0,
+        packages_needing_installation: 0,
+        models_resolved: 2,
+        models_unresolved: 0,
+        models_ambiguous: 0,
+        models_with_category_mismatch: 0,
+        download_intents: 2,
+        needs_user_input: false
+      }
+    }
+
+    it('should show "Models to Download" section in review step when download intents exist', async () => {
+      vi.mocked(useWorkflowResolution).mockReturnValue({
+        analyzeWorkflow: vi.fn().mockResolvedValue(mockAnalysisWithDownloadIntents),
+        applyResolution: vi.fn().mockResolvedValue({ status: 'success', nodes_to_install: [], models_to_download: [] }),
+        searchNodes: vi.fn(),
+        searchModels: vi.fn(),
+        installNodes: vi.fn(),
+        queueModelDownloads: vi.fn(),
+        progress: { phase: 'idle', completedFiles: [], totalFiles: 0 },
+        resetProgress: vi.fn(),
+        loading: { value: false },
+        error: { value: null }
+      } as any)
+
+      const wrapper = mount(WorkflowResolveModal, {
+        props: {
+          workflowName: 'test_workflow'
+        },
+        attachTo: document.body
+      })
+
+      await flushPromises()
+      await wrapper.vm.$nextTick()
+
+      // Navigate to review step (analysis -> models -> review for download-intent-only workflow)
+      await wrapper.find('button:contains("Continue")').trigger('click')
+      await wrapper.vm.$nextTick()
+      await wrapper.find('button:contains("Continue")').trigger('click')
+      await wrapper.vm.$nextTick()
+
+      // Should show "Models to Download" section with count
+      const reviewText = document.body.textContent || ''
+      expect(reviewText).toContain('Models to Download')
+      expect(reviewText).toContain('(2)')
+
+      wrapper.unmount()
+    })
+
+    it('should display filename, target path, and truncated URL for each download intent', async () => {
+      vi.mocked(useWorkflowResolution).mockReturnValue({
+        analyzeWorkflow: vi.fn().mockResolvedValue(mockAnalysisWithDownloadIntents),
+        applyResolution: vi.fn().mockResolvedValue({ status: 'success', nodes_to_install: [], models_to_download: [] }),
+        searchNodes: vi.fn(),
+        searchModels: vi.fn(),
+        installNodes: vi.fn(),
+        queueModelDownloads: vi.fn(),
+        progress: { phase: 'idle', completedFiles: [], totalFiles: 0 },
+        resetProgress: vi.fn(),
+        loading: { value: false },
+        error: { value: null }
+      } as any)
+
+      const wrapper = mount(WorkflowResolveModal, {
+        props: {
+          workflowName: 'test_workflow'
+        },
+        attachTo: document.body
+      })
+
+      await flushPromises()
+      await wrapper.vm.$nextTick()
+
+      // Navigate to review step
+      await wrapper.find('button:contains("Continue")').trigger('click')
+      await wrapper.vm.$nextTick()
+      await wrapper.find('button:contains("Continue")').trigger('click')
+      await wrapper.vm.$nextTick()
+
+      const reviewText = document.body.textContent || ''
+      // Should show filenames
+      expect(reviewText).toContain('flux_dev.safetensors')
+      expect(reviewText).toContain('ae.safetensors')
+      // Should show target paths
+      expect(reviewText).toContain('models/checkpoints/flux_dev.safetensors')
+      expect(reviewText).toContain('models/vae/ae.safetensors')
+      // Should show truncated URLs (URL is longer than 50 chars, should be truncated)
+      expect(reviewText).toContain('huggingface.co')
+
+      wrapper.unmount()
+    })
+
+    it('should not show cancelled download intents in Models to Download section', async () => {
+      vi.mocked(useWorkflowResolution).mockReturnValue({
+        analyzeWorkflow: vi.fn().mockResolvedValue(mockAnalysisWithDownloadIntents),
+        applyResolution: vi.fn().mockResolvedValue({ status: 'success', nodes_to_install: [], models_to_download: [] }),
+        searchNodes: vi.fn(),
+        searchModels: vi.fn(),
+        installNodes: vi.fn(),
+        queueModelDownloads: vi.fn(),
+        progress: { phase: 'idle', completedFiles: [], totalFiles: 0 },
+        resetProgress: vi.fn(),
+        loading: { value: false },
+        error: { value: null }
+      } as any)
+
+      const wrapper = mount(WorkflowResolveModal, {
+        props: {
+          workflowName: 'test_workflow'
+        },
+        attachTo: document.body
+      })
+
+      await flushPromises()
+      await wrapper.vm.$nextTick()
+
+      // Navigate to models step
+      await wrapper.find('button:contains("Continue")').trigger('click')
+      await wrapper.vm.$nextTick()
+
+      // Cancel one download intent via the model choices
+      const modelStep = wrapper.findComponent({ name: 'ModelResolutionStep' })
+      modelStep.vm.$emit('skip', 'flux_dev.safetensors')
+      await wrapper.vm.$nextTick()
+
+      // Continue to review
+      await wrapper.find('button:contains("Continue")').trigger('click')
+      await wrapper.vm.$nextTick()
+
+      // Should only show 1 download in the count
+      const reviewText = document.body.textContent || ''
+      expect(reviewText).toContain('Models to Download')
+      expect(reviewText).toContain('(1)')
+      // The cancelled one should not be in the download section
+      // (it may still appear in the generic Models section with "Skip" badge)
+
+      wrapper.unmount()
+    })
+
+    it('should not show "Models to Download" section when no download intents exist', async () => {
+      const noDownloadIntentsResult = {
+        ...mockAnalysisWithDownloadIntents,
+        models: {
+          resolved: [],
+          unresolved: [],
+          ambiguous: []
+        },
+        stats: {
+          ...mockAnalysisWithDownloadIntents.stats,
+          models_resolved: 0,
+          download_intents: 0
+        }
+      }
+
+      vi.mocked(useWorkflowResolution).mockReturnValue({
+        analyzeWorkflow: vi.fn().mockResolvedValue(noDownloadIntentsResult),
+        applyResolution: vi.fn().mockResolvedValue({ status: 'success', nodes_to_install: [], models_to_download: [] }),
+        searchNodes: vi.fn(),
+        searchModels: vi.fn(),
+        installNodes: vi.fn(),
+        queueModelDownloads: vi.fn(),
+        progress: { phase: 'idle', completedFiles: [], totalFiles: 0 },
+        resetProgress: vi.fn(),
+        loading: { value: false },
+        error: { value: null }
+      } as any)
+
+      const wrapper = mount(WorkflowResolveModal, {
+        props: {
+          workflowName: 'test_workflow'
+        },
+        attachTo: document.body
+      })
+
+      await flushPromises()
+      await wrapper.vm.$nextTick()
+
+      // Navigate to review step (direct since no models/nodes)
+      await wrapper.find('button:contains("Continue")').trigger('click')
+      await wrapper.vm.$nextTick()
+
+      // Should NOT show "Models to Download" section
+      const reviewText = document.body.textContent || ''
+      expect(reviewText).not.toContain('Models to Download')
+
+      wrapper.unmount()
+    })
+
+    it('should show full URL in tooltip on hover', async () => {
+      vi.mocked(useWorkflowResolution).mockReturnValue({
+        analyzeWorkflow: vi.fn().mockResolvedValue(mockAnalysisWithDownloadIntents),
+        applyResolution: vi.fn().mockResolvedValue({ status: 'success', nodes_to_install: [], models_to_download: [] }),
+        searchNodes: vi.fn(),
+        searchModels: vi.fn(),
+        installNodes: vi.fn(),
+        queueModelDownloads: vi.fn(),
+        progress: { phase: 'idle', completedFiles: [], totalFiles: 0 },
+        resetProgress: vi.fn(),
+        loading: { value: false },
+        error: { value: null }
+      } as any)
+
+      const wrapper = mount(WorkflowResolveModal, {
+        props: {
+          workflowName: 'test_workflow'
+        },
+        attachTo: document.body
+      })
+
+      await flushPromises()
+      await wrapper.vm.$nextTick()
+
+      // Navigate to review step
+      await wrapper.find('button:contains("Continue")').trigger('click')
+      await wrapper.vm.$nextTick()
+      await wrapper.find('button:contains("Continue")').trigger('click')
+      await wrapper.vm.$nextTick()
+
+      // Check that the full URL is in a title attribute for tooltip
+      const downloadUrlElement = wrapper.find('.download-url')
+      expect(downloadUrlElement.exists()).toBe(true)
+      expect(downloadUrlElement.attributes('title')).toContain('https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/')
+
+      wrapper.unmount()
+    })
+  })
+
   describe('Error Handling', () => {
     it('should display error if analysis fails', async () => {
       vi.mocked(useWorkflowResolution).mockReturnValue({

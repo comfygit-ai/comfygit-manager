@@ -662,8 +662,18 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
         result.models_unresolved or result.models_ambiguous
     )
 
-    # is_fully_resolved: workflow is ready to run (no user input needed AND all nodes installed)
-    is_fully_resolved = not needs_user_input and nodes_needing_installation == 0
+    # Count download intents (both from pyproject and from node properties)
+    download_intents_count = sum(
+        1 for m in result.models_resolved
+        if m.match_type in ("download_intent", "property_download_intent")
+    )
+
+    # is_fully_resolved: workflow is ready to run (no user input needed AND all nodes installed AND no pending downloads)
+    is_fully_resolved = (
+        not needs_user_input
+        and nodes_needing_installation == 0
+        and download_intents_count == 0
+    )
 
     # Transform to frontend format
     response = {
@@ -687,7 +697,7 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
         "stats": {
             "total_nodes": len(result.nodes_resolved) + len(result.nodes_unresolved) + len(result.nodes_ambiguous),
             "total_models": len(result.models_resolved) + len(result.models_unresolved) + len(result.models_ambiguous),
-            "download_intents": sum(1 for m in result.models_resolved if m.match_type == "download_intent"),
+            "download_intents": download_intents_count,
             "nodes_needing_installation": nodes_needing_installation,  # Node types count
             "packages_needing_installation": packages_needing_installation,  # Unique packages count
             "needs_user_input": needs_user_input,
@@ -886,11 +896,11 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
     # Get models directory for checking if files already exist
     models_dir = env.workspace.workspace_config_manager.get_models_directory()
 
-    # Collect models that need downloading (download_intent OR have model_source but no file)
+    # Collect models that need downloading (download_intent/property_download_intent with model_source)
     # Skip models where user chose to cancel/optional, or file already exists
     models_to_download = []
     for model in result.models_resolved:
-        if model.model_source and model.match_type == "download_intent":
+        if model.model_source and model.match_type in ("download_intent", "property_download_intent"):
             filename = model.reference.widget_value
             choice = model_choices.get(filename)
 

@@ -1,0 +1,7 @@
+# Generated directories (setup-fixtures.sh creates these)
+.cache/
+.comfyui-base/
+fixtures/
+
+# Runtime files
+.comfyui-pid
