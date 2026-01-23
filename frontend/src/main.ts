@@ -480,6 +480,40 @@ document.head.appendChild(styles)
 app.registerExtension({
   name: 'Comfy.ComfyGitPanel',
 
+  // Hook into workflow loading to intercept missing resources
+  // This runs BEFORE ComfyUI's missing nodes/models dialogs
+  async beforeConfigureGraph(graphData: any, missingNodeTypes: any[]) {
+    // Store workflow data for use in afterConfigureGraph
+    // We use window to share state since these are separate hook calls
+    ;(window as any).__comfygit_pending_workflow = {
+      graphData,
+      missingNodeTypes,
+      timestamp: Date.now()
+    }
+    console.log('[ComfyGit] beforeConfigureGraph: captured workflow data', {
+      nodeCount: graphData?.nodes?.length ?? 0,
+      missingNodeTypes: missingNodeTypes?.length ?? 0
+    })
+  },
+
+  async afterConfigureGraph(missingNodeTypes: any[]) {
+    const pending = (window as any).__comfygit_pending_workflow
+    if (!pending) return
+    delete (window as any).__comfygit_pending_workflow
+
+    // Dispatch custom event for our popup component to handle
+    window.dispatchEvent(new CustomEvent('comfygit:workflow-loaded', {
+      detail: {
+        workflow: pending.graphData,
+        missingNodeTypes: missingNodeTypes,
+        timestamp: pending.timestamp
+      }
+    }))
+    console.log('[ComfyGit] afterConfigureGraph: dispatched workflow-loaded event', {
+      missingNodeTypes: missingNodeTypes?.length ?? 0
+    })
+  },
+
   async setup() {
     // Create button group
     const btnGroup = document.createElement('div')
