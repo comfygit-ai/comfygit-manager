@@ -75,3 +75,4 @@ web/.meow/
 .browserflow/
 node_modules/
 packages/
+legacy/

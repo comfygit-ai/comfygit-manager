@@ -501,6 +501,18 @@ app.registerExtension({
   // Hook into workflow loading to intercept missing resources
   // This runs BEFORE ComfyUI's missing nodes/models dialogs
   async beforeConfigureGraph(graphData: any, missingNodeTypes: any[]) {
+    // Disable ComfyUI's built-in missing nodes/models popups BEFORE they check the settings
+    // This must happen synchronously before the settings are read
+    try {
+      await Promise.all([
+        app.ui.settings.setSettingValueAsync('Comfy.Workflow.ShowMissingModelsWarning', false),
+        app.ui.settings.setSettingValueAsync('Comfy.Workflow.ShowMissingNodesWarning', false)
+      ])
+      console.log('[ComfyGit] Disabled built-in missing nodes/models warnings')
+    } catch (e) {
+      console.warn('[ComfyGit] Failed to disable built-in warnings:', e)
+    }
+
     // Store workflow data for use in afterConfigureGraph
     // We use window to share state since these are separate hook calls
     ;(window as any).__comfygit_pending_workflow = {
