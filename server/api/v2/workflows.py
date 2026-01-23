@@ -9,7 +9,7 @@ from comfygit_core.strategies.auto import AutoNodeStrategy, AutoModelStrategy
 from comfygit_core.models.workflow import (
     NodeResolutionContext, ModelResolutionContext,
     ResolvedNodePackage, ResolvedModel, WorkflowNodeWidgetRef,
-    BatchDownloadCallbacks, Workflow
+    BatchDownloadCallbacks,
 )
 from comfygit_core.analyzers.workflow_dependency_parser import WorkflowDependencyParser
 
@@ -718,6 +718,8 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
     Used for analyzing workflows loaded in browser before save.
     Request body: { "workflow": <workflow_json_object>, "name": "optional_name" }
     """
+    import tempfile
+
     try:
         body = await request.json()
     except Exception:
@@ -729,25 +731,43 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
     if not workflow_data:
         return web.json_response({"error": "Missing workflow data"}, status=400)
 
-    # Parse workflow from JSON (no file needed)
+    # Validate workflow_data is a dict (not a string or other type)
+    if not isinstance(workflow_data, dict):
+        return web.json_response(
+            {"error": "Invalid workflow format: expected object"},
+            status=400
+        )
+
+    # Write workflow to temp file for analysis (core library requires path)
+    # Use suffix to ensure proper cleanup and identification
+    with tempfile.NamedTemporaryFile(
+        mode='w', suffix='.json', delete=False
+    ) as tmp:
+        json.dump(workflow_data, tmp)
+        tmp_path = Path(tmp.name)
+
     try:
-        workflow = Workflow.from_json(workflow_data)
+        # Parse and analyze using the temp file
+        parser = WorkflowDependencyParser(
+            workflow_path=tmp_path,
+            cec_path=env.cec_path
+        )
+        dependencies = parser.analyze_dependencies()
+
+        # Use the same resolution logic as analyze_workflow
+        result = await run_sync(
+            env.workflow_manager.resolve_workflow,
+            dependencies
+        )
     except Exception as e:
-        return web.json_response({"error": f"Invalid workflow format: {e}"}, status=400)
-
-    # Use WorkflowDependencyParser with Workflow object (requires cg-2ro refactor)
-    parser = WorkflowDependencyParser(
-        workflow=workflow,
-        workflow_name=workflow_name,
-        cec_path=env.cec_path
-    )
-    dependencies = parser.analyze_dependencies()
-
-    # Use the same resolution logic as analyze_workflow
-    result = await run_sync(
-        env.workflow_manager.resolve_workflow,
-        dependencies
-    )
+        tmp_path.unlink(missing_ok=True)
+        return web.json_response(
+            {"error": f"Invalid workflow format: {e}"},
+            status=400
+        )
+    finally:
+        # Clean up temp file
+        tmp_path.unlink(missing_ok=True)
 
     # Determine uninstalled nodes (same logic as analyze_workflow lines 641-648)
     # For unsaved workflows, check against environment's installed packages
