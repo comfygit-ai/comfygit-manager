@@ -886,11 +886,18 @@ async def search_nodes(request: web.Request, env) -> web.Response:
         limit
     )
 
+    # Normalize scores to 0.0-1.0 range for frontend display
+    # Find max score for normalization (minimum 1.0 to avoid division issues)
+    max_score = max((m.score for m in matches), default=1.0)
+    max_score = max(max_score, 1.0)  # Ensure at least 1.0
+
     results = []
     for match in matches:
+        # Normalize: highest score becomes 1.0, others scale proportionally
+        normalized_confidence = match.score / max_score
         results.append({
             "package_id": match.package_id,
-            "match_confidence": match.score,
+            "match_confidence": normalized_confidence,
             "match_type": match.confidence,  # "high", "medium", "low"
             "description": match.package_data.description if match.package_data else None,
             "repository": match.package_data.repository if match.package_data else None,
