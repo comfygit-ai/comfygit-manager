@@ -450,6 +450,7 @@ function submitManualEntry() {
   if (!currentNode.value || !manualPackageInput.value.trim()) return
   emit('manual-entry', currentNode.value.node_type, manualPackageInput.value.trim())
   closeManualEntry()
+  nextTick(() => advanceToNextUnresolved())
 }
 </script>
 
