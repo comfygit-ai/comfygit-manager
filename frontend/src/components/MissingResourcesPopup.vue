@@ -27,7 +27,7 @@
               :disabled="allPackagesInstalled"
               @click="installAllNodes"
             >
-              {{ allPackagesInstalled ? 'All Installed' : 'Install All' }}
+              {{ allPackagesInstalled ? 'All Queued' : 'Install All' }}
             </BaseButton>
           </div>
           <div class="item-list">
@@ -36,15 +36,27 @@
                 <span class="package-name">{{ pkg.title }}</span>
                 <span class="node-count">({{ pkg.node_count }} {{ pkg.node_count === 1 ? 'node' : 'nodes' }})</span>
               </div>
+              <!-- Install button: show when not installed, not queued, not failed -->
               <BaseButton
-                v-if="!installedPackages.has(pkg.package_id)"
+                v-if="!installedPackages.has(pkg.package_id) && !queuedPackages.has(pkg.package_id) && !failedPackages.has(pkg.package_id)"
                 size="sm"
                 variant="secondary"
                 :disabled="installingPackage === pkg.package_id"
                 @click="installPackage(pkg.package_id)"
               >
-                {{ installingPackage === pkg.package_id ? 'Installing...' : 'Install' }}
+                {{ installingPackage === pkg.package_id ? 'Queueing...' : 'Install' }}
               </BaseButton>
+              <!-- Installing: currently being processed by Manager -->
+              <span v-else-if="installingPackage === pkg.package_id" class="installing-badge">Installing...</span>
+              <!-- Queued: waiting in Manager queue -->
+              <span v-else-if="queuedPackages.has(pkg.package_id)" class="queued-badge">Queued</span>
+              <!-- Failed: installation failed with error -->
+              <span
+                v-else-if="failedPackages.has(pkg.package_id)"
+                class="failed-badge"
+                :title="failedPackages.get(pkg.package_id)"
+              >Failed ⚠</span>
+              <!-- Installed: successfully installed -->
               <span v-else class="installed-badge">Installed</span>
             </div>
             <div v-if="missingPackages.length > 5" class="overflow-note">
@@ -163,14 +175,19 @@ const error = ref<string | null>(null)
 const analysis = ref<any>(null)
 const visible = ref(false)
 const installedPackages = ref<Set<string>>(new Set())  // Packages that have been installed
+const queuedPackages = ref<Set<string>>(new Set())     // Packages queued for install (via Manager queue)
+const failedPackages = ref<Map<string, string>>(new Map())  // package_id -> error message
 const queuedModels = ref<Set<string>>(new Set())       // Models queued for download
 const dontShowAgain = ref(false)
-const installingPackage = ref<string | null>(null)
+const installingPackage = ref<string | null>(null)     // Currently installing package (from WebSocket cm-task-started)
 const currentWorkflowHash = ref<string | null>(null)
 const installedCount = ref(0)  // Track total installed for restart notification
 
+// Map ui_id to package_id for tracking queue task completion
+const pendingInstalls = ref<Map<string, string>>(new Map())
+
 const { addToQueue } = useModelDownloadQueue()
-const { installNode } = useComfyGitService()
+const { queueNodeInstall } = useComfyGitService()
 
 const hasIssues = computed(() => {
   return missingPackages.value.length > 0 ||
@@ -253,10 +270,14 @@ const downloadableModels = computed(() => {
   return missingModels.value.filter(m => m.canDownload)
 })
 
-// Check if all packages are installed
+// Check if all packages are installed, queued, or failed (no more to install)
 const allPackagesInstalled = computed(() => {
   return missingPackages.value.length > 0 &&
-    missingPackages.value.every(pkg => installedPackages.value.has(pkg.package_id))
+    missingPackages.value.every(pkg =>
+      installedPackages.value.has(pkg.package_id) ||
+      queuedPackages.value.has(pkg.package_id) ||
+      failedPackages.value.has(pkg.package_id)
+    )
 })
 
 // Check if all downloadable models are queued
@@ -277,22 +298,32 @@ const allItemsDone = computed(() => {
   return packagesDone && modelsDone
 })
 
-// Install a single package
+// Queue a single package install via Manager queue
 async function installPackage(packageId: string) {
-  if (installedPackages.value.has(packageId)) return
+  // Skip if already installed, queued, or failed
+  if (installedPackages.value.has(packageId) ||
+      queuedPackages.value.has(packageId) ||
+      failedPackages.value.has(packageId)) return
 
   installingPackage.value = packageId
   try {
-    await installNode(packageId)
-    installedPackages.value.add(packageId)
-    installedCount.value++
+    // Queue the install via Manager queue API
+    const { ui_id } = await queueNodeInstall({
+      id: packageId,
+      selected_version: 'latest',
+      mode: 'remote',
+      channel: 'default'
+    })
 
-    // Dispatch event to show restart notification
-    window.dispatchEvent(new CustomEvent('comfygit:nodes-installed', {
-      detail: { count: installedCount.value }
-    }))
+    // Track this task for completion handling
+    pendingInstalls.value.set(ui_id, packageId)
+    queuedPackages.value.add(packageId)
+
+    // Note: installedCount is updated in handleTaskCompleted on success
   } catch (e) {
-    console.error('[ComfyGit] Failed to install package:', e)
+    console.error('[ComfyGit] Failed to queue package install:', e)
+    // Mark as failed if we couldn't even queue it
+    failedPackages.value.set(packageId, 'Failed to queue install request')
   } finally {
     installingPackage.value = null
   }
@@ -311,11 +342,14 @@ function downloadModel(model: MissingModelItem) {
   queuedModels.value.add(model.url)
 }
 
-// Install all missing nodes
-function installAllNodes() {
+// Queue all missing nodes for install
+async function installAllNodes() {
   for (const pkg of missingPackages.value) {
-    if (!installedPackages.value.has(pkg.package_id)) {
-      installPackage(pkg.package_id)
+    // Skip already installed, queued, or failed packages
+    if (!installedPackages.value.has(pkg.package_id) &&
+        !queuedPackages.value.has(pkg.package_id) &&
+        !failedPackages.value.has(pkg.package_id)) {
+      await installPackage(pkg.package_id)
     }
   }
 }
@@ -394,7 +428,10 @@ async function analyzeWorkflow(workflow: any) {
 
   // Reset state
   installedPackages.value = new Set()
+  queuedPackages.value = new Set()
+  failedPackages.value = new Map()
   queuedModels.value = new Set()
+  pendingInstalls.value = new Map()
   dontShowAgain.value = false
   installedCount.value = 0
 
@@ -446,13 +483,75 @@ function handleWorkflowLoaded(event: CustomEvent) {
   }
 }
 
+// WebSocket event handlers for Manager queue status
+function handleTaskStarted(event: CustomEvent) {
+  const taskId = event.detail?.ui_id
+  const packageId = pendingInstalls.value.get(taskId)
+  if (packageId) {
+    installingPackage.value = packageId
+    console.log('[ComfyGit] Installing package:', packageId)
+  }
+}
+
+function handleTaskCompleted(event: CustomEvent) {
+  const taskId = event.detail?.ui_id
+  const packageId = pendingInstalls.value.get(taskId)
+  const status = event.detail?.status?.status_str
+
+  if (packageId) {
+    pendingInstalls.value.delete(taskId)
+    queuedPackages.value.delete(packageId)
+
+    // Clear installing state if this was the active one
+    if (installingPackage.value === packageId) {
+      installingPackage.value = null
+    }
+
+    if (status === 'success') {
+      installedPackages.value.add(packageId)
+      installedCount.value++
+      console.log('[ComfyGit] Package installed successfully:', packageId)
+    } else {
+      const errorMsg = event.detail?.status?.messages?.[0] || event.detail?.result || 'Unknown error'
+      failedPackages.value.set(packageId, errorMsg)
+      console.error('[ComfyGit] Package install failed:', packageId, errorMsg)
+    }
+
+    // When all pending installs are done and at least one succeeded, show restart notification
+    if (pendingInstalls.value.size === 0 && installedCount.value > 0) {
+      window.dispatchEvent(new CustomEvent('comfygit:nodes-installed', {
+        detail: { count: installedCount.value }
+      }))
+    }
+  }
+}
+
+// Get ComfyUI's API for WebSocket events
+function getComfyApi() {
+  return (window as any).app?.api
+}
+
 onMounted(() => {
   // Listen for workflow-loaded events
   window.addEventListener('comfygit:workflow-loaded', handleWorkflowLoaded as EventListener)
+
+  // Listen for Manager queue events via ComfyUI API
+  const api = getComfyApi()
+  if (api) {
+    api.addEventListener('cm-task-started', handleTaskStarted)
+    api.addEventListener('cm-task-completed', handleTaskCompleted)
+  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('comfygit:workflow-loaded', handleWorkflowLoaded as EventListener)
+
+  // Clean up Manager queue event listeners
+  const api = getComfyApi()
+  if (api) {
+    api.removeEventListener('cm-task-started', handleTaskStarted)
+    api.removeEventListener('cm-task-completed', handleTaskCompleted)
+  }
 })
 </script>
 
@@ -571,13 +670,34 @@ onUnmounted(() => {
 }
 
 .queued-badge,
+.installing-badge,
+.failed-badge,
 .installed-badge {
-  color: var(--cg-color-success);
   font-size: var(--cg-font-size-xs);
   font-weight: var(--cg-font-weight-medium);
   padding: var(--cg-space-1) var(--cg-space-2);
-  background: color-mix(in srgb, var(--cg-color-success) 15%, transparent);
   border-radius: var(--cg-radius-sm);
+}
+
+.queued-badge {
+  color: var(--cg-color-warning);
+  background: color-mix(in srgb, var(--cg-color-warning) 15%, transparent);
+}
+
+.installing-badge {
+  color: var(--cg-color-accent);
+  background: color-mix(in srgb, var(--cg-color-accent) 15%, transparent);
+}
+
+.failed-badge {
+  color: var(--cg-color-error);
+  background: color-mix(in srgb, var(--cg-color-error) 15%, transparent);
+  cursor: help;
+}
+
+.installed-badge {
+  color: var(--cg-color-success);
+  background: color-mix(in srgb, var(--cg-color-success) 15%, transparent);
 }
 
 .overflow-note {

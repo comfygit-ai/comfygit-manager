@@ -850,6 +850,56 @@ export function useComfyGitService() {
     })
   }
 
+  /**
+   * Queue a node install via Manager queue API.
+   * This routes through the Manager's sequential queue to avoid race conditions.
+   * Returns the ui_id for tracking via WebSocket events.
+   */
+  async function queueNodeInstall(params: {
+    id: string
+    version?: string
+    selected_version?: string
+    mode?: string
+    channel?: string
+  }): Promise<{ ui_id: string }> {
+    if (USE_MOCK) {
+      await mockApi.installNode(params.id)
+      return { ui_id: crypto.randomUUID() }
+    }
+
+    const ui_id = crypto.randomUUID()
+
+    // Get client_id from ComfyUI's API if available
+    const client_id = (window as any).app?.api?.clientId ??
+                      (window as any).app?.api?.initialClientId ??
+                      'comfygit-panel'
+
+    const task = {
+      kind: 'install',
+      params: {
+        id: params.id,
+        version: params.version || '',
+        selected_version: params.selected_version || 'latest',
+        mode: params.mode || 'remote',
+        channel: params.channel || 'default'
+      },
+      ui_id,
+      client_id
+    }
+
+    // Queue the task
+    await fetchApi<void>('/v2/manager/queue/task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(task)
+    })
+
+    // Start queue processing
+    await fetchApi<void>('/v2/manager/queue/start')
+
+    return { ui_id }
+  }
+
   async function updateNode(nodeName: string): Promise<{ status: 'success' | 'error', message?: string }> {
     if (USE_MOCK) {
       await mockApi.updateNode(nodeName)
@@ -1603,6 +1653,7 @@ export function useComfyGitService() {
     getNodes,
     trackNodeAsDev,
     installNode,
+    queueNodeInstall,
     updateNode,
     uninstallNode,
     // Git Remotes
