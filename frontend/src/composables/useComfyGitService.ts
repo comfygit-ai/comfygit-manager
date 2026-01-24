@@ -79,6 +79,20 @@ declare global {
 // Toggle between mock and real API (set VITE_USE_MOCK_API=false in .env to disable)
 const USE_MOCK = isMockApi()
 
+// UUID generator that works in non-secure contexts (HTTP)
+// generateUUID() only works in secure contexts (HTTPS/localhost)
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return generateUUID()
+  }
+  // Fallback for non-secure contexts
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
+
 // ============================================================================
 // MOCK STATE MANAGEMENT
 // For simulating stateful operations like wizard flows
@@ -870,10 +884,10 @@ export function useComfyGitService() {
   }): Promise<{ ui_id: string }> {
     if (USE_MOCK) {
       await mockApi.installNode(params.id)
-      return { ui_id: crypto.randomUUID() }
+      return { ui_id: generateUUID() }
     }
 
-    const ui_id = crypto.randomUUID()
+    const ui_id = generateUUID()
 
     // Get client_id from ComfyUI's API if available
     const client_id = (window as any).app?.api?.clientId ??
