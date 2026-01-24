@@ -169,7 +169,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import NodeResolutionItem from '../molecules/NodeResolutionItem.vue'
 import type { ResolutionStatus } from '../molecules/NodeResolutionItem.vue'
 import ItemNavigator from '../molecules/ItemNavigator.vue'
@@ -346,20 +346,36 @@ function goToItem(index: number) {
   }
 }
 
-// Handlers - no auto-advance, user navigates manually
+// Auto-advance helper: find next unresolved item and navigate to it
+function advanceToNextUnresolved() {
+  // Find next item after current that doesn't have a choice
+  for (let i = currentIndex.value + 1; i < props.nodes.length; i++) {
+    const node = props.nodes[i]
+    if (!props.nodeChoices?.has(node.node_type)) {
+      goToItem(i)
+      return
+    }
+  }
+  // No more unresolved items - stay on current (user can see completion status)
+}
+
+// Handlers with auto-advance after making a choice
 function handleMarkOptional() {
   if (!currentNode.value) return
   emit('mark-optional', currentNode.value.node_type)
+  nextTick(() => advanceToNextUnresolved())
 }
 
 function handleSkip() {
   if (!currentNode.value) return
   emit('skip', currentNode.value.node_type)
+  nextTick(() => advanceToNextUnresolved())
 }
 
 function handleOptionSelected(index: number) {
   if (!currentNode.value) return
   emit('option-selected', currentNode.value.node_type, index)
+  nextTick(() => advanceToNextUnresolved())
 }
 
 function handleClearChoice() {
@@ -420,18 +436,21 @@ function selectSearchResult(result: NodeSearchResult) {
   if (!currentNode.value) return
   emit('manual-entry', currentNode.value.node_type, result.package_id)
   closeSearch()
+  nextTick(() => advanceToNextUnresolved())
 }
 
 // Handler for inline search result selection
 function handleSearchResultSelected(result: NodeSearchResult) {
   if (!currentNode.value) return
   emit('manual-entry', currentNode.value.node_type, result.package_id)
+  nextTick(() => advanceToNextUnresolved())
 }
 
 function submitManualEntry() {
   if (!currentNode.value || !manualPackageInput.value.trim()) return
   emit('manual-entry', currentNode.value.node_type, manualPackageInput.value.trim())
   closeManualEntry()
+  nextTick(() => advanceToNextUnresolved())
 }
 </script>
 
