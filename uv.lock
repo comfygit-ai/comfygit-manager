@@ -375,8 +375,8 @@ wheels = [
 
 [[package]]
 name = "comfygit-core"
-version = "0.3.11"
-source = { registry = "https://pypi.org/simple" }
+version = "0.3.13"
+source = { editable = "../../../../comfygit/packages/core" }
 dependencies = [
     { name = "aiohttp" },
     { name = "blake3" },
@@ -389,14 +389,27 @@ dependencies = [
     { name = "uv" },
     { name = "xxhash" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9f/2b/568ec2855830b1a20d6e78627957e79be3bd28cd83401d2290233a5ae097/comfygit_core-0.3.11.tar.gz", hash = "sha256:0adfff4b466fd247a56fba50e370515bdacd8010e246d140f0f8d94870655862", size = 573208, upload-time = "2025-12-29T07:50:06.682Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/2b/11/cbefc7a8921739996e4c850ba7c953162d0986a831374dd2452381c92c4f/comfygit_core-0.3.11-py3-none-any.whl", hash = "sha256:d7337dc0ce5ed656c96a930a3caf66edc6aebb7884f94f50b690e8ba92abc643", size = 326670, upload-time = "2025-12-29T07:50:08.159Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "aiohttp", specifier = ">=3.9.0" },
+    { name = "blake3", specifier = ">=1.0.5" },
+    { name = "packaging", specifier = ">=25.0" },
+    { name = "psutil", specifier = ">=7.0.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "requests", specifier = ">=2.32.4" },
+    { name = "requirements-parser", specifier = ">=0.13.0" },
+    { name = "tomlkit", specifier = ">=0.13.3" },
+    { name = "uv", specifier = ">=0.7.0" },
+    { name = "xxhash", specifier = ">=2.0.0" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8.4.1" }]
 
 [[package]]
 name = "comfygit-manager"
-version = "0.0.15"
+version = "0.0.16"
 source = { virtual = "." }
 dependencies = [
     { name = "comfygit-core" },
@@ -416,7 +429,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "comfygit-core", specifier = "==0.3.11" },
+    { name = "comfygit-core", editable = "../../../../comfygit/packages/core" },
     { name = "watchdog", specifier = ">=6.0.0" },
     { name = "zeroconf", specifier = ">=0.131.0" },
 ]
