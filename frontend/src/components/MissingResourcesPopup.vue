@@ -42,7 +42,7 @@
                 size="sm"
                 variant="secondary"
                 :disabled="installingPackage === pkg.package_id"
-                @click="installPackage(pkg.package_id)"
+                @click="installPackage(pkg)"
               >
                 {{ installingPackage === pkg.package_id ? 'Queueing...' : 'Install' }}
               </BaseButton>
@@ -156,6 +156,8 @@ interface MissingPackage {
   title: string
   node_count: number
   node_types: string[]
+  repository: string | null
+  latest_version: string | null
 }
 
 interface MissingModelItem {
@@ -211,7 +213,9 @@ const missingPackages = computed<MissingPackage[]>(() => {
         package_id: pkgId,
         title: node.package.title || pkgId,
         node_count: 0,
-        node_types: []
+        node_types: [],
+        repository: node.package.repository || null,
+        latest_version: node.package.latest_version || null
       })
     }
     const pkg = packageMap.get(pkgId)!
@@ -299,7 +303,9 @@ const allItemsDone = computed(() => {
 })
 
 // Queue a single package install via Manager queue
-async function installPackage(packageId: string) {
+async function installPackage(pkg: MissingPackage) {
+  const packageId = pkg.package_id
+
   // Skip if already installed, queued, or failed
   if (installedPackages.value.has(packageId) ||
       queuedPackages.value.has(packageId) ||
@@ -308,9 +314,12 @@ async function installPackage(packageId: string) {
   installingPackage.value = packageId
   try {
     // Queue the install via Manager queue API
+    // Pass repository and version from package data
     const { ui_id } = await queueNodeInstall({
       id: packageId,
-      selected_version: 'latest',
+      version: pkg.latest_version || 'latest',
+      selected_version: pkg.latest_version || 'latest',
+      repository: pkg.repository || undefined,
       mode: 'remote',
       channel: 'default'
     })
@@ -349,7 +358,7 @@ async function installAllNodes() {
     if (!installedPackages.value.has(pkg.package_id) &&
         !queuedPackages.value.has(pkg.package_id) &&
         !failedPackages.value.has(pkg.package_id)) {
-      await installPackage(pkg.package_id)
+      await installPackage(pkg)
     }
   }
 }

@@ -27,6 +27,13 @@ routes = web.RouteTableDef()
 def _serialize_resolved_node(node: ResolvedNodePackage, workflow_name: str, uninstalled_set: set = None) -> dict:
     """Convert ResolvedNodePackage to frontend ResolvedNode format."""
     uninstalled_set = uninstalled_set or set()
+
+    # Extract latest version from package_data.versions if available
+    latest_version = None
+    if node.package_data and node.package_data.versions:
+        # versions is a dict - get the first key (latest version)
+        latest_version = next(iter(node.package_data.versions.keys()), None)
+
     return {
         "reference": {
             "node_type": node.node_type,
@@ -34,7 +41,9 @@ def _serialize_resolved_node(node: ResolvedNodePackage, workflow_name: str, unin
         },
         "package": {
             "package_id": node.package_id,
-            "title": node.package_data.display_name if node.package_data else node.package_id
+            "title": node.package_data.display_name if node.package_data else node.package_id,
+            "repository": node.package_data.repository if node.package_data else None,
+            "latest_version": latest_version
         },
         "match_confidence": node.match_confidence,
         "match_type": node.match_type,
@@ -59,6 +68,12 @@ def _serialize_ambiguous_node(options: list[ResolvedNodePackage], workflow_name:
     if not options:
         return None
     uninstalled_set = uninstalled_set or set()
+
+    def get_latest_version(opt):
+        if opt.package_data and opt.package_data.versions:
+            return next(iter(opt.package_data.versions.keys()), None)
+        return None
+
     return {
         "reference": {
             "node_type": options[0].node_type,
@@ -68,7 +83,9 @@ def _serialize_ambiguous_node(options: list[ResolvedNodePackage], workflow_name:
             {
                 "package": {
                     "package_id": opt.package_id,
-                    "title": opt.package_data.display_name if opt.package_data else opt.package_id
+                    "title": opt.package_data.display_name if opt.package_data else opt.package_id,
+                    "repository": opt.package_data.repository if opt.package_data else None,
+                    "latest_version": get_latest_version(opt)
                 },
                 "match_confidence": opt.match_confidence,
                 "match_type": opt.match_type,

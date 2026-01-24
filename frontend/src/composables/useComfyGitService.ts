@@ -285,7 +285,12 @@ export function useComfyGitService() {
       throw new Error(errorData.error || errorData.message || `Request failed: ${response.status}`)
     }
 
-    return response.json()
+    // Handle empty responses (some endpoints return 200 with no body)
+    const text = await response.text()
+    if (!text) {
+      return undefined as T
+    }
+    return JSON.parse(text)
   }
 
   async function getStatus(forceRefresh = false): Promise<ComfyGitStatus> {
@@ -859,6 +864,7 @@ export function useComfyGitService() {
     id: string
     version?: string
     selected_version?: string
+    repository?: string
     mode?: string
     channel?: string
   }): Promise<{ ui_id: string }> {
@@ -878,8 +884,9 @@ export function useComfyGitService() {
       kind: 'install',
       params: {
         id: params.id,
-        version: params.version || '',
+        version: params.version || params.selected_version || 'latest',
         selected_version: params.selected_version || 'latest',
+        repository: params.repository || '',
         mode: params.mode || 'remote',
         channel: params.channel || 'default'
       },
