@@ -122,7 +122,7 @@
         <!-- Don't Show Again -->
         <div class="dont-show-again">
           <BaseCheckbox v-model="dontShowAgain" @update:model-value="handleDontShowAgainChange">
-            Don't show again for this workflow
+            Don't show this popup
           </BaseCheckbox>
         </div>
       </div>
@@ -138,7 +138,6 @@
       >
         {{ allItemsDone ? 'All Done' : 'Download All' }}
       </BaseButton>
-      <BaseButton v-else variant="primary" @click="openPanel">Open ComfyGit Panel</BaseButton>
     </template>
   </BaseModal>
 </template>
@@ -182,7 +181,6 @@ const failedPackages = ref<Map<string, string>>(new Map())  // package_id -> err
 const queuedModels = ref<Set<string>>(new Set())       // Models queued for download
 const dontShowAgain = ref(false)
 const installingPackage = ref<string | null>(null)     // Currently installing package (from WebSocket cm-task-started)
-const currentWorkflowHash = ref<string | null>(null)
 const installedCount = ref(0)  // Track total installed for restart notification
 
 // Map ui_id to package_id for tracking queue task completion
@@ -388,52 +386,31 @@ function downloadAll() {
   downloadAllModels()
 }
 
-// Simple string hash function (djb2 algorithm)
-function hashString(str: string): string {
-  let hash = 5381
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) + hash) ^ str.charCodeAt(i)
-  }
-  return Math.abs(hash).toString(16).padStart(8, '0')
-}
-
-// Generate a hash for the workflow (for "don't show again")
-// Includes node IDs to uniquely identify each workflow, not just node types
-function getWorkflowHash(workflow: any): string {
-  const nodeInfo = (workflow?.nodes || [])
-    .map((n: any) => `${n.id}:${n.type}`)
-    .sort()
-    .join(',')
-  return hashString(nodeInfo)
-}
-
-// Check if popup should be shown for this workflow
-function shouldShowPopup(workflow: any): boolean {
-  const hash = getWorkflowHash(workflow)
-  return localStorage.getItem('comfygit:popup-dismissed:' + hash) !== 'true'
-}
-
-// Handle "don't show again" change (bidirectional)
+// Handle "don't show this popup" change (global setting)
 function handleDontShowAgainChange() {
-  if (!currentWorkflowHash.value) return
-
   if (dontShowAgain.value) {
-    localStorage.setItem('comfygit:popup-dismissed:' + currentWorkflowHash.value, 'true')
+    localStorage.setItem('comfygit:popup-disabled', 'true')
   } else {
-    localStorage.removeItem('comfygit:popup-dismissed:' + currentWorkflowHash.value)
+    localStorage.removeItem('comfygit:popup-disabled')
   }
 }
 
 async function analyzeWorkflow(workflow: any) {
-  // Check if user dismissed this workflow
-  if (!shouldShowPopup(workflow)) {
+  // Skip for saved workflows - issues tracked in ComfyGit panel
+  if (workflow?.path || workflow?.filename) {
+    console.log('[ComfyGit] Workflow saved to disk, skipping popup')
+    return
+  }
+
+  // Skip if user globally disabled popup
+  if (localStorage.getItem('comfygit:popup-disabled') === 'true') {
+    console.log('[ComfyGit] Popup globally disabled')
     return
   }
 
   // Prepare state but DON'T show modal yet - wait for analysis results
   loading.value = true
   error.value = null
-  currentWorkflowHash.value = getWorkflowHash(workflow)
 
   // Reset state
   installedPackages.value = new Set()
@@ -471,18 +448,9 @@ async function analyzeWorkflow(workflow: any) {
   }
 }
 
-function openPanel() {
-  // Dispatch custom event for main.ts to handle
-  window.dispatchEvent(new CustomEvent('comfygit:open-panel', {
-    detail: { initialView: 'workflows' }
-  }))
-  dismiss()
-}
-
 function dismiss() {
   visible.value = false
   analysis.value = null
-  currentWorkflowHash.value = null
 }
 
 function handleWorkflowLoaded(event: CustomEvent) {
@@ -540,6 +508,15 @@ function getComfyApi() {
   return (window as any).app?.api
 }
 
+// Listen for workflow save - auto-dismiss popup
+function handleWorkflowSaved(event: CustomEvent) {
+  const { change_type } = event.detail
+  if ((change_type === 'created' || change_type === 'modified') && visible.value) {
+    visible.value = false
+    console.log('[ComfyGit] Workflow saved, auto-dismissing popup')
+  }
+}
+
 onMounted(() => {
   // Listen for workflow-loaded events
   window.addEventListener('comfygit:workflow-loaded', handleWorkflowLoaded as EventListener)
@@ -549,6 +526,7 @@ onMounted(() => {
   if (api) {
     api.addEventListener('cm-task-started', handleTaskStarted)
     api.addEventListener('cm-task-completed', handleTaskCompleted)
+    api.addEventListener('comfygit:workflow-changed', handleWorkflowSaved)
   }
 })
 
@@ -560,6 +538,7 @@ onUnmounted(() => {
   if (api) {
     api.removeEventListener('cm-task-started', handleTaskStarted)
     api.removeEventListener('cm-task-completed', handleTaskCompleted)
+    api.removeEventListener('comfygit:workflow-changed', handleWorkflowSaved)
   }
 })
 </script>
