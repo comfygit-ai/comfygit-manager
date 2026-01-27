@@ -424,6 +424,10 @@ async function analyzeWorkflow(workflow: any) {
       const result = await response.json()
       if (result.is_saved) {
         console.log(`[ComfyGit] Workflow matches saved file: ${result.filename}, skipping popup`)
+        // Add to session suppression so modifications don't trigger popup
+        if (workflowId) {
+          shownWorkflowIds.value.add(workflowId)
+        }
         return
       }
     }

@@ -2809,7 +2809,7 @@ function bd(e, s) {
     nextSibling: w,
     setScopeId: p = gs,
     insertStaticContent: _
-  } = e, S = (O, F, ee, le = null, ve = null, pe = null, Se = void 0, Ie = null, ae = !!F.dynamicChildren) => {
+  } = e, S = (O, F, ee, le = null, ve = null, pe = null, Ie = void 0, Ee = null, ae = !!F.dynamicChildren) => {
     if (O === F)
       return;
     O && !Xs(O, F) && (le = $e(O), Be(O, ve, pe, !0), O = null), F.patchFlag === -2 && (ae = !1, F.dynamicChildren = null);
@@ -2822,7 +2822,7 @@ function bd(e, s) {
         P(O, F, ee, le);
         break;
       case la:
-        O == null && D(F, ee, le, Se);
+        O == null && D(F, ee, le, Ie);
         break;
       case j:
         J(
@@ -2832,8 +2832,8 @@ function bd(e, s) {
           le,
           ve,
           pe,
-          Se,
           Ie,
+          Ee,
           ae
         );
         break;
@@ -2845,8 +2845,8 @@ function bd(e, s) {
           le,
           ve,
           pe,
-          Se,
           Ie,
+          Ee,
           ae
         ) : Te & 6 ? G(
           O,
@@ -2855,8 +2855,8 @@ function bd(e, s) {
           le,
           ve,
           pe,
-          Se,
           Ie,
+          Ee,
           ae
         ) : (Te & 64 || Te & 128) && me.process(
           O,
@@ -2865,8 +2865,8 @@ function bd(e, s) {
           le,
           ve,
           pe,
-          Se,
           Ie,
+          Ee,
           ae,
           Me
         );
@@ -2908,16 +2908,16 @@ function bd(e, s) {
     for (; O && O !== F; )
       ee = w(O), l(O), O = ee;
     l(F);
-  }, W = (O, F, ee, le, ve, pe, Se, Ie, ae) => {
-    if (F.type === "svg" ? Se = "svg" : F.type === "math" && (Se = "mathml"), O == null)
+  }, W = (O, F, ee, le, ve, pe, Ie, Ee, ae) => {
+    if (F.type === "svg" ? Ie = "svg" : F.type === "math" && (Ie = "mathml"), O == null)
       V(
         F,
         ee,
         le,
         ve,
         pe,
-        Se,
         Ie,
+        Ee,
         ae
       );
     else {
@@ -2928,15 +2928,15 @@ function bd(e, s) {
           F,
           ve,
           pe,
-          Se,
           Ie,
+          Ee,
           ae
         );
       } finally {
         me && me._endPatch();
       }
     }
-  }, V = (O, F, ee, le, ve, pe, Se, Ie) => {
+  }, V = (O, F, ee, le, ve, pe, Ie, Ee) => {
     let ae, me;
     const { props: Ue, shapeFlag: Te, transition: Z, dirs: q } = O;
     if (ae = O.el = c(
@@ -2951,9 +2951,9 @@ function bd(e, s) {
       le,
       ve,
       aa(O, pe),
-      Se,
-      Ie
-    ), q && Hs(O, null, le, "created"), z(ae, O, O.scopeId, Se, le), Ue) {
+      Ie,
+      Ee
+    ), q && Hs(O, null, le, "created"), z(ae, O, O.scopeId, Ie, le), Ue) {
       for (const ke in Ue)
         ke !== "value" && !No(ke) && i(ae, ke, null, Ue[ke], pe, le);
       "value" in Ue && i(ae, "value", null, Ue.value, pe), (me = Ue.onVnodeBeforeMount) && ds(me, le, O);
@@ -2970,19 +2970,19 @@ function bd(e, s) {
     if (ve) {
       let pe = ve.subTree;
       if (F === pe || ar(pe.type) && (pe.ssContent === F || pe.ssFallback === F)) {
-        const Se = ve.vnode;
+        const Ie = ve.vnode;
         z(
           O,
-          Se,
-          Se.scopeId,
-          Se.slotScopeIds,
+          Ie,
+          Ie.scopeId,
+          Ie.slotScopeIds,
           ve.parent
         );
       }
     }
-  }, I = (O, F, ee, le, ve, pe, Se, Ie, ae = 0) => {
+  }, I = (O, F, ee, le, ve, pe, Ie, Ee, ae = 0) => {
     for (let me = ae; me < O.length; me++) {
-      const Ue = O[me] = Ie ? Ns(O[me]) : ps(O[me]);
+      const Ue = O[me] = Ee ? Ns(O[me]) : ps(O[me]);
       S(
         null,
         Ue,
@@ -2991,28 +2991,28 @@ function bd(e, s) {
         le,
         ve,
         pe,
-        Se,
-        Ie
+        Ie,
+        Ee
       );
     }
-  }, T = (O, F, ee, le, ve, pe, Se) => {
-    const Ie = F.el = O.el;
+  }, T = (O, F, ee, le, ve, pe, Ie) => {
+    const Ee = F.el = O.el;
     let { patchFlag: ae, dynamicChildren: me, dirs: Ue } = F;
     ae |= O.patchFlag & 16;
     const Te = O.props || st, Z = F.props || st;
     let q;
-    if (ee && Ks(ee, !1), (q = Z.onVnodeBeforeUpdate) && ds(q, ee, F, O), Ue && Hs(F, O, ee, "beforeUpdate"), ee && Ks(ee, !0), (Te.innerHTML && Z.innerHTML == null || Te.textContent && Z.textContent == null) && v(Ie, ""), me ? M(
+    if (ee && Ks(ee, !1), (q = Z.onVnodeBeforeUpdate) && ds(q, ee, F, O), Ue && Hs(F, O, ee, "beforeUpdate"), ee && Ks(ee, !0), (Te.innerHTML && Z.innerHTML == null || Te.textContent && Z.textContent == null) && v(Ee, ""), me ? M(
       O.dynamicChildren,
       me,
-      Ie,
+      Ee,
       ee,
       le,
       aa(F, ve),
       pe
-    ) : Se || L(
+    ) : Ie || L(
       O,
       F,
-      Ie,
+      Ee,
       null,
       ee,
       le,
@@ -3021,22 +3021,22 @@ function bd(e, s) {
       !1
     ), ae > 0) {
       if (ae & 16)
-        ne(Ie, Te, Z, ee, ve);
-      else if (ae & 2 && Te.class !== Z.class && i(Ie, "class", null, Z.class, ve), ae & 4 && i(Ie, "style", Te.style, Z.style, ve), ae & 8) {
+        ne(Ee, Te, Z, ee, ve);
+      else if (ae & 2 && Te.class !== Z.class && i(Ee, "class", null, Z.class, ve), ae & 4 && i(Ee, "style", Te.style, Z.style, ve), ae & 8) {
         const Ae = F.dynamicProps;
         for (let ke = 0; ke < Ae.length; ke++) {
           const be = Ae[ke], B = Te[be], U = Z[be];
-          (U !== B || be === "value") && i(Ie, be, B, U, ve, ee);
+          (U !== B || be === "value") && i(Ee, be, B, U, ve, ee);
         }
       }
-      ae & 1 && O.children !== F.children && v(Ie, F.children);
-    } else !Se && me == null && ne(Ie, Te, Z, ee, ve);
+      ae & 1 && O.children !== F.children && v(Ee, F.children);
+    } else !Ie && me == null && ne(Ee, Te, Z, ee, ve);
     ((q = Z.onVnodeUpdated) || Ue) && St(() => {
       q && ds(q, ee, F, O), Ue && Hs(F, O, ee, "updated");
     }, le);
-  }, M = (O, F, ee, le, ve, pe, Se) => {
-    for (let Ie = 0; Ie < F.length; Ie++) {
-      const ae = O[Ie], me = F[Ie], Ue = (
+  }, M = (O, F, ee, le, ve, pe, Ie) => {
+    for (let Ee = 0; Ee < F.length; Ee++) {
+      const ae = O[Ee], me = F[Ee], Ue = (
         // oldVNode may be an errored async setup() component inside Suspense
         // which will not have a mounted element
         ae.el && // - In the case of a Fragment, we need to provide the actual parent
@@ -3058,7 +3058,7 @@ function bd(e, s) {
         le,
         ve,
         pe,
-        Se,
+        Ie,
         !0
       );
     }
@@ -3076,15 +3076,15 @@ function bd(e, s) {
           );
       for (const pe in ee) {
         if (No(pe)) continue;
-        const Se = ee[pe], Ie = F[pe];
-        Se !== Ie && pe !== "value" && i(O, pe, Ie, Se, ve, le);
+        const Ie = ee[pe], Ee = F[pe];
+        Ie !== Ee && pe !== "value" && i(O, pe, Ee, Ie, ve, le);
       }
       "value" in ee && i(O, "value", F.value, ee.value, ve);
     }
-  }, J = (O, F, ee, le, ve, pe, Se, Ie, ae) => {
+  }, J = (O, F, ee, le, ve, pe, Ie, Ee, ae) => {
     const me = F.el = O ? O.el : d(""), Ue = F.anchor = O ? O.anchor : d("");
     let { patchFlag: Te, dynamicChildren: Z, slotScopeIds: q } = F;
-    q && (Ie = Ie ? Ie.concat(q) : q), O == null ? (n(me, ee, le), n(Ue, ee, le), I(
+    q && (Ee = Ee ? Ee.concat(q) : q), O == null ? (n(me, ee, le), n(Ue, ee, le), I(
       // #10007
       // such fragment like `<></>` will be compiled into
       // a fragment which doesn't have a children.
@@ -3094,8 +3094,8 @@ function bd(e, s) {
       Ue,
       ve,
       pe,
-      Se,
       Ie,
+      Ee,
       ae
     )) : Te > 0 && Te & 64 && Z && // #2715 the previous fragment could've been a BAILed one as a result
     // of renderSlot() with no valid children
@@ -3105,8 +3105,8 @@ function bd(e, s) {
       ee,
       ve,
       pe,
-      Se,
-      Ie
+      Ie,
+      Ee
     ), // #2080 if the stable fragment has a key, it's a <template v-for> that may
     //  get moved around. Make sure all root level vnodes inherit el.
     // #2134 or if it's a component root, it may also get moved around
@@ -3123,16 +3123,16 @@ function bd(e, s) {
       Ue,
       ve,
       pe,
-      Se,
       Ie,
+      Ee,
       ae
     );
-  }, G = (O, F, ee, le, ve, pe, Se, Ie, ae) => {
-    F.slotScopeIds = Ie, O == null ? F.shapeFlag & 512 ? ve.ctx.activate(
+  }, G = (O, F, ee, le, ve, pe, Ie, Ee, ae) => {
+    F.slotScopeIds = Ee, O == null ? F.shapeFlag & 512 ? ve.ctx.activate(
       F,
       ee,
       le,
-      Se,
+      Ie,
       ae
     ) : te(
       F,
@@ -3140,29 +3140,29 @@ function bd(e, s) {
       le,
       ve,
       pe,
-      Se,
+      Ie,
       ae
     ) : Q(O, F, ae);
-  }, te = (O, F, ee, le, ve, pe, Se) => {
-    const Ie = O.component = Rd(
+  }, te = (O, F, ee, le, ve, pe, Ie) => {
+    const Ee = O.component = Rd(
       O,
       le,
       ve
     );
-    if (Gn(O) && (Ie.ctx.renderer = Me), Md(Ie, !1, Se), Ie.asyncDep) {
-      if (ve && ve.registerDep(Ie, A, Se), !O.el) {
-        const ae = Ie.subTree = C(bt);
+    if (Gn(O) && (Ee.ctx.renderer = Me), Md(Ee, !1, Ie), Ee.asyncDep) {
+      if (ve && ve.registerDep(Ee, A, Ie), !O.el) {
+        const ae = Ee.subTree = C(bt);
         P(null, ae, F, ee), O.placeholder = ae.el;
       }
     } else
       A(
-        Ie,
+        Ee,
         O,
         F,
         ee,
         ve,
         pe,
-        Se
+        Ie
       );
   }, Q = (O, F, ee) => {
     const le = F.component = O.component;
@@ -3174,21 +3174,21 @@ function bd(e, s) {
         le.next = F, le.update();
     else
       F.el = O.el, le.vnode = F;
-  }, A = (O, F, ee, le, ve, pe, Se) => {
-    const Ie = () => {
+  }, A = (O, F, ee, le, ve, pe, Ie) => {
+    const Ee = () => {
       if (O.isMounted) {
         let { next: Te, bu: Z, u: q, parent: Ae, vnode: ke } = O;
         {
           const We = nr(O);
           if (We) {
-            Te && (Te.el = ke.el, H(O, Te, Se)), We.asyncDep.then(() => {
-              O.isUnmounted || Ie();
+            Te && (Te.el = ke.el, H(O, Te, Ie)), We.asyncDep.then(() => {
+              O.isUnmounted || Ee();
             });
             return;
           }
         }
         let be = Te, B;
-        Ks(O, !1), Te ? (Te.el = ke.el, H(O, Te, Se)) : Te = ke, Z && yn(Z), (B = Te.props && Te.props.onVnodeBeforeUpdate) && ds(B, Ae, Te, ke), Ks(O, !0);
+        Ks(O, !1), Te ? (Te.el = ke.el, H(O, Te, Ie)) : Te = ke, Z && yn(Z), (B = Te.props && Te.props.onVnodeBeforeUpdate) && ds(B, Ae, Te, ke), Ks(O, !0);
         const U = bl(O), ce = O.subTree;
         O.subTree = U, S(
           ce,
@@ -3233,7 +3233,7 @@ function bd(e, s) {
       }
     };
     O.scope.on();
-    const ae = O.effect = new ci(Ie);
+    const ae = O.effect = new ci(Ee);
     O.scope.off();
     const me = O.update = ae.run.bind(ae), Ue = O.job = ae.runIfDirty.bind(ae);
     Ue.i = O, Ue.id = O.uid, ae.scheduler = () => Ha(Ue), Ks(O, !0), me();
@@ -3241,7 +3241,7 @@ function bd(e, s) {
     F.component = O;
     const le = O.vnode.props;
     O.vnode = F, O.next = null, pd(O, F.props, le, ee), wd(O, F.children, ee), Ss(), dl(O), Is();
-  }, L = (O, F, ee, le, ve, pe, Se, Ie, ae = !1) => {
+  }, L = (O, F, ee, le, ve, pe, Ie, Ee, ae = !1) => {
     const me = O && O.children, Ue = O ? O.shapeFlag : 0, Te = F.children, { patchFlag: Z, shapeFlag: q } = F;
     if (Z > 0) {
       if (Z & 128) {
@@ -3252,8 +3252,8 @@ function bd(e, s) {
           le,
           ve,
           pe,
-          Se,
           Ie,
+          Ee,
           ae
         );
         return;
@@ -3265,8 +3265,8 @@ function bd(e, s) {
           le,
           ve,
           pe,
-          Se,
           Ie,
+          Ee,
           ae
         );
         return;
@@ -3279,8 +3279,8 @@ function bd(e, s) {
       le,
       ve,
       pe,
-      Se,
       Ie,
+      Ee,
       ae
     ) : he(me, ve, pe, !0) : (Ue & 8 && v(ee, ""), q & 16 && I(
       Te,
@@ -3288,11 +3288,11 @@ function bd(e, s) {
       le,
       ve,
       pe,
-      Se,
       Ie,
+      Ee,
       ae
     ));
-  }, oe = (O, F, ee, le, ve, pe, Se, Ie, ae) => {
+  }, oe = (O, F, ee, le, ve, pe, Ie, Ee, ae) => {
     O = O || fo, F = F || fo;
     const me = O.length, Ue = F.length, Te = Math.min(me, Ue);
     let Z;
@@ -3305,8 +3305,8 @@ function bd(e, s) {
         null,
         ve,
         pe,
-        Se,
         Ie,
+        Ee,
         ae
       );
     }
@@ -3323,12 +3323,12 @@ function bd(e, s) {
       le,
       ve,
       pe,
-      Se,
       Ie,
+      Ee,
       ae,
       Te
     );
-  }, ue = (O, F, ee, le, ve, pe, Se, Ie, ae) => {
+  }, ue = (O, F, ee, le, ve, pe, Ie, Ee, ae) => {
     let me = 0;
     const Ue = F.length;
     let Te = O.length - 1, Z = Ue - 1;
@@ -3342,8 +3342,8 @@ function bd(e, s) {
           null,
           ve,
           pe,
-          Se,
           Ie,
+          Ee,
           ae
         );
       else
@@ -3360,8 +3360,8 @@ function bd(e, s) {
           null,
           ve,
           pe,
-          Se,
           Ie,
+          Ee,
           ae
         );
       else
@@ -3379,8 +3379,8 @@ function bd(e, s) {
             Ae,
             ve,
             pe,
-            Se,
             Ie,
+            Ee,
             ae
           ), me++;
       }
@@ -3420,8 +3420,8 @@ function bd(e, s) {
           null,
           ve,
           pe,
-          Se,
           Ie,
+          Ee,
           ae
         ), B++);
       }
@@ -3438,14 +3438,14 @@ function bd(e, s) {
           zt,
           ve,
           pe,
-          Se,
           Ie,
+          Ee,
           ae
         ) : ce && (be < 0 || me !== mt[be] ? De(dt, ee, zt, 2) : be--);
       }
     }
   }, De = (O, F, ee, le, ve = null) => {
-    const { el: pe, type: Se, transition: Ie, children: ae, shapeFlag: me } = O;
+    const { el: pe, type: Ie, transition: Ee, children: ae, shapeFlag: me } = O;
     if (me & 6) {
       De(O.component.subTree, F, ee, le);
       return;
@@ -3455,25 +3455,25 @@ function bd(e, s) {
       return;
     }
     if (me & 64) {
-      Se.move(O, F, ee, Me);
+      Ie.move(O, F, ee, Me);
       return;
     }
-    if (Se === j) {
+    if (Ie === j) {
       n(pe, F, ee);
       for (let Te = 0; Te < ae.length; Te++)
         De(ae[Te], F, ee, le);
       n(O.anchor, F, ee);
       return;
     }
-    if (Se === la) {
+    if (Ie === la) {
       E(O, F, ee);
       return;
     }
-    if (le !== 2 && me & 1 && Ie)
+    if (le !== 2 && me & 1 && Ee)
       if (le === 0)
-        Ie.beforeEnter(pe), n(pe, F, ee), St(() => Ie.enter(pe), ve);
+        Ee.beforeEnter(pe), n(pe, F, ee), St(() => Ee.enter(pe), ve);
       else {
-        const { leave: Te, delayLeave: Z, afterLeave: q } = Ie, Ae = () => {
+        const { leave: Te, delayLeave: Z, afterLeave: q } = Ee, Ae = () => {
           O.ctx.isUnmounted ? l(pe) : n(pe, F, ee);
         }, ke = () => {
           pe._isLeaving && pe[ks](
@@ -3490,8 +3490,8 @@ function bd(e, s) {
   }, Be = (O, F, ee, le = !1, ve = !1) => {
     const {
       type: pe,
-      props: Se,
-      ref: Ie,
+      props: Ie,
+      ref: Ee,
       children: ae,
       dynamicChildren: me,
       shapeFlag: Ue,
@@ -3499,13 +3499,13 @@ function bd(e, s) {
       dirs: Z,
       cacheIndex: q
     } = O;
-    if (Te === -2 && (ve = !1), Ie != null && (Ss(), Bo(Ie, null, ee, O, !0), Is()), q != null && (F.renderCache[q] = void 0), Ue & 256) {
+    if (Te === -2 && (ve = !1), Ee != null && (Ss(), Bo(Ee, null, ee, O, !0), Is()), q != null && (F.renderCache[q] = void 0), Ue & 256) {
       F.ctx.deactivate(O);
       return;
     }
     const Ae = Ue & 1 && Z, ke = !po(O);
     let be;
-    if (ke && (be = Se && Se.onVnodeBeforeUnmount) && ds(be, F, O), Ue & 6)
+    if (ke && (be = Ie && Ie.onVnodeBeforeUnmount) && ds(be, F, O), Ue & 6)
       we(O.component, ee, le);
     else {
       if (Ue & 128) {
@@ -3532,13 +3532,13 @@ function bd(e, s) {
         !0
       ) : (pe === j && Te & 384 || !ve && Ue & 16) && he(ae, F, ee), le && re(O);
     }
-    (ke && (be = Se && Se.onVnodeUnmounted) || Ae) && St(() => {
+    (ke && (be = Ie && Ie.onVnodeUnmounted) || Ae) && St(() => {
       be && ds(be, F, O), Ae && Hs(O, null, F, "unmounted");
     }, ee);
   }, re = (O) => {
     const { type: F, el: ee, anchor: le, transition: ve } = O;
     if (F === j) {
-      Ee(ee, le);
+      Se(ee, le);
       return;
     }
     if (F === la) {
@@ -3549,23 +3549,23 @@ function bd(e, s) {
       l(ee), ve && !ve.persisted && ve.afterLeave && ve.afterLeave();
     };
     if (O.shapeFlag & 1 && ve && !ve.persisted) {
-      const { leave: Se, delayLeave: Ie } = ve, ae = () => Se(ee, pe);
-      Ie ? Ie(O.el, pe, ae) : ae();
+      const { leave: Ie, delayLeave: Ee } = ve, ae = () => Ie(ee, pe);
+      Ee ? Ee(O.el, pe, ae) : ae();
     } else
       pe();
-  }, Ee = (O, F) => {
+  }, Se = (O, F) => {
     let ee;
     for (; O !== F; )
       ee = w(O), l(O), O = ee;
     l(F);
   }, we = (O, F, ee) => {
-    const { bum: le, scope: ve, job: pe, subTree: Se, um: Ie, m: ae, a: me } = O;
-    Cl(ae), Cl(me), le && yn(le), ve.stop(), pe && (pe.flags |= 8, Be(Se, O, F, ee)), Ie && St(Ie, F), St(() => {
+    const { bum: le, scope: ve, job: pe, subTree: Ie, um: Ee, m: ae, a: me } = O;
+    Cl(ae), Cl(me), le && yn(le), ve.stop(), pe && (pe.flags |= 8, Be(Ie, O, F, ee)), Ee && St(Ee, F), St(() => {
       O.isUnmounted = !0;
     }, F);
   }, he = (O, F, ee, le = !1, ve = !1, pe = 0) => {
-    for (let Se = pe; Se < O.length; Se++)
-      Be(O[Se], F, ee, le, ve);
+    for (let Ie = pe; Ie < O.length; Ie++)
+      Be(O[Ie], F, ee, le, ve);
   }, $e = (O) => {
     if (O.shapeFlag & 6)
       return $e(O.component.subTree);
@@ -7076,7 +7076,7 @@ function at() {
       };
     }
   }
-  async function Ee(Y, xe) {
+  async function Se(Y, xe) {
     const Fe = xe ? `/v2/comfygit/config?workspace_path=${encodeURIComponent(xe)}` : "/v2/comfygit/config";
     return o(Fe, {
       method: "POST",
@@ -7178,14 +7178,14 @@ function at() {
       method: "DELETE"
     });
   }
-  async function Se() {
+  async function Ie() {
     try {
       return o("/v2/comfygit/remotes");
     } catch {
       return { remotes: [] };
     }
   }
-  async function Ie(Y, xe) {
+  async function Ee(Y, xe) {
     return o("/v2/comfygit/remotes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -7527,7 +7527,7 @@ function at() {
     setModelsDirectory: Be,
     // Settings
     getConfig: re,
-    updateConfig: Ee,
+    updateConfig: Se,
     // Debug/Logs
     getEnvironmentLogs: we,
     getWorkspaceLogs: he,
@@ -7544,8 +7544,8 @@ function at() {
     updateNode: ve,
     uninstallNode: pe,
     // Git Remotes
-    getRemotes: Se,
-    addRemote: Ie,
+    getRemotes: Ie,
+    addRemote: Ee,
     removeRemote: ae,
     updateRemoteUrl: me,
     fetchRemote: Ue,
@@ -9152,7 +9152,7 @@ const bp = { class: "resolution-stepper" }, kp = { class: "stepper-header" }, $p
     function re(he) {
       $.value && (n("manual-entry", $.value.node_type, he.package_id), L(), _t(() => ne()));
     }
-    function Ee(he) {
+    function Se(he) {
       $.value && (n("manual-entry", $.value.node_type, he.package_id), _t(() => ne()));
     }
     function we() {
@@ -9221,7 +9221,7 @@ const bp = { class: "resolution-stepper" }, kp = { class: "stepper-header" }, $p
               onSearch: A,
               onOptionSelected: te,
               onClearChoice: Q,
-              onSearchResultSelected: Ee
+              onSearchResultSelected: Se
             }, null, 8, ["node-type", "has-multiple-options", "options", "choice", "status", "status-label", "search-results", "is-searching"])
           ])) : y("", !0)
         ], 64)) : y("", !0),
@@ -9728,7 +9728,7 @@ const bp = { class: "resolution-stepper" }, kp = { class: "stepper-header" }, $p
                   (a(!0), r(j, null, _e(w.value, (re) => (a(), r("div", {
                     key: re.hash,
                     class: "model-search-result-item",
-                    onClick: (Ee) => Q()
+                    onClick: (Se) => Q()
                   }, [
                     t("div", Ph, [
                       t("code", Rh, f(re.filename), 1)
@@ -10164,7 +10164,7 @@ const bp = { class: "resolution-stepper" }, kp = { class: "stepper-header" }, $p
     function re(B, U = 50) {
       return B.length <= U ? B : B.slice(0, U - 3) + "...";
     }
-    const Ee = N(() => {
+    const Se = N(() => {
       let B = H.value.length;
       for (const U of D.value.values())
         U.action === "install" && B++;
@@ -10260,10 +10260,10 @@ const bp = { class: "resolution-stepper" }, kp = { class: "stepper-header" }, $p
         package_id: U
       });
     }
-    function Se(B) {
+    function Ie(B) {
       D.value.delete(B);
     }
-    function Ie(B) {
+    function Ee(B) {
       x.value.has(B) ? x.value.delete(B) : x.value.add(B);
     }
     function ae(B) {
@@ -10474,8 +10474,8 @@ const bp = { class: "resolution-stepper" }, kp = { class: "stepper-header" }, $p
             onSkip: le,
             onOptionSelected: ve,
             onManualEntry: pe,
-            onClearChoice: Se,
-            onPackageSkip: Ie
+            onClearChoice: Ie,
+            onPackageSkip: Ee
           }, null, 8, ["nodes", "node-choices", "auto-resolved-packages", "skipped-packages"])) : y("", !0),
           $.value === "models" ? (a(), R(Gh, {
             key: 2,
@@ -10495,7 +10495,7 @@ const bp = { class: "resolution-stepper" }, kp = { class: "stepper-header" }, $p
               ], -1)),
               t("div", f1, [
                 t("div", m1, [
-                  t("span", v1, f(Ee.value), 1),
+                  t("span", v1, f(Se.value), 1),
                   U[32] || (U[32] = t("span", { class: "stat-label" }, "to install", -1))
                 ]),
                 t("div", p1, [
@@ -13884,7 +13884,7 @@ const c_ = { class: "remote-url-display" }, d_ = ["title"], u_ = ["title"], f_ =
       () => L.value === "resolving" || L.value === "validating"
     ), De = N(
       () => L.value === "validation_review" || L.value === "executing"
-    ), Be = k(!1), re = k(null), Ee = k(!1), we = k(null), he = k(!1), $e = k(null), fe = k(null), de = k(/* @__PURE__ */ new Map()), Me = k(null), Re = k(null), O = N(() => $e.value && Cr($e.value) ? $e.value : null);
+    ), Be = k(!1), re = k(null), Se = k(!1), we = k(null), he = k(!1), $e = k(null), fe = k(null), de = k(/* @__PURE__ */ new Map()), Me = k(null), Re = k(null), O = N(() => $e.value && Cr($e.value) ? $e.value : null);
     async function F(be) {
       we.value = be, L.value = "pull_preview", he.value = !0, $e.value = null, fe.value = null;
       try {
@@ -13919,10 +13919,10 @@ const c_ = { class: "remote-url-display" }, d_ = ["title"], u_ = ["title"], f_ =
     function pe(be, B) {
       de.value.set(be, { name: be, resolution: B });
     }
-    function Se() {
+    function Ie() {
       L.value = "pull_preview";
     }
-    async function Ie() {
+    async function Ee() {
       L.value = "validating", Re.value = null;
       try {
         const be = Array.from(de.value.values());
@@ -13973,14 +13973,14 @@ const c_ = { class: "remote-url-display" }, d_ = ["title"], u_ = ["title"], f_ =
     }
     async function Ae(be) {
       if (!we.value) return;
-      Ee.value = !0;
+      Se.value = !0;
       const B = we.value;
       try {
         await w(B, be), q(), o("toast", `✓ Pushed to ${B}`, "success"), await M();
       } catch (U) {
         o("toast", U instanceof Error ? U.message : "Push failed", "error");
       } finally {
-        Ee.value = !1;
+        Se.value = !1;
       }
     }
     function ke() {
@@ -14133,7 +14133,7 @@ const c_ = { class: "remote-url-display" }, d_ = ["title"], u_ = ["title"], f_ =
         "remote-name": we.value || "",
         preview: re.value,
         loading: he.value,
-        pushing: Ee.value,
+        pushing: Se.value,
         onClose: q,
         onPush: Ae,
         onPullFirst: ke
@@ -14145,9 +14145,9 @@ const c_ = { class: "remote-url-display" }, d_ = ["title"], u_ = ["title"], f_ =
         "operation-type": "pull",
         validating: L.value === "validating",
         error: Re.value,
-        onClose: Se,
+        onClose: Ie,
         onResolve: pe,
-        onApply: Ie
+        onApply: Ee
       }, null, 8, ["workflow-conflicts", "resolutions", "validating", "error"])) : y("", !0),
       De.value && Me.value ? (a(), R(Gk, {
         key: 1,
@@ -16584,11 +16584,11 @@ const c_ = { class: "remote-url-display" }, d_ = ["title"], u_ = ["title"], f_ =
   },
   emits: ["import-complete", "import-started", "source-cleared"],
   setup(e, { expose: s, emit: o }) {
-    var Ee, we, he, $e;
+    var Se, we, he, $e;
     const n = e, l = o, { previewTarballImport: i, previewGitImport: c, validateEnvironmentName: d, executeImport: u, executeGitImport: m, getImportProgress: v } = at();
     let g = null;
     const w = k(null), p = k(n.resumeImport ?? !1), _ = k(!1), S = k(!1), $ = k(""), P = k(!1), D = k(null), E = k(""), x = k(null), W = k(!1), V = k(null), z = k(null), I = k({
-      name: ((Ee = n.initialProgress) == null ? void 0 : Ee.environmentName) ?? "",
+      name: ((Se = n.initialProgress) == null ? void 0 : Se.environmentName) ?? "",
       modelStrategy: "required",
       torchBackend: "auto",
       switchAfterImport: !0
@@ -17465,16 +17465,16 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
 }, Z5 = {
   key: 1,
   class: "spec-row spot-warning"
-}, e8 = {
+}, eS = {
   key: 4,
   class: "deploy-actions"
-}, t8 = { class: "progress-content" }, s8 = { class: "phase-indicator" }, o8 = { key: 0 }, n8 = { key: 1 }, a8 = { key: 2 }, l8 = {
+}, tS = { class: "progress-content" }, sS = { class: "phase-indicator" }, oS = { key: 0 }, nS = { key: 1 }, aS = { key: 2 }, lS = {
   key: 3,
   class: "spinner"
-}, i8 = { class: "phase-text" }, r8 = { class: "phase-name" }, c8 = { class: "phase-detail" }, d8 = {
+}, iS = { class: "phase-text" }, rS = { class: "phase-name" }, cS = { class: "phase-detail" }, dS = {
   key: 0,
   class: "ready-actions"
-}, u8 = { class: "console-link" }, f8 = ["href"], m8 = /* @__PURE__ */ ge({
+}, uS = { class: "console-link" }, fS = ["href"], mS = /* @__PURE__ */ ge({
   __name: "RunPodTab",
   emits: ["toast", "navigate", "deployed"],
   setup(e, { emit: s }) {
@@ -17493,7 +17493,7 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
       fetchRemote: _,
       pushToRemote: S,
       getDataCenters: $
-    } = at(), P = k(!1), D = k(""), E = k(!1), x = k(!1), W = k(null), V = k(null), z = k(""), I = k(""), T = k(""), M = k("SECURE"), ne = k("ON_DEMAND"), J = k("my-comfyui-deploy"), G = k([]), te = k({}), Q = k(!1), A = k(null), H = k(null), L = k(null), oe = k([]), ue = k(!1), De = k([]), Be = k(!1), re = k([]), Ee = k(!1), we = k(null), he = k(!1), $e = k(!1), fe = k(null), de = k(!1), Me = k(null), Re = k(null), O = k(null), F = k(!1), ee = k(null), le = k(!1), ve = k(!1), pe = N(() => De.value.find((Ce) => Ce.id === I.value) || null), Se = N(() => z.value ? De.value.filter((Ce) => Ce.data_center_id === z.value) : De.value), Ie = N(() => re.value.filter((Ce) => Ce.available)), ae = N(() => A.value && te.value[A.value] || null), me = N(() => {
+    } = at(), P = k(!1), D = k(""), E = k(!1), x = k(!1), W = k(null), V = k(null), z = k(""), I = k(""), T = k(""), M = k("SECURE"), ne = k("ON_DEMAND"), J = k("my-comfyui-deploy"), G = k([]), te = k({}), Q = k(!1), A = k(null), H = k(null), L = k(null), oe = k([]), ue = k(!1), De = k([]), Be = k(!1), re = k([]), Se = k(!1), we = k(null), he = k(!1), $e = k(!1), fe = k(null), de = k(!1), Me = k(null), Re = k(null), O = k(null), F = k(!1), ee = k(null), le = k(!1), ve = k(!1), pe = N(() => De.value.find((Ce) => Ce.id === I.value) || null), Ie = N(() => z.value ? De.value.filter((Ce) => Ce.data_center_id === z.value) : De.value), Ee = N(() => re.value.filter((Ce) => Ce.available)), ae = N(() => A.value && te.value[A.value] || null), me = N(() => {
       if (!A.value) return null;
       const Ce = G.value.find((X) => X.name === A.value);
       return (Ce == null ? void 0 : Ce.fetch_url) || null;
@@ -17617,7 +17617,7 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
       }
     }
     async function Qe(Ce) {
-      Ee.value = !0;
+      Se.value = !0;
       try {
         const X = await c(Ce);
         re.value = X.gpu_types;
@@ -17626,7 +17626,7 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
       } catch {
         o("toast", "Failed to load GPU types", "error");
       } finally {
-        Ee.value = !1;
+        Se.value = !1;
       }
     }
     Ct(z, async (Ce) => {
@@ -17851,7 +17851,7 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
                 ]),
                 t("div", H3, [
                   X[24] || (X[24] = t("label", { class: "config-label" }, "Network Volume", -1)),
-                  Be.value ? (a(), r("div", K3, "Loading volumes...")) : Se.value.length === 0 ? (a(), r(j, { key: 1 }, [
+                  Be.value ? (a(), r("div", K3, "Loading volumes...")) : Ie.value.length === 0 ? (a(), r(j, { key: 1 }, [
                     t("div", q3, [
                       X[20] || (X[20] = t("span", { class: "no-volumes-icon" }, "⚠", -1)),
                       t("span", Y3, "No volumes in " + f(z.value || "this region"), 1)
@@ -17868,7 +17868,7 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
                       "onUpdate:modelValue": X[3] || (X[3] = (ze) => I.value = ze),
                       class: "config-select"
                     }, [
-                      (a(!0), r(j, null, _e(Se.value, (ze) => (a(), r("option", {
+                      (a(!0), r(j, null, _e(Ie.value, (ze) => (a(), r("option", {
                         key: ze.id,
                         value: ze.id
                       }, f(ze.name) + " (" + f(ze.size_gb) + "GB) ", 9, J3))), 128))
@@ -17888,10 +17888,10 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
                   Ye(t("select", {
                     "onUpdate:modelValue": X[4] || (X[4] = (ze) => T.value = ze),
                     class: "config-select",
-                    disabled: Ee.value || !I.value
+                    disabled: Se.value || !I.value
                   }, [
-                    I.value ? Ee.value ? (a(), r("option", e5, "Loading GPUs...")) : Ie.value.length === 0 ? (a(), r("option", t5, "No GPUs available in this region")) : y("", !0) : (a(), r("option", Z3, "Select a volume first")),
-                    (a(!0), r(j, null, _e(Ie.value, (ze) => (a(), r("option", {
+                    I.value ? Se.value ? (a(), r("option", e5, "Loading GPUs...")) : Ee.value.length === 0 ? (a(), r("option", t5, "No GPUs available in this region")) : y("", !0) : (a(), r("option", Z3, "Select a volume first")),
+                    (a(!0), r(j, null, _e(Ee.value, (ze) => (a(), r("option", {
                       key: ze.id,
                       value: ze.id
                     }, f(ze.displayName) + " (" + f(ze.memoryInGb) + "GB) - $" + f(M.value === "SECURE" ? (ze.securePrice ?? 0).toFixed(2) : (ze.communityPrice ?? 0).toFixed(2)) + "/hr " + f(ze.stockStatus ? `[${ze.stockStatus}]` : ""), 9, s5))), 128))
@@ -18129,7 +18129,7 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
             }),
             _: 1
           })) : y("", !0),
-          E.value ? (a(), r("div", e8, [
+          E.value ? (a(), r("div", eS, [
             C(ie, {
               variant: "primary",
               size: "md",
@@ -18209,23 +18209,23 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
           body: h(() => {
             var ze, is, se, K, Ne, He, ot, ft, Mt, rs, Gs, js;
             return [
-              t("div", t8, [
-                t("div", s8, [
+              t("div", tS, [
+                t("div", sS, [
                   t("div", {
                     class: Pe(["phase-icon", (is = (ze = Re.value) == null ? void 0 : ze.phase) == null ? void 0 : is.toLowerCase()])
                   }, [
-                    ((se = Re.value) == null ? void 0 : se.phase) === "READY" ? (a(), r("span", o8, "✓")) : ((K = Re.value) == null ? void 0 : K.phase) === "ERROR" ? (a(), r("span", n8, "✕")) : ((Ne = Re.value) == null ? void 0 : Ne.phase) === "STOPPED" ? (a(), r("span", a8, "○")) : (a(), r("span", l8, "⟳"))
+                    ((se = Re.value) == null ? void 0 : se.phase) === "READY" ? (a(), r("span", oS, "✓")) : ((K = Re.value) == null ? void 0 : K.phase) === "ERROR" ? (a(), r("span", nS, "✕")) : ((Ne = Re.value) == null ? void 0 : Ne.phase) === "STOPPED" ? (a(), r("span", aS, "○")) : (a(), r("span", lS, "⟳"))
                   ], 2),
-                  t("div", i8, [
-                    t("div", r8, f(xo((He = Re.value) == null ? void 0 : He.phase)), 1),
-                    t("div", c8, f(((ot = Re.value) == null ? void 0 : ot.phase_detail) || "Starting..."), 1)
+                  t("div", iS, [
+                    t("div", rS, f(xo((He = Re.value) == null ? void 0 : He.phase)), 1),
+                    t("div", cS, f(((ot = Re.value) == null ? void 0 : ot.phase_detail) || "Starting..."), 1)
                   ])
                 ]),
                 C(Xn, {
                   progress: So((ft = Re.value) == null ? void 0 : ft.phase),
                   variant: ((Mt = Re.value) == null ? void 0 : Mt.phase) === "ERROR" ? "error" : ((rs = Re.value) == null ? void 0 : rs.phase) === "READY" ? "success" : "default"
                 }, null, 8, ["progress", "variant"]),
-                ((Gs = Re.value) == null ? void 0 : Gs.phase) === "READY" ? (a(), r("div", d8, [
+                ((Gs = Re.value) == null ? void 0 : Gs.phase) === "READY" ? (a(), r("div", dS, [
                   C(ie, {
                     variant: "primary",
                     size: "md",
@@ -18237,13 +18237,13 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
                     _: 1
                   })
                 ])) : y("", !0),
-                t("div", u8, [
+                t("div", uS, [
                   (js = Re.value) != null && js.console_url ? (a(), r("a", {
                     key: 0,
                     href: Re.value.console_url,
                     target: "_blank",
                     rel: "noopener"
-                  }, " View in RunPod Console → ", 8, f8)) : y("", !0)
+                  }, " View in RunPod Console → ", 8, fS)) : y("", !0)
                 ])
               ])
             ];
@@ -18282,22 +18282,22 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
       ], 64);
     };
   }
-}), v8 = /* @__PURE__ */ ye(m8, [["__scopeId", "data-v-522cd4d9"]]), p8 = { class: "worker-header" }, g8 = { class: "worker-status" }, h8 = { class: "worker-name" }, y8 = { class: "worker-actions" }, w8 = { class: "worker-details" }, _8 = { class: "detail-item" }, b8 = { class: "detail-value" }, k8 = {
+}), vS = /* @__PURE__ */ ye(mS, [["__scopeId", "data-v-522cd4d9"]]), pS = { class: "worker-header" }, gS = { class: "worker-status" }, hS = { class: "worker-name" }, yS = { class: "worker-actions" }, wS = { class: "worker-details" }, _S = { class: "detail-item" }, bS = { class: "detail-value" }, kS = {
   key: 0,
   class: "detail-item"
-}, $8 = { class: "detail-value" }, C8 = {
+}, $S = { class: "detail-value" }, CS = {
   key: 1,
   class: "detail-item"
-}, x8 = { class: "detail-value mode-badge" }, S8 = {
+}, xS = { class: "detail-value mode-badge" }, SS = {
   key: 0,
   class: "worker-stats"
-}, I8 = {
+}, IS = {
   key: 0,
   class: "stat-item"
-}, E8 = { key: 0 }, T8 = {
+}, ES = { key: 0 }, TS = {
   key: 1,
   class: "worker-stats offline"
-}, P8 = /* @__PURE__ */ ge({
+}, PS = /* @__PURE__ */ ge({
   __name: "WorkerCard",
   props: {
     worker: {},
@@ -18308,14 +18308,14 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
     return (s, o) => (a(), r("div", {
       class: Pe(["worker-card", { offline: e.worker.status === "offline" }])
     }, [
-      t("div", p8, [
-        t("div", g8, [
+      t("div", pS, [
+        t("div", gS, [
           t("span", {
             class: Pe(["status-dot", e.worker.status])
           }, null, 2),
-          t("span", h8, f(e.worker.name), 1)
+          t("span", hS, f(e.worker.name), 1)
         ]),
-        t("div", y8, [
+        t("div", yS, [
           e.worker.status === "online" ? (a(), R(ie, {
             key: 0,
             variant: "primary",
@@ -18341,29 +18341,29 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
           }, 8, ["loading"])
         ])
       ]),
-      t("div", w8, [
-        t("span", _8, [
-          t("span", b8, f(e.worker.host) + ":" + f(e.worker.port), 1)
+      t("div", wS, [
+        t("span", _S, [
+          t("span", bS, f(e.worker.host) + ":" + f(e.worker.port), 1)
         ]),
-        e.worker.gpu_info ? (a(), r("span", k8, [
+        e.worker.gpu_info ? (a(), r("span", kS, [
           o[4] || (o[4] = t("span", { class: "detail-label" }, "•", -1)),
-          t("span", $8, f(e.worker.gpu_info), 1)
+          t("span", $S, f(e.worker.gpu_info), 1)
         ])) : y("", !0),
-        e.worker.mode ? (a(), r("span", C8, [
+        e.worker.mode ? (a(), r("span", CS, [
           o[5] || (o[5] = t("span", { class: "detail-label" }, "•", -1)),
-          t("span", x8, f(e.worker.mode), 1)
+          t("span", xS, f(e.worker.mode), 1)
         ])) : y("", !0)
       ]),
-      e.worker.status === "online" ? (a(), r("div", S8, [
+      e.worker.status === "online" ? (a(), r("div", SS, [
         o[6] || (o[6] = t("span", { class: "stat-item" }, [
           b(" Status: "),
           t("span", { class: "stat-value online" }, "Online")
         ], -1)),
-        e.worker.instance_count !== void 0 ? (a(), r("span", I8, [
+        e.worker.instance_count !== void 0 ? (a(), r("span", IS, [
           b(" • " + f(e.worker.instance_count) + " instance" + f(e.worker.instance_count !== 1 ? "s" : "") + " ", 1),
-          e.worker.running_count ? (a(), r("span", E8, "(" + f(e.worker.running_count) + " running)", 1)) : y("", !0)
+          e.worker.running_count ? (a(), r("span", ES, "(" + f(e.worker.running_count) + " running)", 1)) : y("", !0)
         ])) : y("", !0)
-      ])) : (a(), r("div", T8, [...o[7] || (o[7] = [
+      ])) : (a(), r("div", TS, [...o[7] || (o[7] = [
         t("span", { class: "stat-item" }, [
           b(" Status: "),
           t("span", { class: "stat-value offline" }, "Offline")
@@ -18371,10 +18371,10 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
       ])]))
     ], 2));
   }
-}), R8 = /* @__PURE__ */ ye(P8, [["__scopeId", "data-v-b1be7134"]]), M8 = { class: "add-worker-content" }, D8 = { class: "manual-form" }, L8 = { class: "form-row" }, O8 = { class: "form-row-inline" }, A8 = { class: "form-field flex-2" }, N8 = { class: "form-field flex-1" }, U8 = { class: "form-row" }, z8 = { class: "api-key-wrapper" }, F8 = ["type"], B8 = { class: "result-icon" }, V8 = { class: "result-content" }, W8 = { class: "result-message" }, G8 = {
+}), RS = /* @__PURE__ */ ye(PS, [["__scopeId", "data-v-b1be7134"]]), MS = { class: "add-worker-content" }, DS = { class: "manual-form" }, LS = { class: "form-row" }, OS = { class: "form-row-inline" }, AS = { class: "form-field flex-2" }, NS = { class: "form-field flex-1" }, US = { class: "form-row" }, zS = { class: "api-key-wrapper" }, FS = ["type"], BS = { class: "result-icon" }, VS = { class: "result-content" }, WS = { class: "result-message" }, GS = {
   key: 0,
   class: "result-detail"
-}, j8 = { class: "modal-actions" }, H8 = /* @__PURE__ */ ge({
+}, jS = { class: "modal-actions" }, HS = /* @__PURE__ */ ge({
   __name: "AddWorkerModal",
   emits: ["close", "add"],
   setup(e, { emit: s }) {
@@ -18425,9 +18425,9 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
       onClose: _[5] || (_[5] = (S) => p.$emit("close"))
     }, {
       body: h(() => [
-        t("div", M8, [
-          t("div", D8, [
-            t("div", L8, [
+        t("div", MS, [
+          t("div", DS, [
+            t("div", LS, [
               _[6] || (_[6] = t("label", { class: "form-label" }, "Worker Name", -1)),
               Ye(t("input", {
                 "onUpdate:modelValue": _[0] || (_[0] = (S) => l.name = S),
@@ -18438,8 +18438,8 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
                 [Ut, l.name]
               ])
             ]),
-            t("div", O8, [
-              t("div", A8, [
+            t("div", OS, [
+              t("div", AS, [
                 _[7] || (_[7] = t("label", { class: "form-label" }, "Host", -1)),
                 Ye(t("input", {
                   "onUpdate:modelValue": _[1] || (_[1] = (S) => l.host = S),
@@ -18450,7 +18450,7 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
                   [Ut, l.host]
                 ])
               ]),
-              t("div", N8, [
+              t("div", NS, [
                 _[8] || (_[8] = t("label", { class: "form-label" }, "Port", -1)),
                 Ye(t("input", {
                   "onUpdate:modelValue": _[2] || (_[2] = (S) => l.port = S),
@@ -18467,15 +18467,15 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
                 ])
               ])
             ]),
-            t("div", U8, [
+            t("div", US, [
               _[9] || (_[9] = t("label", { class: "form-label" }, "API Key", -1)),
-              t("div", z8, [
+              t("div", zS, [
                 Ye(t("input", {
                   "onUpdate:modelValue": _[3] || (_[3] = (S) => l.apiKey = S),
                   type: i.value ? "text" : "password",
                   class: "form-input",
                   placeholder: "cg_wk_*********************************"
-                }, null, 8, F8), [
+                }, null, 8, FS), [
                   [Yn, l.apiKey]
                 ]),
                 t("button", {
@@ -18495,17 +18495,17 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
               key: 0,
               class: Pe(["test-result", u.value.type])
             }, [
-              t("span", B8, f(u.value.type === "success" ? "✓" : "✕"), 1),
-              t("div", V8, [
-                t("span", W8, f(u.value.message), 1),
-                u.value.gpu_info ? (a(), r("span", G8, "GPU: " + f(u.value.gpu_info), 1)) : y("", !0)
+              t("span", BS, f(u.value.type === "success" ? "✓" : "✕"), 1),
+              t("div", VS, [
+                t("span", WS, f(u.value.message), 1),
+                u.value.gpu_info ? (a(), r("span", GS, "GPU: " + f(u.value.gpu_info), 1)) : y("", !0)
               ])
             ], 2)) : y("", !0)
           ])
         ])
       ]),
       footer: h(() => [
-        t("div", j8, [
+        t("div", jS, [
           C(ie, {
             variant: "ghost",
             size: "sm",
@@ -18535,19 +18535,19 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
       _: 1
     }));
   }
-}), K8 = /* @__PURE__ */ ye(H8, [["__scopeId", "data-v-07a00732"]]), q8 = { class: "discovered-content" }, Y8 = {
+}), KS = /* @__PURE__ */ ye(HS, [["__scopeId", "data-v-07a00732"]]), qS = { class: "discovered-content" }, YS = {
   key: 0,
   class: "workers-list"
-}, J8 = { class: "worker-info" }, X8 = { class: "worker-name" }, Q8 = { class: "worker-address" }, Z8 = {
+}, JS = { class: "worker-info" }, XS = { class: "worker-name" }, QS = { class: "worker-address" }, ZS = {
   key: 0,
   class: "worker-gpu"
-}, eS = {
+}, e8 = {
   key: 1,
   class: "empty-state"
-}, tS = {
+}, t8 = {
   key: 2,
   class: "api-key-section"
-}, sS = { class: "selected-worker" }, oS = { class: "selected-name" }, nS = { class: "selected-address" }, aS = { class: "form-row" }, lS = { class: "api-key-wrapper" }, iS = ["type"], rS = { class: "result-icon" }, cS = { class: "result-message" }, dS = { class: "modal-actions" }, uS = /* @__PURE__ */ ge({
+}, s8 = { class: "selected-worker" }, o8 = { class: "selected-name" }, n8 = { class: "selected-address" }, a8 = { class: "form-row" }, l8 = { class: "api-key-wrapper" }, i8 = ["type"], r8 = { class: "result-icon" }, c8 = { class: "result-message" }, d8 = { class: "modal-actions" }, u8 = /* @__PURE__ */ ge({
   __name: "DiscoveredWorkersModal",
   props: {
     workers: {}
@@ -18593,16 +18593,16 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
       onClose: p[3] || (p[3] = (_) => w.$emit("close"))
     }, {
       body: h(() => [
-        t("div", q8, [
-          e.workers.length > 0 ? (a(), r("div", Y8, [
+        t("div", qS, [
+          e.workers.length > 0 ? (a(), r("div", YS, [
             (a(!0), r(j, null, _e(e.workers, (_) => (a(), r("div", {
               key: `${_.host}:${_.port}`,
               class: "worker-item"
             }, [
-              t("div", J8, [
-                t("span", X8, f(_.name), 1),
-                t("span", Q8, f(_.host) + ":" + f(_.port), 1),
-                _.gpu_info ? (a(), r("span", Z8, f(_.gpu_info), 1)) : y("", !0)
+              t("div", JS, [
+                t("span", XS, f(_.name), 1),
+                t("span", QS, f(_.host) + ":" + f(_.port), 1),
+                _.gpu_info ? (a(), r("span", ZS, f(_.gpu_info), 1)) : y("", !0)
               ]),
               C(ie, {
                 variant: "primary",
@@ -18615,7 +18615,7 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
                 _: 1
               }, 8, ["onClick"])
             ]))), 128))
-          ])) : (a(), r("div", eS, [...p[5] || (p[5] = [
+          ])) : (a(), r("div", e8, [...p[5] || (p[5] = [
             t("span", { class: "empty-icon" }, "📡", -1),
             t("span", { class: "empty-text" }, "No workers found on the network", -1),
             t("span", { class: "empty-help" }, [
@@ -18623,15 +18623,15 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
               t("code", null, "--broadcast")
             ], -1)
           ])])),
-          l.value ? (a(), r("div", tS, [
-            t("div", sS, [
+          l.value ? (a(), r("div", t8, [
+            t("div", s8, [
               p[6] || (p[6] = t("span", { class: "selected-label" }, "Adding:", -1)),
-              t("span", oS, f(l.value.name), 1),
-              t("span", nS, "(" + f(l.value.host) + ":" + f(l.value.port) + ")", 1)
+              t("span", o8, f(l.value.name), 1),
+              t("span", n8, "(" + f(l.value.host) + ":" + f(l.value.port) + ")", 1)
             ]),
-            t("div", aS, [
+            t("div", a8, [
               p[7] || (p[7] = t("label", { class: "form-label" }, "API Key", -1)),
-              t("div", lS, [
+              t("div", l8, [
                 Ye(t("input", {
                   ref_key: "apiKeyInput",
                   ref: u,
@@ -18640,7 +18640,7 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
                   class: "form-input",
                   placeholder: "cg_wk_*********************************",
                   onKeyup: Zt(g, ["enter"])
-                }, null, 40, iS), [
+                }, null, 40, i8), [
                   [Yn, i.value]
                 ]),
                 t("button", {
@@ -18660,14 +18660,14 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
               key: 0,
               class: Pe(["test-result", m.value.type])
             }, [
-              t("span", rS, f(m.value.type === "success" ? "✓" : "✕"), 1),
-              t("span", cS, f(m.value.message), 1)
+              t("span", r8, f(m.value.type === "success" ? "✓" : "✕"), 1),
+              t("span", c8, f(m.value.message), 1)
             ], 2)) : y("", !0)
           ])) : y("", !0)
         ])
       ]),
       footer: h(() => [
-        t("div", dS, [
+        t("div", d8, [
           l.value ? (a(), R(ie, {
             key: 0,
             variant: "ghost",
@@ -18699,22 +18699,22 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
       _: 1
     }));
   }
-}), fS = /* @__PURE__ */ ye(uS, [["__scopeId", "data-v-5a3e40a4"]]), mS = { class: "deploy-content" }, vS = { class: "section" }, pS = {
+}), f8 = /* @__PURE__ */ ye(u8, [["__scopeId", "data-v-5a3e40a4"]]), m8 = { class: "deploy-content" }, v8 = { class: "section" }, p8 = {
   key: 0,
   class: "loading-text"
-}, gS = {
+}, g8 = {
   key: 1,
   class: "empty-remotes"
-}, hS = {
+}, h8 = {
   key: 2,
   class: "remotes-list"
-}, yS = { class: "section" }, wS = { class: "mode-options" }, _S = { class: "mode-option" }, bS = ["disabled"], kS = { class: "mode-option" }, $S = { class: "section" }, CS = {
+}, y8 = { class: "section" }, w8 = { class: "mode-options" }, _8 = { class: "mode-option" }, b8 = ["disabled"], k8 = { class: "mode-option" }, $8 = { class: "section" }, C8 = {
   key: 0,
   class: "section"
-}, xS = { class: "summary-row" }, SS = {
+}, x8 = { class: "summary-row" }, S8 = {
   key: 1,
   class: "sync-warning"
-}, IS = { class: "warning-content" }, ES = { class: "modal-actions" }, TS = /* @__PURE__ */ ge({
+}, I8 = { class: "warning-content" }, E8 = { class: "modal-actions" }, T8 = /* @__PURE__ */ ge({
   __name: "DeployToWorkerModal",
   props: {
     worker: {}
@@ -18809,14 +18809,14 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
       onClose: te[5] || (te[5] = (Q) => G.$emit("close"))
     }, {
       body: h(() => [
-        t("div", mS, [
-          t("div", vS, [
+        t("div", m8, [
+          t("div", v8, [
             te[7] || (te[7] = t("div", { class: "section-label" }, "DEPLOY SOURCE", -1)),
-            w.value ? (a(), r("div", pS, "Loading remotes...")) : v.value.length === 0 ? (a(), r("div", gS, [...te[6] || (te[6] = [
+            w.value ? (a(), r("div", p8, "Loading remotes...")) : v.value.length === 0 ? (a(), r("div", g8, [...te[6] || (te[6] = [
               t("span", { class: "empty-icon" }, "🌐", -1),
               t("span", { class: "empty-text" }, "No Git remotes configured", -1),
               t("p", { class: "empty-help" }, "Configure a remote repository to deploy.", -1)
-            ])])) : (a(), r("div", hS, [
+            ])])) : (a(), r("div", h8, [
               (a(!0), r(j, null, _e(v.value, (Q) => (a(), R(Or, {
                 key: Q.name,
                 remote: Q,
@@ -18830,21 +18830,21 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
               }, null, 8, ["remote", "sync-status", "is-selected", "is-fetching", "is-pushing"]))), 128))
             ]))
           ]),
-          t("div", yS, [
+          t("div", y8, [
             te[10] || (te[10] = t("div", { class: "section-label" }, "INSTANCE MODE", -1)),
-            t("div", wS, [
-              t("label", _S, [
+            t("div", w8, [
+              t("label", _8, [
                 Ye(t("input", {
                   type: "radio",
                   "onUpdate:modelValue": te[0] || (te[0] = (Q) => $.value = Q),
                   value: "docker",
                   disabled: !e.worker.mode || e.worker.mode === "native"
-                }, null, 8, bS), [
+                }, null, 8, b8), [
                   [Xt, $.value]
                 ]),
                 te[8] || (te[8] = t("span", { class: "mode-label" }, "Docker (isolated container)", -1))
               ]),
-              t("label", kS, [
+              t("label", k8, [
                 Ye(t("input", {
                   type: "radio",
                   "onUpdate:modelValue": te[1] || (te[1] = (Q) => $.value = Q),
@@ -18856,7 +18856,7 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
               ])
             ])
           ]),
-          t("div", $S, [
+          t("div", $8, [
             te[11] || (te[11] = t("div", { class: "section-label" }, "INSTANCE NAME (optional)", -1)),
             Ye(t("input", {
               "onUpdate:modelValue": te[2] || (te[2] = (Q) => P.value = Q),
@@ -18867,13 +18867,13 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
               [Ut, P.value]
             ])
           ]),
-          D.value ? (a(), r("div", CS, [
+          D.value ? (a(), r("div", C8, [
             te[12] || (te[12] = t("div", { class: "section-label" }, "ENVIRONMENT SUMMARY", -1)),
-            t("div", xS, " ComfyUI: " + f(D.value.comfyui_version) + " • " + f(D.value.node_count) + " nodes • " + f(D.value.model_count) + " models • " + f(D.value.workflow_count) + " workflows ", 1)
+            t("div", x8, " ComfyUI: " + f(D.value.comfyui_version) + " • " + f(D.value.node_count) + " nodes • " + f(D.value.model_count) + " models • " + f(D.value.workflow_count) + " workflows ", 1)
           ])) : y("", !0),
-          x.value && x.value.ahead > 0 ? (a(), r("div", SS, [
+          x.value && x.value.ahead > 0 ? (a(), r("div", S8, [
             te[14] || (te[14] = t("span", { class: "warning-icon" }, "⚠", -1)),
-            t("div", IS, [
+            t("div", I8, [
               t("strong", null, f(x.value.ahead) + " unpushed commit" + f(x.value.ahead !== 1 ? "s" : ""), 1),
               t("p", null, "Push to '" + f(p.value) + "' before deploying to include your latest changes.", 1)
             ]),
@@ -18892,7 +18892,7 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
         ])
       ]),
       footer: h(() => [
-        t("div", ES, [
+        t("div", E8, [
           C(ie, {
             variant: "ghost",
             size: "sm",
@@ -18920,16 +18920,16 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
       _: 1
     }, 8, ["title"]));
   }
-}), PS = /* @__PURE__ */ ye(TS, [["__scopeId", "data-v-c12720d3"]]), RS = { class: "custom-tab" }, MS = { class: "section-header" }, DS = { class: "section-actions" }, LS = { class: "workers-content" }, OS = {
+}), P8 = /* @__PURE__ */ ye(T8, [["__scopeId", "data-v-c12720d3"]]), R8 = { class: "custom-tab" }, M8 = { class: "section-header" }, D8 = { class: "section-actions" }, L8 = { class: "workers-content" }, O8 = {
   key: 0,
   class: "loading-state"
-}, AS = {
+}, A8 = {
   key: 1,
   class: "empty-state"
-}, NS = {
+}, N8 = {
   key: 2,
   class: "workers-list"
-}, US = { class: "scan-icon" }, zS = { class: "scan-message" }, FS = /* @__PURE__ */ ge({
+}, U8 = { class: "scan-icon" }, z8 = { class: "scan-message" }, F8 = /* @__PURE__ */ ge({
   __name: "CustomTab",
   emits: ["toast", "deployed"],
   setup(e, { emit: s }) {
@@ -19001,10 +19001,10 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
     }
     return et(() => {
       $();
-    }), (z, I) => (a(), r("div", RS, [
-      t("div", MS, [
+    }), (z, I) => (a(), r("div", R8, [
+      t("div", M8, [
         I[8] || (I[8] = t("span", { class: "section-title" }, "CUSTOM WORKERS", -1)),
-        t("div", DS, [
+        t("div", D8, [
           C(ie, {
             variant: "ghost",
             size: "xs",
@@ -19029,11 +19029,11 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
           })
         ])
       ]),
-      t("div", LS, [
-        m.value && d.value.length === 0 ? (a(), r("div", OS, [...I[9] || (I[9] = [
+      t("div", L8, [
+        m.value && d.value.length === 0 ? (a(), r("div", O8, [...I[9] || (I[9] = [
           t("span", { class: "spinner" }, null, -1),
           b(" Loading workers... ", -1)
-        ])])) : d.value.length === 0 ? (a(), r("div", AS, [...I[10] || (I[10] = [
+        ])])) : d.value.length === 0 ? (a(), r("div", A8, [...I[10] || (I[10] = [
           t("div", { class: "empty-card" }, [
             t("span", { class: "empty-text" }, "No workers registered yet"),
             t("p", { class: "empty-help" }, " To add a custom worker: "),
@@ -19048,8 +19048,8 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
               t("li", null, 'Click "Scan Network" above or "Add" to enter manually')
             ])
           ], -1)
-        ])])) : (a(), r("div", NS, [
-          (a(!0), r(j, null, _e(d.value, (T) => (a(), R(R8, {
+        ])])) : (a(), r("div", N8, [
+          (a(!0), r(j, null, _e(d.value, (T) => (a(), R(RS, {
             key: T.name,
             worker: T,
             "is-action-loading": g.value === T.name,
@@ -19062,25 +19062,25 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
         key: 0,
         class: Pe(["scan-result", S.value.type])
       }, [
-        t("span", US, f(S.value.type === "success" ? "✓" : "ⓘ"), 1),
-        t("span", zS, f(S.value.message), 1),
+        t("span", U8, f(S.value.type === "success" ? "✓" : "ⓘ"), 1),
+        t("span", z8, f(S.value.message), 1),
         t("button", {
           class: "dismiss-btn",
           onClick: I[1] || (I[1] = (T) => S.value = null)
         }, "×")
       ], 2)) : y("", !0),
-      p.value ? (a(), R(fS, {
+      p.value ? (a(), R(f8, {
         key: 1,
         workers: u.value,
         onClose: I[2] || (I[2] = (T) => p.value = !1),
         onAdd: E
       }, null, 8, ["workers"])) : y("", !0),
-      w.value ? (a(), R(K8, {
+      w.value ? (a(), R(KS, {
         key: 2,
         onClose: I[3] || (I[3] = (T) => w.value = !1),
         onAdd: D
       })) : y("", !0),
-      _.value ? (a(), R(PS, {
+      _.value ? (a(), R(P8, {
         key: 3,
         worker: _.value,
         onClose: I[4] || (I[4] = (T) => _.value = null),
@@ -19089,14 +19089,14 @@ const Jx = { class: "instance-header" }, Xx = { class: "provider-badge" }, Qx = 
       }, null, 8, ["worker"])) : y("", !0)
     ]));
   }
-}), BS = /* @__PURE__ */ ye(FS, [["__scopeId", "data-v-1637dead"]]), va = "ComfyGit.Deploy.GitHubPAT";
+}), B8 = /* @__PURE__ */ ye(F8, [["__scopeId", "data-v-1637dead"]]), va = "ComfyGit.Deploy.GitHubPAT";
 function Ar(e) {
   return e.startsWith("git@") || e.startsWith("ssh://");
 }
-function VS(e) {
+function V8(e) {
   return e.startsWith("https://") || e.startsWith("http://");
 }
-function WS() {
+function W8() {
   function e() {
     try {
       return localStorage.getItem(va);
@@ -19128,17 +19128,17 @@ function WS() {
     clearToken: o,
     hasToken: n,
     isRemoteSsh: Ar,
-    isRemoteHttps: VS
+    isRemoteHttps: V8
   };
 }
-const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS = {
+const G8 = { class: "settings-content" }, j8 = { class: "settings-section" }, H8 = {
   key: 0,
   class: "ssh-warning"
-}, KS = { class: "form-row" }, qS = { class: "token-wrapper" }, YS = ["type"], JS = { class: "result-icon" }, XS = { class: "result-message" }, QS = { class: "token-actions" }, ZS = /* @__PURE__ */ ge({
+}, K8 = { class: "form-row" }, q8 = { class: "token-wrapper" }, Y8 = ["type"], J8 = { class: "result-icon" }, X8 = { class: "result-message" }, Q8 = { class: "token-actions" }, Z8 = /* @__PURE__ */ ge({
   __name: "DeploySettingsModal",
   emits: ["close", "saved"],
   setup(e, { emit: s }) {
-    const o = s, { getToken: n, setToken: l, clearToken: i, hasToken: c } = WS(), { getRemotes: d, testGitAuth: u } = at(), m = k(""), v = k(!1), g = k(!1), w = k(null), p = k(!1), _ = N(() => c());
+    const o = s, { getToken: n, setToken: l, clearToken: i, hasToken: c } = W8(), { getRemotes: d, testGitAuth: u } = at(), m = k(""), v = k(!1), g = k(!1), w = k(null), p = k(!1), _ = N(() => c());
     et(async () => {
       var E;
       const D = n();
@@ -19180,13 +19180,13 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
       onClose: E[2] || (E[2] = (x) => D.$emit("close"))
     }, {
       body: h(() => [
-        t("div", GS, [
-          t("div", jS, [
+        t("div", G8, [
+          t("div", j8, [
             E[8] || (E[8] = t("div", { class: "section-header" }, [
               t("span", { class: "section-title" }, "GitHub Authentication")
             ], -1)),
             E[9] || (E[9] = t("p", { class: "section-description" }, " Required for push/pull to private repositories on cloud instances. ", -1)),
-            p.value ? (a(), r("div", HS, [...E[3] || (E[3] = [
+            p.value ? (a(), r("div", H8, [...E[3] || (E[3] = [
               t("span", { class: "warning-icon" }, "!", -1),
               t("div", { class: "warning-content" }, [
                 t("strong", null, "SSH remote detected"),
@@ -19198,15 +19198,15 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
                 ])
               ], -1)
             ])])) : y("", !0),
-            t("div", KS, [
+            t("div", K8, [
               E[4] || (E[4] = t("label", { class: "form-label" }, "Personal Access Token", -1)),
-              t("div", qS, [
+              t("div", q8, [
                 Ye(t("input", {
                   "onUpdate:modelValue": E[0] || (E[0] = (x) => m.value = x),
                   type: v.value ? "text" : "password",
                   class: "form-input",
                   placeholder: "ghp_xxxxxxxxxxxxxxxxxxxx"
-                }, null, 8, YS), [
+                }, null, 8, Y8), [
                   [Yn, m.value]
                 ]),
                 t("button", {
@@ -19221,10 +19221,10 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
               key: 1,
               class: Pe(["test-result", w.value.type])
             }, [
-              t("span", JS, f(w.value.type === "success" ? "✓" : "✕"), 1),
-              t("span", XS, f(w.value.message), 1)
+              t("span", J8, f(w.value.type === "success" ? "✓" : "✕"), 1),
+              t("span", X8, f(w.value.message), 1)
             ], 2)) : y("", !0),
-            t("div", QS, [
+            t("div", Q8, [
               C(ie, {
                 variant: "ghost",
                 size: "sm",
@@ -19268,7 +19268,7 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
       _: 1
     }));
   }
-}), e4 = /* @__PURE__ */ ye(ZS, [["__scopeId", "data-v-b21588ad"]]), t4 = /* @__PURE__ */ ge({
+}), e4 = /* @__PURE__ */ ye(Z8, [["__scopeId", "data-v-b21588ad"]]), t4 = /* @__PURE__ */ ge({
   __name: "DeploySection",
   emits: ["toast", "navigate"],
   setup(e, { emit: s }) {
@@ -19381,13 +19381,13 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
             onStart: E,
             onTerminate: x
           }, null, 8, ["instances", "is-loading", "action-loading-id", "onRefresh"])) : y("", !0),
-          _.value === "runpod" ? (a(), R(v8, {
+          _.value === "runpod" ? (a(), R(vS, {
             key: 1,
             onToast: I[3] || (I[3] = (T, M) => o("toast", T, M)),
             onNavigate: I[4] || (I[4] = (T) => o("navigate", T)),
             onDeployed: V
           })) : y("", !0),
-          _.value === "custom" ? (a(), R(BS, {
+          _.value === "custom" ? (a(), R(B8, {
             key: 2,
             onToast: I[5] || (I[5] = (T, M) => o("toast", T, M)),
             onDeployed: V
@@ -20491,7 +20491,7 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
       getCreateProgress: u,
       getImportProgress: m,
       getComfyUIReleases: v
-    } = at(), g = k(o.initialStep || 1), w = k(null), p = k("landing"), _ = k(!1), S = k(!1), $ = k(!1), P = k(!1), D = k(null), E = k(o.initialStep === 2), x = k(o.defaultPath), W = k(!!o.detectedModelsDir), V = k(o.detectedModelsDir || ""), z = k(null), I = k(null), T = k(null), M = k(null), ne = k("my-new-env"), J = k(Tr), G = k("latest"), te = k(Pr), Q = k(!0), A = k(null), H = k(null), L = k([{ tag_name: "latest", name: "Latest", published_at: "" }]), oe = k(!1), ue = k(!1), De = k(!1), Be = k({ progress: 0, message: "" }), re = k({ progress: 0, message: "" }), Ee = [
+    } = at(), g = k(o.initialStep || 1), w = k(null), p = k("landing"), _ = k(!1), S = k(!1), $ = k(!1), P = k(!1), D = k(null), E = k(o.initialStep === 2), x = k(o.defaultPath), W = k(!!o.detectedModelsDir), V = k(o.detectedModelsDir || ""), z = k(null), I = k(null), T = k(null), M = k(null), ne = k("my-new-env"), J = k(Tr), G = k("latest"), te = k(Pr), Q = k(!0), A = k(null), H = k(null), L = k([{ tag_name: "latest", name: "Latest", published_at: "" }]), oe = k(!1), ue = k(!1), De = k(!1), Be = k({ progress: 0, message: "" }), re = k({ progress: 0, message: "" }), Se = [
       { id: "init_structure", label: "Initialize structure", progressThreshold: 5 },
       { id: "resolve_version", label: "Resolve ComfyUI version", progressThreshold: 10 },
       { id: "clone_comfyui", label: "Clone/restore ComfyUI", progressThreshold: 25 },
@@ -20623,10 +20623,10 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
         oe.value = !1;
       }
     }
-    function Se() {
+    function Ie() {
       w.value && n("switch-environment", w.value, H.value);
     }
-    function Ie() {
+    function Ee() {
       p.value === "create" || p.value === "import" ? p.value = "landing" : g.value === 2 && o.setupState === "no_workspace" && (g.value = 1);
     }
     function ae(Z, q) {
@@ -20887,7 +20887,7 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
                       message: re.value.message,
                       "current-phase": re.value.phase,
                       "show-steps": !0,
-                      steps: Ee
+                      steps: Se
                     }, null, 8, ["progress", "message", "current-phase"]),
                     q[43] || (q[43] = t("p", { class: "progress-warning" }, " This may take several minutes. Please wait... ", -1))
                   ])) : (a(), r(j, { key: 0 }, [
@@ -20991,7 +20991,7 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
                 !De.value && !S.value && (p.value !== "landing" || o.setupState === "no_workspace" && !H.value) ? (a(), R(Oe, {
                   key: 0,
                   variant: "secondary",
-                  onClick: Ie
+                  onClick: Ee
                 }, {
                   default: h(() => [...q[44] || (q[44] = [
                     b(" Back ", -1)
@@ -21012,7 +21012,7 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
                 p.value === "landing" && w.value ? (a(), R(Oe, {
                   key: 2,
                   variant: "primary",
-                  onClick: Se
+                  onClick: Ie
                 }, {
                   default: h(() => [
                     b(" Switch to " + f(w.value), 1)
@@ -21078,7 +21078,7 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
     } = at(), D = Iv(), { liveInstanceCount: E } = Lr({ autoStart: !0 }), x = k(null), W = k([]), V = k([]), z = k([]), I = N(() => z.value.find((se) => se.is_current)), T = k(null), M = k(!1), ne = k(1), J = N(() => {
       var se;
       return ((se = T.value) == null ? void 0 : se.state) || "managed";
-    }), G = k(!1), te = k(null), Q = k(null), A = k(!1), H = k(null), L = k(null), oe = k(null), ue = k(!1), De = k(!1), Be = k(""), re = k(null), Ee = k({ state: "idle", progress: 0, message: "" });
+    }), G = k(!1), te = k(null), Q = k(null), A = k(!1), H = k(null), L = k(null), oe = k(null), ue = k(!1), De = k(!1), Be = k(""), re = k(null), Se = k({ state: "idle", progress: 0, message: "" });
     let we = null, he = null;
     const $e = {
       "debug-env": { view: "debug-env", section: "this-env" },
@@ -21110,16 +21110,16 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
         console.warn("[ComfyGit] Manager button not found in toolbar");
       }, 100);
     }
-    const le = k(null), ve = k(!1), pe = k(!1), Se = k([]);
-    let Ie = 0;
+    const le = k(null), ve = k(!1), pe = k(!1), Ie = k([]);
+    let Ee = 0;
     function ae(se, K = "info", Ne = 3e3) {
-      const He = ++Ie;
-      return Se.value.push({ id: He, message: se, type: K }), Ne > 0 && setTimeout(() => {
-        Se.value = Se.value.filter((ot) => ot.id !== He);
+      const He = ++Ee;
+      return Ie.value.push({ id: He, message: se, type: K }), Ne > 0 && setTimeout(() => {
+        Ie.value = Ie.value.filter((ot) => ot.id !== He);
       }, Ne), He;
     }
     function me(se) {
-      Se.value = Se.value.filter((K) => K.id !== se);
+      Ie.value = Ie.value.filter((K) => K.id !== se);
     }
     function Ue(se, K) {
       ae(se, K);
@@ -21280,7 +21280,7 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
       A.value = !1, Be.value = se, re.value = K || null, ue.value = !0;
     }
     async function lt() {
-      ue.value = !1, De.value = !0, ce(), Ee.value = {
+      ue.value = !1, De.value = !0, ce(), Se.value = {
         progress: 10,
         state: dt(10),
         message: Rt(10)
@@ -21288,7 +21288,7 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
       try {
         await w(Be.value, re.value || void 0), zt(), Ws();
       } catch (se) {
-        Kt(), De.value = !1, ae(`Failed to initiate switch: ${se instanceof Error ? se.message : "Unknown error"}`, "error"), Ee.value = { state: "idle", progress: 0, message: "" }, re.value = null;
+        Kt(), De.value = !1, ae(`Failed to initiate switch: ${se instanceof Error ? se.message : "Unknown error"}`, "error"), Se.value = { state: "idle", progress: 0, message: "" }, re.value = null;
       }
     }
     function dt(se) {
@@ -21308,9 +21308,9 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
       let se = 10;
       const K = 60, Ne = 5e3, He = 100, ot = (K - se) / (Ne / He);
       he = window.setInterval(() => {
-        if (se += ot, se >= K && (se = K, Kt()), Ee.value.progress < K) {
+        if (se += ot, se >= K && (se = K, Kt()), Se.value.progress < K) {
           const ft = Math.floor(se);
-          Ee.value = {
+          Se.value = {
             progress: ft,
             state: dt(ft),
             message: Rt(ft)
@@ -21329,8 +21329,8 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
             return;
           const K = se.progress || 0;
           K >= 60 && Kt();
-          const Ne = Math.max(K, Ee.value.progress), He = se.state && se.state !== "idle" && se.state !== "unknown", ot = He ? se.state : dt(Ne), ft = He && se.message || Rt(Ne);
-          Ee.value = {
+          const Ne = Math.max(K, Se.value.progress), He = se.state && se.state !== "idle" && se.state !== "unknown", ot = He ? se.state : dt(Ne), ft = He && se.message || Rt(Ne);
+          Se.value = {
             state: ot,
             progress: Ne,
             message: ft
@@ -21743,9 +21743,9 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
         }, null, 8, ["show", "mismatch-details"])) : y("", !0),
         C(R6, {
           show: De.value,
-          state: Ee.value.state,
-          progress: Ee.value.progress,
-          message: Ee.value.message
+          state: Se.value.state,
+          progress: Se.value.progress,
+          message: Se.value.message
         }, null, 8, ["show", "state", "progress", "message"]),
         A.value ? (a(), r("div", {
           key: 4,
@@ -21812,7 +21812,7 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
         t("div", kE, [
           C(cu, { name: "toast" }, {
             default: h(() => [
-              (a(!0), r(j, null, _e(Se.value, (Le) => (a(), r("div", {
+              (a(!0), r(j, null, _e(Ie.value, (Le) => (a(), r("div", {
                 key: Le.id,
                 class: Pe(["toast", Le.type])
               }, [
@@ -22144,11 +22144,11 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
     const s = k(!1), o = k(null), n = k(null), l = k(!1), i = k(/* @__PURE__ */ new Set()), c = k(/* @__PURE__ */ new Set()), d = k(/* @__PURE__ */ new Map()), u = k(/* @__PURE__ */ new Set()), m = k(!1), v = k(null), g = k(0), w = k(/* @__PURE__ */ new Set()), p = k(/* @__PURE__ */ new Map()), { addToQueue: _ } = ko(), { queueNodeInstall: S } = at(), $ = N(() => P.value.length > 0 || E.value.length > 0 || x.value.length > 0), P = N(() => {
       var we, he;
       if (!((we = n.value) != null && we.nodes)) return [];
-      const re = /* @__PURE__ */ new Map(), Ee = (n.value.nodes.resolved || []).filter(($e) => {
+      const re = /* @__PURE__ */ new Map(), Se = (n.value.nodes.resolved || []).filter(($e) => {
         var fe;
         return !$e.is_installed && ((fe = $e.package) == null ? void 0 : fe.package_id);
       });
-      for (const $e of Ee) {
+      for (const $e of Se) {
         const fe = $e.package.package_id;
         re.has(fe) || re.set(fe, {
           package_id: fe,
@@ -22162,12 +22162,12 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
         de.node_count++, de.node_types.push(((he = $e.reference) == null ? void 0 : he.node_type) || $e.node_type);
       }
       return Array.from(re.values());
-    }), D = N(() => P.value.reduce((re, Ee) => re + Ee.node_count, 0)), E = N(() => {
+    }), D = N(() => P.value.reduce((re, Se) => re + Se.node_count, 0)), E = N(() => {
       var re;
-      return (re = n.value) != null && re.nodes ? (n.value.nodes.unresolved || []).map((Ee) => {
+      return (re = n.value) != null && re.nodes ? (n.value.nodes.unresolved || []).map((Se) => {
         var we;
         return {
-          node_type: ((we = Ee.reference) == null ? void 0 : we.node_type) || Ee.node_type
+          node_type: ((we = Se.reference) == null ? void 0 : we.node_type) || Se.node_type
         };
       }) : [];
     }), x = N(() => {
@@ -22185,7 +22185,7 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
           targetPath: he.target_path || null,
           canDownload: !!(he.download_source && he.target_path)
         };
-      }), Ee = (n.value.models.unresolved || []).map((he) => {
+      }), Se = (n.value.models.unresolved || []).map((he) => {
         var $e, fe, de, Me;
         return {
           filename: ((fe = ($e = he.reference) == null ? void 0 : $e.widget_value) == null ? void 0 : fe.split("/").pop()) || ((de = he.reference) == null ? void 0 : de.widget_value) || he.widget_value,
@@ -22195,29 +22195,29 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
           canDownload: !1
         };
       });
-      return [...re, ...Ee];
+      return [...re, ...Se];
     }), W = N(() => x.value.filter((re) => re.canDownload)), V = N(() => P.value.length > 0 && P.value.every(
       (re) => i.value.has(re.package_id) || c.value.has(re.package_id) || d.value.has(re.package_id)
     )), z = N(() => W.value.length > 0 && W.value.every((re) => u.value.has(re.url))), I = N(() => P.value.length > 0 || W.value.length > 0), T = N(() => {
-      const re = P.value.length === 0 || V.value, Ee = W.value.length === 0 || z.value;
-      return re && Ee;
+      const re = P.value.length === 0 || V.value, Se = W.value.length === 0 || z.value;
+      return re && Se;
     });
     async function M(re) {
-      const Ee = re.package_id;
-      if (!(i.value.has(Ee) || c.value.has(Ee) || d.value.has(Ee))) {
-        v.value = Ee;
+      const Se = re.package_id;
+      if (!(i.value.has(Se) || c.value.has(Se) || d.value.has(Se))) {
+        v.value = Se;
         try {
           const { ui_id: we } = await S({
-            id: Ee,
+            id: Se,
             version: re.latest_version || "latest",
             selected_version: re.latest_version || "latest",
             repository: re.repository || void 0,
             mode: "remote",
             channel: "default"
           });
-          p.value.set(we, Ee), c.value.add(Ee);
+          p.value.set(we, Se), c.value.add(Se);
         } catch (we) {
-          console.error("[ComfyGit] Failed to queue package install:", we), d.value.set(Ee, "Failed to queue install request");
+          console.error("[ComfyGit] Failed to queue package install:", we), d.value.set(Se, "Failed to queue install request");
         } finally {
           v.value = null;
         }
@@ -22237,17 +22237,17 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
     }
     function G() {
       const re = W.value.filter(
-        (Ee) => !u.value.has(Ee.url)
+        (Se) => !u.value.has(Se.url)
       );
       if (re.length !== 0) {
-        _(re.map((Ee) => ({
+        _(re.map((Se) => ({
           workflow: "unsaved",
-          filename: Ee.filename,
-          url: Ee.url,
-          targetPath: Ee.targetPath
+          filename: Se.filename,
+          url: Se.url,
+          targetPath: Se.targetPath
         })));
-        for (const Ee of re)
-          u.value.add(Ee.url);
+        for (const Se of re)
+          u.value.add(Se.url);
       }
     }
     function te() {
@@ -22261,9 +22261,9 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
         console.log("[ComfyGit] Popup globally disabled");
         return;
       }
-      const Ee = re == null ? void 0 : re.id;
-      if (Ee && w.value.has(Ee)) {
-        console.log(`[ComfyGit] Already shown popup for workflow ${Ee} this session`);
+      const Se = re == null ? void 0 : re.id;
+      if (Se && w.value.has(Se)) {
+        console.log(`[ComfyGit] Already shown popup for workflow ${Se} this session`);
         return;
       }
       try {
@@ -22275,7 +22275,7 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
         if (we.ok) {
           const he = await we.json();
           if (he.is_saved) {
-            console.log(`[ComfyGit] Workflow matches saved file: ${he.filename}, skipping popup`);
+            console.log(`[ComfyGit] Workflow matches saved file: ${he.filename}, skipping popup`), Se && w.value.add(Se);
             return;
           }
         }
@@ -22293,7 +22293,7 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
           const he = await we.json();
           throw new Error(he.error || "Failed to analyze workflow");
         }
-        n.value = await we.json(), $.value && (l.value = !0, Ee && w.value.add(Ee));
+        n.value = await we.json(), $.value && (l.value = !0, Se && w.value.add(Se));
       } catch (we) {
         console.error("[ComfyGit] Failed to analyze workflow:", we);
       } finally {
@@ -22304,19 +22304,19 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
       l.value = !1, n.value = null;
     }
     function L(re) {
-      const { workflow: Ee } = re.detail;
-      Ee && A(Ee);
+      const { workflow: Se } = re.detail;
+      Se && A(Se);
     }
     function oe(re) {
       var he;
-      const Ee = (he = re.detail) == null ? void 0 : he.ui_id, we = p.value.get(Ee);
+      const Se = (he = re.detail) == null ? void 0 : he.ui_id, we = p.value.get(Se);
       we && (v.value = we, console.log("[ComfyGit] Installing package:", we));
     }
     function ue(re) {
       var $e, fe, de, Me, Re, O, F;
-      const Ee = ($e = re.detail) == null ? void 0 : $e.ui_id, we = p.value.get(Ee), he = (de = (fe = re.detail) == null ? void 0 : fe.status) == null ? void 0 : de.status_str;
+      const Se = ($e = re.detail) == null ? void 0 : $e.ui_id, we = p.value.get(Se), he = (de = (fe = re.detail) == null ? void 0 : fe.status) == null ? void 0 : de.status_str;
       if (we) {
-        if (p.value.delete(Ee), c.value.delete(we), v.value === we && (v.value = null), he === "success")
+        if (p.value.delete(Se), c.value.delete(we), v.value === we && (v.value = null), he === "success")
           i.value.add(we), g.value++, console.log("[ComfyGit] Package installed successfully:", we);
         else {
           const ee = ((O = (Re = (Me = re.detail) == null ? void 0 : Me.status) == null ? void 0 : Re.messages) == null ? void 0 : O[0]) || ((F = re.detail) == null ? void 0 : F.result) || "Unknown error";
@@ -22332,8 +22332,8 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
       return (re = window.app) == null ? void 0 : re.api;
     }
     function Be(re) {
-      const { change_type: Ee } = re.detail;
-      (Ee === "created" || Ee === "modified") && l.value && (l.value = !1, console.log("[ComfyGit] Workflow saved, auto-dismissing popup"));
+      const { change_type: Se } = re.detail;
+      (Se === "created" || Se === "modified") && l.value && (l.value = !1, console.log("[ComfyGit] Workflow saved, auto-dismissing popup"));
     }
     return et(() => {
       window.addEventListener("comfygit:workflow-loaded", L);
@@ -22343,7 +22343,7 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
       window.removeEventListener("comfygit:workflow-loaded", L);
       const re = De();
       re && (re.removeEventListener("cm-task-started", oe), re.removeEventListener("cm-task-completed", ue), re.removeEventListener("comfygit:workflow-changed", Be));
-    }), (re, Ee) => l.value ? (a(), R(vt, {
+    }), (re, Se) => l.value ? (a(), R(vt, {
       key: 0,
       title: "Missing Dependencies",
       size: "md",
@@ -22352,7 +22352,7 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
       onClose: H
     }, {
       body: h(() => [
-        s.value ? (a(), r("div", _T, [...Ee[1] || (Ee[1] = [
+        s.value ? (a(), r("div", _T, [...Se[1] || (Se[1] = [
           t("div", { class: "loading-spinner" }, null, -1),
           t("span", null, "Analyzing workflow...", -1)
         ])])) : n.value && $.value ? (a(), r("div", bT, [
@@ -22411,7 +22411,7 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
                 class: "item"
               }, [
                 t("code", UT, f(we.node_type), 1),
-                Ee[2] || (Ee[2] = t("span", { class: "not-found" }, "Not found in registry", -1))
+                Se[2] || (Se[2] = t("span", { class: "not-found" }, "Not found in registry", -1))
               ]))), 128)),
               E.value.length > 5 ? (a(), r("div", zT, " ...and " + f(E.value.length - 5) + " more ", 1)) : y("", !0)
             ])
@@ -22447,7 +22447,7 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
                     variant: "secondary",
                     onClick: (he) => ne(we)
                   }, {
-                    default: h(() => [...Ee[3] || (Ee[3] = [
+                    default: h(() => [...Se[3] || (Se[3] = [
                       b(" Download ", -1)
                     ])]),
                     _: 1
@@ -22461,11 +22461,11 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
             C(Pa, {
               modelValue: m.value,
               "onUpdate:modelValue": [
-                Ee[0] || (Ee[0] = (we) => m.value = we),
+                Se[0] || (Se[0] = (we) => m.value = we),
                 Q
               ]
             }, {
-              default: h(() => [...Ee[4] || (Ee[4] = [
+              default: h(() => [...Se[4] || (Se[4] = [
                 b(" Don't show this popup ", -1)
               ])]),
               _: 1
@@ -22478,7 +22478,7 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
           variant: "secondary",
           onClick: H
         }, {
-          default: h(() => [...Ee[5] || (Ee[5] = [
+          default: h(() => [...Se[5] || (Se[5] = [
             b("Dismiss", -1)
           ])]),
           _: 1
@@ -22498,7 +22498,7 @@ const GS = { class: "settings-content" }, jS = { class: "settings-section" }, HS
       _: 1
     }, 8, ["loading", "error"])) : y("", !0);
   }
-}), XT = /* @__PURE__ */ ye(JT, [["__scopeId", "data-v-fcb98788"]]), QT = '@import"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap";[data-comfygit-theme=comfy]{--cg-font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;--cg-font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;--cg-font-mono: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;--cg-font-size-xs: 14.3px;--cg-font-size-sm: 16.9px;--cg-font-size-base: 18.2px;--cg-font-size-lg: 20.8px;--cg-font-size-xl: 23.4px;--cg-font-size-2xl: 26px;--cg-font-weight-normal: 400;--cg-font-weight-medium: 500;--cg-font-weight-semibold: 600;--cg-font-weight-bold: 700;--cg-panel-width: 884px;--cg-space-1: 5.2px;--cg-space-2: 10.4px;--cg-space-3: 15.6px;--cg-space-4: 20.8px;--cg-space-5: 26px;--cg-space-6: 31.2px;--cg-space-8: 41.6px;--cg-space-10: 52px;--cg-space-12: 62.4px;--cg-letter-spacing-normal: 0;--cg-letter-spacing-wide: .025em;--cg-transition-fast: .15s ease;--cg-transition-base: .2s ease;--cg-transition-slow: .3s ease;--cg-color-bg-primary: #2d2e32;--cg-color-bg-secondary: #262729;--cg-color-bg-tertiary: #202121;--cg-color-bg-hover: #3c3d42;--cg-color-bg-overlay: rgba(0, 0, 0, .75);--cg-color-text-primary: #ffffff;--cg-color-text-secondary: #c5c5c5;--cg-color-text-muted: #8a8a8a;--cg-color-text-inverse: #000000;--cg-color-border: #55565e;--cg-color-border-subtle: #3c3d42;--cg-color-border-strong: #828282;--cg-color-accent: #31b9f4;--cg-color-accent-hover: #0b8ce9;--cg-color-accent-muted: rgba(49, 185, 244, .15);--cg-color-success: #47e469;--cg-color-success-muted: rgba(71, 228, 105, .15);--cg-color-warning: #fcbf64;--cg-color-warning-muted: rgba(252, 191, 100, .15);--cg-color-error: #dd424e;--cg-color-error-muted: rgba(221, 66, 78, .15);--cg-color-info: #31b9f4;--cg-color-info-muted: rgba(49, 185, 244, .15);--cg-radius-none: 0;--cg-radius-sm: 4px;--cg-radius-md: 6px;--cg-radius-lg: 8px;--cg-radius-xl: 12px;--cg-radius-2xl: 16px;--cg-radius-full: 9999px;--cg-shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);--cg-shadow-md: 0 2px 8px rgba(0, 0, 0, .4);--cg-shadow-lg: 0 4px 16px rgba(0, 0, 0, .5);--cg-shadow-xl: 0 8px 32px rgba(0, 0, 0, .6);--cg-btn-gradient-start: #31b9f4;--cg-btn-gradient-end: #0b8ce9;--cg-btn-shadow-inset: inset 0 1px 0 rgba(255, 255, 255, .1);--cg-decoration-title-prefix: "";--cg-decoration-label-prefix: "";--cg-decoration-label-suffix: "";--cg-decoration-status-animation: none;--cg-decoration-status-shape: circle;--cg-shadow-accent: rgba(49, 185, 244, .3);--cg-shadow-accent-strong: rgba(49, 185, 244, .5);--cg-shadow-error: rgba(221, 66, 78, .3);--cg-shadow-success: rgba(71, 228, 105, .3);--cg-text-shadow-title: none;--cg-text-shadow-accent: none}[data-comfygit-theme=comfy] .comfygit-panel{box-shadow:var(--cg-shadow-lg);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=comfy] .sidebar{background:var(--cg-color-bg-secondary);border-right:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=comfy] .sidebar-item{border-radius:var(--cg-radius-md);transition:background var(--cg-transition-fast),color var(--cg-transition-fast)}[data-comfygit-theme=comfy] .sidebar-item:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .sidebar-item.active{background:var(--cg-color-accent-muted);color:var(--cg-color-accent);font-weight:var(--cg-font-weight-medium)}[data-comfygit-theme=comfy] button{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .icon-btn{border-radius:var(--cg-radius-md);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .icon-btn:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .status-grid{border-radius:var(--cg-radius-lg);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .issue-card{border-radius:var(--cg-radius-lg);box-shadow:var(--cg-shadow-sm);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .issue-card:hover{box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=comfy] .issue-card--warning,[data-comfygit-theme=comfy] .issue-card--error,[data-comfygit-theme=comfy] .issue-card--info{border-left-width:4px}[data-comfygit-theme=comfy] .branch-indicator{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .branch-indicator__name{font-weight:var(--cg-font-weight-semibold)}[data-comfygit-theme=comfy] .commit-list{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .commit-item{transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .commit-item:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .branch-item,[data-comfygit-theme=comfy] .branch-list-item{border-radius:var(--cg-radius-md);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .branch-item:hover,[data-comfygit-theme=comfy] .branch-list-item:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .branch-list{border-radius:var(--cg-radius-md);overflow:hidden}[data-comfygit-theme=comfy] .branch-create-form,[data-comfygit-theme=comfy] .create-form{border-radius:var(--cg-radius-md);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .text-input{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] input[type=text],[data-comfygit-theme=comfy] textarea{border-radius:var(--cg-radius-md);border:1px solid var(--cg-color-border);transition:border-color var(--cg-transition-fast),box-shadow var(--cg-transition-fast)}[data-comfygit-theme=comfy] input[type=text]:focus,[data-comfygit-theme=comfy] textarea:focus{border-color:var(--cg-color-accent);box-shadow:0 0 0 3px var(--cg-color-accent-muted)}[data-comfygit-theme=comfy] .dialog-content{border-radius:var(--cg-radius-xl);box-shadow:var(--cg-shadow-xl);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=comfy] .status-badge{border-radius:var(--cg-radius-sm);font-size:var(--cg-font-size-xs);font-weight:var(--cg-font-weight-medium);padding:2px 8px}[data-comfygit-theme=comfy] .warning-box{border-radius:var(--cg-radius-md);border-left:4px solid var(--cg-color-warning);background:var(--cg-color-warning-muted)}[data-comfygit-theme=comfy] .env-switcher-btn{border-radius:var(--cg-radius-md);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .env-switcher-btn:hover{background:var(--cg-color-bg-hover);transform:translateY(-1px);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .section-title{font-weight:var(--cg-font-weight-semibold);letter-spacing:var(--cg-letter-spacing-wide);color:var(--cg-color-text-secondary)}[data-comfygit-theme=comfy] .commit-hash,[data-comfygit-theme=comfy] .branch-name-mono,[data-comfygit-theme=comfy] .file-path{font-family:var(--cg-font-mono)}[data-comfygit-theme=comfy] .settings-section{border-radius:var(--cg-radius-md);background:var(--cg-color-bg-secondary)}[data-comfygit-theme=comfy] .setting-row{transition:background var(--cg-transition-fast)}[data-comfygit-theme=comfy] .setting-row:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .toggle-slider{border-radius:var(--cg-radius-full)}[data-comfygit-theme=comfy] .commit-hash{color:var(--cg-color-accent);font-weight:var(--cg-font-weight-medium)}[data-comfygit-theme=comfy] .status-dot.success{background:var(--cg-color-success)}[data-comfygit-theme=comfy] .status-dot.warning{background:var(--cg-color-warning)}[data-comfygit-theme=comfy] .status-dot.error{background:var(--cg-color-error)}[data-comfygit-theme=comfy] ::-webkit-scrollbar{width:8px;height:8px}[data-comfygit-theme=comfy] ::-webkit-scrollbar-track{background:var(--cg-color-bg-secondary)}[data-comfygit-theme=comfy] ::-webkit-scrollbar-thumb{background:var(--cg-color-border);border-radius:var(--cg-radius-sm)}[data-comfygit-theme=comfy] ::-webkit-scrollbar-thumb:hover{background:var(--cg-color-border-strong)}[data-comfygit-theme=comfy] .view-title:before,[data-comfygit-theme=comfy] .panel-title:before,[data-comfygit-theme=comfy] .section-title:before{content:""}[data-comfygit-theme=comfy] .status-dot{width:8px;height:8px;border-radius:50%;animation:none}[data-comfygit-theme=comfy] .env-switcher-label{font-weight:var(--cg-font-weight-semibold)}[data-comfygit-theme=comfy] .panel-title,[data-comfygit-theme=comfy] .view-title{text-shadow:none}[data-comfygit-theme=comfy] .log-level{border-radius:var(--cg-radius-sm);font-weight:var(--cg-font-weight-semibold)}[data-comfygit-theme=comfy] .log-item{border-radius:var(--cg-radius-md);transition:all var(--cg-transition-fast);margin-bottom:var(--cg-space-1)}[data-comfygit-theme=comfy] .log-item:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .log-item__context{border-radius:var(--cg-radius-sm);font-weight:var(--cg-font-weight-medium)}[data-comfygit-theme=comfy] .log-filter-bar{border-radius:var(--cg-radius-md);background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle);margin-bottom:var(--cg-space-3)}[data-comfygit-theme=comfy] .filter-option{border-radius:var(--cg-radius-sm);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .filter-option:hover{transform:translateY(-1px);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .filter-option.active{box-shadow:0 0 8px var(--cg-shadow-accent)}[data-comfygit-theme=comfy] .log-list{border-radius:var(--cg-radius-md);overflow:hidden}[data-comfygit-theme=comfy] .remote-form{border-radius:var(--cg-radius-md);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .remote-url-display{background:var(--cg-color-bg-secondary);padding:var(--cg-space-1) var(--cg-space-2);border-radius:var(--cg-radius-sm)}[data-comfygit-theme=comfy] .default-badge,[data-comfygit-theme=comfy] .copy-btn{border-radius:var(--cg-radius-sm)}[data-comfygit-theme=comfy] .file-path,[data-comfygit-theme=comfy] .export-warning{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .file-drop-zone{border-radius:var(--cg-radius-lg);transition:all var(--cg-transition-base)}[data-comfygit-theme=comfy] .file-drop-zone.drop-active{transform:scale(1.01)}[data-comfygit-theme=comfy] .file-drop-zone.has-file{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .import-preview,[data-comfygit-theme=comfy] .import-options{border-radius:var(--cg-radius-lg);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .option-item{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .option-item:hover{transform:translate(2px)}[data-comfygit-theme=comfy] .selected-file-bar{border-radius:var(--cg-radius-md);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .import-help{border-radius:var(--cg-radius-lg);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .help-number{border-radius:var(--cg-radius-md);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .progress-bar{border-radius:var(--cg-radius-full);overflow:hidden}[data-comfygit-theme=comfy] .progress-bar-fill{border-radius:var(--cg-radius-full);box-shadow:0 0 8px var(--cg-shadow-accent-strong)}[data-comfygit-theme=comfy] .complete-icon.success{box-shadow:0 0 16px var(--cg-shadow-success)}[data-comfygit-theme=comfy] .complete-icon.error{box-shadow:0 0 16px var(--cg-shadow-error)}[data-comfygit-theme=comfy] .base-tabs{border-bottom-color:var(--cg-color-border-subtle)}[data-comfygit-theme=comfy] .base-tabs__tab{border-radius:var(--cg-radius-sm) var(--cg-radius-sm) 0 0}[data-comfygit-theme=comfy] .base-tabs__tab:hover:not(.disabled){background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .base-tabs__tab.active{background:var(--cg-color-accent-muted)}', ZT = '@import"https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap";[data-comfygit-theme=phosphor]{--cg-font-display: "IBM Plex Mono", ui-monospace, monospace;--cg-font-body: "IBM Plex Mono", ui-monospace, monospace;--cg-font-mono: "IBM Plex Mono", ui-monospace, monospace;--cg-font-size-xs: 15.6px;--cg-font-size-sm: 18.2px;--cg-font-size-base: 22.1px;--cg-font-size-lg: 26px;--cg-font-size-xl: 31.2px;--cg-font-size-2xl: 36.4px;--cg-panel-width: 980px;--cg-space-1: 5.2px;--cg-space-2: 10.4px;--cg-space-3: 15.6px;--cg-space-4: 20.8px;--cg-space-5: 26px;--cg-space-6: 31.2px;--cg-space-8: 41.6px;--cg-space-10: 52px;--cg-space-12: 62.4px;--cg-letter-spacing-normal: .02em;--cg-letter-spacing-wide: .08em;--cg-color-bg-primary: #0a0a0a;--cg-color-bg-secondary: #050505;--cg-color-bg-tertiary: #000000;--cg-color-bg-hover: #0f1f0f;--cg-color-bg-overlay: rgba(0, 0, 0, .85);--cg-color-text-primary: #00ff41;--cg-color-text-secondary: #00cc33;--cg-color-text-muted: #008f11;--cg-color-text-inverse: #000000;--cg-color-border: #00ff41;--cg-color-border-subtle: #003b00;--cg-color-border-strong: #00ff41;--cg-color-accent: #00ff41;--cg-color-accent-hover: #39ff14;--cg-color-accent-muted: rgba(0, 255, 65, .15);--cg-color-success: #00ff41;--cg-color-success-muted: rgba(0, 255, 65, .2);--cg-color-warning: #ffff00;--cg-color-warning-muted: rgba(255, 255, 0, .15);--cg-color-error: #ff0040;--cg-color-error-muted: rgba(255, 0, 64, .15);--cg-color-info: #00ffff;--cg-color-info-muted: rgba(0, 255, 255, .15);--cg-radius-none: 0;--cg-radius-sm: 0;--cg-radius-md: 0;--cg-radius-lg: 0;--cg-radius-xl: 0;--cg-radius-2xl: 0;--cg-radius-full: 0;--cg-shadow-sm: 0 0 4px rgba(0, 255, 65, .3);--cg-shadow-md: 0 0 8px rgba(0, 255, 65, .4);--cg-shadow-lg: 0 0 16px rgba(0, 255, 65, .5);--cg-shadow-xl: 0 0 32px rgba(0, 255, 65, .6);--cg-btn-gradient-start: #00ff41;--cg-btn-gradient-end: #00cc33;--cg-btn-shadow-inset: none;--cg-decoration-title-prefix: "> ";--cg-decoration-label-prefix: "/* ";--cg-decoration-label-suffix: " */";--cg-decoration-status-animation: cursor-blink 1s step-end infinite;--cg-decoration-status-shape: cursor;--cg-shadow-accent: rgba(0, 255, 65, .3);--cg-shadow-accent-strong: rgba(0, 255, 65, .5);--cg-shadow-error: rgba(255, 0, 64, .3);--cg-shadow-success: rgba(0, 255, 65, .3);--cg-text-shadow-title: 0 0 8px var(--cg-color-accent);--cg-text-shadow-accent: 0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .comfygit-panel{position:relative;overflow:hidden}[data-comfygit-theme=phosphor] .comfygit-panel:before{content:"";position:absolute;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.15) 2px,rgba(0,0,0,.15) 3px);pointer-events:none;z-index:100}[data-comfygit-theme=phosphor] .comfygit-panel:after{content:"";position:absolute;top:0;left:0;right:0;bottom:0;background:#00ff4105;pointer-events:none;animation:phosphor-flicker 4s infinite;z-index:99}@keyframes phosphor-flicker{0%,to{opacity:1}50%{opacity:.98}52%{opacity:1}54%{opacity:.96}56%{opacity:1}}[data-comfygit-theme=phosphor] .comfygit-panel{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg),inset 0 0 100px #00ff4108;font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .panel-title{color:var(--cg-color-accent);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-sm);text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .panel-title:before{content:var(--cg-decoration-title-prefix);opacity:.7}[data-comfygit-theme=phosphor] .view-title{text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .view-title:before{content:var(--cg-decoration-title-prefix);opacity:.7}[data-comfygit-theme=phosphor] .env-name,[data-comfygit-theme=phosphor] .branch-name{color:var(--cg-color-text-secondary);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .branch-name:before{content:"@";margin-right:2px}[data-comfygit-theme=phosphor] .env-switcher-label:before{content:var(--cg-decoration-label-prefix)}[data-comfygit-theme=phosphor] .env-switcher-label:after{content:var(--cg-decoration-label-suffix)}[data-comfygit-theme=phosphor] .group-title:before{content:var(--cg-decoration-label-prefix)}[data-comfygit-theme=phosphor] .group-title:after{content:var(--cg-decoration-label-suffix)}[data-comfygit-theme=phosphor] .status-dot{width:6px;height:12px;border-radius:0;animation:var(--cg-decoration-status-animation)}[data-comfygit-theme=phosphor] .status-dot.success{background:var(--cg-color-success)}[data-comfygit-theme=phosphor] .status-dot.warning{background:var(--cg-color-warning)}[data-comfygit-theme=phosphor] .status-dot.error{background:var(--cg-color-error)}@keyframes cursor-blink{50%{opacity:0}}[data-comfygit-theme=phosphor] .icon-btn{color:var(--cg-color-text-primary);border:1px solid transparent}[data-comfygit-theme=phosphor] .icon-btn:hover{background:var(--cg-color-bg-hover);border-color:var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .status-section{margin-bottom:var(--cg-space-4)}[data-comfygit-theme=phosphor] .section-title{color:var(--cg-color-accent);font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);text-shadow:0 0 8px var(--cg-color-accent);margin-bottom:var(--cg-space-2)}[data-comfygit-theme=phosphor] .section-title:before{content:"> ";opacity:.7}[data-comfygit-theme=phosphor] .count{font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .status-grid{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .column-title{color:var(--cg-color-text-muted);font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wider)}[data-comfygit-theme=phosphor] .column-title:before{content:"/* "}[data-comfygit-theme=phosphor] .column-title:after{content:" */"}[data-comfygit-theme=phosphor] .status-item{font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .status-item .icon{display:none}[data-comfygit-theme=phosphor] .synced-item:before{content:"└─ "}[data-comfygit-theme=phosphor] .count{font-weight:var(--cg-font-weight-bold)}[data-comfygit-theme=phosphor] .count.new{color:var(--cg-color-success);text-shadow:0 0 4px var(--cg-color-success)}[data-comfygit-theme=phosphor] .count.modified{color:var(--cg-color-warning);text-shadow:0 0 4px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .count.deleted{color:var(--cg-color-error);text-shadow:0 0 4px var(--cg-color-error)}[data-comfygit-theme=phosphor] .count.synced{color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .warning-box{background:transparent;border:1px solid var(--cg-color-warning);color:var(--cg-color-warning);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .warning-box:before{content:"[!] ";font-weight:700}[data-comfygit-theme=phosphor] .warning-box.error{border-color:var(--cg-color-error);color:var(--cg-color-error)}[data-comfygit-theme=phosphor] .issue-card{background:transparent;border:1px solid;box-shadow:var(--cg-shadow-sm);transition:all var(--cg-transition-fast)}[data-comfygit-theme=phosphor] .issue-card:hover{box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=phosphor] .issue-card--warning{border-color:var(--cg-color-warning)}[data-comfygit-theme=phosphor] .issue-card--warning .issue-card__icon,[data-comfygit-theme=phosphor] .issue-card--warning .issue-card__title{text-shadow:0 0 8px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .issue-card--error{border-color:var(--cg-color-error)}[data-comfygit-theme=phosphor] .issue-card--error .issue-card__icon,[data-comfygit-theme=phosphor] .issue-card--error .issue-card__title{text-shadow:0 0 8px var(--cg-color-error)}[data-comfygit-theme=phosphor] .issue-card--info{border-color:var(--cg-color-accent)}[data-comfygit-theme=phosphor] .issue-card--info .issue-card__icon,[data-comfygit-theme=phosphor] .issue-card--info .issue-card__title{text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .status-item__icon{display:none}[data-comfygit-theme=phosphor] .status-item:before{content:"├─ ";color:var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .status-item.is-separator:before{content:"└─ "}[data-comfygit-theme=phosphor] .status-item__count{font-weight:var(--cg-font-weight-bold)}[data-comfygit-theme=phosphor] .status-item--new .status-item__count{text-shadow:0 0 4px var(--cg-color-success)}[data-comfygit-theme=phosphor] .status-item--modified .status-item__count{text-shadow:0 0 4px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .status-item--deleted .status-item__count{text-shadow:0 0 4px var(--cg-color-error)}[data-comfygit-theme=phosphor] .branch-indicator__label:before{content:"/* ";color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .branch-indicator__label:after{content:" */";color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .branch-indicator__name{font-weight:var(--cg-font-weight-bold);text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .branch-indicator__remote{opacity:.7}[data-comfygit-theme=phosphor] .branch-indicator__ahead{text-shadow:0 0 4px var(--cg-color-success)}[data-comfygit-theme=phosphor] .branch-indicator__behind{text-shadow:0 0 4px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .branch-item,[data-comfygit-theme=phosphor] .branch-name{font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .switch-btn,[data-comfygit-theme=phosphor] .current-label{font-size:var(--cg-font-size-sm)!important;padding:6px 12px!important}[data-comfygit-theme=phosphor] .switch-btn{background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .switch-btn:hover{border-color:var(--cg-color-accent);color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .current-label{color:var(--cg-color-text-muted);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .history-section{font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .history-title{color:var(--cg-color-text-muted);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .commit-item{background:transparent;border:none;border-left:2px solid var(--cg-color-border-subtle);padding-left:var(--cg-space-3);margin-left:var(--cg-space-2)}[data-comfygit-theme=phosphor] .commit-item:hover{border-left-color:var(--cg-color-accent);background:var(--cg-color-bg-hover)}[data-comfygit-theme=phosphor] .commit-hash{color:var(--cg-color-accent);font-weight:var(--cg-font-weight-bold);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .commit-hash:before{content:"#"}[data-comfygit-theme=phosphor] .commit-message{color:var(--cg-color-text-primary);font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .commit-date{color:var(--cg-color-text-muted);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .panel-footer{border-top:1px solid var(--cg-color-border);background:var(--cg-color-bg-tertiary)}[data-comfygit-theme=phosphor] .export-btn{background:transparent;color:var(--cg-color-text-primary);border:1px solid var(--cg-color-border);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .export-btn:hover:not(:disabled){background:var(--cg-color-bg-hover);border-color:var(--cg-color-accent);color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .commit-popover{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg)}[data-comfygit-theme=phosphor] .commit-input{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle);color:var(--cg-color-text-primary);font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .commit-input:focus{border-color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm);outline:none}[data-comfygit-theme=phosphor] .comfygit-panel-btn{background:var(--cg-color-accent)!important;color:var(--cg-color-bg-primary)!important;border:none!important;text-transform:uppercase;letter-spacing:.1em;font-family:var(--cg-font-mono);font-size:11px;box-shadow:0 0 8px var(--cg-color-accent)!important}[data-comfygit-theme=phosphor] .comfygit-panel-btn:hover{box-shadow:0 0 16px var(--cg-color-accent)!important}[data-comfygit-theme=phosphor] .comfygit-commit-btn{background:var(--cg-color-bg-tertiary)!important;color:var(--cg-color-text-primary)!important;border:1px solid var(--cg-color-border-subtle)!important;font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .comfygit-commit-btn:hover{border-color:var(--cg-color-accent)!important;box-shadow:0 0 8px #00ff414d!important}[data-comfygit-theme=phosphor] .commit-indicator{background:var(--cg-color-warning);box-shadow:0 0 6px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar{width:8px}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar-track{background:var(--cg-color-bg-tertiary)}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar-thumb{background:var(--cg-color-border-subtle);border:1px solid var(--cg-color-bg-tertiary)}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar-thumb:hover{background:var(--cg-color-accent)}[data-comfygit-theme=phosphor] .comfygit-panel ::selection,[data-comfygit-theme=phosphor] .toast ::selection,[data-comfygit-theme=phosphor] .dialog-content ::selection,[data-comfygit-theme=phosphor] .commit-popover ::selection{background:var(--cg-color-accent);color:var(--cg-color-bg-primary)}[data-comfygit-theme=phosphor] .toast{background:var(--cg-color-bg-primary);border:1px solid var(--cg-color-border);font-family:var(--cg-font-mono);box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=phosphor] .toast.info{border-left:3px solid var(--cg-color-info)}[data-comfygit-theme=phosphor] .toast.success{border-left:3px solid var(--cg-color-success)}[data-comfygit-theme=phosphor] .toast.warning{border-left:3px solid var(--cg-color-warning)}[data-comfygit-theme=phosphor] .toast.error{border-left:3px solid var(--cg-color-error)}[data-comfygit-theme=phosphor] .toast-message:before{content:"> ";opacity:.5}[data-comfygit-theme=phosphor] .dialog-content{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg);font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .dialog-title{color:var(--cg-color-accent);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .dialog-title:before{content:"> ";opacity:.7}[data-comfygit-theme=phosphor] .dialog-message{color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .dialog-details{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .dialog-warning{background:transparent;border:1px solid var(--cg-color-warning);color:var(--cg-color-warning)}[data-comfygit-theme=phosphor] .dialog-btn{font-family:var(--cg-font-mono);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .dialog-btn.cancel{background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .dialog-btn.cancel:hover{border-color:var(--cg-color-accent);color:var(--cg-color-accent)}[data-comfygit-theme=phosphor] .dialog-btn.primary{background:var(--cg-color-accent);color:var(--cg-color-bg-primary);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .dialog-btn.primary:hover{box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=phosphor] .dialog-btn.primary.destructive{background:var(--cg-color-error)}[data-comfygit-theme=phosphor] .branch-input{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle);color:var(--cg-color-text-primary);font-family:var(--cg-font-mono);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .branch-input:focus{border-color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .action-btn{font-family:var(--cg-font-mono);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .action-btn.create{background:var(--cg-color-accent);color:var(--cg-color-bg-primary);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .action-btn.create:hover:not(:disabled){box-shadow:var(--cg-shadow-md);transform:none}[data-comfygit-theme=phosphor] .action-btn.cancel{background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .action-btn.cancel:hover{border-color:var(--cg-color-accent);color:var(--cg-color-accent);background:transparent}[data-comfygit-theme=phosphor] .commit-popover{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg);font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .popover-title{color:var(--cg-color-accent);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .popover-title:before{content:"> ";opacity:.7}[data-comfygit-theme=phosphor] .commit-input{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle);color:var(--cg-color-text-primary);font-family:var(--cg-font-mono);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .commit-input:focus{border-color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .commit-input::placeholder{color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .changes-summary{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .change-item:before{content:"├─ ";color:var(--cg-color-border-subtle);margin-right:4px}[data-comfygit-theme=phosphor] .cancel-btn{font-family:var(--cg-font-mono);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs);background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .cancel-btn:hover{border-color:var(--cg-color-accent);color:var(--cg-color-accent);background:transparent}[data-comfygit-theme=phosphor] .commit-btn{font-family:var(--cg-font-mono);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs);background:var(--cg-color-accent);color:var(--cg-color-bg-primary);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .commit-btn:hover:not(:disabled){box-shadow:var(--cg-shadow-md);transform:none}[data-comfygit-theme=phosphor] .result.success{background:transparent;border:1px solid var(--cg-color-success);color:var(--cg-color-success)}[data-comfygit-theme=phosphor] .result.error{background:transparent;border:1px solid var(--cg-color-error);color:var(--cg-color-error)}[data-comfygit-theme=phosphor] .base-modal-content{box-shadow:var(--cg-shadow-xl)}[data-comfygit-theme=phosphor] .base-title.view:before{content:var(--cg-decoration-title-prefix)}[data-comfygit-theme=phosphor] .base-title.section:before{content:var(--cg-decoration-label-prefix)}[data-comfygit-theme=phosphor] .base-title.section:after{content:var(--cg-decoration-label-suffix)}[data-comfygit-theme=phosphor] .base-title.dialog{text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .base-btn.primary{background:var(--cg-color-accent);color:var(--cg-color-bg-primary);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .base-btn.primary:hover:not(:disabled){box-shadow:var(--cg-shadow-md);transform:none}[data-comfygit-theme=phosphor] .base-btn.secondary{background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .base-btn.secondary:hover:not(:disabled){border-color:var(--cg-color-accent);color:var(--cg-color-accent);background:transparent}[data-comfygit-theme=phosphor] .base-tabs{border-bottom-color:var(--cg-color-border)}[data-comfygit-theme=phosphor] .base-tabs__tab{text-shadow:none}[data-comfygit-theme=phosphor] .base-tabs__tab:before{content:""}[data-comfygit-theme=phosphor] .base-tabs__tab.active:before{content:"> ";opacity:.7}[data-comfygit-theme=phosphor] .base-tabs__tab.active{text-shadow:0 0 8px var(--cg-color-accent);border-bottom-color:var(--cg-color-accent);box-shadow:0 2px 8px var(--cg-shadow-accent)}[data-comfygit-theme=phosphor] .base-tabs__tab:hover:not(.disabled):not(.active){color:var(--cg-color-accent);text-shadow:0 0 4px var(--cg-color-accent)}', e7 = {
+}), XT = /* @__PURE__ */ ye(JT, [["__scopeId", "data-v-ed99da35"]]), QT = '@import"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap";[data-comfygit-theme=comfy]{--cg-font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;--cg-font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;--cg-font-mono: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;--cg-font-size-xs: 14.3px;--cg-font-size-sm: 16.9px;--cg-font-size-base: 18.2px;--cg-font-size-lg: 20.8px;--cg-font-size-xl: 23.4px;--cg-font-size-2xl: 26px;--cg-font-weight-normal: 400;--cg-font-weight-medium: 500;--cg-font-weight-semibold: 600;--cg-font-weight-bold: 700;--cg-panel-width: 884px;--cg-space-1: 5.2px;--cg-space-2: 10.4px;--cg-space-3: 15.6px;--cg-space-4: 20.8px;--cg-space-5: 26px;--cg-space-6: 31.2px;--cg-space-8: 41.6px;--cg-space-10: 52px;--cg-space-12: 62.4px;--cg-letter-spacing-normal: 0;--cg-letter-spacing-wide: .025em;--cg-transition-fast: .15s ease;--cg-transition-base: .2s ease;--cg-transition-slow: .3s ease;--cg-color-bg-primary: #2d2e32;--cg-color-bg-secondary: #262729;--cg-color-bg-tertiary: #202121;--cg-color-bg-hover: #3c3d42;--cg-color-bg-overlay: rgba(0, 0, 0, .75);--cg-color-text-primary: #ffffff;--cg-color-text-secondary: #c5c5c5;--cg-color-text-muted: #8a8a8a;--cg-color-text-inverse: #000000;--cg-color-border: #55565e;--cg-color-border-subtle: #3c3d42;--cg-color-border-strong: #828282;--cg-color-accent: #31b9f4;--cg-color-accent-hover: #0b8ce9;--cg-color-accent-muted: rgba(49, 185, 244, .15);--cg-color-success: #47e469;--cg-color-success-muted: rgba(71, 228, 105, .15);--cg-color-warning: #fcbf64;--cg-color-warning-muted: rgba(252, 191, 100, .15);--cg-color-error: #dd424e;--cg-color-error-muted: rgba(221, 66, 78, .15);--cg-color-info: #31b9f4;--cg-color-info-muted: rgba(49, 185, 244, .15);--cg-radius-none: 0;--cg-radius-sm: 4px;--cg-radius-md: 6px;--cg-radius-lg: 8px;--cg-radius-xl: 12px;--cg-radius-2xl: 16px;--cg-radius-full: 9999px;--cg-shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);--cg-shadow-md: 0 2px 8px rgba(0, 0, 0, .4);--cg-shadow-lg: 0 4px 16px rgba(0, 0, 0, .5);--cg-shadow-xl: 0 8px 32px rgba(0, 0, 0, .6);--cg-btn-gradient-start: #31b9f4;--cg-btn-gradient-end: #0b8ce9;--cg-btn-shadow-inset: inset 0 1px 0 rgba(255, 255, 255, .1);--cg-decoration-title-prefix: "";--cg-decoration-label-prefix: "";--cg-decoration-label-suffix: "";--cg-decoration-status-animation: none;--cg-decoration-status-shape: circle;--cg-shadow-accent: rgba(49, 185, 244, .3);--cg-shadow-accent-strong: rgba(49, 185, 244, .5);--cg-shadow-error: rgba(221, 66, 78, .3);--cg-shadow-success: rgba(71, 228, 105, .3);--cg-text-shadow-title: none;--cg-text-shadow-accent: none}[data-comfygit-theme=comfy] .comfygit-panel{box-shadow:var(--cg-shadow-lg);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=comfy] .sidebar{background:var(--cg-color-bg-secondary);border-right:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=comfy] .sidebar-item{border-radius:var(--cg-radius-md);transition:background var(--cg-transition-fast),color var(--cg-transition-fast)}[data-comfygit-theme=comfy] .sidebar-item:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .sidebar-item.active{background:var(--cg-color-accent-muted);color:var(--cg-color-accent);font-weight:var(--cg-font-weight-medium)}[data-comfygit-theme=comfy] button{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .icon-btn{border-radius:var(--cg-radius-md);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .icon-btn:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .status-grid{border-radius:var(--cg-radius-lg);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .issue-card{border-radius:var(--cg-radius-lg);box-shadow:var(--cg-shadow-sm);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .issue-card:hover{box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=comfy] .issue-card--warning,[data-comfygit-theme=comfy] .issue-card--error,[data-comfygit-theme=comfy] .issue-card--info{border-left-width:4px}[data-comfygit-theme=comfy] .branch-indicator{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .branch-indicator__name{font-weight:var(--cg-font-weight-semibold)}[data-comfygit-theme=comfy] .commit-list{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .commit-item{transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .commit-item:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .branch-item,[data-comfygit-theme=comfy] .branch-list-item{border-radius:var(--cg-radius-md);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .branch-item:hover,[data-comfygit-theme=comfy] .branch-list-item:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .branch-list{border-radius:var(--cg-radius-md);overflow:hidden}[data-comfygit-theme=comfy] .branch-create-form,[data-comfygit-theme=comfy] .create-form{border-radius:var(--cg-radius-md);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .text-input{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] input[type=text],[data-comfygit-theme=comfy] textarea{border-radius:var(--cg-radius-md);border:1px solid var(--cg-color-border);transition:border-color var(--cg-transition-fast),box-shadow var(--cg-transition-fast)}[data-comfygit-theme=comfy] input[type=text]:focus,[data-comfygit-theme=comfy] textarea:focus{border-color:var(--cg-color-accent);box-shadow:0 0 0 3px var(--cg-color-accent-muted)}[data-comfygit-theme=comfy] .dialog-content{border-radius:var(--cg-radius-xl);box-shadow:var(--cg-shadow-xl);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=comfy] .status-badge{border-radius:var(--cg-radius-sm);font-size:var(--cg-font-size-xs);font-weight:var(--cg-font-weight-medium);padding:2px 8px}[data-comfygit-theme=comfy] .warning-box{border-radius:var(--cg-radius-md);border-left:4px solid var(--cg-color-warning);background:var(--cg-color-warning-muted)}[data-comfygit-theme=comfy] .env-switcher-btn{border-radius:var(--cg-radius-md);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .env-switcher-btn:hover{background:var(--cg-color-bg-hover);transform:translateY(-1px);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .section-title{font-weight:var(--cg-font-weight-semibold);letter-spacing:var(--cg-letter-spacing-wide);color:var(--cg-color-text-secondary)}[data-comfygit-theme=comfy] .commit-hash,[data-comfygit-theme=comfy] .branch-name-mono,[data-comfygit-theme=comfy] .file-path{font-family:var(--cg-font-mono)}[data-comfygit-theme=comfy] .settings-section{border-radius:var(--cg-radius-md);background:var(--cg-color-bg-secondary)}[data-comfygit-theme=comfy] .setting-row{transition:background var(--cg-transition-fast)}[data-comfygit-theme=comfy] .setting-row:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .toggle-slider{border-radius:var(--cg-radius-full)}[data-comfygit-theme=comfy] .commit-hash{color:var(--cg-color-accent);font-weight:var(--cg-font-weight-medium)}[data-comfygit-theme=comfy] .status-dot.success{background:var(--cg-color-success)}[data-comfygit-theme=comfy] .status-dot.warning{background:var(--cg-color-warning)}[data-comfygit-theme=comfy] .status-dot.error{background:var(--cg-color-error)}[data-comfygit-theme=comfy] ::-webkit-scrollbar{width:8px;height:8px}[data-comfygit-theme=comfy] ::-webkit-scrollbar-track{background:var(--cg-color-bg-secondary)}[data-comfygit-theme=comfy] ::-webkit-scrollbar-thumb{background:var(--cg-color-border);border-radius:var(--cg-radius-sm)}[data-comfygit-theme=comfy] ::-webkit-scrollbar-thumb:hover{background:var(--cg-color-border-strong)}[data-comfygit-theme=comfy] .view-title:before,[data-comfygit-theme=comfy] .panel-title:before,[data-comfygit-theme=comfy] .section-title:before{content:""}[data-comfygit-theme=comfy] .status-dot{width:8px;height:8px;border-radius:50%;animation:none}[data-comfygit-theme=comfy] .env-switcher-label{font-weight:var(--cg-font-weight-semibold)}[data-comfygit-theme=comfy] .panel-title,[data-comfygit-theme=comfy] .view-title{text-shadow:none}[data-comfygit-theme=comfy] .log-level{border-radius:var(--cg-radius-sm);font-weight:var(--cg-font-weight-semibold)}[data-comfygit-theme=comfy] .log-item{border-radius:var(--cg-radius-md);transition:all var(--cg-transition-fast);margin-bottom:var(--cg-space-1)}[data-comfygit-theme=comfy] .log-item:hover{background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .log-item__context{border-radius:var(--cg-radius-sm);font-weight:var(--cg-font-weight-medium)}[data-comfygit-theme=comfy] .log-filter-bar{border-radius:var(--cg-radius-md);background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle);margin-bottom:var(--cg-space-3)}[data-comfygit-theme=comfy] .filter-option{border-radius:var(--cg-radius-sm);transition:all var(--cg-transition-fast)}[data-comfygit-theme=comfy] .filter-option:hover{transform:translateY(-1px);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .filter-option.active{box-shadow:0 0 8px var(--cg-shadow-accent)}[data-comfygit-theme=comfy] .log-list{border-radius:var(--cg-radius-md);overflow:hidden}[data-comfygit-theme=comfy] .remote-form{border-radius:var(--cg-radius-md);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .remote-url-display{background:var(--cg-color-bg-secondary);padding:var(--cg-space-1) var(--cg-space-2);border-radius:var(--cg-radius-sm)}[data-comfygit-theme=comfy] .default-badge,[data-comfygit-theme=comfy] .copy-btn{border-radius:var(--cg-radius-sm)}[data-comfygit-theme=comfy] .file-path,[data-comfygit-theme=comfy] .export-warning{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .file-drop-zone{border-radius:var(--cg-radius-lg);transition:all var(--cg-transition-base)}[data-comfygit-theme=comfy] .file-drop-zone.drop-active{transform:scale(1.01)}[data-comfygit-theme=comfy] .file-drop-zone.has-file{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .import-preview,[data-comfygit-theme=comfy] .import-options{border-radius:var(--cg-radius-lg);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .option-item{border-radius:var(--cg-radius-md)}[data-comfygit-theme=comfy] .option-item:hover{transform:translate(2px)}[data-comfygit-theme=comfy] .selected-file-bar{border-radius:var(--cg-radius-md);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .import-help{border-radius:var(--cg-radius-lg);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .help-number{border-radius:var(--cg-radius-md);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=comfy] .progress-bar{border-radius:var(--cg-radius-full);overflow:hidden}[data-comfygit-theme=comfy] .progress-bar-fill{border-radius:var(--cg-radius-full);box-shadow:0 0 8px var(--cg-shadow-accent-strong)}[data-comfygit-theme=comfy] .complete-icon.success{box-shadow:0 0 16px var(--cg-shadow-success)}[data-comfygit-theme=comfy] .complete-icon.error{box-shadow:0 0 16px var(--cg-shadow-error)}[data-comfygit-theme=comfy] .base-tabs{border-bottom-color:var(--cg-color-border-subtle)}[data-comfygit-theme=comfy] .base-tabs__tab{border-radius:var(--cg-radius-sm) var(--cg-radius-sm) 0 0}[data-comfygit-theme=comfy] .base-tabs__tab:hover:not(.disabled){background:var(--cg-color-bg-hover)}[data-comfygit-theme=comfy] .base-tabs__tab.active{background:var(--cg-color-accent-muted)}', ZT = '@import"https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap";[data-comfygit-theme=phosphor]{--cg-font-display: "IBM Plex Mono", ui-monospace, monospace;--cg-font-body: "IBM Plex Mono", ui-monospace, monospace;--cg-font-mono: "IBM Plex Mono", ui-monospace, monospace;--cg-font-size-xs: 15.6px;--cg-font-size-sm: 18.2px;--cg-font-size-base: 22.1px;--cg-font-size-lg: 26px;--cg-font-size-xl: 31.2px;--cg-font-size-2xl: 36.4px;--cg-panel-width: 980px;--cg-space-1: 5.2px;--cg-space-2: 10.4px;--cg-space-3: 15.6px;--cg-space-4: 20.8px;--cg-space-5: 26px;--cg-space-6: 31.2px;--cg-space-8: 41.6px;--cg-space-10: 52px;--cg-space-12: 62.4px;--cg-letter-spacing-normal: .02em;--cg-letter-spacing-wide: .08em;--cg-color-bg-primary: #0a0a0a;--cg-color-bg-secondary: #050505;--cg-color-bg-tertiary: #000000;--cg-color-bg-hover: #0f1f0f;--cg-color-bg-overlay: rgba(0, 0, 0, .85);--cg-color-text-primary: #00ff41;--cg-color-text-secondary: #00cc33;--cg-color-text-muted: #008f11;--cg-color-text-inverse: #000000;--cg-color-border: #00ff41;--cg-color-border-subtle: #003b00;--cg-color-border-strong: #00ff41;--cg-color-accent: #00ff41;--cg-color-accent-hover: #39ff14;--cg-color-accent-muted: rgba(0, 255, 65, .15);--cg-color-success: #00ff41;--cg-color-success-muted: rgba(0, 255, 65, .2);--cg-color-warning: #ffff00;--cg-color-warning-muted: rgba(255, 255, 0, .15);--cg-color-error: #ff0040;--cg-color-error-muted: rgba(255, 0, 64, .15);--cg-color-info: #00ffff;--cg-color-info-muted: rgba(0, 255, 255, .15);--cg-radius-none: 0;--cg-radius-sm: 0;--cg-radius-md: 0;--cg-radius-lg: 0;--cg-radius-xl: 0;--cg-radius-2xl: 0;--cg-radius-full: 0;--cg-shadow-sm: 0 0 4px rgba(0, 255, 65, .3);--cg-shadow-md: 0 0 8px rgba(0, 255, 65, .4);--cg-shadow-lg: 0 0 16px rgba(0, 255, 65, .5);--cg-shadow-xl: 0 0 32px rgba(0, 255, 65, .6);--cg-btn-gradient-start: #00ff41;--cg-btn-gradient-end: #00cc33;--cg-btn-shadow-inset: none;--cg-decoration-title-prefix: "> ";--cg-decoration-label-prefix: "/* ";--cg-decoration-label-suffix: " */";--cg-decoration-status-animation: cursor-blink 1s step-end infinite;--cg-decoration-status-shape: cursor;--cg-shadow-accent: rgba(0, 255, 65, .3);--cg-shadow-accent-strong: rgba(0, 255, 65, .5);--cg-shadow-error: rgba(255, 0, 64, .3);--cg-shadow-success: rgba(0, 255, 65, .3);--cg-text-shadow-title: 0 0 8px var(--cg-color-accent);--cg-text-shadow-accent: 0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .comfygit-panel{position:relative;overflow:hidden}[data-comfygit-theme=phosphor] .comfygit-panel:before{content:"";position:absolute;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.15) 2px,rgba(0,0,0,.15) 3px);pointer-events:none;z-index:100}[data-comfygit-theme=phosphor] .comfygit-panel:after{content:"";position:absolute;top:0;left:0;right:0;bottom:0;background:#00ff4105;pointer-events:none;animation:phosphor-flicker 4s infinite;z-index:99}@keyframes phosphor-flicker{0%,to{opacity:1}50%{opacity:.98}52%{opacity:1}54%{opacity:.96}56%{opacity:1}}[data-comfygit-theme=phosphor] .comfygit-panel{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg),inset 0 0 100px #00ff4108;font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .panel-title{color:var(--cg-color-accent);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-sm);text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .panel-title:before{content:var(--cg-decoration-title-prefix);opacity:.7}[data-comfygit-theme=phosphor] .view-title{text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .view-title:before{content:var(--cg-decoration-title-prefix);opacity:.7}[data-comfygit-theme=phosphor] .env-name,[data-comfygit-theme=phosphor] .branch-name{color:var(--cg-color-text-secondary);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .branch-name:before{content:"@";margin-right:2px}[data-comfygit-theme=phosphor] .env-switcher-label:before{content:var(--cg-decoration-label-prefix)}[data-comfygit-theme=phosphor] .env-switcher-label:after{content:var(--cg-decoration-label-suffix)}[data-comfygit-theme=phosphor] .group-title:before{content:var(--cg-decoration-label-prefix)}[data-comfygit-theme=phosphor] .group-title:after{content:var(--cg-decoration-label-suffix)}[data-comfygit-theme=phosphor] .status-dot{width:6px;height:12px;border-radius:0;animation:var(--cg-decoration-status-animation)}[data-comfygit-theme=phosphor] .status-dot.success{background:var(--cg-color-success)}[data-comfygit-theme=phosphor] .status-dot.warning{background:var(--cg-color-warning)}[data-comfygit-theme=phosphor] .status-dot.error{background:var(--cg-color-error)}@keyframes cursor-blink{50%{opacity:0}}[data-comfygit-theme=phosphor] .icon-btn{color:var(--cg-color-text-primary);border:1px solid transparent}[data-comfygit-theme=phosphor] .icon-btn:hover{background:var(--cg-color-bg-hover);border-color:var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .status-section{margin-bottom:var(--cg-space-4)}[data-comfygit-theme=phosphor] .section-title{color:var(--cg-color-accent);font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);text-shadow:0 0 8px var(--cg-color-accent);margin-bottom:var(--cg-space-2)}[data-comfygit-theme=phosphor] .section-title:before{content:"> ";opacity:.7}[data-comfygit-theme=phosphor] .count{font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .status-grid{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .column-title{color:var(--cg-color-text-muted);font-size:var(--cg-font-size-xs);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wider)}[data-comfygit-theme=phosphor] .column-title:before{content:"/* "}[data-comfygit-theme=phosphor] .column-title:after{content:" */"}[data-comfygit-theme=phosphor] .status-item{font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .status-item .icon{display:none}[data-comfygit-theme=phosphor] .synced-item:before{content:"└─ "}[data-comfygit-theme=phosphor] .count{font-weight:var(--cg-font-weight-bold)}[data-comfygit-theme=phosphor] .count.new{color:var(--cg-color-success);text-shadow:0 0 4px var(--cg-color-success)}[data-comfygit-theme=phosphor] .count.modified{color:var(--cg-color-warning);text-shadow:0 0 4px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .count.deleted{color:var(--cg-color-error);text-shadow:0 0 4px var(--cg-color-error)}[data-comfygit-theme=phosphor] .count.synced{color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .warning-box{background:transparent;border:1px solid var(--cg-color-warning);color:var(--cg-color-warning);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .warning-box:before{content:"[!] ";font-weight:700}[data-comfygit-theme=phosphor] .warning-box.error{border-color:var(--cg-color-error);color:var(--cg-color-error)}[data-comfygit-theme=phosphor] .issue-card{background:transparent;border:1px solid;box-shadow:var(--cg-shadow-sm);transition:all var(--cg-transition-fast)}[data-comfygit-theme=phosphor] .issue-card:hover{box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=phosphor] .issue-card--warning{border-color:var(--cg-color-warning)}[data-comfygit-theme=phosphor] .issue-card--warning .issue-card__icon,[data-comfygit-theme=phosphor] .issue-card--warning .issue-card__title{text-shadow:0 0 8px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .issue-card--error{border-color:var(--cg-color-error)}[data-comfygit-theme=phosphor] .issue-card--error .issue-card__icon,[data-comfygit-theme=phosphor] .issue-card--error .issue-card__title{text-shadow:0 0 8px var(--cg-color-error)}[data-comfygit-theme=phosphor] .issue-card--info{border-color:var(--cg-color-accent)}[data-comfygit-theme=phosphor] .issue-card--info .issue-card__icon,[data-comfygit-theme=phosphor] .issue-card--info .issue-card__title{text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .status-item__icon{display:none}[data-comfygit-theme=phosphor] .status-item:before{content:"├─ ";color:var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .status-item.is-separator:before{content:"└─ "}[data-comfygit-theme=phosphor] .status-item__count{font-weight:var(--cg-font-weight-bold)}[data-comfygit-theme=phosphor] .status-item--new .status-item__count{text-shadow:0 0 4px var(--cg-color-success)}[data-comfygit-theme=phosphor] .status-item--modified .status-item__count{text-shadow:0 0 4px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .status-item--deleted .status-item__count{text-shadow:0 0 4px var(--cg-color-error)}[data-comfygit-theme=phosphor] .branch-indicator__label:before{content:"/* ";color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .branch-indicator__label:after{content:" */";color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .branch-indicator__name{font-weight:var(--cg-font-weight-bold);text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .branch-indicator__remote{opacity:.7}[data-comfygit-theme=phosphor] .branch-indicator__ahead{text-shadow:0 0 4px var(--cg-color-success)}[data-comfygit-theme=phosphor] .branch-indicator__behind{text-shadow:0 0 4px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .branch-item,[data-comfygit-theme=phosphor] .branch-name{font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .switch-btn,[data-comfygit-theme=phosphor] .current-label{font-size:var(--cg-font-size-sm)!important;padding:6px 12px!important}[data-comfygit-theme=phosphor] .switch-btn{background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .switch-btn:hover{border-color:var(--cg-color-accent);color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .current-label{color:var(--cg-color-text-muted);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .history-section{font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .history-title{color:var(--cg-color-text-muted);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .commit-item{background:transparent;border:none;border-left:2px solid var(--cg-color-border-subtle);padding-left:var(--cg-space-3);margin-left:var(--cg-space-2)}[data-comfygit-theme=phosphor] .commit-item:hover{border-left-color:var(--cg-color-accent);background:var(--cg-color-bg-hover)}[data-comfygit-theme=phosphor] .commit-hash{color:var(--cg-color-accent);font-weight:var(--cg-font-weight-bold);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .commit-hash:before{content:"#"}[data-comfygit-theme=phosphor] .commit-message{color:var(--cg-color-text-primary);font-size:var(--cg-font-size-base)}[data-comfygit-theme=phosphor] .commit-date{color:var(--cg-color-text-muted);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .panel-footer{border-top:1px solid var(--cg-color-border);background:var(--cg-color-bg-tertiary)}[data-comfygit-theme=phosphor] .export-btn{background:transparent;color:var(--cg-color-text-primary);border:1px solid var(--cg-color-border);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .export-btn:hover:not(:disabled){background:var(--cg-color-bg-hover);border-color:var(--cg-color-accent);color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .commit-popover{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg)}[data-comfygit-theme=phosphor] .commit-input{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle);color:var(--cg-color-text-primary);font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .commit-input:focus{border-color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm);outline:none}[data-comfygit-theme=phosphor] .comfygit-panel-btn{background:var(--cg-color-accent)!important;color:var(--cg-color-bg-primary)!important;border:none!important;text-transform:uppercase;letter-spacing:.1em;font-family:var(--cg-font-mono);font-size:11px;box-shadow:0 0 8px var(--cg-color-accent)!important}[data-comfygit-theme=phosphor] .comfygit-panel-btn:hover{box-shadow:0 0 16px var(--cg-color-accent)!important}[data-comfygit-theme=phosphor] .comfygit-commit-btn{background:var(--cg-color-bg-tertiary)!important;color:var(--cg-color-text-primary)!important;border:1px solid var(--cg-color-border-subtle)!important;font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .comfygit-commit-btn:hover{border-color:var(--cg-color-accent)!important;box-shadow:0 0 8px #00ff414d!important}[data-comfygit-theme=phosphor] .commit-indicator{background:var(--cg-color-warning);box-shadow:0 0 6px var(--cg-color-warning)}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar{width:8px}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar-track{background:var(--cg-color-bg-tertiary)}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar-thumb{background:var(--cg-color-border-subtle);border:1px solid var(--cg-color-bg-tertiary)}[data-comfygit-theme=phosphor] .panel-content::-webkit-scrollbar-thumb:hover{background:var(--cg-color-accent)}[data-comfygit-theme=phosphor] .comfygit-panel ::selection,[data-comfygit-theme=phosphor] .toast ::selection,[data-comfygit-theme=phosphor] .dialog-content ::selection,[data-comfygit-theme=phosphor] .commit-popover ::selection{background:var(--cg-color-accent);color:var(--cg-color-bg-primary)}[data-comfygit-theme=phosphor] .toast{background:var(--cg-color-bg-primary);border:1px solid var(--cg-color-border);font-family:var(--cg-font-mono);box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=phosphor] .toast.info{border-left:3px solid var(--cg-color-info)}[data-comfygit-theme=phosphor] .toast.success{border-left:3px solid var(--cg-color-success)}[data-comfygit-theme=phosphor] .toast.warning{border-left:3px solid var(--cg-color-warning)}[data-comfygit-theme=phosphor] .toast.error{border-left:3px solid var(--cg-color-error)}[data-comfygit-theme=phosphor] .toast-message:before{content:"> ";opacity:.5}[data-comfygit-theme=phosphor] .dialog-content{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg);font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .dialog-title{color:var(--cg-color-accent);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .dialog-title:before{content:"> ";opacity:.7}[data-comfygit-theme=phosphor] .dialog-message{color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .dialog-details{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .dialog-warning{background:transparent;border:1px solid var(--cg-color-warning);color:var(--cg-color-warning)}[data-comfygit-theme=phosphor] .dialog-btn{font-family:var(--cg-font-mono);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .dialog-btn.cancel{background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .dialog-btn.cancel:hover{border-color:var(--cg-color-accent);color:var(--cg-color-accent)}[data-comfygit-theme=phosphor] .dialog-btn.primary{background:var(--cg-color-accent);color:var(--cg-color-bg-primary);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .dialog-btn.primary:hover{box-shadow:var(--cg-shadow-md)}[data-comfygit-theme=phosphor] .dialog-btn.primary.destructive{background:var(--cg-color-error)}[data-comfygit-theme=phosphor] .branch-input{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle);color:var(--cg-color-text-primary);font-family:var(--cg-font-mono);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .branch-input:focus{border-color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .action-btn{font-family:var(--cg-font-mono);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs)}[data-comfygit-theme=phosphor] .action-btn.create{background:var(--cg-color-accent);color:var(--cg-color-bg-primary);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .action-btn.create:hover:not(:disabled){box-shadow:var(--cg-shadow-md);transform:none}[data-comfygit-theme=phosphor] .action-btn.cancel{background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .action-btn.cancel:hover{border-color:var(--cg-color-accent);color:var(--cg-color-accent);background:transparent}[data-comfygit-theme=phosphor] .commit-popover{background:var(--cg-color-bg-primary);border:2px solid var(--cg-color-border);box-shadow:var(--cg-shadow-lg);font-family:var(--cg-font-mono)}[data-comfygit-theme=phosphor] .popover-title{color:var(--cg-color-accent);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .popover-title:before{content:"> ";opacity:.7}[data-comfygit-theme=phosphor] .commit-input{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle);color:var(--cg-color-text-primary);font-family:var(--cg-font-mono);font-size:var(--cg-font-size-sm)}[data-comfygit-theme=phosphor] .commit-input:focus{border-color:var(--cg-color-accent);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .commit-input::placeholder{color:var(--cg-color-text-muted)}[data-comfygit-theme=phosphor] .changes-summary{background:var(--cg-color-bg-tertiary);border:1px solid var(--cg-color-border-subtle)}[data-comfygit-theme=phosphor] .change-item:before{content:"├─ ";color:var(--cg-color-border-subtle);margin-right:4px}[data-comfygit-theme=phosphor] .cancel-btn{font-family:var(--cg-font-mono);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs);background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .cancel-btn:hover{border-color:var(--cg-color-accent);color:var(--cg-color-accent);background:transparent}[data-comfygit-theme=phosphor] .commit-btn{font-family:var(--cg-font-mono);text-transform:uppercase;letter-spacing:var(--cg-letter-spacing-wide);font-size:var(--cg-font-size-xs);background:var(--cg-color-accent);color:var(--cg-color-bg-primary);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .commit-btn:hover:not(:disabled){box-shadow:var(--cg-shadow-md);transform:none}[data-comfygit-theme=phosphor] .result.success{background:transparent;border:1px solid var(--cg-color-success);color:var(--cg-color-success)}[data-comfygit-theme=phosphor] .result.error{background:transparent;border:1px solid var(--cg-color-error);color:var(--cg-color-error)}[data-comfygit-theme=phosphor] .base-modal-content{box-shadow:var(--cg-shadow-xl)}[data-comfygit-theme=phosphor] .base-title.view:before{content:var(--cg-decoration-title-prefix)}[data-comfygit-theme=phosphor] .base-title.section:before{content:var(--cg-decoration-label-prefix)}[data-comfygit-theme=phosphor] .base-title.section:after{content:var(--cg-decoration-label-suffix)}[data-comfygit-theme=phosphor] .base-title.dialog{text-shadow:0 0 8px var(--cg-color-accent)}[data-comfygit-theme=phosphor] .base-btn.primary{background:var(--cg-color-accent);color:var(--cg-color-bg-primary);box-shadow:var(--cg-shadow-sm)}[data-comfygit-theme=phosphor] .base-btn.primary:hover:not(:disabled){box-shadow:var(--cg-shadow-md);transform:none}[data-comfygit-theme=phosphor] .base-btn.secondary{background:transparent;border:1px solid var(--cg-color-border);color:var(--cg-color-text-primary)}[data-comfygit-theme=phosphor] .base-btn.secondary:hover:not(:disabled){border-color:var(--cg-color-accent);color:var(--cg-color-accent);background:transparent}[data-comfygit-theme=phosphor] .base-tabs{border-bottom-color:var(--cg-color-border)}[data-comfygit-theme=phosphor] .base-tabs__tab{text-shadow:none}[data-comfygit-theme=phosphor] .base-tabs__tab:before{content:""}[data-comfygit-theme=phosphor] .base-tabs__tab.active:before{content:"> ";opacity:.7}[data-comfygit-theme=phosphor] .base-tabs__tab.active{text-shadow:0 0 8px var(--cg-color-accent);border-bottom-color:var(--cg-color-accent);box-shadow:0 2px 8px var(--cg-shadow-accent)}[data-comfygit-theme=phosphor] .base-tabs__tab:hover:not(.disabled):not(.active){color:var(--cg-color-accent);text-shadow:0 0 4px var(--cg-color-accent)}', e7 = {
   comfy: QT,
   phosphor: ZT
 }, ol = "comfy", Fr = "comfygit-theme";
