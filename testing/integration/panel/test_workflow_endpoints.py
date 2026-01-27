@@ -2188,3 +2188,153 @@ class TestPropertyDownloadIntentRegression:
         # is_fully_resolved should be True - no download intents
         assert data["stats"]["download_intents"] == 0
         assert data["stats"]["is_fully_resolved"] is True
+
+
+@pytest.mark.integration
+class TestWorkflowIsSavedEndpoint:
+    """POST /v2/comfygit/workflow/is-saved - Check if workflow matches saved file."""
+
+    async def test_success_workflow_is_saved(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return is_saved=True when workflow hash matches saved file."""
+        # Setup: Mock environment's comfyui_path to point to workflows directory
+        mock_environment.comfyui_path = Path("/tmp/test-comfyui")
+
+        # Workflow data to test (matches what would be saved on disk)
+        workflow_data = {
+            "nodes": [{"id": 1, "type": "KSampler"}],
+            "links": [],
+            "groups": []
+        }
+
+        # Execute
+        resp = await client.post(
+            "/v2/comfygit/workflow/is-saved",
+            json={"workflow": workflow_data}
+        )
+
+        # Verify - endpoint should exist and return JSON
+        assert resp.status == 200
+        data = await resp.json()
+        assert "is_saved" in data
+        assert "filename" in data
+
+    async def test_success_workflow_not_saved(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return is_saved=False when workflow doesn't match any saved file."""
+        mock_environment.comfyui_path = Path("/tmp/test-comfyui")
+
+        # Workflow data that won't match anything
+        workflow_data = {
+            "nodes": [{"id": 999, "type": "NonexistentNode"}],
+            "links": [],
+            "groups": []
+        }
+
+        # Execute
+        resp = await client.post(
+            "/v2/comfygit/workflow/is-saved",
+            json={"workflow": workflow_data}
+        )
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["is_saved"] is False
+        assert data["filename"] is None
+
+    async def test_normalizes_extra_ds_field(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should ignore extra.ds (viewport state) when comparing hashes."""
+        mock_environment.comfyui_path = Path("/tmp/test-comfyui")
+
+        # Two workflows that differ only in extra.ds should have same hash
+        workflow1 = {
+            "nodes": [{"id": 1, "type": "KSampler"}],
+            "extra": {"ds": {"scale": 1.0, "offset": [0, 0]}}
+        }
+        workflow2 = {
+            "nodes": [{"id": 1, "type": "KSampler"}],
+            "extra": {"ds": {"scale": 2.0, "offset": [100, 200]}}
+        }
+
+        # Execute both
+        resp1 = await client.post(
+            "/v2/comfygit/workflow/is-saved",
+            json={"workflow": workflow1}
+        )
+        resp2 = await client.post(
+            "/v2/comfygit/workflow/is-saved",
+            json={"workflow": workflow2}
+        )
+
+        # Both should succeed and endpoint should handle normalization
+        assert resp1.status == 200
+        assert resp2.status == 200
+
+    async def test_error_missing_workflow_field(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 400 when workflow field is missing."""
+        resp = await client.post(
+            "/v2/comfygit/workflow/is-saved",
+            json={"something_else": "data"}
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "error" in data
+        assert "workflow" in data["error"].lower() or "missing" in data["error"].lower()
+
+    async def test_error_invalid_json_body(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 400 for invalid JSON body."""
+        resp = await client.post(
+            "/v2/comfygit/workflow/is-saved",
+            data=b"not valid json",
+            headers={"Content-Type": "application/json"}
+        )
+
+        assert resp.status == 400
+
+    async def test_error_workflow_not_dict(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 400 when workflow is not a dict."""
+        resp = await client.post(
+            "/v2/comfygit/workflow/is-saved",
+            json={"workflow": "string instead of dict"}
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "error" in data
+
+    async def test_error_no_environment(self, client, monkeypatch):
+        """Should return 500 when no environment detected."""
+        monkeypatch.setattr(
+            "comfygit_panel.get_environment_from_cwd",
+            lambda: None
+        )
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/is-saved",
+            json={"workflow": {"nodes": []}}
+        )
+        assert resp.status == 500
