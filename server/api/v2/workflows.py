@@ -3,6 +3,7 @@ import asyncio
 import json
 from pathlib import Path
 
+import xxhash
 from aiohttp import web
 
 from comfygit_core.strategies.auto import AutoNodeStrategy, AutoModelStrategy
@@ -18,6 +19,81 @@ from cgm_core.serializers import serialize_workflow_details
 from cgm_utils.async_helpers import run_sync
 
 routes = web.RouteTableDef()
+
+
+# =============================================================================
+# Workflow Is-Saved Detection (hash-based comparison)
+# =============================================================================
+
+# Cache for disk workflow hashes (invalidated by file watcher)
+_workflow_hash_cache: dict[str, str] = {}  # filename -> hash
+_cache_valid: bool = False
+
+
+def invalidate_workflow_hash_cache():
+    """Called by file watcher when workflows change."""
+    global _cache_valid
+    _cache_valid = False
+
+
+def _normalize_workflow(wf: dict) -> dict:
+    """Strip volatile fields that don't affect workflow identity."""
+    wf = wf.copy()
+    if 'extra' in wf and isinstance(wf['extra'], dict):
+        wf['extra'] = {k: v for k, v in wf['extra'].items() if k != 'ds'}
+    return wf
+
+
+def _get_workflow_hash(wf: dict) -> str:
+    """Compute xxhash of normalized workflow JSON."""
+    normalized = _normalize_workflow(wf)
+    json_str = json.dumps(normalized, sort_keys=True, separators=(',', ':'))
+    return xxhash.xxh64(json_str.encode()).hexdigest()
+
+
+def _get_disk_workflow_hashes(workflows_path: Path) -> dict[str, str]:
+    """Get hashes of all saved workflows, using cache if valid."""
+    global _workflow_hash_cache, _cache_valid
+
+    if _cache_valid:
+        return _workflow_hash_cache
+
+    _workflow_hash_cache = {}
+    if workflows_path.exists():
+        for wf_file in workflows_path.glob("**/*.json"):
+            try:
+                with open(wf_file) as f:
+                    data = json.load(f)
+                _workflow_hash_cache[wf_file.name] = _get_workflow_hash(data)
+            except (json.JSONDecodeError, IOError):
+                pass  # Skip invalid files
+
+    _cache_valid = True
+    return _workflow_hash_cache
+
+
+@routes.post("/v2/comfygit/workflow/is-saved")
+@requires_environment
+async def check_workflow_saved(request: web.Request, env) -> web.Response:
+    """Check if workflow JSON matches a saved workflow on disk."""
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    workflow_data = body.get("workflow")
+    if not workflow_data or not isinstance(workflow_data, dict):
+        return web.json_response({"error": "Missing workflow"}, status=400)
+
+    incoming_hash = _get_workflow_hash(workflow_data)
+    workflows_path = env.comfyui_path / "user" / "default" / "workflows"
+    disk_hashes = _get_disk_workflow_hashes(workflows_path)
+
+    for filename, disk_hash in disk_hashes.items():
+        if disk_hash == incoming_hash:
+            return web.json_response({"is_saved": True, "filename": filename})
+
+    return web.json_response({"is_saved": False, "filename": None})
 
 
 # =============================================================================

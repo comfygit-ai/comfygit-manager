@@ -396,16 +396,29 @@ function handleDontShowAgainChange() {
 }
 
 async function analyzeWorkflow(workflow: any) {
-  // Skip for saved workflows - issues tracked in ComfyGit panel
-  if (workflow?.path || workflow?.filename) {
-    console.log('[ComfyGit] Workflow saved to disk, skipping popup')
-    return
-  }
-
   // Skip if user globally disabled popup
   if (localStorage.getItem('comfygit:popup-disabled') === 'true') {
     console.log('[ComfyGit] Popup globally disabled')
     return
+  }
+
+  // Check if this workflow is saved on disk via content hash
+  try {
+    const response = await fetch('/v2/comfygit/workflow/is-saved', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workflow })
+    })
+    if (response.ok) {
+      const result = await response.json()
+      if (result.is_saved) {
+        console.log(`[ComfyGit] Workflow matches saved file: ${result.filename}, skipping popup`)
+        return
+      }
+    }
+  } catch (e) {
+    console.warn('[ComfyGit] Failed to check if workflow is saved:', e)
+    // On error, proceed with popup (safe default)
   }
 
   // Prepare state but DON'T show modal yet - wait for analysis results

@@ -17,6 +17,22 @@ except ImportError:
     # Fallback for test environment
     logger = logging.getLogger(__name__)
 
+# Import cache invalidation function (lazy to avoid circular imports)
+_invalidate_cache = None
+
+
+def _get_invalidate_cache():
+    """Lazily import cache invalidation function to avoid circular imports."""
+    global _invalidate_cache
+    if _invalidate_cache is None:
+        try:
+            from api.v2.workflows import invalidate_workflow_hash_cache
+            _invalidate_cache = invalidate_workflow_hash_cache
+        except ImportError:
+            # Fallback if import fails (e.g., during tests)
+            _invalidate_cache = lambda: None
+    return _invalidate_cache
+
 
 class WorkflowFileWatcher(FileSystemEventHandler):
     """Watch for workflow file changes and broadcast events via WebSocket."""
@@ -39,6 +55,9 @@ class WorkflowFileWatcher(FileSystemEventHandler):
         if not event.src_path.endswith('.json'):
             return
 
+        # Invalidate is-saved hash cache
+        _get_invalidate_cache()()
+
         workflow_name = Path(event.src_path).name
         logger.debug(f"Workflow modified: {workflow_name}")
         self._broadcast_change('modified', workflow_name)
@@ -50,6 +69,9 @@ class WorkflowFileWatcher(FileSystemEventHandler):
         if not event.src_path.endswith('.json'):
             return
 
+        # Invalidate is-saved hash cache
+        _get_invalidate_cache()()
+
         workflow_name = Path(event.src_path).name
         logger.debug(f"Workflow created: {workflow_name}")
         self._broadcast_change('created', workflow_name)
@@ -60,6 +82,9 @@ class WorkflowFileWatcher(FileSystemEventHandler):
             return
         if not event.src_path.endswith('.json'):
             return
+
+        # Invalidate is-saved hash cache
+        _get_invalidate_cache()()
 
         workflow_name = Path(event.src_path).name
         logger.debug(f"Workflow deleted: {workflow_name}")
