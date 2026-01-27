@@ -183,6 +183,10 @@ const dontShowAgain = ref(false)
 const installingPackage = ref<string | null>(null)     // Currently installing package (from WebSocket cm-task-started)
 const installedCount = ref(0)  // Track total installed for restart notification
 
+// Session-based suppression - workflow IDs that have shown popup this session
+// Cleared on browser refresh (in-memory only)
+const shownWorkflowIds = ref<Set<string>>(new Set())
+
 // Map ui_id to package_id for tracking queue task completion
 const pendingInstalls = ref<Map<string, string>>(new Map())
 
@@ -402,6 +406,13 @@ async function analyzeWorkflow(workflow: any) {
     return
   }
 
+  // Session suppression: skip if already shown for this workflow ID this session
+  const workflowId = workflow?.id
+  if (workflowId && shownWorkflowIds.value.has(workflowId)) {
+    console.log(`[ComfyGit] Already shown popup for workflow ${workflowId} this session`)
+    return
+  }
+
   // Check if this workflow is saved on disk via content hash
   try {
     const response = await fetch('/v2/comfygit/workflow/is-saved', {
@@ -452,6 +463,10 @@ async function analyzeWorkflow(workflow: any) {
     // Only show modal if there are actual issues to display
     if (hasIssues.value) {
       visible.value = true
+      // Remember this workflow ID for session suppression
+      if (workflowId) {
+        shownWorkflowIds.value.add(workflowId)
+      }
     }
   } catch (e) {
     console.error('[ComfyGit] Failed to analyze workflow:', e)
