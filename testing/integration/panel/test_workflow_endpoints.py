@@ -379,6 +379,8 @@ class TestWorkflowAnalyzeEndpoint:
         mock_resolved_node.package_id = "comfyui-core"
         mock_resolved_node.package_data = Mock()
         mock_resolved_node.package_data.display_name = "ComfyUI Core"
+        mock_resolved_node.package_data.repository = "https://github.com/comfyanonymous/ComfyUI"
+        mock_resolved_node.package_data.versions = {"1.0.0": {}}
         mock_resolved_node.match_confidence = 1.0
         mock_resolved_node.match_type = "exact"
 
@@ -391,6 +393,8 @@ class TestWorkflowAnalyzeEndpoint:
         mock_ambiguous_node_opt1.package_id = "pkg-option-1"
         mock_ambiguous_node_opt1.package_data = Mock()
         mock_ambiguous_node_opt1.package_data.display_name = "Package Option 1"
+        mock_ambiguous_node_opt1.package_data.repository = "https://github.com/example/pkg1"
+        mock_ambiguous_node_opt1.package_data.versions = {"2.0.0": {}}
         mock_ambiguous_node_opt1.match_confidence = 0.9
         mock_ambiguous_node_opt1.match_type = "fuzzy"
 
@@ -399,6 +403,8 @@ class TestWorkflowAnalyzeEndpoint:
         mock_ambiguous_node_opt2.package_id = "pkg-option-2"
         mock_ambiguous_node_opt2.package_data = Mock()
         mock_ambiguous_node_opt2.package_data.display_name = "Package Option 2"
+        mock_ambiguous_node_opt2.package_data.repository = "https://github.com/example/pkg2"
+        mock_ambiguous_node_opt2.package_data.versions = {"1.5.0": {}}
         mock_ambiguous_node_opt2.match_confidence = 0.8
         mock_ambiguous_node_opt2.match_type = "fuzzy"
 
@@ -1701,6 +1707,8 @@ class TestAnalyzeWorkflowJsonEndpoint:
         mock_resolved_node.package_id = "test-pkg"
         mock_resolved_node.package_data = Mock()
         mock_resolved_node.package_data.display_name = "Test Package"
+        mock_resolved_node.package_data.repository = "https://github.com/example/test-pkg"
+        mock_resolved_node.package_data.versions = {"1.0.0": {}}
         mock_resolved_node.match_confidence = 0.95
         mock_resolved_node.match_type = "exact"
 
