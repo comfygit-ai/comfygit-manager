@@ -21,6 +21,11 @@ except ImportError:
 _invalidate_cache = None
 
 
+def _noop():
+    """No-op function for when cache invalidation is unavailable."""
+    pass
+
+
 def _get_invalidate_cache():
     """Lazily import cache invalidation function to avoid circular imports."""
     global _invalidate_cache
@@ -30,7 +35,7 @@ def _get_invalidate_cache():
             _invalidate_cache = invalidate_workflow_hash_cache
         except ImportError:
             # Fallback if import fails (e.g., during tests)
-            _invalidate_cache = lambda: None
+            _invalidate_cache = _noop
     return _invalidate_cache
 
 
