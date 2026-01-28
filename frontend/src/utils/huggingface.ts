@@ -45,7 +45,8 @@ export function parseHuggingFaceUrl(rawUrl: string): HuggingFaceParsedUrl {
   // https://huggingface.co/owner/repo/tree/main(/subdir...)
   if (marker === 'tree') {
     const revision = rest[1] || 'main'
-    return { kind: 'repo', repoId, revision }
+    const path = rest.slice(2).join('/')
+    return { kind: 'repo', repoId, revision, path: path || undefined }
   }
 
   // https://huggingface.co/owner/repo/resolve/main/path/to/file

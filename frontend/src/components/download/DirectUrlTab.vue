@@ -87,35 +87,36 @@ const handleQueue = () => {
 .direct-url-tab {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--cg-space-4);
 }
 
 .input-group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--cg-space-2);
 }
 
 .input-group label {
-  font-weight: 500;
-  font-size: 0.875rem;
+  font-weight: var(--cg-font-weight-medium);
+  font-size: var(--cg-font-size-sm);
+  color: var(--cg-color-text-secondary);
 }
 
 .error {
-  color: var(--error-color, #ef4444);
-  font-size: 0.875rem;
+  color: var(--cg-color-error);
+  font-size: var(--cg-font-size-sm);
   margin: 0;
 }
 
 .note {
-  color: var(--text-secondary, #666);
-  font-size: 0.875rem;
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-sm);
   margin: 0;
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 0.5rem;
+  margin-top: var(--cg-space-2);
 }
 </style>

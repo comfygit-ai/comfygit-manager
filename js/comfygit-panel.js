@@ -11643,8 +11643,8 @@ function hw(e) {
     return { kind: "repo", repoId: l, revision: "main" };
   const c = i[0];
   if (c === "tree") {
-    const u = i[1] || "main";
-    return { kind: "repo", repoId: l, revision: u };
+    const u = i[1] || "main", d = i.slice(2).join("/");
+    return { kind: "repo", repoId: l, revision: u, path: d || void 0 };
   }
   if (c === "resolve") {
     const u = i[1] || "main", d = i.slice(2).join("/");
@@ -11943,7 +11943,7 @@ const _w = { class: "hf-file-browser" }, kw = { class: "browser-header" }, bw = 
         return;
       }
       if (T.kind === "repo" && T.repoId) {
-        d.value = T.repoId, m.value = T.revision || "main", v.value = void 0, g.value = void 0, o.value = "browse";
+        d.value = T.repoId, m.value = T.revision || "main", v.value = T.path, g.value = void 0, o.value = "browse";
         return;
       }
       if (/^[\w-]+\/[\w.-]+$/.test(b) && !b.includes("://")) {
@@ -12027,7 +12027,7 @@ const _w = { class: "hf-file-browser" }, kw = { class: "browser-header" }, bw = 
       }, null, 8, ["repo-id", "revision", "initial-path", "preselected-file"]))
     ]));
   }
-}), c_ = /* @__PURE__ */ me(r_, [["__scopeId", "data-v-d535ebb5"]]), u_ = { class: "civitai-tab" }, d_ = /* @__PURE__ */ ue({
+}), c_ = /* @__PURE__ */ me(r_, [["__scopeId", "data-v-88ed2d62"]]), u_ = { class: "civitai-tab" }, d_ = /* @__PURE__ */ ue({
   __name: "CivitaiTab",
   setup(e) {
     return (s, o) => (a(), r("div", u_, [...o[0] || (o[0] = [
@@ -12092,7 +12092,7 @@ const _w = { class: "hf-file-browser" }, kw = { class: "browser-header" }, bw = 
       ])
     ]));
   }
-}), w_ = /* @__PURE__ */ me(y_, [["__scopeId", "data-v-d4447991"]]), __ = { class: "download-modal" }, k_ = { class: "tab-bar" }, b_ = ["onClick"], $_ = { class: "tab-content" }, C_ = /* @__PURE__ */ ue({
+}), w_ = /* @__PURE__ */ me(y_, [["__scopeId", "data-v-01def7aa"]]), __ = { class: "download-modal" }, k_ = { class: "tab-bar" }, b_ = ["onClick"], $_ = { class: "tab-content" }, C_ = /* @__PURE__ */ ue({
   __name: "ModelDownloadModal",
   props: {
     show: { type: Boolean }

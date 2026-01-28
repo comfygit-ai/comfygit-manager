@@ -138,10 +138,10 @@ async function handleSearch() {
   }
 
   if (parsed.kind === 'repo' && parsed.repoId) {
-    // Repo URL: go to browse
+    // Repo URL: go to browse (may include subfolder path from /tree/ URLs)
     selectedRepo.value = parsed.repoId
     selectedRevision.value = parsed.revision || 'main'
-    initialPath.value = undefined
+    initialPath.value = parsed.path
     preselectedFile.value = undefined
     mode.value = 'browse'
     return
