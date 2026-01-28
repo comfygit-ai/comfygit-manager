@@ -62,6 +62,7 @@ import type {
   WorkerInstancesResponse,
   DeployToWorkerRequest,
   HuggingFaceRepoInfoResponse,
+  HuggingFaceSearchResponse,
   ModelsSubdirectoriesResponse
 } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
@@ -745,6 +746,20 @@ export function useComfyGitService() {
       }
     }
     return fetchApi('/v2/workspace/models/subdirectories')
+  }
+
+  async function searchHuggingFaceRepos(query: string, limit = 10): Promise<HuggingFaceSearchResponse> {
+    if (USE_MOCK) {
+      return {
+        query,
+        results: [
+          { repo_id: 'black-forest-labs/FLUX.1-dev', description: 'FLUX.1 development model', downloads: 1200000, likes: 4500, tags: ['text-to-image', 'diffusers'] },
+          { repo_id: 'stabilityai/stable-diffusion-xl-base-1.0', description: 'SDXL base model', downloads: 890000, likes: 3200, tags: ['text-to-image'] }
+        ]
+      }
+    }
+    const params = new URLSearchParams({ query, limit: String(limit) })
+    return fetchApi(`/v2/workspace/huggingface/search?${params}`)
   }
 
   // Settings
@@ -1688,6 +1703,7 @@ export function useComfyGitService() {
     setModelsDirectory,
     getHuggingFaceRepoInfo,
     getModelsSubdirectories,
+    searchHuggingFaceRepos,
     // Settings
     getConfig,
     updateConfig,

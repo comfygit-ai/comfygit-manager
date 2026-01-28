@@ -1163,3 +1163,16 @@ export interface ModelsSubdirectoriesResponse {
   standard: string[]
   existing: string[]
 }
+
+export interface HuggingFaceSearchResult {
+  repo_id: string
+  description: string | null
+  downloads: number
+  likes: number
+  tags: string[]
+}
+
+export interface HuggingFaceSearchResponse {
+  results: HuggingFaceSearchResult[]
+  query: string
+}
