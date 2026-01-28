@@ -629,7 +629,10 @@ async def huggingface_search(request: web.Request, env) -> web.Response:
     if len(query) < 2:
         return web.json_response({"error": "Query must be at least 2 characters"}, status=400)
 
-    limit = min(int(request.query.get("limit", 10)), 20)
+    try:
+        limit = min(int(request.query.get("limit", 10)), 20)
+    except (ValueError, TypeError):
+        return web.json_response({"error": "Limit must be a valid integer"}, status=400)
 
     token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
     api = HfApi(token=token if token else None)
