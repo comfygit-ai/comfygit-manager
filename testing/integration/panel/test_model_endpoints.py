@@ -767,3 +767,312 @@ class TestModelsSubdirectoriesEndpoint:
         resp = await client.get("/v2/workspace/models/subdirectories")
 
         assert resp.status == 500
+
+
+@pytest.mark.integration
+class TestHuggingFaceSearchEndpoint:
+    """GET /v2/workspace/huggingface/search - Search HuggingFace Hub for model repositories."""
+
+    async def test_success_basic_search(self, client, mock_environment, monkeypatch):
+        """Should return search results for valid query."""
+        # Mock HfApi.list_models
+        mock_model1 = Mock()
+        mock_model1.id = "black-forest-labs/FLUX.1-dev"
+        mock_model1.description = "FLUX.1 [dev] is a 12 billion parameter rectified flow transformer"
+        mock_model1.downloads = 1500000
+        mock_model1.likes = 5000
+        mock_model1.tags = ["diffusion", "text-to-image"]
+
+        mock_model2 = Mock()
+        mock_model2.id = "black-forest-labs/FLUX.1-schnell"
+        mock_model2.description = "FLUX.1 [schnell] is a 12 billion parameter rectified flow transformer"
+        mock_model2.downloads = 800000
+        mock_model2.likes = 3000
+        mock_model2.tags = ["diffusion", "text-to-image", "fast"]
+
+        mock_hf_api = Mock()
+        mock_hf_api.list_models.return_value = [mock_model1, mock_model2]
+
+        monkeypatch.setattr(
+            "api.v2.models.HfApi",
+            lambda token=None: mock_hf_api
+        )
+
+        # Execute
+        resp = await client.get(
+            "/v2/workspace/huggingface/search",
+            params={"query": "flux", "limit": 10}
+        )
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert "results" in data
+        assert "query" in data
+        assert data["query"] == "flux"
+        assert len(data["results"]) == 2
+
+        # Check first result
+        assert data["results"][0]["repo_id"] == "black-forest-labs/FLUX.1-dev"
+        assert "FLUX.1 [dev]" in data["results"][0]["description"]
+        assert data["results"][0]["downloads"] == 1500000
+        assert data["results"][0]["likes"] == 5000
+        assert "diffusion" in data["results"][0]["tags"]
+
+        # Verify list_models was called with correct params
+        mock_hf_api.list_models.assert_called_once()
+        call_kwargs = mock_hf_api.list_models.call_args[1]
+        assert call_kwargs["search"] == "flux"
+        assert call_kwargs["limit"] == 10
+        assert call_kwargs["sort"] == "downloads"
+        assert call_kwargs["direction"] == -1
+
+    async def test_success_with_limit(self, client, mock_environment, monkeypatch):
+        """Should respect limit parameter."""
+        mock_models = []
+        for i in range(5):
+            m = Mock()
+            m.id = f"test/model-{i}"
+            m.description = f"Test model {i}"
+            m.downloads = 1000 - i
+            m.likes = 100 - i
+            m.tags = ["test"]
+            mock_models.append(m)
+
+        mock_hf_api = Mock()
+        mock_hf_api.list_models.return_value = mock_models
+
+        monkeypatch.setattr(
+            "api.v2.models.HfApi",
+            lambda token=None: mock_hf_api
+        )
+
+        # Execute with limit=5
+        resp = await client.get(
+            "/v2/workspace/huggingface/search",
+            params={"query": "test", "limit": 5}
+        )
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert len(data["results"]) == 5
+
+        # Verify limit was passed correctly
+        call_kwargs = mock_hf_api.list_models.call_args[1]
+        assert call_kwargs["limit"] == 5
+
+    async def test_success_limit_capped_at_20(self, client, mock_environment, monkeypatch):
+        """Should cap limit at 20 even if higher value requested."""
+        mock_hf_api = Mock()
+        mock_hf_api.list_models.return_value = []
+
+        monkeypatch.setattr(
+            "api.v2.models.HfApi",
+            lambda token=None: mock_hf_api
+        )
+
+        # Execute with limit=100 (should be capped at 20)
+        resp = await client.get(
+            "/v2/workspace/huggingface/search",
+            params={"query": "test", "limit": 100}
+        )
+
+        # Verify
+        assert resp.status == 200
+
+        # Verify limit was capped at 20
+        call_kwargs = mock_hf_api.list_models.call_args[1]
+        assert call_kwargs["limit"] == 20
+
+    async def test_success_default_limit(self, client, mock_environment, monkeypatch):
+        """Should use default limit of 10 when not specified."""
+        mock_hf_api = Mock()
+        mock_hf_api.list_models.return_value = []
+
+        monkeypatch.setattr(
+            "api.v2.models.HfApi",
+            lambda token=None: mock_hf_api
+        )
+
+        # Execute without limit parameter
+        resp = await client.get(
+            "/v2/workspace/huggingface/search",
+            params={"query": "test"}
+        )
+
+        # Verify
+        assert resp.status == 200
+
+        # Verify default limit of 10 was used
+        call_kwargs = mock_hf_api.list_models.call_args[1]
+        assert call_kwargs["limit"] == 10
+
+    async def test_success_model_without_description(self, client, mock_environment, monkeypatch):
+        """Should handle models without description gracefully."""
+        mock_model = Mock()
+        mock_model.id = "test/model"
+        mock_model.description = None  # No description
+        mock_model.downloads = 100
+        mock_model.likes = 10
+        mock_model.tags = []
+
+        # Also test fallback to card_data.description
+        mock_model.card_data = None
+
+        mock_hf_api = Mock()
+        mock_hf_api.list_models.return_value = [mock_model]
+
+        monkeypatch.setattr(
+            "api.v2.models.HfApi",
+            lambda token=None: mock_hf_api
+        )
+
+        # Execute
+        resp = await client.get(
+            "/v2/workspace/huggingface/search",
+            params={"query": "test"}
+        )
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["results"][0]["description"] is None
+
+    async def test_success_long_description_truncated(self, client, mock_environment, monkeypatch):
+        """Should truncate long descriptions to 200 chars from card_data."""
+        long_description = "A" * 300  # 300 character description
+
+        mock_model = Mock()
+        mock_model.id = "test/model"
+        mock_model.description = None  # Use card_data instead
+        mock_model.downloads = 100
+        mock_model.likes = 10
+        mock_model.tags = []
+
+        # card_data with long description
+        mock_card = Mock()
+        mock_card.description = long_description
+        mock_model.card_data = mock_card
+
+        mock_hf_api = Mock()
+        mock_hf_api.list_models.return_value = [mock_model]
+
+        monkeypatch.setattr(
+            "api.v2.models.HfApi",
+            lambda token=None: mock_hf_api
+        )
+
+        # Execute
+        resp = await client.get(
+            "/v2/workspace/huggingface/search",
+            params={"query": "test"}
+        )
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        # Should be truncated to 200 chars
+        assert len(data["results"][0]["description"]) == 200
+
+    async def test_error_query_too_short(self, client, mock_environment):
+        """Should return 400 when query is less than 2 characters."""
+        # Test with 1 character
+        resp = await client.get(
+            "/v2/workspace/huggingface/search",
+            params={"query": "a"}
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "error" in data
+        assert "2 characters" in data["error"]
+
+    async def test_error_query_missing(self, client, mock_environment):
+        """Should return 400 when query parameter is missing."""
+        resp = await client.get("/v2/workspace/huggingface/search")
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "error" in data
+        assert "2 characters" in data["error"]
+
+    async def test_error_query_empty_string(self, client, mock_environment):
+        """Should return 400 when query is empty or whitespace."""
+        # Test empty string
+        resp = await client.get(
+            "/v2/workspace/huggingface/search",
+            params={"query": ""}
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "error" in data
+
+        # Test whitespace only
+        resp = await client.get(
+            "/v2/workspace/huggingface/search",
+            params={"query": "  "}
+        )
+
+        assert resp.status == 400
+
+    async def test_error_api_failure(self, client, mock_environment, monkeypatch):
+        """Should return 500 when HuggingFace API call fails."""
+        mock_hf_api = Mock()
+        mock_hf_api.list_models.side_effect = Exception("API connection failed")
+
+        monkeypatch.setattr(
+            "api.v2.models.HfApi",
+            lambda token=None: mock_hf_api
+        )
+
+        # Execute
+        resp = await client.get(
+            "/v2/workspace/huggingface/search",
+            params={"query": "test"}
+        )
+
+        # Verify
+        assert resp.status == 500
+        data = await resp.json()
+        assert "error" in data
+        assert "Search failed" in data["error"]
+
+    async def test_success_uses_hf_token_from_env(self, client, mock_environment, monkeypatch):
+        """Should use HF_TOKEN from environment if available."""
+        mock_hf_api_class = Mock()
+        mock_hf_api_instance = Mock()
+        mock_hf_api_instance.list_models.return_value = []
+        mock_hf_api_class.return_value = mock_hf_api_instance
+
+        monkeypatch.setattr("api.v2.models.HfApi", mock_hf_api_class)
+        monkeypatch.setenv("HF_TOKEN", "test_token_123")
+
+        # Execute
+        resp = await client.get(
+            "/v2/workspace/huggingface/search",
+            params={"query": "test"}
+        )
+
+        # Verify
+        assert resp.status == 200
+
+        # Verify HfApi was instantiated with token
+        mock_hf_api_class.assert_called_once()
+        call_kwargs = mock_hf_api_class.call_args[1]
+        assert call_kwargs["token"] == "test_token_123"
+
+    async def test_error_no_environment(self, client, monkeypatch):
+        """Should return 500 when no environment detected."""
+        monkeypatch.setattr(
+            "comfygit_panel.get_environment_from_cwd",
+            lambda: None
+        )
+
+        resp = await client.get(
+            "/v2/workspace/huggingface/search",
+            params={"query": "test"}
+        )
+
+        assert resp.status == 500
