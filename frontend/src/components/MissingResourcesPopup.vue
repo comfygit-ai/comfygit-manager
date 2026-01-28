@@ -400,6 +400,10 @@ async function installPackage(pkg: MissingPackage) {
       queuedPackages.value.has(packageId) ||
       failedPackages.value.has(packageId)) return
 
+  // Ensure WebSocket listeners are registered before starting install
+  // (lazy registration because window.app may not exist at mount time)
+  ensureEventListeners()
+
   installingPackage.value = packageId
   try {
     // Queue the install via Manager queue API
@@ -414,8 +418,10 @@ async function installPackage(pkg: MissingPackage) {
     })
 
     // Track this task for completion handling
+    // IMPORTANT: This must happen BEFORE queue processing starts (handled by fire-and-forget in queueNodeInstall)
     pendingInstalls.value.set(ui_id, packageId)
     queuedPackages.value.add(packageId)
+    console.log('[ComfyGit] Registered pending install:', { ui_id, packageId, pendingInstalls: Array.from(pendingInstalls.value.entries()) })
 
     // Note: installedCount is updated in handleTaskCompleted on success
   } catch (e) {
@@ -582,17 +588,30 @@ function handleWorkflowLoaded(event: CustomEvent) {
 // WebSocket event handlers for Manager queue status
 function handleTaskStarted(event: CustomEvent) {
   const taskId = event.detail?.ui_id
+  console.log('[ComfyGit] cm-task-started received:', {
+    taskId,
+    pendingInstalls: Array.from(pendingInstalls.value.entries()),
+    eventDetail: event.detail
+  })
   const packageId = pendingInstalls.value.get(taskId)
   if (packageId) {
     installingPackage.value = packageId
     console.log('[ComfyGit] Installing package:', packageId)
+  } else {
+    console.warn('[ComfyGit] cm-task-started: No matching package for taskId:', taskId)
   }
 }
 
 function handleTaskCompleted(event: CustomEvent) {
   const taskId = event.detail?.ui_id
-  const packageId = pendingInstalls.value.get(taskId)
   const status = event.detail?.status?.status_str
+  console.log('[ComfyGit] cm-task-completed received:', {
+    taskId,
+    status,
+    pendingInstalls: Array.from(pendingInstalls.value.entries()),
+    eventDetail: event.detail
+  })
+  const packageId = pendingInstalls.value.get(taskId)
 
   if (packageId) {
     pendingInstalls.value.delete(taskId)
@@ -615,16 +634,42 @@ function handleTaskCompleted(event: CustomEvent) {
 
     // When all pending installs are done and at least one succeeded, show restart notification
     if (pendingInstalls.value.size === 0 && installedCount.value > 0) {
+      console.log('[ComfyGit] All installs complete, dispatching nodes-installed event:', installedCount.value)
       window.dispatchEvent(new CustomEvent('comfygit:nodes-installed', {
         detail: { count: installedCount.value }
       }))
     }
+  } else {
+    console.warn('[ComfyGit] cm-task-completed: No matching package for taskId:', taskId)
   }
 }
 
-// Get ComfyUI's API for WebSocket events
+// Get ComfyUI's API for WebSocket events (cached for performance)
+let cachedApi: any = null
 function getComfyApi() {
-  return (window as any).app?.api
+  if (!cachedApi) {
+    cachedApi = (window as any).app?.api
+  }
+  return cachedApi
+}
+
+// Lazy event listener registration
+// We register listeners when first install is triggered, not at mount time,
+// because window.app may not exist yet when the component mounts
+let listenersRegistered = false
+function ensureEventListeners() {
+  if (listenersRegistered) return true
+  const api = getComfyApi()
+  if (api) {
+    api.addEventListener('cm-task-started', handleTaskStarted)
+    api.addEventListener('cm-task-completed', handleTaskCompleted)
+    api.addEventListener('comfygit:workflow-changed', handleWorkflowSaved)
+    listenersRegistered = true
+    console.log('[ComfyGit] Registered WebSocket event listeners for install tracking')
+    return true
+  }
+  console.warn('[ComfyGit] Could not register WebSocket listeners - API not available')
+  return false
 }
 
 // Listen for workflow save - auto-dismiss popup
@@ -637,27 +682,26 @@ function handleWorkflowSaved(event: CustomEvent) {
 }
 
 onMounted(() => {
-  // Listen for workflow-loaded events
+  // Listen for workflow-loaded events (window event, always available)
   window.addEventListener('comfygit:workflow-loaded', handleWorkflowLoaded as EventListener)
 
-  // Listen for Manager queue events via ComfyUI API
-  const api = getComfyApi()
-  if (api) {
-    api.addEventListener('cm-task-started', handleTaskStarted)
-    api.addEventListener('cm-task-completed', handleTaskCompleted)
-    api.addEventListener('comfygit:workflow-changed', handleWorkflowSaved)
-  }
+  // Note: WebSocket event listeners (cm-task-started, cm-task-completed) are registered
+  // lazily in ensureEventListeners() when first install is triggered, because window.app
+  // may not exist yet at mount time
 })
 
 onUnmounted(() => {
   window.removeEventListener('comfygit:workflow-loaded', handleWorkflowLoaded as EventListener)
 
-  // Clean up Manager queue event listeners
-  const api = getComfyApi()
-  if (api) {
-    api.removeEventListener('cm-task-started', handleTaskStarted)
-    api.removeEventListener('cm-task-completed', handleTaskCompleted)
-    api.removeEventListener('comfygit:workflow-changed', handleWorkflowSaved)
+  // Clean up Manager queue event listeners if they were registered
+  if (listenersRegistered) {
+    const api = getComfyApi()
+    if (api) {
+      api.removeEventListener('cm-task-started', handleTaskStarted)
+      api.removeEventListener('cm-task-completed', handleTaskCompleted)
+      api.removeEventListener('comfygit:workflow-changed', handleWorkflowSaved)
+    }
+    listenersRegistered = false
   }
 })
 </script>

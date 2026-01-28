@@ -957,8 +957,14 @@ export function useComfyGitService() {
       body: JSON.stringify(task)
     })
 
-    // Start queue processing
-    await fetchApi<void>('/v2/manager/queue/start')
+    console.log('[ComfyGit] Task queued with ui_id:', ui_id, 'for package:', params.id)
+
+    // Return ui_id BEFORE starting queue processing
+    // This allows caller to set up event tracking before events fire
+    // Fire-and-forget the start - don't await (avoids race condition)
+    fetchApi<void>('/v2/manager/queue/start').catch(err => {
+      console.error('[ComfyGit] Queue start failed:', err)
+    })
 
     return { ui_id }
   }
