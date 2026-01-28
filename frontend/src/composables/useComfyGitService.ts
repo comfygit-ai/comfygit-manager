@@ -60,7 +60,9 @@ import type {
   WorkerTestResult,
   CustomWorkerSystemInfo,
   WorkerInstancesResponse,
-  DeployToWorkerRequest
+  DeployToWorkerRequest,
+  HuggingFaceRepoInfoResponse,
+  ModelsSubdirectoriesResponse
 } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
 import { useMockControls } from '@/composables/useMockControls'
@@ -718,6 +720,31 @@ export function useComfyGitService() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path })
     })
+  }
+
+  async function getHuggingFaceRepoInfo(url: string): Promise<HuggingFaceRepoInfoResponse> {
+    if (USE_MOCK) {
+      return {
+        repo_id: 'mock/repo',
+        revision: 'main',
+        files: [
+          { path: 'model.safetensors', size: 1024 * 1024 * 100, is_model_file: true, shard_group: null }
+        ]
+      }
+    }
+    const params = new URLSearchParams({ url })
+    return fetchApi(`/v2/workspace/huggingface/repo-info?${params}`)
+  }
+
+  async function getModelsSubdirectories(): Promise<ModelsSubdirectoriesResponse> {
+    if (USE_MOCK) {
+      return {
+        directories: ['checkpoints', 'loras', 'vae', 'controlnet'],
+        standard: ['checkpoints', 'loras', 'vae'],
+        existing: ['checkpoints', 'controlnet']
+      }
+    }
+    return fetchApi('/v2/workspace/models/subdirectories')
   }
 
   // Settings
@@ -1659,6 +1686,8 @@ export function useComfyGitService() {
     scanWorkspaceModels,
     getModelsDirectory,
     setModelsDirectory,
+    getHuggingFaceRepoInfo,
+    getModelsSubdirectories,
     // Settings
     getConfig,
     updateConfig,
