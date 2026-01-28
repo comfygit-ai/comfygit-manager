@@ -1140,3 +1140,26 @@ export interface WorkerTestResult {
   gpu_info?: string
   mode?: string
 }
+
+// =============================================================================
+// HuggingFace Integration Types
+// =============================================================================
+
+export interface HuggingFaceRepoFile {
+  path: string
+  size: number
+  is_model_file: boolean
+  shard_group?: string | null
+}
+
+export interface HuggingFaceRepoInfoResponse {
+  repo_id: string
+  revision: string
+  files: HuggingFaceRepoFile[]
+}
+
+export interface ModelsSubdirectoriesResponse {
+  directories: string[]
+  standard: string[]
+  existing: string[]
+}
