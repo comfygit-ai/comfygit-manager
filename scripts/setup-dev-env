@@ -1,0 +1,292 @@
+#!/bin/bash
+# setup-dev-env - Configure a managed ComfyGit environment for local development
+#
+# Usage:
+#   setup-dev-env [options] <environment-name>
+#   setup-dev-env [options] --all
+#
+# Options:
+#   --workspace PATH   Override COMFYGIT_HOME (default: $COMFYGIT_HOME or ~/comfygit)
+#   --all              Apply to all environments in workspace
+#   --sync             Run 'cg sync' after setup
+#   -h, --help         Show this help message
+#
+# This script:
+#   1. Replaces registry-installed comfygit-manager with a symlink to this repo
+#   2. Configures editable comfygit-core dependency in .cec/pyproject.toml
+#   3. Marks comfygit-manager as a development node (skips version checks)
+
+set -e
+
+# Resolve symlinks to get actual script location
+if command -v realpath &> /dev/null; then
+    SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
+elif command -v readlink &> /dev/null && readlink -f / &> /dev/null; then
+    SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+else
+    SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+fi
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+MANAGER_PATH="$(dirname "$SCRIPT_DIR")"
+
+# Auto-detect CORE_PATH (sibling repo)
+CORE_PATH="$(dirname "$MANAGER_PATH")/comfygit/packages/core"
+
+# Defaults
+WORKSPACE_PATH=""
+ALL_ENVS=false
+RUN_SYNC=false
+ENV_NAME=""
+
+# Parse arguments
+show_help() {
+    sed -n '2,/^$/p' "$0" | sed 's/^# //' | sed 's/^#//'
+    exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            ;;
+        --workspace)
+            WORKSPACE_PATH="$2"
+            shift 2
+            ;;
+        --all)
+            ALL_ENVS=true
+            shift
+            ;;
+        --sync)
+            RUN_SYNC=true
+            shift
+            ;;
+        -*)
+            echo "Error: Unknown option $1"
+            echo "Run with --help for usage"
+            exit 1
+            ;;
+        *)
+            if [[ -n "$ENV_NAME" ]]; then
+                echo "Error: Multiple environment names specified"
+                exit 1
+            fi
+            ENV_NAME="$1"
+            shift
+            ;;
+    esac
+done
+
+# Resolve workspace path: arg > COMFYGIT_HOME > ~/comfygit
+if [[ -z "$WORKSPACE_PATH" ]]; then
+    if [[ -n "$COMFYGIT_HOME" ]]; then
+        WORKSPACE_PATH="$COMFYGIT_HOME"
+    else
+        WORKSPACE_PATH="$HOME/comfygit"
+    fi
+fi
+
+# Validate arguments
+if [[ "$ALL_ENVS" == "false" ]] && [[ -z "$ENV_NAME" ]]; then
+    echo "Error: Environment name required (or use --all)"
+    echo "Run with --help for usage"
+    exit 1
+fi
+
+# Validate paths
+if [[ ! -d "$WORKSPACE_PATH" ]]; then
+    echo "Error: Workspace not found: $WORKSPACE_PATH"
+    echo "Set COMFYGIT_HOME or use --workspace"
+    exit 1
+fi
+
+if [[ ! -d "$WORKSPACE_PATH/environments" ]]; then
+    echo "Error: No environments directory in workspace: $WORKSPACE_PATH"
+    exit 1
+fi
+
+if [[ ! -d "$CORE_PATH" ]]; then
+    echo "Error: comfygit-core not found at: $CORE_PATH"
+    echo "Expected directory structure:"
+    echo "  parent-dir/"
+    echo "    comfygit-manager/  (this repo)"
+    echo "    comfygit/"
+    echo "      packages/"
+    echo "        core/"
+    exit 1
+fi
+
+# Print configuration
+echo "[setup-dev-env] Workspace: $WORKSPACE_PATH"
+echo "[setup-dev-env] Manager:   $MANAGER_PATH"
+echo "[setup-dev-env] Core:      $CORE_PATH"
+echo ""
+
+# Build list of environments to process
+ENVS=()
+if [[ "$ALL_ENVS" == "true" ]]; then
+    for env_dir in "$WORKSPACE_PATH/environments"/*/; do
+        if [[ -d "$env_dir" ]]; then
+            ENVS+=("$(basename "$env_dir")")
+        fi
+    done
+    if [[ ${#ENVS[@]} -eq 0 ]]; then
+        echo "Error: No environments found in $WORKSPACE_PATH/environments/"
+        exit 1
+    fi
+else
+    if [[ ! -d "$WORKSPACE_PATH/environments/$ENV_NAME" ]]; then
+        echo "Error: Environment not found: $ENV_NAME"
+        echo "Available environments:"
+        ls -1 "$WORKSPACE_PATH/environments/" 2>/dev/null || echo "  (none)"
+        exit 1
+    fi
+    ENVS=("$ENV_NAME")
+fi
+
+# Process each environment
+setup_environment() {
+    local env_name="$1"
+    local env_path="$WORKSPACE_PATH/environments/$env_name"
+    local custom_nodes="$env_path/ComfyUI/custom_nodes"
+    local manager_link="$custom_nodes/comfygit-manager"
+    local pyproject="$env_path/.cec/pyproject.toml"
+
+    echo "[setup-dev-env] Setting up environment: $env_name"
+
+    # Ensure custom_nodes exists
+    if [[ ! -d "$custom_nodes" ]]; then
+        echo "  Warning: custom_nodes directory not found, creating..."
+        mkdir -p "$custom_nodes"
+    fi
+
+    # Handle comfygit-manager symlink
+    if [[ -L "$manager_link" ]]; then
+        local current_target
+        current_target="$(readlink "$manager_link")"
+        if [[ "$current_target" == "$MANAGER_PATH" ]]; then
+            echo "  Manager symlink: Already configured"
+        else
+            echo "  Manager symlink: Updating (was: $current_target)"
+            rm "$manager_link"
+            ln -s "$MANAGER_PATH" "$manager_link"
+        fi
+    elif [[ -d "$manager_link" ]]; then
+        echo "  Removing registry-installed comfygit-manager..."
+        rm -rf "$manager_link"
+        echo "  Creating symlink to dev repo..."
+        ln -s "$MANAGER_PATH" "$manager_link"
+    elif [[ -e "$manager_link" ]]; then
+        echo "  Error: $manager_link exists but is not a directory or symlink"
+        return 1
+    else
+        echo "  Creating symlink to dev repo..."
+        ln -s "$MANAGER_PATH" "$manager_link"
+    fi
+
+    # Update .cec/pyproject.toml
+    if [[ ! -f "$pyproject" ]]; then
+        echo "  Warning: .cec/pyproject.toml not found, skipping config"
+    else
+        echo "  Updating .cec/pyproject.toml..."
+
+        # Use Python to safely update TOML
+        python3 << PYEOF
+import re
+
+pyproject_path = "$pyproject"
+core_path = "$CORE_PATH"
+manager_path = "$MANAGER_PATH"
+
+with open(pyproject_path, "r") as f:
+    content = f.read()
+
+modified = False
+
+# 1. Update comfygit-core source for editable install
+if '[tool.uv.sources.comfygit-core]' in content:
+    if f'path = "{core_path}"' in content:
+        print("  Core source: Already configured")
+    else:
+        # Remove existing section and re-add
+        content = re.sub(
+            r'\[tool\.uv\.sources\.comfygit-core\][^\[]*',
+            '',
+            content,
+            flags=re.DOTALL
+        )
+        modified = True
+else:
+    modified = True
+
+if modified or '[tool.uv.sources.comfygit-core]' not in content:
+    content = content.rstrip() + f'''
+
+[tool.uv.sources.comfygit-core]
+path = "{core_path}"
+editable = true
+'''
+    print("  Core source: Configured")
+    modified = True
+
+# 2. Mark comfygit-manager as development node (skips version checks)
+# Change source = "registry" to source = "development" for comfygit-manager
+if '[tool.comfygit.nodes.comfygit-manager]' in content:
+    # Check if already set to development
+    # Look for source = "development" within the comfygit-manager node section
+    node_section_match = re.search(
+        r'\[tool\.comfygit\.nodes\.comfygit-manager\](.*?)(?=\n\[|\Z)',
+        content,
+        flags=re.DOTALL
+    )
+    if node_section_match:
+        node_section = node_section_match.group(1)
+        if 'source = "development"' in node_section:
+            print("  Node source: Already set to development")
+        elif 'source = "registry"' in node_section:
+            content = content.replace(
+                'source = "registry"',
+                'source = "development"',
+                1  # Only replace first occurrence (in the node section)
+            )
+            print("  Node source: Changed to development")
+            modified = True
+        else:
+            print("  Node source: No source field found (will add)")
+            # Add source = "development" to the node section
+            content = re.sub(
+                r'(\[tool\.comfygit\.nodes\.comfygit-manager\]\n)',
+                r'\1source = "development"\n',
+                content
+            )
+            modified = True
+
+if modified:
+    with open(pyproject_path, "w") as f:
+        f.write(content)
+PYEOF
+    fi
+
+    echo "  Done!"
+    echo ""
+}
+
+# Process all environments
+for env in "${ENVS[@]}"; do
+    setup_environment "$env"
+done
+
+# Run sync if requested
+if [[ "$RUN_SYNC" == "true" ]]; then
+    echo "[setup-dev-env] Running cg sync..."
+    for env in "${ENVS[@]}"; do
+        echo "  Syncing $env..."
+        COMFYGIT_HOME="$WORKSPACE_PATH" cg sync -e "$env"
+    done
+    echo ""
+fi
+
+echo "[setup-dev-env] Setup complete!"
+if [[ "$RUN_SYNC" == "false" ]]; then
+    echo "[setup-dev-env] Run 'cg run -e <env>' to start (sync happens automatically)"
+fi
