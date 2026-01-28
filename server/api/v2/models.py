@@ -4,14 +4,19 @@ Provides two scopes:
 - Environment scope (/v2/comfygit/models/environment): Models used in current env's workflows
 - Workspace scope (/v2/workspace/models): All models in the shared workspace index
 """
+import os
 import platform
+import re
 import subprocess
 from pathlib import Path
 
 from aiohttp import web
+from huggingface_hub import HfApi
 
 from cgm_core.decorators import requires_environment, logged_operation
 from cgm_utils.async_helpers import run_sync
+from comfygit_core.configs.model_config import ModelConfig
+from comfygit_core.services.huggingface_url import parse_huggingface_url
 
 routes = web.RouteTableDef()
 
@@ -506,3 +511,111 @@ async def open_file(request: web.Request, env) -> web.Response:
         return web.json_response({"status": "success"})
     except Exception as e:
         return web.json_response({"error": f"Failed to open file: {e}"}, status=500)
+
+
+# =============================================================================
+# HuggingFace integration endpoints
+# =============================================================================
+
+
+HF_MODEL_EXTS_EXTRA = [".gguf"]
+
+
+def _shard_group(path: str) -> str | None:
+    """Detect sharded model files like model-00001-of-00003.safetensors"""
+    m = re.match(r"^(.*)-(\d{4,5})-of-(\d{4,5})(\.[^.]+)$", path, flags=re.IGNORECASE)
+    if not m:
+        return None
+    return f"{m.group(1)}{m.group(4)}"
+
+
+@routes.get("/v2/workspace/huggingface/repo-info")
+@requires_environment
+async def workspace_huggingface_repo_info(request: web.Request, env) -> web.Response:
+    """Get file listing for a HuggingFace repository."""
+    url = (request.query.get("url") or "").strip()
+    if not url:
+        return web.json_response({"error": "Missing required query param: url"}, status=400)
+
+    # Use core parser for consistency with ModelDownloader
+    parsed = parse_huggingface_url(url)
+    if parsed.kind == "unknown":
+        return web.json_response({"error": "Not a valid HuggingFace model URL"}, status=400)
+    if not parsed.repo_id:
+        return web.json_response({"error": "Could not extract repository ID from URL"}, status=400)
+
+    repo_id = parsed.repo_id
+    revision = parsed.revision or "main"
+
+    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
+    api = HfApi(token=token if token else None)
+
+    try:
+        info = api.model_info(repo_id=repo_id, revision=revision, files_metadata=True)
+    except Exception as e:
+        error_str = str(e)
+        if "401" in error_str or "403" in error_str:
+            return web.json_response({
+                "error": "This repository requires authentication. Set HF_TOKEN environment variable."
+            }, status=401)
+        if "404" in error_str:
+            return web.json_response({
+                "error": f"Repository not found: {repo_id}"
+            }, status=404)
+        return web.json_response({"error": f"Failed to fetch repo info: {e}"}, status=400)
+
+    model_cfg = ModelConfig.load()
+    model_exts = set([e.lower() for e in (model_cfg.default_extensions or [])] + HF_MODEL_EXTS_EXTRA)
+
+    files = []
+    for sib in (info.siblings or []):
+        path = getattr(sib, "rfilename", None)
+        if not path:
+            continue
+        size = getattr(sib, "size", None) or 0
+        lower = path.lower()
+        is_model_file = any(lower.endswith(ext) for ext in model_exts)
+        files.append({
+            "path": path,
+            "size": size,
+            "is_model_file": is_model_file,
+            "shard_group": _shard_group(path),
+        })
+
+    return web.json_response({
+        "repo_id": repo_id,
+        "revision": revision,
+        "files": files,
+    })
+
+
+@routes.get("/v2/workspace/models/subdirectories")
+@requires_environment
+async def workspace_models_subdirectories(request: web.Request, env) -> web.Response:
+    """List available model subdirectories for destination picker."""
+    model_cfg = ModelConfig.load()
+    standard = list(model_cfg.standard_directories or [])
+
+    models_dir = None
+    try:
+        models_dir = env.workspace.workspace_config_manager.get_models_directory()
+    except Exception:
+        pass
+
+    existing = []
+    if models_dir and models_dir.exists():
+        try:
+            existing = sorted([
+                p.name for p in models_dir.iterdir()
+                if p.is_dir() and not p.name.startswith(".")
+            ])
+        except Exception:
+            existing = []
+
+    merged = sorted(set(standard) | set(existing))
+
+    return web.json_response({
+        "directories": merged,
+        "standard": standard,
+        "existing": existing,
+    })
