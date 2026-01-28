@@ -20,15 +20,25 @@
         <div v-if="missingPackages.length > 0" class="section">
           <div class="section-header">
             <span class="section-title">Missing Custom Nodes ({{ totalMissingNodeCount }})</span>
-            <BaseButton
-              v-if="missingPackages.length > 1"
-              size="sm"
-              variant="secondary"
-              :disabled="allPackagesInstalled"
-              @click="installAllNodes"
-            >
-              {{ allPackagesInstalled ? 'All Queued' : 'Install All' }}
-            </BaseButton>
+            <div class="section-actions">
+              <BaseButton
+                v-if="missingPackages.length > 5"
+                size="sm"
+                variant="ghost"
+                @click="activeDetailView = 'packages'"
+              >
+                Show All
+              </BaseButton>
+              <BaseButton
+                v-if="missingPackages.length > 1"
+                size="sm"
+                variant="secondary"
+                :disabled="allPackagesInstalled"
+                @click="installAllNodes"
+              >
+                {{ allPackagesInstalled ? 'All Queued' : 'Install All' }}
+              </BaseButton>
+            </div>
           </div>
           <div class="item-list">
             <div v-for="pkg in missingPackages.slice(0, 5)" :key="pkg.package_id" class="package-item">
@@ -59,9 +69,6 @@
               <!-- Installed: successfully installed -->
               <span v-else class="installed-badge">Installed</span>
             </div>
-            <div v-if="missingPackages.length > 5" class="overflow-note">
-              ...and {{ missingPackages.length - 5 }} more packages
-            </div>
           </div>
         </div>
 
@@ -85,15 +92,25 @@
         <div v-if="missingModels.length > 0" class="section">
           <div class="section-header">
             <span class="section-title">Missing Models ({{ missingModels.length }})</span>
-            <BaseButton
-              v-if="downloadableModels.length > 1"
-              size="sm"
-              variant="secondary"
-              :disabled="allModelsQueued"
-              @click="downloadAllModels"
-            >
-              {{ allModelsQueued ? 'All Queued' : 'Download All' }}
-            </BaseButton>
+            <div class="section-actions">
+              <BaseButton
+                v-if="missingModels.length > 5"
+                size="sm"
+                variant="ghost"
+                @click="activeDetailView = 'models'"
+              >
+                Show All
+              </BaseButton>
+              <BaseButton
+                v-if="downloadableModels.length > 1"
+                size="sm"
+                variant="secondary"
+                :disabled="allModelsQueued"
+                @click="downloadAllModels"
+              >
+                {{ allModelsQueued ? 'All Queued' : 'Download All' }}
+              </BaseButton>
+            </div>
           </div>
           <div class="item-list">
             <div v-for="model in missingModels.slice(0, 5)" :key="model.widget_value" class="model-item">
@@ -112,9 +129,6 @@
                 <span v-else class="queued-badge">Queued</span>
               </template>
               <span v-else class="no-url">Manual download required</span>
-            </div>
-            <div v-if="missingModels.length > 5" class="overflow-note">
-              ...and {{ missingModels.length - 5 }} more
             </div>
           </div>
         </div>
@@ -140,6 +154,21 @@
       </BaseButton>
     </template>
   </BaseModal>
+
+  <!-- Detail Modal for full list view -->
+  <MissingResourcesDetailModal
+    v-if="activeDetailView"
+    :title="detailModalTitle"
+    :items="detailModalItems"
+    :item-type="activeDetailView"
+    :queued-items="activeDetailView === 'models' ? queuedModels : queuedPackages"
+    :installed-items="activeDetailView === 'packages' ? installedPackages : undefined"
+    :failed-items="activeDetailView === 'packages' ? failedPackages : undefined"
+    :installing-item="activeDetailView === 'packages' ? installingPackage : undefined"
+    @close="activeDetailView = null"
+    @action="handleDetailAction"
+    @bulk-action="handleDetailBulkAction"
+  />
 </template>
 
 <script setup lang="ts">
@@ -147,6 +176,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import BaseModal from './base/BaseModal.vue'
 import BaseButton from './base/BaseButton.vue'
 import BaseCheckbox from './base/BaseCheckbox.vue'
+import MissingResourcesDetailModal, { type ResourceItem } from './MissingResourcesDetailModal.vue'
 import { useModelDownloadQueue } from '@/composables/useModelDownloadQueue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 
@@ -182,6 +212,7 @@ const queuedModels = ref<Set<string>>(new Set())       // Models queued for down
 const dontShowAgain = ref(false)
 const installingPackage = ref<string | null>(null)     // Currently installing package (from WebSocket cm-task-started)
 const installedCount = ref(0)  // Track total installed for restart notification
+const activeDetailView = ref<'models' | 'packages' | null>(null)
 
 // Session-based suppression - workflow IDs that have shown popup this session
 // Cleared on browser refresh (in-memory only)
@@ -303,6 +334,49 @@ const allItemsDone = computed(() => {
   const modelsDone = downloadableModels.value.length === 0 || allModelsQueued.value
   return packagesDone && modelsDone
 })
+
+// Detail modal computed properties
+const detailModalTitle = computed(() => {
+  if (activeDetailView.value === 'models') return `Missing Models (${missingModels.value.length})`
+  if (activeDetailView.value === 'packages') return `Missing Custom Nodes (${totalMissingNodeCount.value})`
+  return ''
+})
+
+const detailModalItems = computed<ResourceItem[]>(() => {
+  if (activeDetailView.value === 'models') {
+    return missingModels.value.map(m => ({
+      id: m.url || m.widget_value,
+      name: m.filename,
+      canAction: m.canDownload,
+      actionDisabledReason: m.canDownload ? undefined : 'Manual download required'
+    }))
+  }
+  if (activeDetailView.value === 'packages') {
+    return missingPackages.value.map(p => ({
+      id: p.package_id,
+      name: p.title,
+      subtitle: `(${p.node_count} ${p.node_count === 1 ? 'node' : 'nodes'})`,
+      canAction: true
+    }))
+  }
+  return []
+})
+
+// Detail modal handlers
+function handleDetailAction(item: ResourceItem) {
+  if (activeDetailView.value === 'models') {
+    const model = missingModels.value.find(m => m.url === item.id || m.widget_value === item.id)
+    if (model) downloadModel(model)
+  } else if (activeDetailView.value === 'packages') {
+    const pkg = missingPackages.value.find(p => p.package_id === item.id)
+    if (pkg) installPackage(pkg)
+  }
+}
+
+function handleDetailBulkAction() {
+  if (activeDetailView.value === 'models') downloadAllModels()
+  else if (activeDetailView.value === 'packages') installAllNodes()
+}
 
 // Queue a single package install via Manager queue
 async function installPackage(pkg: MissingPackage) {
@@ -613,6 +687,12 @@ onUnmounted(() => {
 .section-title {
   font-weight: var(--cg-font-weight-semibold);
   color: var(--cg-color-text-primary);
+}
+
+.section-actions {
+  display: flex;
+  gap: var(--cg-space-2);
+  align-items: center;
 }
 
 .item-list {
