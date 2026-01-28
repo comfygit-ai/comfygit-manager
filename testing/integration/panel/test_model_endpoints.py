@@ -398,3 +398,372 @@ class TestWorkspaceModelSourceRemoveEndpoint:
         )
 
         assert resp.status == 500
+
+
+@pytest.mark.integration
+class TestHuggingFaceRepoInfoEndpoint:
+    """GET /v2/workspace/huggingface/repo-info - Get file listing for HuggingFace repo."""
+
+    async def test_success_public_repo(self, client, mock_environment, monkeypatch):
+        """Should return file listing for a public HuggingFace repository."""
+        # Setup: Mock core's parse_huggingface_url
+        mock_parsed = Mock()
+        mock_parsed.kind = "model"
+        mock_parsed.repo_id = "microsoft/VibeVoice-1.5B"
+        mock_parsed.revision = "main"
+
+        monkeypatch.setattr(
+            "api.v2.models.parse_huggingface_url",
+            lambda url: mock_parsed
+        )
+
+        # Mock HfApi
+        mock_sibling = Mock()
+        mock_sibling.rfilename = "model.safetensors"
+        mock_sibling.size = 3000000000
+
+        mock_info = Mock()
+        mock_info.siblings = [mock_sibling]
+
+        mock_hf_api = Mock()
+        mock_hf_api.model_info.return_value = mock_info
+
+        monkeypatch.setattr(
+            "api.v2.models.HfApi",
+            lambda token=None: mock_hf_api
+        )
+
+        # Mock ModelConfig
+        mock_model_cfg = Mock()
+        mock_model_cfg.default_extensions = [".safetensors", ".ckpt", ".pt"]
+
+        monkeypatch.setattr(
+            "api.v2.models.ModelConfig.load",
+            lambda: mock_model_cfg
+        )
+
+        # Execute
+        resp = await client.get(
+            "/v2/workspace/huggingface/repo-info",
+            params={"url": "https://huggingface.co/microsoft/VibeVoice-1.5B"}
+        )
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["repo_id"] == "microsoft/VibeVoice-1.5B"
+        assert data["revision"] == "main"
+        assert isinstance(data["files"], list)
+        assert len(data["files"]) >= 1
+        assert data["files"][0]["path"] == "model.safetensors"
+        assert data["files"][0]["size"] == 3000000000
+        assert data["files"][0]["is_model_file"] is True
+
+    async def test_success_with_sharded_files(self, client, mock_environment, monkeypatch):
+        """Should detect sharded model files and group them."""
+        mock_parsed = Mock()
+        mock_parsed.kind = "model"
+        mock_parsed.repo_id = "meta-llama/Llama-2-7b"
+        mock_parsed.revision = "main"
+
+        monkeypatch.setattr(
+            "api.v2.models.parse_huggingface_url",
+            lambda url: mock_parsed
+        )
+
+        # Create sharded file siblings
+        shards = []
+        for i in range(1, 4):
+            sib = Mock()
+            sib.rfilename = f"model-0000{i}-of-00003.safetensors"
+            sib.size = 1000000000
+            shards.append(sib)
+
+        mock_info = Mock()
+        mock_info.siblings = shards
+
+        mock_hf_api = Mock()
+        mock_hf_api.model_info.return_value = mock_info
+
+        monkeypatch.setattr(
+            "api.v2.models.HfApi",
+            lambda token=None: mock_hf_api
+        )
+
+        mock_model_cfg = Mock()
+        mock_model_cfg.default_extensions = [".safetensors"]
+
+        monkeypatch.setattr(
+            "api.v2.models.ModelConfig.load",
+            lambda: mock_model_cfg
+        )
+
+        # Execute
+        resp = await client.get(
+            "/v2/workspace/huggingface/repo-info",
+            params={"url": "https://huggingface.co/meta-llama/Llama-2-7b"}
+        )
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert len(data["files"]) == 3
+
+        # All shards should have the same shard_group
+        shard_groups = [f["shard_group"] for f in data["files"]]
+        assert all(g == "model.safetensors" for g in shard_groups)
+
+    async def test_error_missing_url_param(self, client, mock_environment):
+        """Should return 400 when URL parameter is missing."""
+        resp = await client.get("/v2/workspace/huggingface/repo-info")
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "url" in data["error"].lower() or "missing" in data["error"].lower()
+
+    async def test_error_invalid_url(self, client, mock_environment, monkeypatch):
+        """Should return 400 for non-HuggingFace URLs."""
+        mock_parsed = Mock()
+        mock_parsed.kind = "unknown"
+        mock_parsed.repo_id = None
+
+        monkeypatch.setattr(
+            "api.v2.models.parse_huggingface_url",
+            lambda url: mock_parsed
+        )
+
+        resp = await client.get(
+            "/v2/workspace/huggingface/repo-info",
+            params={"url": "https://civitai.com/models/12345"}
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "valid" in data["error"].lower() or "huggingface" in data["error"].lower()
+
+    async def test_error_gated_repo_requires_auth(self, client, mock_environment, monkeypatch):
+        """Should return 401 for gated repos without authentication."""
+        mock_parsed = Mock()
+        mock_parsed.kind = "model"
+        mock_parsed.repo_id = "meta-llama/Llama-3-8B"
+        mock_parsed.revision = "main"
+
+        monkeypatch.setattr(
+            "api.v2.models.parse_huggingface_url",
+            lambda url: mock_parsed
+        )
+
+        mock_hf_api = Mock()
+        mock_hf_api.model_info.side_effect = Exception("401 Unauthorized: Access denied")
+
+        monkeypatch.setattr(
+            "api.v2.models.HfApi",
+            lambda token=None: mock_hf_api
+        )
+
+        resp = await client.get(
+            "/v2/workspace/huggingface/repo-info",
+            params={"url": "https://huggingface.co/meta-llama/Llama-3-8B"}
+        )
+
+        assert resp.status == 401
+        data = await resp.json()
+        assert "authentication" in data["error"].lower() or "hf_token" in data["error"].lower()
+
+    async def test_error_repo_not_found(self, client, mock_environment, monkeypatch):
+        """Should return 404 for non-existent repositories."""
+        mock_parsed = Mock()
+        mock_parsed.kind = "model"
+        mock_parsed.repo_id = "nonexistent/fake-model"
+        mock_parsed.revision = "main"
+
+        monkeypatch.setattr(
+            "api.v2.models.parse_huggingface_url",
+            lambda url: mock_parsed
+        )
+
+        mock_hf_api = Mock()
+        mock_hf_api.model_info.side_effect = Exception("404 Not Found: Repository not found")
+
+        monkeypatch.setattr(
+            "api.v2.models.HfApi",
+            lambda token=None: mock_hf_api
+        )
+
+        resp = await client.get(
+            "/v2/workspace/huggingface/repo-info",
+            params={"url": "https://huggingface.co/nonexistent/fake-model"}
+        )
+
+        assert resp.status == 404
+        data = await resp.json()
+        assert "not found" in data["error"].lower()
+
+    async def test_error_no_environment(self, client, monkeypatch):
+        """Should return 500 when no environment detected."""
+        monkeypatch.setattr(
+            "comfygit_panel.get_environment_from_cwd",
+            lambda: None
+        )
+
+        resp = await client.get(
+            "/v2/workspace/huggingface/repo-info",
+            params={"url": "https://huggingface.co/microsoft/VibeVoice-1.5B"}
+        )
+
+        assert resp.status == 500
+
+
+@pytest.mark.integration
+class TestModelsSubdirectoriesEndpoint:
+    """GET /v2/workspace/models/subdirectories - List model subdirectories for destination picker."""
+
+    async def test_success_with_both_standard_and_existing(
+        self,
+        client,
+        mock_environment,
+        monkeypatch,
+        tmp_path
+    ):
+        """Should return merged list of standard and existing directories."""
+        # Setup: Mock ModelConfig with standard directories
+        mock_model_cfg = Mock()
+        mock_model_cfg.standard_directories = ["checkpoints", "loras", "vae"]
+
+        monkeypatch.setattr(
+            "api.v2.models.ModelConfig.load",
+            lambda: mock_model_cfg
+        )
+
+        # Create a temp models directory with some existing dirs
+        models_dir = tmp_path / "models"
+        models_dir.mkdir()
+        (models_dir / "checkpoints").mkdir()
+        (models_dir / "custom_models").mkdir()  # Non-standard existing dir
+        (models_dir / "loras").mkdir()
+
+        # Mock workspace config manager to return our temp dir
+        mock_environment.workspace.workspace_config_manager.get_models_directory.return_value = models_dir
+
+        # Execute
+        resp = await client.get("/v2/workspace/models/subdirectories")
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+
+        # Should have merged list (sorted, deduplicated)
+        assert "directories" in data
+        assert "checkpoints" in data["directories"]
+        assert "loras" in data["directories"]
+        assert "vae" in data["directories"]  # From standard
+        assert "custom_models" in data["directories"]  # From existing
+
+        # Should also return separate lists
+        assert "standard" in data
+        assert "existing" in data
+        assert data["standard"] == ["checkpoints", "loras", "vae"]
+        assert "custom_models" in data["existing"]
+
+    async def test_success_with_only_standard_dirs(
+        self,
+        client,
+        mock_environment,
+        monkeypatch,
+        tmp_path
+    ):
+        """Should return standard directories when models dir is empty."""
+        mock_model_cfg = Mock()
+        mock_model_cfg.standard_directories = ["checkpoints", "loras"]
+
+        monkeypatch.setattr(
+            "api.v2.models.ModelConfig.load",
+            lambda: mock_model_cfg
+        )
+
+        # Create empty models directory
+        models_dir = tmp_path / "models"
+        models_dir.mkdir()
+
+        mock_environment.workspace.workspace_config_manager.get_models_directory.return_value = models_dir
+
+        # Execute
+        resp = await client.get("/v2/workspace/models/subdirectories")
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["directories"] == ["checkpoints", "loras"]
+        assert data["existing"] == []
+
+    async def test_success_no_models_directory(
+        self,
+        client,
+        mock_environment,
+        monkeypatch
+    ):
+        """Should handle case where models directory doesn't exist."""
+        mock_model_cfg = Mock()
+        mock_model_cfg.standard_directories = ["checkpoints"]
+
+        monkeypatch.setattr(
+            "api.v2.models.ModelConfig.load",
+            lambda: mock_model_cfg
+        )
+
+        # Return None for models directory
+        mock_environment.workspace.workspace_config_manager.get_models_directory.return_value = None
+
+        # Execute
+        resp = await client.get("/v2/workspace/models/subdirectories")
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["directories"] == ["checkpoints"]
+        assert data["existing"] == []
+
+    async def test_success_ignores_hidden_dirs(
+        self,
+        client,
+        mock_environment,
+        monkeypatch,
+        tmp_path
+    ):
+        """Should not include hidden directories (starting with .)."""
+        mock_model_cfg = Mock()
+        mock_model_cfg.standard_directories = []
+
+        monkeypatch.setattr(
+            "api.v2.models.ModelConfig.load",
+            lambda: mock_model_cfg
+        )
+
+        models_dir = tmp_path / "models"
+        models_dir.mkdir()
+        (models_dir / "checkpoints").mkdir()
+        (models_dir / ".hidden").mkdir()  # Should be ignored
+        (models_dir / ".cache").mkdir()  # Should be ignored
+
+        mock_environment.workspace.workspace_config_manager.get_models_directory.return_value = models_dir
+
+        # Execute
+        resp = await client.get("/v2/workspace/models/subdirectories")
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert "checkpoints" in data["directories"]
+        assert ".hidden" not in data["directories"]
+        assert ".cache" not in data["directories"]
+
+    async def test_error_no_environment(self, client, monkeypatch):
+        """Should return 500 when no environment detected."""
+        monkeypatch.setattr(
+            "comfygit_panel.get_environment_from_cwd",
+            lambda: None
+        )
+
+        resp = await client.get("/v2/workspace/models/subdirectories")
+
+        assert resp.status == 500
