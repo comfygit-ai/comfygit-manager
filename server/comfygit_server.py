@@ -240,6 +240,7 @@ async def start_queue(request):
 
         # Broadcast task started
         PromptServer.instance.send_sync("cm-task-started", {
+            "ui_id": running_task.get("ui_id"),
             "state": get_current_state()
         })
 
@@ -266,6 +267,7 @@ async def start_queue(request):
         # Broadcast task completed
         PromptServer.instance.send_sync("cm-task-completed", {
             "ui_id": task_id,
+            "status": result,
             "state": get_current_state()
         })
 
@@ -511,7 +513,7 @@ async def process_install(env, params: dict) -> dict:
         if is_installed and (not version or version == "latest"):
             await loop.run_in_executor(
                 None,
-                lambda: env.node_manager.update_node(pack_id, no_test=True)
+                lambda: env.node_manager.update_node(pack_id)
             )
             return {
                 "status_str": "success",
@@ -527,7 +529,7 @@ async def process_install(env, params: dict) -> dict:
 
         await loop.run_in_executor(
             None,
-            lambda: env.node_manager.add_node(identifier, force=is_installed, no_test=True)
+            lambda: env.node_manager.add_node(identifier, force=is_installed)
         )
 
         return {
