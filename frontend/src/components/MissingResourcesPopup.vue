@@ -20,28 +20,18 @@
         <div v-if="missingPackages.length > 0" class="section">
           <div class="section-header">
             <span class="section-title">Missing Custom Nodes ({{ totalMissingNodeCount }})</span>
-            <div class="section-actions">
-              <BaseButton
-                v-if="missingPackages.length > 5"
-                size="sm"
-                variant="ghost"
-                @click="activeDetailView = 'packages'"
-              >
-                Show All
-              </BaseButton>
-              <BaseButton
-                v-if="missingPackages.length > 1"
-                size="sm"
-                variant="secondary"
-                :disabled="allPackagesInstalled"
-                @click="installAllNodes"
-              >
-                {{ allPackagesInstalled ? 'All Queued' : 'Install All' }}
-              </BaseButton>
-            </div>
+            <BaseButton
+              v-if="missingPackages.length > 1"
+              size="sm"
+              variant="secondary"
+              :disabled="allPackagesInstalled"
+              @click="installAllNodes"
+            >
+              {{ allPackagesInstalled ? 'All Queued' : 'Install All' }}
+            </BaseButton>
           </div>
           <div class="item-list">
-            <div v-for="pkg in missingPackages.slice(0, 5)" :key="pkg.package_id" class="package-item">
+            <div v-for="pkg in displayedPackages" :key="pkg.package_id" class="package-item">
               <div class="package-info">
                 <span class="package-name">{{ pkg.title }}</span>
                 <span class="node-count">({{ pkg.node_count }} {{ pkg.node_count === 1 ? 'node' : 'nodes' }})</span>
@@ -69,6 +59,15 @@
               <!-- Installed: successfully installed -->
               <span v-else class="installed-badge">Installed</span>
             </div>
+            <!-- Show all row - appears when 5+ packages -->
+            <div
+              v-if="missingPackages.length >= 5"
+              class="show-all-row"
+              @click="activeDetailView = 'packages'"
+            >
+              <span>Show all {{ missingPackages.length }} packages...</span>
+              <span class="show-all-arrow">→</span>
+            </div>
           </div>
         </div>
 
@@ -92,28 +91,18 @@
         <div v-if="missingModels.length > 0" class="section">
           <div class="section-header">
             <span class="section-title">Missing Models ({{ missingModels.length }})</span>
-            <div class="section-actions">
-              <BaseButton
-                v-if="missingModels.length > 5"
-                size="sm"
-                variant="ghost"
-                @click="activeDetailView = 'models'"
-              >
-                Show All
-              </BaseButton>
-              <BaseButton
-                v-if="downloadableModels.length > 1"
-                size="sm"
-                variant="secondary"
-                :disabled="allModelsQueued"
-                @click="downloadAllModels"
-              >
-                {{ allModelsQueued ? 'All Queued' : 'Download All' }}
-              </BaseButton>
-            </div>
+            <BaseButton
+              v-if="downloadableModels.length > 1"
+              size="sm"
+              variant="secondary"
+              :disabled="allModelsQueued"
+              @click="downloadAllModels"
+            >
+              {{ allModelsQueued ? 'All Queued' : 'Download All' }}
+            </BaseButton>
           </div>
           <div class="item-list">
-            <div v-for="model in missingModels.slice(0, 5)" :key="model.widget_value" class="model-item">
+            <div v-for="model in displayedModels" :key="model.widget_value" class="model-item">
               <div class="model-info">
                 <span class="model-name">{{ model.filename }}</span>
               </div>
@@ -129,6 +118,15 @@
                 <span v-else class="queued-badge">Queued</span>
               </template>
               <span v-else class="no-url">Manual download required</span>
+            </div>
+            <!-- Show all row - appears when 5+ models -->
+            <div
+              v-if="missingModels.length >= 5"
+              class="show-all-row"
+              @click="activeDetailView = 'models'"
+            >
+              <span>Show all {{ missingModels.length }} models...</span>
+              <span class="show-all-arrow">→</span>
             </div>
           </div>
         </div>
@@ -305,6 +303,21 @@ const missingModels = computed<MissingModelItem[]>(() => {
 // Models that can be auto-downloaded
 const downloadableModels = computed(() => {
   return missingModels.value.filter(m => m.canDownload)
+})
+
+// Display subsets - show 4 items when 5+, to make room for "show all" row
+const displayedPackages = computed(() => {
+  if (missingPackages.value.length >= 5) {
+    return missingPackages.value.slice(0, 4)
+  }
+  return missingPackages.value
+})
+
+const displayedModels = computed(() => {
+  if (missingModels.value.length >= 5) {
+    return missingModels.value.slice(0, 4)
+  }
+  return missingModels.value
 })
 
 // Check if all packages are installed, queued, or failed (no more to install)
@@ -689,12 +702,6 @@ onUnmounted(() => {
   color: var(--cg-color-text-primary);
 }
 
-.section-actions {
-  display: flex;
-  gap: var(--cg-space-2);
-  align-items: center;
-}
-
 .item-list {
   background: var(--cg-color-bg-tertiary);
   border-radius: var(--cg-radius-md);
@@ -798,6 +805,25 @@ onUnmounted(() => {
 .installed-badge {
   color: var(--cg-color-success);
   background: color-mix(in srgb, var(--cg-color-success) 15%, transparent);
+}
+
+.show-all-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--cg-space-2);
+  color: var(--cg-color-accent);
+  cursor: pointer;
+  font-size: var(--cg-font-size-sm);
+  border-top: 1px solid var(--cg-color-border);
+}
+
+.show-all-row:hover {
+  background: var(--cg-color-bg-hover);
+}
+
+.show-all-arrow {
+  opacity: 0.6;
 }
 
 .overflow-note {
