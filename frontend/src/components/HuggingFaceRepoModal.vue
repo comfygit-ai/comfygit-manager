@@ -310,6 +310,7 @@ async function loadRepoInfo() {
     const parsed = parseHuggingFaceUrl(props.url)
     if (parsed.kind === 'unknown') {
       error.value = 'Invalid HuggingFace URL'
+      loading.value = false
       return
     }
 
