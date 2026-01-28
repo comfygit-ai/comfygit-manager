@@ -408,7 +408,7 @@ class TestHuggingFaceRepoInfoEndpoint:
         """Should return file listing for a public HuggingFace repository."""
         # Setup: Mock core's parse_huggingface_url
         mock_parsed = Mock()
-        mock_parsed.kind = "model"
+        mock_parsed.kind = "repo"
         mock_parsed.repo_id = "microsoft/VibeVoice-1.5B"
         mock_parsed.revision = "main"
 
@@ -462,7 +462,7 @@ class TestHuggingFaceRepoInfoEndpoint:
     async def test_success_with_sharded_files(self, client, mock_environment, monkeypatch):
         """Should detect sharded model files and group them."""
         mock_parsed = Mock()
-        mock_parsed.kind = "model"
+        mock_parsed.kind = "repo"
         mock_parsed.repo_id = "meta-llama/Llama-2-7b"
         mock_parsed.revision = "main"
 
@@ -544,7 +544,7 @@ class TestHuggingFaceRepoInfoEndpoint:
     async def test_error_gated_repo_requires_auth(self, client, mock_environment, monkeypatch):
         """Should return 401 for gated repos without authentication."""
         mock_parsed = Mock()
-        mock_parsed.kind = "model"
+        mock_parsed.kind = "repo"
         mock_parsed.repo_id = "meta-llama/Llama-3-8B"
         mock_parsed.revision = "main"
 
@@ -573,7 +573,7 @@ class TestHuggingFaceRepoInfoEndpoint:
     async def test_error_repo_not_found(self, client, mock_environment, monkeypatch):
         """Should return 404 for non-existent repositories."""
         mock_parsed = Mock()
-        mock_parsed.kind = "model"
+        mock_parsed.kind = "repo"
         mock_parsed.repo_id = "nonexistent/fake-model"
         mock_parsed.revision = "main"
 
