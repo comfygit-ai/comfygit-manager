@@ -619,3 +619,34 @@ async def workspace_models_subdirectories(request: web.Request, env) -> web.Resp
         "standard": standard,
         "existing": existing,
     })
+
+
+@routes.get("/v2/workspace/huggingface/search")
+@requires_environment
+async def huggingface_search(request: web.Request, env) -> web.Response:
+    """Search HuggingFace Hub for model repositories."""
+    query = (request.query.get("query") or "").strip()
+    if len(query) < 2:
+        return web.json_response({"error": "Query must be at least 2 characters"}, status=400)
+
+    limit = min(int(request.query.get("limit", 10)), 20)
+
+    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
+    api = HfApi(token=token if token else None)
+
+    try:
+        models = list(api.list_models(search=query, limit=limit, sort="downloads", direction=-1))
+    except Exception as e:
+        return web.json_response({"error": f"Search failed: {e}"}, status=500)
+
+    results = []
+    for m in models:
+        results.append({
+            "repo_id": m.id,
+            "description": getattr(m, 'description', None) or (m.card_data.description[:200] if hasattr(m, 'card_data') and m.card_data and hasattr(m.card_data, 'description') and m.card_data.description else None),
+            "downloads": getattr(m, 'downloads', 0) or 0,
+            "likes": getattr(m, 'likes', 0) or 0,
+            "tags": getattr(m, 'tags', []) or []
+        })
+
+    return web.json_response({"results": results, "query": query})
