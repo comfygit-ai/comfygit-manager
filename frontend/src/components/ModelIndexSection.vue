@@ -171,77 +171,16 @@
     </div>
   </Teleport>
 
-  <!-- Download New Model Modal -->
-  <Teleport to="body">
-    <div v-if="showDownloadModal" class="modal-overlay" @click.self="showDownloadModal = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Download New Model</h3>
-          <button class="modal-close" @click="showDownloadModal = false">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="input-group">
-            <label>Download URL</label>
-            <BaseInput
-              v-model="downloadUrl"
-              placeholder="https://huggingface.co/user/repo or https://.../resolve/..."
-            />
-          </div>
-
-          <template v-if="isHfRepoUrl">
-            <p class="modal-note">
-              HuggingFace repository detected. Click <strong>Browse Repo Files</strong> to pick files.
-            </p>
-          </template>
-
-          <template v-else>
-            <div class="input-group">
-              <label>Target Path (relative to models directory)</label>
-              <BaseInput
-                v-model="downloadTargetPath"
-                placeholder="e.g. checkpoints/model.safetensors"
-              />
-              <p v-if="targetPathError" class="modal-error">{{ targetPathError }}</p>
-            </div>
-            <p class="modal-note">Model will be queued for background download.</p>
-          </template>
-        </div>
-        <div class="modal-footer">
-          <BaseButton variant="secondary" @click="showDownloadModal = false">Cancel</BaseButton>
-          <BaseButton
-            v-if="isHfRepoUrl"
-            variant="primary"
-            :disabled="!downloadUrl.trim()"
-            @click="openHfRepoModal"
-          >
-            Browse Repo Files
-          </BaseButton>
-          <BaseButton
-            v-else
-            variant="primary"
-            :disabled="!downloadUrl.trim() || !downloadTargetPath.trim() || !!targetPathError"
-            @click="handleDownloadModel"
-          >
-            Queue Download
-          </BaseButton>
-        </div>
-      </div>
-    </div>
-  </Teleport>
-
-  <!-- HuggingFace Repo Modal -->
-  <HuggingFaceRepoModal
-    :show="showHfRepoModal"
-    :url="hfRepoUrl"
-    @close="showHfRepoModal = false"
-    @queue="handleQueueHfRepo"
+  <!-- Unified Model Download Modal -->
+  <ModelDownloadModal
+    :show="showDownloadModal"
+    @close="showDownloadModal = false"
   />
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
-import { useModelDownloadQueue } from '@/composables/useModelDownloadQueue'
 import type { ModelInfo } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
@@ -256,10 +195,9 @@ import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import ModelDetailModal from '@/components/ModelDetailModal.vue'
-import HuggingFaceRepoModal from '@/components/HuggingFaceRepoModal.vue'
+import ModelDownloadModal from '@/components/ModelDownloadModal.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import { parseHuggingFaceUrl } from '@/utils/huggingface'
 
 const {
   getWorkspaceModels,
@@ -267,8 +205,6 @@ const {
   getModelsDirectory,
   setModelsDirectory
 } = useComfyGitService()
-
-const { addToQueue } = useModelDownloadQueue()
 
 const emit = defineEmits<{
   (e: 'refresh'): void
@@ -291,28 +227,6 @@ const changingDirectory = ref(false)
 
 // Download modal state
 const showDownloadModal = ref(false)
-const downloadUrl = ref('')
-const downloadTargetPath = ref('')
-
-// HuggingFace repo modal state
-const showHfRepoModal = ref(false)
-const hfRepoUrl = ref('')
-
-// Computed: HuggingFace URL detection
-const hfParsed = computed(() => parseHuggingFaceUrl(downloadUrl.value))
-const isHfRepoUrl = computed(() => hfParsed.value.kind === 'repo' && !!hfParsed.value.repoId)
-
-// Computed: Target path validation
-const targetPathError = computed(() => {
-  const p = downloadTargetPath.value.trim()
-  if (!p) return null
-  const last = p.replace(/\\/g, '/').split('/').pop() || ''
-  const hasExt = last.includes('.') && !last.endsWith('.')
-  if (!hasExt) {
-    return 'Target path must include a filename (e.g. checkpoints/model.safetensors).'
-  }
-  return null
-})
 
 // Progress state for indexing
 const indexingProgress = ref<{ message: string; current: number; total: number } | null>(null)
@@ -412,56 +326,6 @@ async function handleChangeDirectory() {
   } finally {
     changingDirectory.value = false
   }
-}
-
-function handleDownloadModel() {
-  if (!downloadUrl.value.trim()) return
-
-  // If it's a HF repo URL, open the repo modal instead
-  const parsed = parseHuggingFaceUrl(downloadUrl.value.trim())
-  if (parsed.kind === 'repo') {
-    openHfRepoModal()
-    return
-  }
-
-  // Direct download requires target path
-  if (!downloadTargetPath.value.trim()) return
-
-  // Extract filename from target path
-  const filename = downloadTargetPath.value.split('/').pop() || 'model.safetensors'
-
-  // Add to download queue
-  addToQueue([{
-    workflow: '__manual__',
-    filename,
-    url: downloadUrl.value.trim(),
-    targetPath: downloadTargetPath.value.trim()
-  }])
-
-  // Reset form and close modal
-  downloadUrl.value = ''
-  downloadTargetPath.value = ''
-  showDownloadModal.value = false
-}
-
-function openHfRepoModal() {
-  hfRepoUrl.value = downloadUrl.value.trim()
-  showHfRepoModal.value = true
-  showDownloadModal.value = false
-}
-
-function handleQueueHfRepo(items: Array<{ url: string; destination: string; filename: string }>) {
-  // Transform HfDownloadItem[] to queue format
-  addToQueue(items.map(item => ({
-    workflow: '__manual__',
-    filename: item.filename,
-    url: item.url,
-    targetPath: item.destination ? `${item.destination}/${item.filename}` : item.filename
-  })))
-  showHfRepoModal.value = false
-  hfRepoUrl.value = ''
-  downloadUrl.value = ''
-  downloadTargetPath.value = ''
 }
 
 async function loadModels() {
