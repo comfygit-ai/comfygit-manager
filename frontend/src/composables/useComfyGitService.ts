@@ -338,6 +338,14 @@ export function useComfyGitService() {
     return fetchApi<LogResult>(`/v2/comfygit/log?limit=${limit}&offset=${offset}`)
   }
 
+  async function getBranchHistory(branchName: string, limit = 50): Promise<LogResult> {
+    if (USE_MOCK) {
+      const commits = await mockApi.getCommitHistory(limit)
+      return { commits, has_more: false, current_branch: branchName }
+    }
+    return fetchApi<LogResult>(`/v2/comfygit/log?branch=${encodeURIComponent(branchName)}&limit=${limit}`)
+  }
+
   async function exportEnv(outputPath?: string): Promise<ExportResult> {
     return fetchApi<ExportResult>('/v2/comfygit/export', {
       method: 'POST',
@@ -1670,6 +1678,7 @@ export function useComfyGitService() {
     getStatus,
     commit,
     getHistory,
+    getBranchHistory,
     exportEnv,
     validateExport,
     validateDeploy,

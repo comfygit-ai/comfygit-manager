@@ -37,27 +37,32 @@
           :key="branch.name"
           :branch-name="branch.name"
           :is-current="branch.is_current"
+          :clickable="true"
+          :show-current-label="true"
+          @click="openBranchDetail(branch)"
         >
           <template #actions>
             <ActionButton
               v-if="!branch.is_current"
-              variant="destructive"
-              size="xs"
-              @click="$emit('delete', branch.name)"
-            >
-              Delete
-            </ActionButton>
-            <ActionButton
-              v-if="!branch.is_current"
               variant="secondary"
               size="xs"
-              @click="$emit('switch', branch.name)"
+              @click.stop="emit('switch', branch.name)"
             >
               Switch
             </ActionButton>
           </template>
         </BranchListItem>
       </div>
+
+      <!-- Branch Detail Modal -->
+      <BranchDetailModal
+        v-if="selectedBranch"
+        :branch-name="selectedBranch.name"
+        :is-current="selectedBranch.is_current"
+        @close="selectedBranch = null"
+        @delete="handleDeleteFromModal"
+        @switch="handleSwitchFromModal"
+      />
     </template>
   </PanelLayout>
 </template>
@@ -71,6 +76,7 @@ import ActionButton from '@/components/base/atoms/ActionButton.vue'
 import EmptyState from '@/components/base/molecules/EmptyState.vue'
 import BranchCreateForm from '@/components/base/molecules/BranchCreateForm.vue'
 import BranchListItem from '@/components/base/molecules/BranchListItem.vue'
+import BranchDetailModal from '@/components/BranchDetailModal.vue'
 
 defineProps<{
   branches: BranchInfo[]
@@ -84,6 +90,7 @@ const emit = defineEmits<{
 }>()
 
 const showCreateInput = ref(false)
+const selectedBranch = ref<BranchInfo | null>(null)
 
 function handleCreate(name: string) {
   emit('create', name)
@@ -92,6 +99,20 @@ function handleCreate(name: string) {
 
 function cancelCreate() {
   showCreateInput.value = false
+}
+
+function openBranchDetail(branch: BranchInfo) {
+  selectedBranch.value = branch
+}
+
+function handleDeleteFromModal(branchName: string) {
+  selectedBranch.value = null
+  emit('delete', branchName)
+}
+
+function handleSwitchFromModal(branchName: string) {
+  selectedBranch.value = null
+  emit('switch', branchName)
 }
 </script>
 
