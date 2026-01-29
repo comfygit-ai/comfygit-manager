@@ -205,7 +205,7 @@ function handleBack() {
   gap: var(--cg-space-2);
 }
 
-.search-bar :deep(input) {
+.search-bar :deep(.base-input-wrapper) {
   flex: 1;
 }
 

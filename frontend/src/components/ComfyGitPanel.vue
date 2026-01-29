@@ -232,6 +232,7 @@
           <HistorySection
             v-else-if="currentView === 'history'"
             :commits="commits"
+            :current-ref="status?.branch"
             @select="handleCommitSelect"
             @checkout="handleCheckout"
           />

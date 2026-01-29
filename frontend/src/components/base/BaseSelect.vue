@@ -72,6 +72,8 @@ function getOptionLabel(option: SelectOption | string): string {
   transition: all var(--cg-transition-fast);
   cursor: pointer;
   width: 100%;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .base-select:focus {

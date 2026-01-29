@@ -1,7 +1,7 @@
 <template>
   <PanelLayout>
     <template #header>
-      <PanelHeader title="HISTORY" />
+      <PanelHeader :title="headerTitle" />
     </template>
 
     <template #content>
@@ -39,6 +39,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { CommitInfo } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
@@ -47,9 +48,15 @@ import CommitItem from '@/components/base/molecules/CommitItem.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
 import EmptyState from '@/components/base/molecules/EmptyState.vue'
 
-defineProps<{
+const props = defineProps<{
   commits: CommitInfo[]
+  currentRef?: string | null
 }>()
+
+const headerTitle = computed(() => {
+  const ref = props.currentRef || 'detached'
+  return `HISTORY (${ref})`
+})
 
 defineEmits<{
   select: [commit: CommitInfo]

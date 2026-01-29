@@ -42,12 +42,30 @@
 
       <!-- File List -->
       <div class="file-list-container">
+        <!-- Header row -->
+        <div v-if="filteredFiles.length > 0" class="file-list-header">
+          <input
+            type="checkbox"
+            :checked="allFilteredSelected"
+            :indeterminate="someFilteredSelected && !allFilteredSelected"
+            class="file-checkbox"
+            @change="toggleSelectAll"
+          />
+          <span class="header-name" @click="toggleSort('name')">
+            Name
+            <span class="sort-indicator">{{ sortKey === 'name' ? (sortAsc ? '▲' : '▼') : '' }}</span>
+          </span>
+          <span class="header-size" @click="toggleSort('size')">
+            Size
+            <span class="sort-indicator">{{ sortKey === 'size' ? (sortAsc ? '▲' : '▼') : '' }}</span>
+          </span>
+        </div>
         <div v-if="filteredFiles.length === 0" class="empty-state">
           {{ files.length === 0 ? 'No files in repository' : 'No files match filter' }}
         </div>
         <div v-else class="file-list">
           <div
-            v-for="file in filteredFiles"
+            v-for="file in sortedFiles"
             :key="file.path"
             :class="['file-item', { selected: selected.has(file.path) }]"
             @click="toggleFile(file)"
@@ -69,7 +87,7 @@
       <div class="destination-section">
         <h4 class="section-label">Download Destination</h4>
         <div class="destination-row">
-          <BaseSelect
+          <BaseDropdown
             v-model="destBase"
             :options="destinationOptions"
             placeholder="Select directory..."
@@ -92,14 +110,12 @@
         />
       </div>
 
-      <!-- Summary -->
-      <div class="summary-bar">
-        <span class="summary-count">{{ selected.size }} file(s) selected</span>
-        <span class="summary-size">{{ formatSize(totalSelectedSize) }}</span>
-      </div>
-
-      <!-- Action buttons -->
+      <!-- Summary & Action -->
       <div class="action-bar">
+        <div class="summary-info">
+          <span class="summary-count">{{ selected.size }} file(s) selected</span>
+          <span class="summary-size">{{ formatSize(totalSelectedSize) }}</span>
+        </div>
         <BaseButton
           variant="primary"
           :disabled="selected.size === 0 || !isDestinationValid"
@@ -116,8 +132,8 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import BaseSelect from '@/components/base/BaseSelect.vue'
-import type { SelectOption } from '@/components/base/BaseSelect.vue'
+import BaseDropdown from '@/components/base/BaseDropdown.vue'
+import type { DropdownOption } from '@/components/base/BaseDropdown.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import { buildHfResolveUrl } from '@/utils/huggingface'
 import type { HuggingFaceRepoFile } from '@/types/comfygit'
@@ -149,7 +165,11 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 
 const searchQuery = ref('')
-const showOnlyModels = ref(true)
+const showOnlyModels = ref(false)
+
+// Sorting state
+const sortKey = ref<'name' | 'size'>('name')
+const sortAsc = ref(true)
 
 const destBase = ref<string>('')
 const destSubfolder = ref<string>('')
@@ -182,8 +202,31 @@ const filteredFiles = computed(() => {
   return result
 })
 
-const destinationOptions = computed<SelectOption[]>(() => {
-  const opts: SelectOption[] = directories.value.map(d => ({
+const sortedFiles = computed(() => {
+  const result = [...filteredFiles.value]
+  result.sort((a, b) => {
+    let cmp: number
+    if (sortKey.value === 'name') {
+      cmp = a.path.localeCompare(b.path)
+    } else {
+      cmp = a.size - b.size
+    }
+    return sortAsc.value ? cmp : -cmp
+  })
+  return result
+})
+
+const allFilteredSelected = computed(() => {
+  if (filteredFiles.value.length === 0) return false
+  return filteredFiles.value.every(f => selected.value.has(f.path))
+})
+
+const someFilteredSelected = computed(() => {
+  return filteredFiles.value.some(f => selected.value.has(f.path))
+})
+
+const destinationOptions = computed<DropdownOption[]>(() => {
+  const opts: DropdownOption[] = directories.value.map(d => ({
     label: d,
     value: d
   }))
@@ -272,6 +315,33 @@ function autoSelectModels() {
 
 function clearSelection() {
   selected.value = new Set()
+}
+
+function toggleSelectAll() {
+  if (allFilteredSelected.value) {
+    // Deselect all filtered files
+    const newSelected = new Set(selected.value)
+    for (const file of filteredFiles.value) {
+      newSelected.delete(file.path)
+    }
+    selected.value = newSelected
+  } else {
+    // Select all filtered files
+    const newSelected = new Set(selected.value)
+    for (const file of filteredFiles.value) {
+      newSelected.add(file.path)
+    }
+    selected.value = newSelected
+  }
+}
+
+function toggleSort(key: 'name' | 'size') {
+  if (sortKey.value === key) {
+    sortAsc.value = !sortAsc.value
+  } else {
+    sortKey.value = key
+    sortAsc.value = true
+  }
 }
 
 function getDestinationPath(): string {
@@ -499,6 +569,50 @@ onMounted(() => {
   background: var(--cg-color-accent);
 }
 
+/* File List Header */
+.file-list-header {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  padding: var(--cg-space-2) var(--cg-space-3);
+  background: var(--cg-color-bg-tertiary);
+  border-bottom: 1px solid var(--cg-color-border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.header-name,
+.header-size {
+  font-size: var(--cg-font-size-xs);
+  font-weight: var(--cg-font-weight-medium);
+  color: var(--cg-color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-1);
+}
+
+.header-name:hover,
+.header-size:hover {
+  color: var(--cg-color-accent);
+}
+
+.header-name {
+  flex: 1;
+}
+
+.header-size {
+  white-space: nowrap;
+}
+
+.sort-indicator {
+  font-size: 10px;
+  color: var(--cg-color-accent);
+  min-width: 10px;
+}
+
 .file-list {
   display: flex;
   flex-direction: column;
@@ -573,7 +687,7 @@ onMounted(() => {
 }
 
 .dest-select {
-  min-width: 150px;
+  min-width: 220px;
 }
 
 .path-separator {
@@ -589,14 +703,18 @@ onMounted(() => {
   margin-top: var(--cg-space-2);
 }
 
-/* Summary */
-.summary-bar {
+/* Action bar with summary */
+.action-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--cg-space-2) var(--cg-space-3);
-  background: var(--cg-color-bg-tertiary);
-  border: 1px solid var(--cg-color-border);
+  gap: var(--cg-space-3);
+}
+
+.summary-info {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-3);
 }
 
 .summary-count {
@@ -608,12 +726,5 @@ onMounted(() => {
   color: var(--cg-color-accent);
   font-family: var(--cg-font-mono);
   font-size: var(--cg-font-size-sm);
-}
-
-/* Action bar */
-.action-bar {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--cg-space-2);
 }
 </style>
