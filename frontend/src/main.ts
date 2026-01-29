@@ -498,50 +498,63 @@ document.head.appendChild(styles)
 app.registerExtension({
   name: 'Comfy.ComfyGitPanel',
 
+  // Commands that can be triggered by keybindings or menu items
+  commands: [
+    {
+      id: 'ComfyGit.OpenPanel',
+      label: 'Open ComfyGit Panel',
+      icon: 'pi pi-folder-open',
+      function: () => showPanel()
+    },
+    {
+      id: 'ComfyGit.QuickCommit',
+      label: 'Quick Commit',
+      icon: 'pi pi-check',
+      function: () => {
+        if (commitButton && !commitButton.disabled) {
+          showCommitPopover(commitButton)
+        }
+      }
+    }
+  ],
+
+  // Default keybindings (user can customize in Settings → Keyboard Shortcuts)
+  keybindings: [
+    {
+      commandId: 'ComfyGit.OpenPanel',
+      combo: { key: 'l', alt: true, shift: true }
+    },
+    {
+      commandId: 'ComfyGit.QuickCommit',
+      combo: { key: 'k', alt: true, shift: true }
+    }
+  ],
+
   // Hook into workflow loading to intercept missing resources
-  // This runs BEFORE ComfyUI's missing nodes/models dialogs
-  async beforeConfigureGraph(graphData: any, missingNodeTypes: any[]) {
-    // Disable ComfyUI's built-in missing nodes/models popups BEFORE they check the settings
-    // This must happen synchronously before the settings are read
+  async beforeConfigureGraph(graphData: any, _missingNodeTypes: any[]) {
+    // Disable ComfyUI's built-in popups - we show our own
     try {
       await Promise.all([
         app.ui.settings.setSettingValueAsync('Comfy.Workflow.ShowMissingModelsWarning', false),
         app.ui.settings.setSettingValueAsync('Comfy.Workflow.ShowMissingNodesWarning', false)
       ])
-      console.log('[ComfyGit] Disabled built-in missing nodes/models warnings')
     } catch (e) {
       console.warn('[ComfyGit] Failed to disable built-in warnings:', e)
     }
 
-    // Store workflow data for use in afterConfigureGraph
-    // We use window to share state since these are separate hook calls
-    ;(window as any).__comfygit_pending_workflow = {
-      graphData,
-      missingNodeTypes,
-      timestamp: Date.now()
-    }
-    console.log('[ComfyGit] beforeConfigureGraph: captured workflow data', {
-      nodeCount: graphData?.nodes?.length ?? 0,
-      missingNodeTypes: missingNodeTypes?.length ?? 0
-    })
+    // Store workflow data for afterConfigureGraph (separate hook calls)
+    ;(window as any).__comfygit_pending_workflow = graphData
   },
 
-  async afterConfigureGraph(missingNodeTypes: any[]) {
-    const pending = (window as any).__comfygit_pending_workflow
-    if (!pending) return
+  async afterConfigureGraph(_missingNodeTypes: any[]) {
+    const workflow = (window as any).__comfygit_pending_workflow
+    if (!workflow) return
     delete (window as any).__comfygit_pending_workflow
 
-    // Dispatch custom event for our popup component to handle
+    // Dispatch event for MissingResourcesPopup to handle
     window.dispatchEvent(new CustomEvent('comfygit:workflow-loaded', {
-      detail: {
-        workflow: pending.graphData,
-        missingNodeTypes: missingNodeTypes,
-        timestamp: pending.timestamp
-      }
+      detail: { workflow }
     }))
-    console.log('[ComfyGit] afterConfigureGraph: dispatched workflow-loaded event', {
-      missingNodeTypes: missingNodeTypes?.length ?? 0
-    })
   },
 
   async setup() {
