@@ -534,12 +534,46 @@ const initialViewMap: Record<string, { view: ViewName; section: SectionName }> =
 }
 const initialConfig = props.initialView ? initialViewMap[props.initialView] : null
 
-const currentView = ref<ViewName>(initialConfig?.view ?? 'status')
-const currentSection = ref<SectionName>(initialConfig?.section ?? 'this-env')
+// Session storage keys for remembering last view
+const VIEW_STORAGE_KEY = 'ComfyGit.LastView'
+const SECTION_STORAGE_KEY = 'ComfyGit.LastSection'
+
+// Valid values for validation
+const validViews: ViewName[] = ['status', 'workflows', 'models-env', 'branches', 'history', 'nodes', 'debug-env',
+                                'environments', 'model-index', 'settings', 'debug-workspace',
+                                'export', 'import', 'remotes', 'deploy']
+const validSections: SectionName[] = ['this-env', 'all-envs', 'sharing']
+
+// Read saved view from sessionStorage (with validation)
+function getSavedView(): { view: ViewName; section: SectionName } | null {
+  try {
+    const savedView = sessionStorage.getItem(VIEW_STORAGE_KEY)
+    const savedSection = sessionStorage.getItem(SECTION_STORAGE_KEY)
+    if (savedView && savedSection &&
+        validViews.includes(savedView as ViewName) &&
+        validSections.includes(savedSection as SectionName)) {
+      return { view: savedView as ViewName, section: savedSection as SectionName }
+    }
+  } catch {
+    // sessionStorage may be unavailable
+  }
+  return null
+}
+
+const savedConfig = getSavedView()
+const currentView = ref<ViewName>(initialConfig?.view ?? savedConfig?.view ?? 'status')
+const currentSection = ref<SectionName>(initialConfig?.section ?? savedConfig?.section ?? 'this-env')
 
 function selectView(view: ViewName, section: SectionName) {
   currentView.value = view
   currentSection.value = section
+  // Persist to sessionStorage for next panel open
+  try {
+    sessionStorage.setItem(VIEW_STORAGE_KEY, view)
+    sessionStorage.setItem(SECTION_STORAGE_KEY, section)
+  } catch {
+    // sessionStorage may be unavailable
+  }
 }
 
 function handleNavigate(view: string) {
