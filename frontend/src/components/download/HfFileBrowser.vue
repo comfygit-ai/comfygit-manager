@@ -484,6 +484,13 @@ watch(selected, () => {
   autoDetectDestination()
 }, { deep: true })
 
+// Also auto-detect when directories load (in case selection happened first due to race condition)
+watch(directories, () => {
+  if (directories.value.length > 0 && selected.value.size > 0) {
+    autoDetectDestination()
+  }
+})
+
 // Watch destBase for user-initiated changes
 watch(destBase, (newVal, oldVal) => {
   // Skip if:
