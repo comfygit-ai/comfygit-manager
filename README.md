@@ -54,6 +54,15 @@ New to ComfyGit? The setup wizard guides you through creating your first workspa
 
 <img width="1596" height="965" alt="Screenshot 2025-12-08 185458" src="https://github.com/user-attachments/assets/b46e00d6-e13c-4320-b4cc-a1d575e4f0f9" />
 
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Alt+Shift+L` | Open ComfyGit Panel |
+| `Alt+Shift+K` | Quick Commit |
+
+Customize these in ComfyUI's **Settings → Keyboard Shortcuts**.
+
 ---
 
 ## Getting Started
