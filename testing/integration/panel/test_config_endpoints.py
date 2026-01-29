@@ -25,6 +25,7 @@ class TestGetConfigEndpoint:
         # Mock config data
         mock_config_manager.get_models_directory.return_value = Path("/workspace/models")
         mock_config_manager.get_civitai_token.return_value = "test_token_1234"
+        mock_config_manager.get_huggingface_token.return_value = None
 
         mock_workspace.workspace_config_manager = mock_config_manager
 
@@ -65,6 +66,7 @@ class TestGetConfigEndpoint:
         mock_config_manager = Mock()
         mock_config_manager.get_models_directory.return_value = Path("/workspace/models")
         mock_config_manager.get_civitai_token.return_value = None  # No token
+        mock_config_manager.get_huggingface_token.return_value = None
         mock_workspace.workspace_config_manager = mock_config_manager
 
         monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
@@ -168,6 +170,7 @@ class TestGetConfigEndpoint:
         from comfygit_core.models.exceptions import ComfyDockError
         mock_config_manager.get_models_directory.side_effect = ComfyDockError("No models directory set")
         mock_config_manager.get_civitai_token.return_value = None
+        mock_config_manager.get_huggingface_token.return_value = None
         mock_workspace.workspace_config_manager = mock_config_manager
 
         monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
@@ -448,6 +451,7 @@ class TestGetConfigWithoutEnvironment:
         mock_config_manager = Mock()
         mock_config_manager.get_models_directory.return_value = tmp_path / "models"
         mock_config_manager.get_civitai_token.return_value = "test_token"
+        mock_config_manager.get_huggingface_token.return_value = None
         mock_workspace.workspace_config_manager = mock_config_manager
 
         # Import config module and patch Workspace class
@@ -482,6 +486,7 @@ class TestGetConfigWithoutEnvironment:
         mock_config_manager = Mock()
         mock_config_manager.get_models_directory.return_value = None
         mock_config_manager.get_civitai_token.return_value = None
+        mock_config_manager.get_huggingface_token.return_value = None
         mock_workspace.workspace_config_manager = mock_config_manager
 
         from api.v2 import config as config_module
