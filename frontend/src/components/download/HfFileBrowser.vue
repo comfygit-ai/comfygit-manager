@@ -129,7 +129,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDropdown from '@/components/base/BaseDropdown.vue'
@@ -176,6 +176,10 @@ const destSubfolder = ref<string>('')
 const destCustom = ref<string>('')
 
 const directories = ref<string[]>([])
+
+// Auto-detection state: tracks whether user has manually selected a destination
+const userOverrodeDestination = ref(false)
+let autoDetectInProgress = false
 
 // Shard detection regex: matches patterns like model-00001-of-00005.safetensors
 const SHARD_REGEX = /^(.*)-(\d{4,5})-of-(\d{4,5})(\.[^.]+)$/i
@@ -344,6 +348,52 @@ function toggleSort(key: 'name' | 'size') {
   }
 }
 
+/**
+ * Extract the immediate parent directory from a file path.
+ * e.g., "split_files/text_encoders/model.safetensors" → "text_encoders"
+ */
+function getParentDirectory(filePath: string): string | null {
+  const parts = filePath.split('/')
+  if (parts.length >= 2) {
+    return parts[parts.length - 2]
+  }
+  return null
+}
+
+/**
+ * Auto-detect destination based on selected files' parent directories.
+ * Only runs if user hasn't manually selected a destination.
+ */
+function autoDetectDestination() {
+  if (userOverrodeDestination.value) return
+  if (selected.value.size === 0) return
+
+  // Extract parent directories from all selected files
+  const parentDirs = new Set<string>()
+  for (const path of selected.value) {
+    const parent = getParentDirectory(path)
+    if (parent) {
+      parentDirs.add(parent.toLowerCase())
+    }
+  }
+
+  // Only auto-detect if ALL selected files share the same parent
+  if (parentDirs.size !== 1) return
+
+  const detectedDir = [...parentDirs][0]
+
+  // Find case-insensitive match in available directories
+  const match = directories.value.find(
+    d => d.toLowerCase() === detectedDir
+  )
+
+  if (match && match !== destBase.value) {
+    autoDetectInProgress = true
+    destBase.value = match
+    nextTick(() => { autoDetectInProgress = false })
+  }
+}
+
 function getDestinationPath(): string {
   if (destBase.value === '__custom__') {
     return destCustom.value.trim()
@@ -423,6 +473,26 @@ watch(() => [props.repoId, props.revision], () => {
     loadRepoFiles()
   }
 }, { immediate: false })
+
+// Reset user override when navigating to a new repo (fresh context)
+watch(() => props.repoId, () => {
+  userOverrodeDestination.value = false
+})
+
+// Watch selection changes to auto-detect destination
+watch(selected, () => {
+  autoDetectDestination()
+}, { deep: true })
+
+// Watch destBase for user-initiated changes
+watch(destBase, (newVal, oldVal) => {
+  // Skip if:
+  // - Our auto-detect is setting the value
+  // - It's the initial load (oldVal is empty)
+  if (autoDetectInProgress || oldVal === '') return
+
+  userOverrodeDestination.value = true
+})
 
 onMounted(() => {
   loadRepoFiles()
