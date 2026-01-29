@@ -48,7 +48,8 @@ class TestGetConfigEndpoint:
         # Check values
         assert data["workspace_path"] == "/workspace"
         assert data["models_path"] == "/workspace/models"
-        assert data["civitai_api_key"] == "test_token_1234"
+        # Token should be masked (last 4 chars only)
+        assert data["civitai_api_key"] == "***1234"
         assert isinstance(data["auto_sync_models"], bool)
         assert isinstance(data["confirm_destructive"], bool)
 
@@ -75,6 +76,83 @@ class TestGetConfigEndpoint:
         assert resp.status == 200
         data = await resp.json()
         assert data["civitai_api_key"] is None
+
+    async def test_success_with_huggingface_token(self, client, monkeypatch):
+        """Should return masked HF token when set."""
+        # Setup
+        mock_env = Mock()
+        mock_env.name = "test-env"
+        mock_workspace = Mock()
+        mock_workspace.path = Path("/workspace")
+        mock_env.workspace = mock_workspace
+
+        mock_config_manager = Mock()
+        mock_config_manager.get_models_directory.return_value = Path("/workspace/models")
+        mock_config_manager.get_civitai_token.return_value = None
+        mock_config_manager.get_huggingface_token.return_value = "hf_1234567890abcdef"
+        mock_workspace.workspace_config_manager = mock_config_manager
+
+        monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
+
+        # Execute
+        resp = await client.get("/v2/comfygit/config")
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        # HF token should be masked (last 4 chars only)
+        assert data["huggingface_token"] == "***cdef"
+
+    async def test_success_with_no_huggingface_token(self, client, monkeypatch):
+        """Should return None for HF token when not set."""
+        # Setup
+        mock_env = Mock()
+        mock_env.name = "test-env"
+        mock_workspace = Mock()
+        mock_workspace.path = Path("/workspace")
+        mock_env.workspace = mock_workspace
+
+        mock_config_manager = Mock()
+        mock_config_manager.get_models_directory.return_value = Path("/workspace/models")
+        mock_config_manager.get_civitai_token.return_value = None
+        mock_config_manager.get_huggingface_token.return_value = None
+        mock_workspace.workspace_config_manager = mock_config_manager
+
+        monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
+
+        # Execute
+        resp = await client.get("/v2/comfygit/config")
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["huggingface_token"] is None
+
+    async def test_success_with_short_token(self, client, monkeypatch):
+        """Should fully mask tokens shorter than 4 characters."""
+        # Setup
+        mock_env = Mock()
+        mock_env.name = "test-env"
+        mock_workspace = Mock()
+        mock_workspace.path = Path("/workspace")
+        mock_env.workspace = mock_workspace
+
+        mock_config_manager = Mock()
+        mock_config_manager.get_models_directory.return_value = Path("/workspace/models")
+        mock_config_manager.get_civitai_token.return_value = "abc"  # Short token
+        mock_config_manager.get_huggingface_token.return_value = None
+        mock_workspace.workspace_config_manager = mock_config_manager
+
+        monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
+
+        # Execute
+        resp = await client.get("/v2/comfygit/config")
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        # Short token should be fully masked
+        assert data["civitai_api_key"] == "****"
 
     async def test_success_with_no_models_directory(self, client, monkeypatch):
         """Should return config with None models_path when not configured."""
@@ -171,6 +249,58 @@ class TestUpdateConfigEndpoint:
         # Verify
         assert resp.status == 200
         mock_config_manager.set_civitai_token.assert_called_once_with(None)
+
+    async def test_success_update_huggingface_token(self, client, monkeypatch):
+        """Should return 200 and update HuggingFace token."""
+        # Setup
+        mock_env = Mock()
+        mock_env.name = "test-env"
+        mock_workspace = Mock()
+        mock_workspace.path = Path("/workspace")
+        mock_env.workspace = mock_workspace
+
+        mock_config_manager = Mock()
+        mock_config_manager.set_huggingface_token = Mock()
+        mock_workspace.workspace_config_manager = mock_config_manager
+
+        monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
+
+        # Execute
+        resp = await client.post("/v2/comfygit/config", json={
+            "huggingface_token": "hf_new_token_abc123"
+        })
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "updated"
+
+        # Verify the config manager was called
+        mock_config_manager.set_huggingface_token.assert_called_once_with("hf_new_token_abc123")
+
+    async def test_success_clear_huggingface_token(self, client, monkeypatch):
+        """Should clear HuggingFace token when set to None."""
+        # Setup
+        mock_env = Mock()
+        mock_env.name = "test-env"
+        mock_workspace = Mock()
+        mock_workspace.path = Path("/workspace")
+        mock_env.workspace = mock_workspace
+
+        mock_config_manager = Mock()
+        mock_config_manager.set_huggingface_token = Mock()
+        mock_workspace.workspace_config_manager = mock_config_manager
+
+        monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
+
+        # Execute
+        resp = await client.post("/v2/comfygit/config", json={
+            "huggingface_token": None
+        })
+
+        # Verify
+        assert resp.status == 200
+        mock_config_manager.set_huggingface_token.assert_called_once_with(None)
 
     async def test_success_update_models_path(self, client, monkeypatch):
         """Should return 200 and update models directory."""
