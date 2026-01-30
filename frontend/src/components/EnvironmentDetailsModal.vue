@@ -33,7 +33,7 @@
         <div class="collapsible-section">
           <div class="collapsible-header" @click="toggleSection('workflows')">
             <span class="label">Workflows:</span>
-            <span class="value">{{ environment.workflow_count }}</span>
+            <span class="value">{{ detail?.workflow_count ?? environment.workflow_count }}</span>
             <span v-if="detail?.workflows" :class="['chevron', { expanded: expandedSections.has('workflows') }]">&#9654;</span>
           </div>
           <div v-if="detail?.workflows && expandedSections.has('workflows')" class="collapsible-body">
@@ -63,7 +63,7 @@
         <div class="collapsible-section">
           <div class="collapsible-header" @click="toggleSection('nodes')">
             <span class="label">Nodes:</span>
-            <span class="value">{{ environment.node_count }}</span>
+            <span class="value">{{ detail?.node_count ?? environment.node_count }}</span>
             <span v-if="detail?.nodes" :class="['chevron', { expanded: expandedSections.has('nodes') }]">&#9654;</span>
           </div>
           <div v-if="detail?.nodes && expandedSections.has('nodes')" class="collapsible-body">
@@ -82,8 +82,8 @@
           <div class="collapsible-header" @click="toggleSection('models')">
             <span class="label">Models:</span>
             <span class="value">
-              {{ environment.model_count }}
-              <template v-if="detail?.models.missing.length">
+              {{ detail?.model_count ?? environment.model_count }}
+              <template v-if="detail?.models?.missing.length">
                 <span class="missing-count">({{ detail.models.missing.length }} missing)</span>
               </template>
             </span>
