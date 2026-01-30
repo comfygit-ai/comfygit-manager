@@ -101,6 +101,26 @@ def spawn_orchestrator(environment, target_env: str) -> None:
     print(f"[ComfyGit] Spawned orchestrator daemon (log: {log_file})")
 
 
+def _get_environment_created_at(env) -> str | None:
+    """Get environment creation date from first git commit in .cec repo."""
+    git_dir = env.path / ".cec" / ".git"
+    if not git_dir.exists():
+        return None
+    try:
+        result = subprocess.run(
+            ["git", "log", "--reverse", "--format=%aI", "-1"],
+            cwd=str(env.path / ".cec"),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
 def _get_environment_info(env, current_env):
     """Get detailed environment information."""
     status = env.status()
@@ -187,6 +207,7 @@ async def get_environment_details(request: web.Request) -> web.Response:
     try:
         status = await run_sync(env.status)
         tracked_nodes = await run_sync(env.list_nodes)
+        created_at = await run_sync(_get_environment_created_at, env)
 
         sync = status.workflow.sync_status
         return web.json_response({
@@ -194,7 +215,7 @@ async def get_environment_details(request: web.Request) -> web.Response:
             "is_current": env.name == current_env.name if current_env else False,
             "path": str(env.path),
             "current_branch": status.git.current_branch,
-            "created_at": None,
+            "created_at": created_at,
             "workflows": {
                 "synced": list(sync.synced),
                 "new": list(sync.new),

@@ -108,17 +108,12 @@
           </div>
         </div>
 
-        <!-- Created/Last Used -->
-        <div class="section-divider" v-if="environment.created_at || environment.last_used"></div>
+        <!-- Created -->
+        <div class="section-divider" v-if="detail?.created_at || environment.created_at"></div>
 
-        <div class="detail-row" v-if="environment.created_at">
+        <div class="detail-row" v-if="detail?.created_at || environment.created_at">
           <span class="label">Created:</span>
-          <span class="value">{{ formatDate(environment.created_at) }}</span>
-        </div>
-
-        <div class="detail-row" v-if="environment.last_used">
-          <span class="label">Last Used:</span>
-          <span class="value">{{ formatDate(environment.last_used) }}</span>
+          <span class="value">{{ formatDateTime(detail?.created_at ?? environment.created_at) }}</span>
         </div>
       </div>
     </template>
@@ -177,23 +172,17 @@ const allWorkflowsEmpty = computed(() => {
   return !w.synced.length && !w.new.length && !w.modified.length && !w.deleted.length
 })
 
-function formatDate(timestamp?: string | null): string {
+function formatDateTime(timestamp?: string | null): string {
   if (!timestamp) return 'Unknown'
 
   try {
-    const date = new Date(timestamp)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    const diffHours = Math.floor(diffMs / 3600000)
-    const diffDays = Math.floor(diffMs / 86400000)
-
-    if (diffMins < 1) return 'just now'
-    if (diffMins < 60) return `${diffMins} ${diffMins === 1 ? 'minute' : 'minutes'} ago`
-    if (diffHours < 24) return `${diffHours} ${diffHours === 1 ? 'hour' : 'hours'} ago`
-    if (diffDays < 30) return `${diffDays} ${diffDays === 1 ? 'day' : 'days'} ago`
-
-    return date.toLocaleDateString()
+    return new Date(timestamp).toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
   } catch {
     return timestamp
   }
