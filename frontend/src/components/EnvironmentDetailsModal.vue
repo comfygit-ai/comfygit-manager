@@ -29,19 +29,83 @@
         <!-- Stats Section -->
         <div class="section-divider"></div>
 
-        <div class="detail-row">
-          <span class="label">Workflows:</span>
-          <span class="value">{{ environment.workflow_count }}</span>
+        <!-- Workflows Collapsible -->
+        <div class="collapsible-section">
+          <div class="collapsible-header" @click="toggleSection('workflows')">
+            <span class="label">Workflows:</span>
+            <span class="value">{{ environment.workflow_count }}</span>
+            <span v-if="detail?.workflows" :class="['chevron', { expanded: expandedSections.has('workflows') }]">&#9654;</span>
+          </div>
+          <div v-if="detail?.workflows && expandedSections.has('workflows')" class="collapsible-body">
+            <div class="item-list">
+              <div v-for="name in detail.workflows.synced" :key="'synced-' + name" class="list-item">
+                <span class="item-name">{{ name }}</span>
+                <span class="sync-badge synced">synced</span>
+              </div>
+              <div v-for="name in detail.workflows.new" :key="'new-' + name" class="list-item">
+                <span class="item-name">{{ name }}</span>
+                <span class="sync-badge new">new</span>
+              </div>
+              <div v-for="name in detail.workflows.modified" :key="'mod-' + name" class="list-item">
+                <span class="item-name">{{ name }}</span>
+                <span class="sync-badge modified">modified</span>
+              </div>
+              <div v-for="name in detail.workflows.deleted" :key="'del-' + name" class="list-item">
+                <span class="item-name">{{ name }}</span>
+                <span class="sync-badge deleted">deleted</span>
+              </div>
+              <div v-if="allWorkflowsEmpty" class="empty-list">No workflows</div>
+            </div>
+          </div>
         </div>
 
-        <div class="detail-row">
-          <span class="label">Nodes:</span>
-          <span class="value">{{ environment.node_count }}</span>
+        <!-- Nodes Collapsible -->
+        <div class="collapsible-section">
+          <div class="collapsible-header" @click="toggleSection('nodes')">
+            <span class="label">Nodes:</span>
+            <span class="value">{{ environment.node_count }}</span>
+            <span v-if="detail?.nodes" :class="['chevron', { expanded: expandedSections.has('nodes') }]">&#9654;</span>
+          </div>
+          <div v-if="detail?.nodes && expandedSections.has('nodes')" class="collapsible-body">
+            <div class="item-list">
+              <div v-for="node in detail.nodes" :key="node.name" class="list-item">
+                <span class="item-name">{{ node.name }}</span>
+                <span v-if="node.version" class="item-meta">{{ node.version }}</span>
+              </div>
+              <div v-if="!detail.nodes.length" class="empty-list">No nodes</div>
+            </div>
+          </div>
         </div>
 
-        <div class="detail-row">
-          <span class="label">Models:</span>
-          <span class="value">{{ environment.model_count }}</span>
+        <!-- Models Collapsible -->
+        <div class="collapsible-section">
+          <div class="collapsible-header" @click="toggleSection('models')">
+            <span class="label">Models:</span>
+            <span class="value">
+              {{ environment.model_count }}
+              <template v-if="detail?.models.missing.length">
+                <span class="missing-count">({{ detail.models.missing.length }} missing)</span>
+              </template>
+            </span>
+            <span v-if="detail?.models" :class="['chevron', { expanded: expandedSections.has('models') }]">&#9654;</span>
+          </div>
+          <div v-if="detail?.models && expandedSections.has('models')" class="collapsible-body">
+            <div class="item-list">
+              <div v-for="model in detail.models.missing" :key="model.filename" class="list-item model-item">
+                <div class="model-row">
+                  <span class="item-name">{{ model.filename }}</span>
+                  <span :class="['criticality-badge', model.criticality]">{{ model.criticality }}</span>
+                </div>
+                <div class="model-meta">
+                  <span class="item-meta">{{ model.category }}</span>
+                  <span v-if="model.workflow_names.length" class="item-meta">
+                    used by: {{ model.workflow_names.join(', ') }}
+                  </span>
+                </div>
+              </div>
+              <div v-if="!detail.models.missing.length" class="empty-list">No missing models</div>
+            </div>
+          </div>
         </div>
 
         <!-- Created/Last Used -->
@@ -79,13 +143,14 @@
 </template>
 
 <script setup lang="ts">
-import type { EnvironmentInfo } from '@/types/comfygit'
+import { ref, computed } from 'vue'
+import type { EnvironmentInfo, EnvironmentDetail } from '@/types/comfygit'
 import BaseModal from './base/BaseModal.vue'
 import BaseButton from './base/BaseButton.vue'
 
-defineProps<{
+const props = defineProps<{
   environment: EnvironmentInfo
-  /** Whether the delete action is available (not current env and more than 1 env exists) */
+  detail?: EnvironmentDetail | null
   canDelete?: boolean
 }>()
 
@@ -93,6 +158,24 @@ const emit = defineEmits<{
   close: []
   delete: [name: string]
 }>()
+
+const expandedSections = ref<Set<string>>(new Set())
+
+function toggleSection(section: string) {
+  if (expandedSections.value.has(section)) {
+    expandedSections.value.delete(section)
+  } else {
+    expandedSections.value.add(section)
+  }
+  // Trigger reactivity since Set mutations aren't tracked
+  expandedSections.value = new Set(expandedSections.value)
+}
+
+const allWorkflowsEmpty = computed(() => {
+  if (!props.detail?.workflows) return true
+  const w = props.detail.workflows
+  return !w.synced.length && !w.new.length && !w.modified.length && !w.deleted.length
+})
 
 function formatDate(timestamp?: string | null): string {
   if (!timestamp) return 'Unknown'
@@ -183,6 +266,167 @@ function formatDate(timestamp?: string | null): string {
   height: 1px;
   background: var(--cg-color-border-subtle);
   margin: var(--cg-space-2) 0;
+}
+
+/* Collapsible sections */
+.collapsible-section {
+  font-size: var(--cg-font-size-sm);
+}
+
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-3);
+  cursor: pointer;
+  user-select: none;
+  padding: var(--cg-space-1) 0;
+  border-radius: var(--cg-radius-sm);
+}
+
+.collapsible-header:hover {
+  opacity: 0.8;
+}
+
+.chevron {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--cg-color-text-muted);
+  transition: transform 0.15s ease;
+}
+
+.chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.collapsible-body {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: var(--cg-space-2);
+  padding-left: var(--cg-space-3);
+  border-left: 2px solid var(--cg-color-border-subtle);
+}
+
+.item-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-1);
+}
+
+.list-item {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  padding: var(--cg-space-1) var(--cg-space-2);
+  font-size: var(--cg-font-size-xs);
+  border-radius: var(--cg-radius-sm);
+}
+
+.list-item:hover {
+  background: var(--cg-color-bg-tertiary);
+}
+
+.item-name {
+  color: var(--cg-color-text-secondary);
+  font-family: var(--cg-font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.item-meta {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  flex-shrink: 0;
+}
+
+.empty-list {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  font-style: italic;
+  padding: var(--cg-space-1) var(--cg-space-2);
+}
+
+/* Sync state badges */
+.sync-badge {
+  padding: 1px 6px;
+  border-radius: var(--cg-radius-sm);
+  font-size: 10px;
+  font-weight: var(--cg-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.sync-badge.synced {
+  background: var(--cg-color-success-muted, rgba(34, 197, 94, 0.15));
+  color: var(--cg-color-success);
+}
+
+.sync-badge.new {
+  background: var(--cg-color-info-muted, rgba(59, 130, 246, 0.15));
+  color: var(--cg-color-info);
+}
+
+.sync-badge.modified {
+  background: var(--cg-color-warning-muted, rgba(245, 158, 11, 0.15));
+  color: var(--cg-color-warning);
+}
+
+.sync-badge.deleted {
+  background: var(--cg-color-error-muted, rgba(239, 68, 68, 0.15));
+  color: var(--cg-color-error);
+}
+
+/* Criticality badges */
+.criticality-badge {
+  padding: 1px 6px;
+  border-radius: var(--cg-radius-sm);
+  font-size: 10px;
+  font-weight: var(--cg-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.criticality-badge.required {
+  background: var(--cg-color-error-muted, rgba(239, 68, 68, 0.15));
+  color: var(--cg-color-error);
+}
+
+.criticality-badge.flexible {
+  background: var(--cg-color-warning-muted, rgba(245, 158, 11, 0.15));
+  color: var(--cg-color-warning);
+}
+
+.criticality-badge.optional {
+  background: var(--cg-color-bg-tertiary);
+  color: var(--cg-color-text-muted);
+}
+
+/* Model items */
+.model-item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--cg-space-1);
+}
+
+.model-row {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  width: 100%;
+}
+
+.model-meta {
+  display: flex;
+  gap: var(--cg-space-2);
+  padding-left: var(--cg-space-1);
+}
+
+.missing-count {
+  color: var(--cg-color-warning);
+  font-size: var(--cg-font-size-xs);
 }
 
 .footer-actions {
