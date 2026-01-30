@@ -3,6 +3,7 @@ import pytest
 from unittest.mock import Mock, MagicMock
 import json
 from pathlib import Path
+from comfygit_core.models.exceptions import CDEnvironmentNotFoundError
 
 
 @pytest.mark.integration
@@ -517,3 +518,204 @@ class TestCreateEnvironmentEndpoint:
         assert resp.status == 400
         data = await resp.json()
         assert "name" in data["message"].lower()
+
+
+@pytest.mark.integration
+class TestGetEnvironmentDetailEndpoint:
+    """GET /v2/comfygit/environments/{name} - Get detailed info for a single environment."""
+
+    def _make_mock_status(self):
+        """Create a mock EnvironmentStatus with populated workflow/node/model data."""
+        status = Mock()
+
+        # Git
+        status.git = Mock()
+        status.git.current_branch = "develop"
+
+        # Workflow sync status
+        status.workflow = Mock()
+        status.workflow.sync_status = Mock()
+        status.workflow.sync_status.synced = ["wf_synced.json"]
+        status.workflow.sync_status.new = ["wf_new.json"]
+        status.workflow.sync_status.modified = ["wf_modified.json"]
+        status.workflow.sync_status.deleted = ["wf_deleted.json"]
+        status.workflow.sync_status.total_count = 4
+
+        # Missing models
+        mock_model = Mock()
+        mock_model.model = Mock()
+        mock_model.model.filename = "sd_xl.safetensors"
+        mock_model.model.category = "checkpoints"
+        mock_model.workflow_names = ["wf_synced.json", "wf_new.json"]
+        mock_model.criticality = "required"
+        mock_model.can_download = True
+        status.missing_models = [mock_model]
+
+        # Comparison (not used by new endpoint, but present on status)
+        status.comparison = Mock()
+        status.comparison.missing_nodes = set()
+        status.comparison.extra_nodes = set()
+        status.comparison.version_mismatches = []
+
+        return status
+
+    def _make_mock_nodes(self):
+        """Create mock NodeInfo list."""
+        node1 = Mock()
+        node1.name = "ComfyUI-Impact-Pack"
+        node1.version = "1.2.0"
+        node1.source = "registry"
+
+        node2 = Mock()
+        node2.name = "ComfyUI-Manager"
+        node2.version = "0.5.0"
+        node2.source = "git"
+
+        return [node1, node2]
+
+    def _setup_managed_workspace(self, monkeypatch, mock_env, mock_current_env=None):
+        """Helper to set up managed workspace with environment."""
+        mock_workspace = Mock()
+
+        if mock_current_env is None:
+            mock_current_env = Mock()
+            mock_current_env.name = "current-env"
+
+        mock_workspace.get_environment = Mock(return_value=mock_env)
+
+        def mock_detect():
+            return (True, mock_workspace, mock_current_env)
+
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+        return mock_workspace
+
+    async def test_success_returns_full_detail(self, client, monkeypatch):
+        """Should return full environment detail with workflows, nodes, models."""
+        mock_env = Mock()
+        mock_env.name = "my-env"
+        mock_env.path = Path("/workspace/environments/my-env")
+        mock_env.status = Mock(return_value=self._make_mock_status())
+        mock_env.list_nodes = Mock(return_value=self._make_mock_nodes())
+
+        mock_workspace = self._setup_managed_workspace(monkeypatch, mock_env)
+
+        resp = await client.get("/v2/comfygit/environments/my-env")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["name"] == "my-env"
+        assert data["current_branch"] == "develop"
+        assert data["path"] == str(Path("/workspace/environments/my-env"))
+
+        # Workflows categorized by sync state
+        assert data["workflows"]["synced"] == ["wf_synced.json"]
+        assert data["workflows"]["new"] == ["wf_new.json"]
+        assert data["workflows"]["modified"] == ["wf_modified.json"]
+        assert data["workflows"]["deleted"] == ["wf_deleted.json"]
+
+        # Nodes with detail
+        assert len(data["nodes"]) == 2
+        assert data["nodes"][0]["name"] == "ComfyUI-Impact-Pack"
+        assert data["nodes"][0]["version"] == "1.2.0"
+        assert data["nodes"][0]["source"] == "registry"
+
+        # Models with detail
+        assert len(data["models"]["missing"]) == 1
+        model = data["models"]["missing"][0]
+        assert model["filename"] == "sd_xl.safetensors"
+        assert model["category"] == "checkpoints"
+        assert model["workflow_names"] == ["wf_synced.json", "wf_new.json"]
+        assert model["criticality"] == "required"
+        assert model["can_download"] is True
+
+        # Counts
+        assert data["workflow_count"] == 4
+        assert data["node_count"] == 2
+        assert data["model_count"] == 1
+
+    async def test_success_is_current_true(self, client, monkeypatch):
+        """Should set is_current=True when environment is the active one."""
+        mock_env = Mock()
+        mock_env.name = "active-env"
+        mock_env.path = Path("/workspace/environments/active-env")
+        mock_env.status = Mock(return_value=self._make_mock_status())
+        mock_env.list_nodes = Mock(return_value=[])
+
+        mock_current_env = Mock()
+        mock_current_env.name = "active-env"
+        self._setup_managed_workspace(monkeypatch, mock_env, mock_current_env)
+
+        resp = await client.get("/v2/comfygit/environments/active-env")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["is_current"] is True
+
+    async def test_success_is_current_false(self, client, monkeypatch):
+        """Should set is_current=False when environment is not active."""
+        mock_env = Mock()
+        mock_env.name = "other-env"
+        mock_env.path = Path("/workspace/environments/other-env")
+        mock_env.status = Mock(return_value=self._make_mock_status())
+        mock_env.list_nodes = Mock(return_value=[])
+
+        mock_current_env = Mock()
+        mock_current_env.name = "active-env"
+        self._setup_managed_workspace(monkeypatch, mock_env, mock_current_env)
+
+        resp = await client.get("/v2/comfygit/environments/other-env")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["is_current"] is False
+
+    async def test_error_not_managed_workspace(self, client, monkeypatch):
+        """Should return 500 when not in managed workspace."""
+        def mock_detect():
+            return (False, None, None)
+
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+
+        resp = await client.get("/v2/comfygit/environments/some-env")
+
+        assert resp.status == 500
+        data = await resp.json()
+        assert "error" in data
+
+    async def test_error_environment_not_found(self, client, monkeypatch):
+        """Should return 404 when environment name doesn't exist."""
+        mock_workspace = Mock()
+        mock_current_env = Mock()
+        mock_current_env.name = "current"
+
+        mock_workspace.get_environment = Mock(
+            side_effect=CDEnvironmentNotFoundError("Not found")
+        )
+
+        def mock_detect():
+            return (True, mock_workspace, mock_current_env)
+
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+
+        resp = await client.get("/v2/comfygit/environments/nonexistent")
+
+        assert resp.status == 404
+        data = await resp.json()
+        assert "error" in data
+        assert "not found" in data["error"].lower()
+
+    async def test_error_internal_exception(self, client, monkeypatch):
+        """Should return 500 when status/list_nodes raises an exception."""
+        mock_env = Mock()
+        mock_env.name = "broken-env"
+        mock_env.path = Path("/workspace/environments/broken-env")
+        mock_env.status = Mock(side_effect=Exception("Disk read error"))
+
+        self._setup_managed_workspace(monkeypatch, mock_env)
+
+        resp = await client.get("/v2/comfygit/environments/broken-env")
+
+        assert resp.status == 500
+        data = await resp.json()
+        assert data["error"] == "internal_error"
+        assert "Disk read error" in data["message"]
