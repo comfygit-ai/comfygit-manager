@@ -195,6 +195,29 @@ export interface EnvironmentInfo {
   last_commit_date?: string
 }
 
+export interface EnvironmentDetail extends EnvironmentInfo {
+  workflows: {
+    synced: string[]
+    new: string[]
+    modified: string[]
+    deleted: string[]
+  }
+  nodes: Array<{
+    name: string
+    version: string | null
+    source: string
+  }>
+  models: {
+    missing: Array<{
+      filename: string
+      category: string
+      workflow_names: string[]
+      criticality: string
+      can_download: boolean
+    }>
+  }
+}
+
 export interface SwitchEnvironmentProgress {
   state: 'idle' | 'preparing' | 'syncing' | 'starting' | 'validating' | 'complete' | 'rolled_back' | 'critical_failure'
   target_env: string

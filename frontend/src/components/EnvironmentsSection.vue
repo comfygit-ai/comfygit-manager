@@ -121,8 +121,9 @@
   <EnvironmentDetailsModal
     v-if="selectedEnvironment"
     :environment="selectedEnvironment"
+    :detail="environmentDetail"
     :can-delete="environments.length > 1"
-    @close="selectedEnvironment = null"
+    @close="selectedEnvironment = null; environmentDetail = null"
     @delete="handleDetailsDelete"
   />
 
@@ -137,7 +138,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
-import type { EnvironmentInfo } from '@/types/comfygit'
+import type { EnvironmentInfo, EnvironmentDetail } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
 import SearchBar from '@/components/base/molecules/SearchBar.vue'
@@ -157,7 +158,7 @@ const emit = defineEmits<{
   delete: [environmentName: string]
 }>()
 
-const { getEnvironments } = useComfyGitService()
+const { getEnvironments, getEnvironmentDetails } = useComfyGitService()
 
 const environments = ref<EnvironmentInfo[]>([])
 const loading = ref(false)
@@ -166,6 +167,7 @@ const searchQuery = ref('')
 const showPopover = ref(false)
 const showCreateModal = ref(false)
 const selectedEnvironment = ref<EnvironmentInfo | null>(null)
+const environmentDetail = ref<EnvironmentDetail | null>(null)
 
 const filteredEnvironments = computed(() => {
   if (!searchQuery.value.trim()) return environments.value
@@ -185,12 +187,16 @@ function openCreateModal() {
   showCreateModal.value = true
 }
 
-function showEnvironmentDetails(env: EnvironmentInfo) {
+async function showEnvironmentDetails(env: EnvironmentInfo) {
   selectedEnvironment.value = env
+  environmentDetail.value = null
+  const detail = await getEnvironmentDetails(env.name)
+  if (detail) environmentDetail.value = detail
 }
 
 function handleDetailsDelete(name: string) {
   selectedEnvironment.value = null
+  environmentDetail.value = null
   emit('delete', name)
 }
 

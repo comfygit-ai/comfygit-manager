@@ -11,6 +11,7 @@ import type {
   CreateBranchResult,
   SwitchBranchResult,
   EnvironmentInfo,
+  EnvironmentDetail,
   SwitchEnvironmentProgress,
   CreateEnvironmentRequest,
   CreateEnvironmentResult,
@@ -466,6 +467,15 @@ export function useComfyGitService() {
       } catch {
         return []
       }
+    }
+  }
+
+  async function getEnvironmentDetails(name: string): Promise<EnvironmentDetail | null> {
+    if (USE_MOCK) return null
+    try {
+      return await fetchApi<EnvironmentDetail>(`/v2/comfygit/environments/${encodeURIComponent(name)}`)
+    } catch {
+      return null
     }
   }
 
@@ -1692,6 +1702,7 @@ export function useComfyGitService() {
     deleteBranch,
     // Environment Management
     getEnvironments,
+    getEnvironmentDetails,
     switchEnvironment,
     getSwitchProgress,
     createEnvironment,
