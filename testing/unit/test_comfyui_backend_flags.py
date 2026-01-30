@@ -650,3 +650,176 @@ class TestCrashRecoveryInRunForever:
 
         assert orch._skip_extra_args is False
         assert orch._used_extra_args is False
+
+
+@pytest.mark.unit
+class TestGeneralCrashRetry:
+    """Test general crash retry with delay."""
+
+    def test_crash_retry_count_initialized_to_zero(self, mock_workspace):
+        """Should initialize _crash_retry_count to 0."""
+        from server.orchestrator import Orchestrator
+        orch = Orchestrator(workspace_root=mock_workspace, initial_env="env1", args=[])
+        assert orch._crash_retry_count == 0
+
+    def test_crash_retries_up_to_max(self, mock_workspace, mocker):
+        """Should retry crash_retry_max times before giving up."""
+        from server.orchestrator import Orchestrator
+        import json
+
+        config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
+        config_file.write_text(json.dumps({
+            "version": "1.0",
+            "orchestrator": {
+                "enable_control_server": False,
+                "crash_retry_max": 2,
+                "crash_retry_delay_s": 0
+            },
+            "comfyui": {"extra_args": []}
+        }))
+
+        orch = Orchestrator(workspace_root=mock_workspace, initial_env="env1", args=[])
+        mocker.patch("time.sleep")
+
+        # First crash: should retry
+        assert orch._handle_crash_for_recovery(-9) is True
+        assert orch._crash_retry_count == 1
+
+        # Second crash: should retry (max is 2)
+        assert orch._handle_crash_for_recovery(-9) is True
+        assert orch._crash_retry_count == 2
+
+        # Third crash: exhausted retries
+        assert orch._handle_crash_for_recovery(-9) is False
+
+    def test_crash_retry_sleeps_between_attempts(self, mock_workspace, mocker):
+        """Should sleep crash_retry_delay_s between retries."""
+        from server.orchestrator import Orchestrator
+        import json
+
+        config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
+        config_file.write_text(json.dumps({
+            "version": "1.0",
+            "orchestrator": {
+                "enable_control_server": False,
+                "crash_retry_max": 3,
+                "crash_retry_delay_s": 10
+            },
+            "comfyui": {"extra_args": []}
+        }))
+
+        orch = Orchestrator(workspace_root=mock_workspace, initial_env="env1", args=[])
+        mock_sleep = mocker.patch("time.sleep")
+
+        orch._handle_crash_for_recovery(-9)
+        mock_sleep.assert_called_with(10)
+
+    def test_crash_retry_uses_default_config(self, mock_workspace, mocker):
+        """Should use default max=3 and delay=10 when not configured."""
+        from server.orchestrator import Orchestrator
+
+        orch = Orchestrator(workspace_root=mock_workspace, initial_env="env1", args=[])
+        mocker.patch("time.sleep")
+
+        # Should allow 3 retries by default
+        for i in range(3):
+            assert orch._handle_crash_for_recovery(1) is True
+        assert orch._handle_crash_for_recovery(1) is False
+
+    def test_extra_args_bypass_happens_before_general_retry(self, mock_workspace, mocker):
+        """Extra args bypass should be tried first, then general retries."""
+        from server.orchestrator import Orchestrator
+        import json
+
+        config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
+        config_file.write_text(json.dumps({
+            "version": "1.0",
+            "orchestrator": {
+                "enable_control_server": False,
+                "crash_retry_max": 2,
+                "crash_retry_delay_s": 0
+            },
+            "comfyui": {"extra_args": ["--bad-flag"]}
+        }))
+
+        orch = Orchestrator(workspace_root=mock_workspace, initial_env="env1", args=[])
+        mocker.patch("time.sleep")
+
+        # Simulate first start used extra_args
+        orch._used_extra_args = True
+        orch._skip_extra_args = False
+
+        # First crash: should try extra_args bypass (count goes to 1)
+        assert orch._handle_crash_for_recovery(-9) is True
+        assert orch._skip_extra_args is True
+        assert orch._crash_retry_count == 1
+
+        # Simulate second start without extra_args
+        orch._used_extra_args = False
+
+        # Second crash: general retry (count goes to 2 = max), returns True
+        assert orch._handle_crash_for_recovery(-9) is True
+        assert orch._crash_retry_count == 2
+
+        # Third crash: count (2) >= max (2), exhausted
+        assert orch._handle_crash_for_recovery(-9) is False
+
+    def test_clear_flags_resets_retry_count(self, mock_workspace):
+        """_clear_crash_recovery_flags should reset _crash_retry_count."""
+        from server.orchestrator import Orchestrator
+
+        orch = Orchestrator(workspace_root=mock_workspace, initial_env="env1", args=[])
+        orch._crash_retry_count = 5
+
+        orch._clear_crash_recovery_flags()
+
+        assert orch._crash_retry_count == 0
+
+    def test_crash_retry_in_run_forever_loop(self, mock_workspace, mocker):
+        """Full integration: crash with retry then success in main loop."""
+        from server.orchestrator import Orchestrator
+        from unittest.mock import Mock
+        import json
+
+        config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
+        config_file.write_text(json.dumps({
+            "version": "1.0",
+            "orchestrator": {
+                "enable_control_server": False,
+                "crash_retry_max": 2,
+                "crash_retry_delay_s": 0
+            },
+            "comfyui": {"extra_args": []}
+        }))
+
+        mock_proc = Mock()
+        # First start: crash with -9 (OOM), second start: clean exit
+        mock_proc.wait.side_effect = [-9, 0]
+
+        mock_env = Mock()
+        mock_env.name = "env1"
+
+        mocker.patch.object(Orchestrator, "_sync_environment")
+        mocker.patch.object(Orchestrator, "_start_comfyui", return_value=mock_proc)
+        mocker.patch("time.sleep")
+
+        orch = Orchestrator(workspace_root=mock_workspace, initial_env="env1", args=[])
+        orch.workspace.get_environment = Mock(return_value=mock_env)
+
+        orch.run_forever()
+
+        # Should have started twice (crash + retry that succeeded)
+        assert orch._start_comfyui.call_count == 2
+
+
+@pytest.mark.unit
+class TestDefaultConfigCrashRetry:
+    """Test DEFAULT_CONFIG includes crash retry settings."""
+
+    def test_default_config_has_crash_retry_max(self):
+        from server.orchestrator import DEFAULT_CONFIG
+        assert DEFAULT_CONFIG["orchestrator"]["crash_retry_max"] == 3
+
+    def test_default_config_has_crash_retry_delay(self):
+        from server.orchestrator import DEFAULT_CONFIG
+        assert DEFAULT_CONFIG["orchestrator"]["crash_retry_delay_s"] == 10
