@@ -2,14 +2,23 @@
   <div class="huggingface-tab">
     <!-- Search Input (always visible in search mode, hidden in browse) -->
     <div v-if="mode === 'search'" class="search-section">
-      <div class="search-bar">
-        <BaseInput
-          v-model="searchInput"
-          placeholder="Search repos, paste URL, or enter user/repo..."
-          @keydown.enter="handleSearch"
-        />
-        <BaseButton variant="primary" @click="handleSearch" :loading="searching">
-          Search
+      <div class="search-header">
+        <div class="search-bar">
+          <BaseInput
+            v-model="searchInput"
+            placeholder="Search repos, paste URL, or enter user/repo..."
+            @keydown.enter="handleSearch"
+          />
+          <BaseButton variant="primary" @click="handleSearch" :loading="searching">
+            Search
+          </BaseButton>
+        </div>
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          @click="showTokenModal = true"
+        >
+          {{ tokenMask ? `Token: ${tokenMask}` : 'Configure Token' }}
         </BaseButton>
       </div>
     </div>
@@ -20,7 +29,15 @@
         Searching HuggingFace...
       </div>
       <div v-else-if="searchError" class="error-state">
-        {{ searchError }}
+        <p>{{ searchError }}</p>
+        <BaseButton
+          v-if="isAuthError"
+          variant="primary"
+          size="sm"
+          @click="showTokenModal = true"
+        >
+          Configure HuggingFace Token
+        </BaseButton>
       </div>
       <div v-else-if="searchResults.length > 0" class="results-list">
         <div
@@ -66,24 +83,35 @@
       @back="handleBack"
       @queue="$emit('queue', $event)"
     />
+
+    <!-- Token Configuration Modal -->
+    <TokenConfigModal
+      v-if="showTokenModal"
+      provider="huggingface"
+      :current-token-mask="tokenMask"
+      @close="showTokenModal = false"
+      @saved="handleTokenSaved"
+      @cleared="handleTokenCleared"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import HfFileBrowser from './HfFileBrowser.vue'
+import TokenConfigModal from './TokenConfigModal.vue'
 import type { HfDownloadItem } from './HfFileBrowser.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
-import { parseHuggingFaceUrl } from '@/utils/huggingface'
+import { parseHuggingFaceUrl} from '@/utils/huggingface'
 import type { HuggingFaceSearchResult } from '@/types/comfygit'
 
 defineEmits<{
   queue: [items: HfDownloadItem[]]
 }>()
 
-const { searchHuggingFaceRepos } = useComfyGitService()
+const { searchHuggingFaceRepos, getConfig } = useComfyGitService()
 
 // Mode state
 const mode = ref<'search' | 'browse'>('search')
@@ -100,6 +128,18 @@ const selectedRepo = ref<string | null>(null)
 const selectedRevision = ref('main')
 const initialPath = ref<string | undefined>()
 const preselectedFile = ref<string | undefined>()
+
+// Token configuration state
+const showTokenModal = ref(false)
+const tokenMask = ref<string | null>(null)
+
+// Detect auth errors in search results
+const isAuthError = computed(() =>
+  searchError.value?.includes('401') ||
+  searchError.value?.includes('403') ||
+  searchError.value?.toLowerCase().includes('authentication') ||
+  searchError.value?.toLowerCase().includes('unauthorized')
+)
 
 function formatNumber(num: number): string {
   if (num >= 1_000_000) {
@@ -185,6 +225,29 @@ function handleBack() {
   initialPath.value = undefined
   preselectedFile.value = undefined
 }
+
+async function loadTokenStatus() {
+  try {
+    const config = await getConfig()
+    tokenMask.value = config.huggingface_token || null  // Already masked from API
+  } catch (e) {
+    console.error('Failed to load config:', e)
+  }
+}
+
+function handleTokenSaved() {
+  loadTokenStatus()
+  // Optionally retry failed search if there was an auth error
+  if (isAuthError.value && searchInput.value) {
+    handleSearch()
+  }
+}
+
+function handleTokenCleared() {
+  tokenMask.value = null
+}
+
+onMounted(loadTokenStatus)
 </script>
 
 <style scoped>
@@ -200,9 +263,17 @@ function handleBack() {
   flex-shrink: 0;
 }
 
+.search-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--cg-space-2);
+}
+
 .search-bar {
   display: flex;
   gap: var(--cg-space-2);
+  flex: 1;
 }
 
 .search-bar :deep(.base-input-wrapper) {
@@ -226,7 +297,15 @@ function handleBack() {
 }
 
 .error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--cg-space-2);
+}
+
+.error-state p {
   color: var(--cg-color-error);
+  margin: 0;
 }
 
 .hint-state {
