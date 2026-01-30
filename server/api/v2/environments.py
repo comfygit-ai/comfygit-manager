@@ -10,7 +10,7 @@ from pathlib import Path
 
 from cgm_utils.async_helpers import run_sync
 from comfygit_core.factories.workspace_factory import WorkspaceFactory
-from comfygit_core.models.exceptions import CDWorkspaceNotFoundError
+from comfygit_core.models.exceptions import CDWorkspaceNotFoundError, CDEnvironmentNotFoundError
 import orchestrator
 
 routes = web.RouteTableDef()
@@ -165,6 +165,64 @@ async def list_environments(request: web.Request) -> web.Response:
             "error": "internal_error",
             "message": str(e)
         }, status=500)
+
+
+@routes.get("/v2/comfygit/environments/{name}")
+async def get_environment_details(request: web.Request) -> web.Response:
+    """Get detailed information for a specific environment."""
+    is_managed, workspace, current_env = orchestrator.detect_environment_type()
+
+    if not is_managed or not workspace:
+        return web.json_response({"error": "Not in managed workspace"}, status=500)
+
+    name = request.match_info.get("name", "").strip()
+    if not name:
+        return web.json_response({"error": "Environment name required"}, status=400)
+
+    try:
+        env = await run_sync(workspace.get_environment, name, auto_sync=False)
+    except CDEnvironmentNotFoundError:
+        return web.json_response({"error": f"Environment '{name}' not found"}, status=404)
+
+    try:
+        status = await run_sync(env.status)
+        tracked_nodes = await run_sync(env.list_nodes)
+
+        sync = status.workflow.sync_status
+        return web.json_response({
+            "name": env.name,
+            "is_current": env.name == current_env.name if current_env else False,
+            "path": str(env.path),
+            "current_branch": status.git.current_branch,
+            "created_at": None,
+            "workflows": {
+                "synced": list(sync.synced),
+                "new": list(sync.new),
+                "modified": list(sync.modified),
+                "deleted": list(sync.deleted),
+            },
+            "nodes": [
+                {"name": n.name, "version": n.version, "source": n.source}
+                for n in tracked_nodes
+            ],
+            "models": {
+                "missing": [
+                    {
+                        "filename": m.model.filename,
+                        "category": m.model.category,
+                        "workflow_names": m.workflow_names,
+                        "criticality": m.criticality,
+                        "can_download": m.can_download,
+                    }
+                    for m in status.missing_models
+                ]
+            },
+            "workflow_count": sync.total_count,
+            "node_count": len(tracked_nodes),
+            "model_count": len(status.missing_models),
+        })
+    except Exception as e:
+        return web.json_response({"error": "internal_error", "message": str(e)}, status=500)
 
 
 @routes.post("/v2/comfygit/switch_environment")
