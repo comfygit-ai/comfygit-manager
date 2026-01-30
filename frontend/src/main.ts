@@ -21,6 +21,12 @@ document.head.appendChild(cssLink)
 const initialTheme = getInitialTheme()
 applyTheme(initialTheme)
 
+// Reset panel tab to default on page load (fresh navigation / refresh)
+// sessionStorage persists across close/reopen within a page, but we want
+// a fresh page load to always start on the status tab.
+sessionStorage.removeItem('ComfyGit.LastView')
+sessionStorage.removeItem('ComfyGit.LastSection')
+
 // Expose theme switcher to console for easy testing
 // Usage: window.ComfyGit.setTheme('comfy') or window.ComfyGit.setTheme('phosphor')
 import { switchTheme, getCurrentTheme, type ThemeName } from '@/themes'

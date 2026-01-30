@@ -23910,6 +23910,8 @@ cl.href = new URL("./comfygit-panel.css", import.meta.url).href;
 document.head.appendChild(cl);
 const EP = CP();
 Zr(EP);
+sessionStorage.removeItem("ComfyGit.LastView");
+sessionStorage.removeItem("ComfyGit.LastSection");
 window.ComfyGit = {
   setTheme: (e) => {
     console.log(`[ComfyGit] Switching to theme: ${e}`), SP(e);
