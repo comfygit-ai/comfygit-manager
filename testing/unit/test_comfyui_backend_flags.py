@@ -572,14 +572,14 @@ class TestCrashRecoveryInRunForever:
         assert orch._skip_extra_args is True, "Should set _skip_extra_args for retry"
 
     def test_crash_without_extra_args_exits(self, mock_workspace, mocker):
-        """When crash happens without extra_args, should not retry."""
+        """When crash happens without extra_args and no general retries, should not retry."""
         from server.orchestrator import Orchestrator
         import json
 
         config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
         config_file.write_text(json.dumps({
             "version": "1.0",
-            "orchestrator": {"enable_control_server": False},
+            "orchestrator": {"enable_control_server": False, "crash_retry_max": 0},
             "comfyui": {"extra_args": []}
         }))
 
@@ -595,17 +595,17 @@ class TestCrashRecoveryInRunForever:
 
         should_retry = orch._handle_crash_for_recovery(exit_code=1)
 
-        assert should_retry is False, "Should not retry when no extra_args were used"
+        assert should_retry is False, "Should not retry when no extra_args were used and no general retries"
 
     def test_second_crash_after_skip_exits(self, mock_workspace, mocker):
-        """When crash happens after skip already set, should not retry again."""
+        """When crash happens after skip already set and no general retries, should not retry."""
         from server.orchestrator import Orchestrator
         import json
 
         config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
         config_file.write_text(json.dumps({
             "version": "1.0",
-            "orchestrator": {"enable_control_server": False},
+            "orchestrator": {"enable_control_server": False, "crash_retry_max": 0},
             "comfyui": {"extra_args": ["--bad-flag"]}
         }))
 
@@ -621,7 +621,7 @@ class TestCrashRecoveryInRunForever:
 
         should_retry = orch._handle_crash_for_recovery(exit_code=1)
 
-        assert should_retry is False, "Should not retry again after already skipping"
+        assert should_retry is False, "Should not retry again after already skipping and no general retries"
 
     def test_successful_start_clears_recovery_flags(self, mock_workspace, mocker):
         """After successful start, crash recovery flags should be cleared."""
