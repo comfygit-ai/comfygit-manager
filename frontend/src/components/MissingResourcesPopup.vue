@@ -506,27 +506,51 @@ async function analyzeWorkflow(workflow: any) {
     return
   }
 
-  // Check if this workflow is saved on disk via content hash
-  try {
-    const response = await fetch('/v2/comfygit/workflow/is-saved', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workflow })
-    })
-    if (response.ok) {
-      const result = await response.json()
-      if (result.is_saved) {
-        console.log(`[ComfyGit] Workflow matches saved file: ${result.filename}, skipping popup`)
-        // Add to session suppression so modifications don't trigger popup
+  // Check if workflow is saved to disk by comparing workflow IDs.
+  // We poll because activeWorkflow updates AFTER our event fires.
+  const appAny = window.app as any
+  const workflowStore = appAny?.extensionManager?.workflow
+
+  if (workflowStore) {
+    const MAX_RETRIES = 20
+    const RETRY_DELAY_MS = 50
+    let foundCorrectWorkflow = false
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      const activeWorkflow = workflowStore.activeWorkflow
+      if (!activeWorkflow) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS))
+        continue
+      }
+
+      const activeStateId = activeWorkflow.activeState?.id
+      const isCorrectWorkflow = workflowId && activeStateId === workflowId
+
+      // If IDs don't match, activeWorkflow is stale - keep polling
+      if (!isCorrectWorkflow) {
+        if (attempt < MAX_RETRIES - 1) {
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS))
+        }
+        continue
+      }
+
+      // IDs match - check persistence status
+      foundCorrectWorkflow = true
+      if (activeWorkflow.isPersisted === true) {
+        console.log(`[ComfyGit] Skipping popup for saved workflow: ${activeWorkflow.filename}`)
         if (workflowId) {
           shownWorkflowIds.value.add(workflowId)
         }
         return
       }
+      // Not persisted - proceed to show popup
+      break
     }
-  } catch (e) {
-    console.warn('[ComfyGit] Failed to check if workflow is saved:', e)
-    // On error, proceed with popup (safe default)
+
+    // Timeout fallback - show popup to be safe
+    if (!foundCorrectWorkflow) {
+      console.warn('[ComfyGit] Could not verify workflow state, showing popup as fallback')
+    }
   }
 
   // Prepare state but DON'T show modal yet - wait for analysis results
