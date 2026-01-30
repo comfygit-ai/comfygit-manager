@@ -264,6 +264,20 @@ async def get_pull_preview(request: web.Request, env) -> web.Response:
     can_pull = not has_uncommitted
     block_reason = "uncommitted_changes" if has_uncommitted else None
 
+    # Fetch incoming commits
+    commits_behind = sync_status["behind"]
+    if commits_behind > 0:
+        try:
+            incoming = await run_sync(
+                env.git_manager.get_version_history,
+                commits_behind,
+                f"HEAD..{name}/{branch}",
+            )
+        except Exception:
+            incoming = []
+    else:
+        incoming = []
+
     # Simplified changes structure (detailed diff not available without git plumbing)
     changes = {
         "workflows": {"added": [], "modified": [], "deleted": []},
@@ -274,8 +288,8 @@ async def get_pull_preview(request: web.Request, env) -> web.Response:
     return web.json_response({
         "remote": name,
         "branch": branch,
-        "commits_behind": sync_status["behind"],
-        "commits": [],  # Commit details require git plumbing commands
+        "commits_behind": commits_behind,
+        "commits": incoming,
         "changes": changes,
         "has_uncommitted_changes": has_uncommitted,
         "can_pull": can_pull,

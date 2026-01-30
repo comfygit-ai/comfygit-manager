@@ -57,6 +57,18 @@
               {{ preview.commits_behind }} commit{{ preview.commits_behind !== 1 ? 's' : '' }} from {{ preview.remote }}/{{ preview.branch }}
             </div>
 
+            <!-- Incoming commits -->
+            <div v-if="preview.commits && preview.commits.length > 0" class="commits-section">
+              <h4 class="section-title">INCOMING COMMITS</h4>
+              <div class="commit-list">
+                <div v-for="commit in preview.commits" :key="commit.hash" class="commit-item">
+                  <span class="commit-hash">{{ commit.short_hash || commit.hash.slice(0, 7) }}</span>
+                  <span class="commit-message">{{ commit.message }}</span>
+                  <span class="commit-date">{{ commit.date_relative || commit.relative_date }}</span>
+                </div>
+              </div>
+            </div>
+
             <!-- Incoming Changes -->
             <div v-if="hasChanges" class="changes-section">
               <h4 class="section-title">INCOMING CHANGES</h4>
@@ -450,6 +462,50 @@ function handlePull(force: boolean) {
   padding: 0;
   font-size: var(--cg-font-size-sm);
   color: var(--cg-color-text-secondary);
+}
+
+.commits-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-2);
+}
+
+.commit-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-1);
+  padding: var(--cg-space-3);
+  background: var(--cg-color-bg-secondary);
+  border-radius: var(--cg-radius-sm);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.commit-item {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  font-size: var(--cg-font-size-sm);
+}
+
+.commit-hash {
+  font-family: var(--cg-font-mono);
+  color: var(--cg-color-info);
+  flex-shrink: 0;
+}
+
+.commit-message {
+  color: var(--cg-color-text-primary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-date {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  flex-shrink: 0;
 }
 
 .changes-section {
