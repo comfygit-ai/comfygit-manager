@@ -36,6 +36,20 @@
               type="password"
               placeholder="Enter CivitAI API key..."
               :style="{ minWidth: '300px' }"
+              @input="civitaiTokenDirty = true"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label="HuggingFace Token"
+            description="Access token for downloading gated/private models from HuggingFace"
+          >
+            <TextInput
+              v-model="huggingfaceToken"
+              type="password"
+              placeholder="Enter HuggingFace token..."
+              :style="{ minWidth: '300px' }"
+              @input="hfTokenDirty = true"
             />
           </SettingRow>
         </div>
@@ -123,7 +137,12 @@ const originalConfig = ref<ConfigSettings | null>(null)
 
 // Editable fields
 const civitaiToken = ref<string>('')
+const huggingfaceToken = ref<string>('')
 const comfyuiExtraArgs = ref<string>('')  // Space-separated args shown as string
+
+// Dirty tracking for token fields (prevents saving masked values)
+const civitaiTokenDirty = ref(false)
+const hfTokenDirty = ref(false)
 
 // UI settings (stored in localStorage)
 const autoRefresh = ref(false)
@@ -143,11 +162,11 @@ function stringToArgs(str: string): string[] {
 const hasChanges = computed(() => {
   if (!originalConfig.value) return false
 
-  // Check all editable fields
-  const civitaiChanged = civitaiToken.value !== (originalConfig.value.civitai_api_key || '')
+  const civitaiChanged = civitaiTokenDirty.value
+  const hfChanged = hfTokenDirty.value
   const extraArgsChanged = comfyuiExtraArgs.value !== argsToString(originalConfig.value.comfyui_extra_args || [])
 
-  return civitaiChanged || extraArgsChanged
+  return civitaiChanged || hfChanged || extraArgsChanged
 })
 
 async function loadSettings() {
@@ -160,7 +179,12 @@ async function loadSettings() {
 
     // Populate editable fields
     civitaiToken.value = config.value.civitai_api_key || ''
+    huggingfaceToken.value = config.value.huggingface_token || ''
     comfyuiExtraArgs.value = argsToString(config.value.comfyui_extra_args || [])
+
+    // Reset dirty flags (values loaded from backend are not user edits)
+    civitaiTokenDirty.value = false
+    hfTokenDirty.value = false
 
     // Load UI settings from localStorage (default to true if not set)
     const storedAutoRefresh = localStorage.getItem('ComfyGit.Settings.AutoRefresh')
@@ -182,8 +206,13 @@ async function saveSettings() {
     // Only send changed fields
     const updates: Partial<ConfigSettings> = {}
 
-    if (civitaiToken.value !== (originalConfig.value?.civitai_api_key || '')) {
+    // Only send tokens if user actually modified them (dirty tracking prevents saving masked values)
+    if (civitaiTokenDirty.value) {
       updates.civitai_api_key = civitaiToken.value || null
+    }
+
+    if (hfTokenDirty.value) {
+      updates.huggingface_token = huggingfaceToken.value || null
     }
 
     if (comfyuiExtraArgs.value !== argsToString(originalConfig.value?.comfyui_extra_args || [])) {
@@ -213,7 +242,10 @@ async function saveSettings() {
 function resetSettings() {
   if (originalConfig.value) {
     civitaiToken.value = originalConfig.value.civitai_api_key || ''
+    huggingfaceToken.value = originalConfig.value.huggingface_token || ''
     comfyuiExtraArgs.value = argsToString(originalConfig.value.comfyui_extra_args || [])
+    civitaiTokenDirty.value = false
+    hfTokenDirty.value = false
     saveStatus.value = null
   }
 }
