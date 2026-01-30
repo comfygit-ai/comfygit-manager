@@ -72,7 +72,10 @@
 
             <!-- First push info -->
             <div v-if="preview.is_first_push" class="info-box">
-              <span class="info-icon">ℹ</span>
+              <svg class="info-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                <text x="8" y="11" text-anchor="middle" font-size="10" font-weight="bold" fill="currentColor">i</text>
+              </svg>
               <span>This will create the remote branch for the first time.</span>
             </div>
 

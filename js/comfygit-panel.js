@@ -14390,7 +14390,30 @@ const sb = { class: "remote-url-display" }, ob = ["title"], nb = ["title"], ab =
                   e.preview.is_first_push ? (a(), i("span", E2, " Creating " + f(e.preview.remote) + "/" + f(e.preview.branch) + " with " + f(e.preview.commits_ahead) + " commit" + f(e.preview.commits_ahead !== 1 ? "s" : ""), 1)) : (a(), i("span", T2, " Pushing " + f(e.preview.commits_ahead) + " commit" + f(e.preview.commits_ahead !== 1 ? "s" : "") + " to " + f(e.preview.remote) + "/" + f(e.preview.branch), 1))
                 ]),
                 e.preview.is_first_push ? (a(), i("div", R2, [...c[15] || (c[15] = [
-                  t("span", { class: "info-icon" }, "ℹ", -1),
+                  t("svg", {
+                    class: "info-icon",
+                    width: "16",
+                    height: "16",
+                    viewBox: "0 0 16 16",
+                    fill: "currentColor"
+                  }, [
+                    t("circle", {
+                      cx: "8",
+                      cy: "8",
+                      r: "7",
+                      stroke: "currentColor",
+                      "stroke-width": "1.5",
+                      fill: "none"
+                    }),
+                    t("text", {
+                      x: "8",
+                      y: "11",
+                      "text-anchor": "middle",
+                      "font-size": "10",
+                      "font-weight": "bold",
+                      fill: "currentColor"
+                    }, "i")
+                  ], -1),
                   t("span", null, "This will create the remote branch for the first time.", -1)
                 ])])) : y("", !0),
                 e.preview.commits_ahead > 0 ? (a(), i("div", P2, [
@@ -14459,7 +14482,7 @@ const sb = { class: "remote-url-display" }, ob = ["title"], nb = ["title"], ab =
       ]);
     };
   }
-}), z2 = /* @__PURE__ */ ge(U2, [["__scopeId", "data-v-ae86b6a7"]]), F2 = { class: "resolution-choice-group" }, B2 = ["disabled"], V2 = ["disabled"], W2 = /* @__PURE__ */ fe({
+}), z2 = /* @__PURE__ */ ge(U2, [["__scopeId", "data-v-3c2e35ab"]]), F2 = { class: "resolution-choice-group" }, B2 = ["disabled"], V2 = ["disabled"], W2 = /* @__PURE__ */ fe({
   __name: "ResolutionChoiceGroup",
   props: {
     modelValue: {},
