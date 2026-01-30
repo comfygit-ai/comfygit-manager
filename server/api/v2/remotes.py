@@ -401,11 +401,30 @@ async def get_push_preview(request: web.Request, env) -> web.Response:
     can_push = not has_uncommitted
     block_reason = "uncommitted_changes" if has_uncommitted else None
 
+    # Fetch outgoing commits
+    commits_ahead = sync_status["ahead"]
+    if commits_ahead > 0:
+        try:
+            if is_first_push:
+                outgoing = await run_sync(
+                    env.git_manager.get_version_history, commits_ahead
+                )
+            else:
+                outgoing = await run_sync(
+                    env.git_manager.get_version_history,
+                    commits_ahead,
+                    f"{name}/{branch}..HEAD",
+                )
+        except Exception:
+            outgoing = []
+    else:
+        outgoing = []
+
     return web.json_response({
         "remote": name,
         "branch": branch,
-        "commits_ahead": sync_status["ahead"],
-        "commits": [],  # Commit details require git plumbing commands
+        "commits_ahead": commits_ahead,
+        "commits": outgoing,
         "has_uncommitted_changes": has_uncommitted,
         "remote_has_new_commits": remote_has_new,
         "can_push": can_push,
