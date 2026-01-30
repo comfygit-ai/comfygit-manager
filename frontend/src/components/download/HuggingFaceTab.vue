@@ -134,12 +134,16 @@ const showTokenModal = ref(false)
 const tokenMask = ref<string | null>(null)
 
 // Detect auth errors in search results
-const isAuthError = computed(() =>
-  searchError.value?.includes('401') ||
-  searchError.value?.includes('403') ||
-  searchError.value?.toLowerCase().includes('authentication') ||
-  searchError.value?.toLowerCase().includes('unauthorized')
-)
+const isAuthError = computed(() => {
+  if (!searchError.value) return false
+  const errorLower = searchError.value.toLowerCase()
+  return (
+    searchError.value.includes('401') ||
+    searchError.value.includes('403') ||
+    errorLower.includes('authentication') ||
+    errorLower.includes('unauthorized')
+  )
+})
 
 function formatNumber(num: number): string {
   if (num >= 1_000_000) {
