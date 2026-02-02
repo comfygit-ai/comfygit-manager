@@ -25,10 +25,6 @@ dev = [
 Repository = "https://github.com/comfygit-ai/comfygit-manager"
 #  Used by Comfy Registry https://comfyregistry.org
 
-[tool.uv.sources]
-# Use local editable install for development - ensures we always test against latest core
-comfygit-core = { path = "/data/projects/comfygit-ai/comfygit/packages/core", editable = true }
-
 [tool.comfy]
 PublisherId = "akatz"
 DisplayName = "comfygit-manager"
