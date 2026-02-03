@@ -103,8 +103,9 @@ async function loadEnvironments() {
   try {
     const response = await service.listEnvironments()
     environments.value = response.environments || []
-    currentEnv.value = response.current || ''
-    selectedEnv.value = currentEnv.value
+    const current = response.current || environments.value.find((env) => env.is_current)?.name || ''
+    currentEnv.value = current
+    selectedEnv.value = current
     isManaged.value = response.is_managed !== false
   } catch (error) {
     console.error('Failed to load environments:', error)
@@ -135,7 +136,10 @@ function startStatusPolling() {
 
   statusPollInterval = window.setInterval(async () => {
     try {
-      const status = await service.getSwitchStatus()
+      const status = await service.getSwitchProgress()
+      if (!status) {
+        return
+      }
 
       switchStatus.value = status
 
