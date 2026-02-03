@@ -58,7 +58,7 @@ const globalStatus = ref<ComfyGitStatus | null>(null)
 
 // Setup state for commit button enablement
 type SetupState = 'no_workspace' | 'empty_workspace' | 'unmanaged' | 'managed'
-let currentSetupState: SetupState = 'managed'
+let currentSetupState: SetupState = 'no_workspace'
 let hasComfyUIManager = false
 
 // Button group reference
@@ -538,14 +538,17 @@ app.registerExtension({
 
   // Hook into workflow loading to intercept missing resources
   async beforeConfigureGraph(graphData: any, _missingNodeTypes: any[]) {
-    // Disable ComfyUI's built-in popups - we show our own
-    try {
-      await Promise.all([
-        app.ui.settings.setSettingValueAsync('Comfy.Workflow.ShowMissingModelsWarning', false),
-        app.ui.settings.setSettingValueAsync('Comfy.Workflow.ShowMissingNodesWarning', false)
-      ])
-    } catch (e) {
-      console.warn('[ComfyGit] Failed to disable built-in warnings:', e)
+    // Only suppress ComfyUI's built-in popups in managed environments
+    // Non-managed environments should use ComfyUI's native warnings
+    if (currentSetupState === 'managed') {
+      try {
+        await Promise.all([
+          app.ui.settings.setSettingValueAsync('Comfy.Workflow.ShowMissingModelsWarning', false),
+          app.ui.settings.setSettingValueAsync('Comfy.Workflow.ShowMissingNodesWarning', false)
+        ])
+      } catch (e) {
+        console.warn('[ComfyGit] Failed to disable built-in warnings:', e)
+      }
     }
 
     // Store workflow data for afterConfigureGraph (separate hook calls)
@@ -553,6 +556,9 @@ app.registerExtension({
   },
 
   async afterConfigureGraph(_missingNodeTypes: any[]) {
+    // Non-managed environments: let ComfyUI handle missing resources natively
+    if (currentSetupState !== 'managed') return
+
     const workflow = (window as any).__comfygit_pending_workflow
     if (!workflow) return
     delete (window as any).__comfygit_pending_workflow
