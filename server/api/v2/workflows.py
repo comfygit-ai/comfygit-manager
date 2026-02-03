@@ -3,14 +3,16 @@ import asyncio
 import json
 from pathlib import Path
 
+import xxhash
 from aiohttp import web
 
 from comfygit_core.strategies.auto import AutoNodeStrategy, AutoModelStrategy
 from comfygit_core.models.workflow import (
     NodeResolutionContext, ModelResolutionContext,
     ResolvedNodePackage, ResolvedModel, WorkflowNodeWidgetRef,
-    BatchDownloadCallbacks
+    BatchDownloadCallbacks, Workflow,
 )
+from comfygit_core.analyzers.workflow_dependency_parser import WorkflowDependencyParser
 
 from cgm_core.decorators import requires_environment, logged_operation
 from cgm_core.serializers import serialize_workflow_details
@@ -20,12 +22,94 @@ routes = web.RouteTableDef()
 
 
 # =============================================================================
+# Workflow Is-Saved Detection (hash-based comparison)
+# =============================================================================
+
+# Cache for disk workflow hashes (invalidated by file watcher)
+_workflow_hash_cache: dict[str, str] = {}  # filename -> hash
+_cache_valid: bool = False
+
+
+def invalidate_workflow_hash_cache():
+    """Called by file watcher when workflows change."""
+    global _cache_valid
+    _cache_valid = False
+
+
+def _normalize_workflow(wf: dict) -> dict:
+    """Strip volatile fields that don't affect workflow identity."""
+    wf = wf.copy()
+    if 'extra' in wf and isinstance(wf['extra'], dict):
+        wf['extra'] = {k: v for k, v in wf['extra'].items() if k != 'ds'}
+    return wf
+
+
+def _get_workflow_hash(wf: dict) -> str:
+    """Compute xxhash of normalized workflow JSON."""
+    normalized = _normalize_workflow(wf)
+    json_str = json.dumps(normalized, sort_keys=True, separators=(',', ':'))
+    return xxhash.xxh64(json_str.encode()).hexdigest()
+
+
+def _get_disk_workflow_hashes(workflows_path: Path) -> dict[str, str]:
+    """Get hashes of all saved workflows, using cache if valid."""
+    global _workflow_hash_cache, _cache_valid
+
+    if _cache_valid:
+        return _workflow_hash_cache
+
+    _workflow_hash_cache = {}
+    if workflows_path.exists():
+        for wf_file in workflows_path.glob("**/*.json"):
+            try:
+                with open(wf_file) as f:
+                    data = json.load(f)
+                _workflow_hash_cache[wf_file.name] = _get_workflow_hash(data)
+            except (json.JSONDecodeError, IOError):
+                pass  # Skip invalid files
+
+    _cache_valid = True
+    return _workflow_hash_cache
+
+
+@routes.post("/v2/comfygit/workflow/is-saved")
+@requires_environment
+async def check_workflow_saved(request: web.Request, env) -> web.Response:
+    """Check if workflow JSON matches a saved workflow on disk."""
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    workflow_data = body.get("workflow")
+    if not workflow_data or not isinstance(workflow_data, dict):
+        return web.json_response({"error": "Missing workflow"}, status=400)
+
+    incoming_hash = _get_workflow_hash(workflow_data)
+    workflows_path = env.comfyui_path / "user" / "default" / "workflows"
+    disk_hashes = _get_disk_workflow_hashes(workflows_path)
+
+    for filename, disk_hash in disk_hashes.items():
+        if disk_hash == incoming_hash:
+            return web.json_response({"is_saved": True, "filename": filename})
+
+    return web.json_response({"is_saved": False, "filename": None})
+
+
+# =============================================================================
 # Serialization Helpers for Interactive Resolution Wizard
 # =============================================================================
 
 def _serialize_resolved_node(node: ResolvedNodePackage, workflow_name: str, uninstalled_set: set = None) -> dict:
     """Convert ResolvedNodePackage to frontend ResolvedNode format."""
     uninstalled_set = uninstalled_set or set()
+
+    # Extract latest version from package_data.versions if available
+    latest_version = None
+    if node.package_data and node.package_data.versions:
+        # versions is a dict - get the first key (latest version)
+        latest_version = next(iter(node.package_data.versions.keys()), None)
+
     return {
         "reference": {
             "node_type": node.node_type,
@@ -33,7 +117,9 @@ def _serialize_resolved_node(node: ResolvedNodePackage, workflow_name: str, unin
         },
         "package": {
             "package_id": node.package_id,
-            "title": node.package_data.display_name if node.package_data else node.package_id
+            "title": node.package_data.display_name if node.package_data else node.package_id,
+            "repository": node.package_data.repository if node.package_data else None,
+            "latest_version": latest_version
         },
         "match_confidence": node.match_confidence,
         "match_type": node.match_type,
@@ -58,6 +144,12 @@ def _serialize_ambiguous_node(options: list[ResolvedNodePackage], workflow_name:
     if not options:
         return None
     uninstalled_set = uninstalled_set or set()
+
+    def get_latest_version(opt):
+        if opt.package_data and opt.package_data.versions:
+            return next(iter(opt.package_data.versions.keys()), None)
+        return None
+
     return {
         "reference": {
             "node_type": options[0].node_type,
@@ -67,7 +159,9 @@ def _serialize_ambiguous_node(options: list[ResolvedNodePackage], workflow_name:
             {
                 "package": {
                     "package_id": opt.package_id,
-                    "title": opt.package_data.display_name if opt.package_data else opt.package_id
+                    "title": opt.package_data.display_name if opt.package_data else opt.package_id,
+                    "repository": opt.package_data.repository if opt.package_data else None,
+                    "latest_version": get_latest_version(opt)
                 },
                 "match_confidence": opt.match_confidence,
                 "match_type": opt.match_type,
@@ -709,6 +803,155 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
     return web.json_response(response)
 
 
+@routes.post("/v2/comfygit/workflow/analyze-json")
+@requires_environment
+async def analyze_workflow_json(request: web.Request, env) -> web.Response:
+    """Analyze workflow JSON directly without requiring file on disk.
+
+    Used for analyzing workflows loaded in browser before save.
+    Request body: { "workflow": <workflow_json_object>, "name": "optional_name" }
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+
+    workflow_data = body.get("workflow")
+    workflow_name = body.get("name", "unsaved")
+
+    if not workflow_data:
+        return web.json_response({"error": "Missing workflow data"}, status=400)
+
+    # Validate workflow_data is a dict (not a string or other type)
+    if not isinstance(workflow_data, dict):
+        return web.json_response(
+            {"error": "Invalid workflow format: expected object"},
+            status=400
+        )
+
+    try:
+        # Parse workflow JSON into Workflow object
+        workflow_obj = Workflow.from_json(workflow_data)
+
+        # Analyze using the Workflow object directly (no temp file needed)
+        parser = WorkflowDependencyParser(
+            workflow=workflow_obj,
+            workflow_name=workflow_name,
+            cec_path=env.cec_path
+        )
+        dependencies = parser.analyze_dependencies()
+
+        # Use the same resolution logic as analyze_workflow
+        result = await run_sync(
+            env.workflow_manager.resolve_workflow,
+            dependencies
+        )
+    except Exception as e:
+        return web.json_response(
+            {"error": f"Invalid workflow format: {e}"},
+            status=400
+        )
+
+    # Determine uninstalled nodes (same logic as analyze_workflow lines 641-648)
+    # For unsaved workflows, check against environment's installed packages
+    installed_packages = set(env.pyproject.nodes.get_existing().keys())
+    uninstalled_set = {
+        n.package_id for n in result.nodes_resolved
+        if n.package_id and n.package_id not in installed_packages
+    }
+
+    # Same stats calculation as analyze_workflow (lines 652-676)
+    nodes_needing_installation = sum(
+        1 for n in result.nodes_resolved if n.package_id in uninstalled_set
+    )
+    packages_needing_installation = len(uninstalled_set)
+    needs_user_input = bool(
+        result.nodes_unresolved or result.nodes_ambiguous or
+        result.models_unresolved or result.models_ambiguous
+    )
+    download_intents_count = sum(
+        1 for m in result.models_resolved
+        if m.match_type in ("download_intent", "property_download_intent")
+    )
+    is_fully_resolved = (
+        not needs_user_input
+        and nodes_needing_installation == 0
+        and download_intents_count == 0
+    )
+
+    # Transform to frontend format (same structure as analyze_workflow)
+    resolved_nodes = [
+        _serialize_resolved_node(n, workflow_name, uninstalled_set)
+        for n in result.nodes_resolved
+    ]
+    unresolved_nodes = [
+        _serialize_unresolved_node(n, workflow_name)
+        for n in result.nodes_unresolved
+    ]
+    ambiguous_nodes = [
+        amb for amb in [
+            _serialize_ambiguous_node(opts, workflow_name, uninstalled_set)
+            for opts in result.nodes_ambiguous
+        ]
+        if amb is not None
+    ]
+    resolved_models = [
+        _serialize_resolved_model(m) for m in result.models_resolved
+    ]
+    unresolved_models = [
+        _serialize_unresolved_model(m, workflow_name)
+        for m in result.models_unresolved
+    ]
+    ambiguous_models = [
+        amb for amb in [
+            _serialize_ambiguous_model(opts)
+            for opts in result.models_ambiguous
+        ]
+        if amb is not None
+    ]
+
+    total_nodes = (
+        len(result.nodes_resolved)
+        + len(result.nodes_unresolved)
+        + len(result.nodes_ambiguous)
+    )
+    total_models = (
+        len(result.models_resolved)
+        + len(result.models_unresolved)
+        + len(result.models_ambiguous)
+    )
+    category_mismatch_count = sum(
+        1 for m in result.models_resolved
+        if getattr(m, 'has_category_mismatch', False)
+    )
+
+    response = {
+        "workflow": workflow_name,
+        "nodes": {
+            "resolved": resolved_nodes,
+            "unresolved": unresolved_nodes,
+            "ambiguous": ambiguous_nodes,
+        },
+        "models": {
+            "resolved": resolved_models,
+            "unresolved": unresolved_models,
+            "ambiguous": ambiguous_models,
+        },
+        "stats": {
+            "total_nodes": total_nodes,
+            "total_models": total_models,
+            "download_intents": download_intents_count,
+            "nodes_needing_installation": nodes_needing_installation,
+            "packages_needing_installation": packages_needing_installation,
+            "needs_user_input": needs_user_input,
+            "is_fully_resolved": is_fully_resolved,
+            "models_with_category_mismatch": category_mismatch_count,
+        },
+    }
+
+    return web.json_response(response)
+
+
 @routes.post("/v2/comfygit/workflow/search-nodes")
 @requires_environment
 async def search_nodes(request: web.Request, env) -> web.Response:
@@ -736,11 +979,18 @@ async def search_nodes(request: web.Request, env) -> web.Response:
         limit
     )
 
+    # Normalize scores to 0.0-1.0 range for frontend display
+    # Find max score for normalization (minimum 1.0 to avoid division issues)
+    max_score = max((m.score for m in matches), default=1.0)
+    max_score = max(max_score, 1.0)  # Ensure at least 1.0
+
     results = []
     for match in matches:
+        # Normalize: highest score becomes 1.0, others scale proportionally
+        normalized_confidence = match.score / max_score
         results.append({
             "package_id": match.package_id,
-            "match_confidence": match.score,
+            "match_confidence": normalized_confidence,
             "match_type": match.confidence,  # "high", "medium", "low"
             "description": match.package_data.description if match.package_data else None,
             "repository": match.package_data.repository if match.package_data else None,
@@ -892,6 +1142,50 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
             env.pyproject.workflows.set_workflow_models(name, current_models)
     except Exception:
         pass  # Continue even if update fails
+
+    # Write property_download_intent models to pyproject (they're in models_resolved, not processed by fix_resolution)
+    try:
+        from comfygit_core.models.manifest import ManifestWorkflowModel
+
+        existing_models = env.pyproject.workflows.get_workflow_models(name)
+        existing_filenames = {m.filename for m in existing_models if m.sources}
+
+        for model in result.models_resolved:
+            if model.match_type == "property_download_intent" and model.model_source:
+                filename = model.reference.widget_value
+
+                # Skip if already in pyproject with sources (avoid duplicates)
+                if filename in existing_filenames:
+                    continue
+
+                # Check if user cancelled this download
+                choice = model_choices.get(filename)
+                if choice and choice.get("action") in ("skip", "cancel_download", "optional"):
+                    continue
+
+                # Use expected_categories from core library's node analysis
+                category = model.expected_categories[0] if model.expected_categories else "models"
+
+                # Use user's URL if they provided one, otherwise use model_source
+                url = model.model_source
+                target_path = str(model.target_path) if model.target_path else None
+                if choice and choice.get("action") == "download" and choice.get("url"):
+                    url = choice["url"]
+                    if choice.get("target_path"):
+                        target_path = choice["target_path"]
+
+                manifest_model = ManifestWorkflowModel(
+                    filename=filename,
+                    category=category,
+                    criticality="required",
+                    status="unresolved",
+                    nodes=[model.reference],
+                    sources=[url],
+                    relative_path=target_path
+                )
+                env.pyproject.workflows.add_workflow_model(name, manifest_model)
+    except Exception:
+        pass  # Continue even if write fails - downloads will still work
 
     # Get models directory for checking if files already exist
     models_dir = env.workspace.workspace_config_manager.get_models_directory()

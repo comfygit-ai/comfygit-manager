@@ -264,6 +264,20 @@ async def get_pull_preview(request: web.Request, env) -> web.Response:
     can_pull = not has_uncommitted
     block_reason = "uncommitted_changes" if has_uncommitted else None
 
+    # Fetch incoming commits
+    commits_behind = sync_status["behind"]
+    if commits_behind > 0:
+        try:
+            incoming = await run_sync(
+                env.git_manager.get_version_history,
+                commits_behind,
+                f"HEAD..{name}/{branch}",
+            )
+        except Exception:
+            incoming = []
+    else:
+        incoming = []
+
     # Simplified changes structure (detailed diff not available without git plumbing)
     changes = {
         "workflows": {"added": [], "modified": [], "deleted": []},
@@ -274,8 +288,8 @@ async def get_pull_preview(request: web.Request, env) -> web.Response:
     return web.json_response({
         "remote": name,
         "branch": branch,
-        "commits_behind": sync_status["behind"],
-        "commits": [],  # Commit details require git plumbing commands
+        "commits_behind": commits_behind,
+        "commits": incoming,
         "changes": changes,
         "has_uncommitted_changes": has_uncommitted,
         "can_pull": can_pull,
@@ -401,11 +415,30 @@ async def get_push_preview(request: web.Request, env) -> web.Response:
     can_push = not has_uncommitted
     block_reason = "uncommitted_changes" if has_uncommitted else None
 
+    # Fetch outgoing commits
+    commits_ahead = sync_status["ahead"]
+    if commits_ahead > 0:
+        try:
+            if is_first_push:
+                outgoing = await run_sync(
+                    env.git_manager.get_version_history, commits_ahead
+                )
+            else:
+                outgoing = await run_sync(
+                    env.git_manager.get_version_history,
+                    commits_ahead,
+                    f"{name}/{branch}..HEAD",
+                )
+        except Exception:
+            outgoing = []
+    else:
+        outgoing = []
+
     return web.json_response({
         "remote": name,
         "branch": branch,
-        "commits_ahead": sync_status["ahead"],
-        "commits": [],  # Commit details require git plumbing commands
+        "commits_ahead": commits_ahead,
+        "commits": outgoing,
         "has_uncommitted_changes": has_uncommitted,
         "remote_has_new_commits": remote_has_new,
         "can_push": can_push,

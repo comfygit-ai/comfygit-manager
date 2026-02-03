@@ -129,7 +129,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import ModelResolutionItem from '../molecules/ModelResolutionItem.vue'
 import type { ResolutionStatus } from '../molecules/ModelResolutionItem.vue'
 import ItemNavigator from '../molecules/ItemNavigator.vue'
@@ -298,20 +298,37 @@ function goToItem(index: number) {
   }
 }
 
-// Handlers - no auto-advance, user navigates manually
+// Auto-advance helper: find next unresolved item and navigate to it
+function advanceToNextUnresolved() {
+  // Find next item after current that doesn't have a choice
+  for (let i = currentIndex.value + 1; i < props.models.length; i++) {
+    const model = props.models[i]
+    // Skip download intents (they're pre-resolved) and items with choices
+    if (!model.is_download_intent && !props.modelChoices?.has(model.filename)) {
+      goToItem(i)
+      return
+    }
+  }
+  // No more unresolved items - stay on current (user can see completion status)
+}
+
+// Handlers with auto-advance after making a choice
 function handleMarkOptional() {
   if (!currentModel.value) return
   emit('mark-optional', currentModel.value.filename)
+  nextTick(() => advanceToNextUnresolved())
 }
 
 function handleSkip() {
   if (!currentModel.value) return
   emit('skip', currentModel.value.filename)
+  nextTick(() => advanceToNextUnresolved())
 }
 
 function handleOptionSelected(index: number) {
   if (!currentModel.value) return
   emit('option-selected', currentModel.value.filename, index)
+  nextTick(() => advanceToNextUnresolved())
 }
 
 function handleClearChoice() {
@@ -357,12 +374,14 @@ function selectSearchResult(result: ModelSearchResult) {
   if (!currentModel.value) return
   // TODO: emit proper selection
   closeSearch()
+  nextTick(() => advanceToNextUnresolved())
 }
 
 function submitDownloadUrl() {
   if (!currentModel.value || !downloadUrl.value.trim()) return
   emit('download-url', currentModel.value.filename, downloadUrl.value.trim(), downloadPath.value.trim() || undefined)
   closeDownloadUrl()
+  nextTick(() => advanceToNextUnresolved())
 }
 
 function formatSize(bytes: number): string {

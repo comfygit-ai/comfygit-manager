@@ -379,6 +379,8 @@ class TestWorkflowAnalyzeEndpoint:
         mock_resolved_node.package_id = "comfyui-core"
         mock_resolved_node.package_data = Mock()
         mock_resolved_node.package_data.display_name = "ComfyUI Core"
+        mock_resolved_node.package_data.repository = "https://github.com/comfyanonymous/ComfyUI"
+        mock_resolved_node.package_data.versions = {"1.0.0": {}}
         mock_resolved_node.match_confidence = 1.0
         mock_resolved_node.match_type = "exact"
 
@@ -391,6 +393,8 @@ class TestWorkflowAnalyzeEndpoint:
         mock_ambiguous_node_opt1.package_id = "pkg-option-1"
         mock_ambiguous_node_opt1.package_data = Mock()
         mock_ambiguous_node_opt1.package_data.display_name = "Package Option 1"
+        mock_ambiguous_node_opt1.package_data.repository = "https://github.com/example/pkg1"
+        mock_ambiguous_node_opt1.package_data.versions = {"2.0.0": {}}
         mock_ambiguous_node_opt1.match_confidence = 0.9
         mock_ambiguous_node_opt1.match_type = "fuzzy"
 
@@ -399,6 +403,8 @@ class TestWorkflowAnalyzeEndpoint:
         mock_ambiguous_node_opt2.package_id = "pkg-option-2"
         mock_ambiguous_node_opt2.package_data = Mock()
         mock_ambiguous_node_opt2.package_data.display_name = "Package Option 2"
+        mock_ambiguous_node_opt2.package_data.repository = "https://github.com/example/pkg2"
+        mock_ambiguous_node_opt2.package_data.versions = {"1.5.0": {}}
         mock_ambiguous_node_opt2.match_confidence = 0.8
         mock_ambiguous_node_opt2.match_type = "fuzzy"
 
@@ -1505,6 +1511,494 @@ class TestCategoryMismatchInResolvedModel:
         assert model["actual_category"] == "checkpoints"
 
 
+# =============================================================================
+# Analyze Workflow JSON Endpoint (NEW - cgm-z5o.1)
+# =============================================================================
+
+@pytest.mark.integration
+class TestAnalyzeWorkflowJsonEndpoint:
+    """POST /v2/comfygit/workflow/analyze-json - Analyze workflow JSON directly.
+
+    This endpoint accepts raw workflow JSON in the request body, enabling analysis
+    of workflows loaded in the browser that aren't yet saved to disk.
+    """
+
+    async def test_success_with_valid_workflow_json(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should analyze valid workflow JSON and return categorized results."""
+        # Setup: Create mock workflow JSON that would be sent from frontend
+        workflow_json = {
+            "nodes": {
+                "1": {
+                    "type": "CheckpointLoaderSimple",
+                    "widgets_values": ["SD1.5/model.safetensors"]
+                },
+                "2": {
+                    "type": "KSampler",
+                    "widgets_values": []
+                },
+                "3": {
+                    "type": "UnknownCustomNode",  # Non-builtin node
+                    "widgets_values": ["some_value"]
+                }
+            }
+        }
+
+        # Setup mock resolution result
+        mock_resolved_node = Mock()
+        mock_resolved_node.node_type = "CheckpointLoaderSimple"
+        mock_resolved_node.package_id = "comfyui-core"
+        mock_resolved_node.package_data = None
+        mock_resolved_node.match_confidence = 1.0
+        mock_resolved_node.match_type = "builtin"
+
+        mock_unresolved_node = Mock()
+        mock_unresolved_node.type = "UnknownCustomNode"
+        mock_unresolved_node.id = "3"
+
+        mock_result = create_mock_resolution(
+            nodes_resolved=[mock_resolved_node],
+            nodes_unresolved=[mock_unresolved_node],
+            models_resolved=[],
+            models_unresolved=[],
+            models_ambiguous=[]
+        )
+
+        # Mock resolve_workflow (used by the endpoint)
+        mock_environment.workflow_manager.resolve_workflow = Mock(return_value=mock_result)
+
+        # Mock pyproject.nodes.get_existing (returns dict of installed packages)
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {"comfyui-core": Mock()}
+
+        # Execute
+        resp = await client.post(
+            "/v2/comfygit/workflow/analyze-json",
+            json={"workflow": workflow_json, "name": "unsaved_workflow"}
+        )
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+
+        # Check top-level structure matches /workflow/{name}/analyze format
+        assert "workflow" in data
+        assert data["workflow"] == "unsaved_workflow"
+        assert "nodes" in data
+        assert "models" in data
+        assert "stats" in data
+
+        # Check nodes structure
+        assert "resolved" in data["nodes"]
+        assert "unresolved" in data["nodes"]
+        assert "ambiguous" in data["nodes"]
+
+    async def test_success_with_default_name(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should use 'unsaved' as default name when not provided."""
+        workflow_json = {"nodes": {}}
+
+        mock_result = create_mock_resolution()
+        mock_environment.workflow_manager.resolve_workflow = Mock(return_value=mock_result)
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {}
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/analyze-json",
+            json={"workflow": workflow_json}  # No name provided
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["workflow"] == "unsaved"
+
+    async def test_error_missing_workflow_data(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 400 when workflow data is missing."""
+        resp = await client.post(
+            "/v2/comfygit/workflow/analyze-json",
+            json={"name": "test"}  # Missing 'workflow' field
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "error" in data
+        assert "workflow" in data["error"].lower() or "missing" in data["error"].lower()
+
+    async def test_error_empty_workflow_data(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 400 when workflow data is empty."""
+        resp = await client.post(
+            "/v2/comfygit/workflow/analyze-json",
+            json={"workflow": None}
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "error" in data
+
+    async def test_error_invalid_json_body(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 400 for invalid JSON body."""
+        resp = await client.post(
+            "/v2/comfygit/workflow/analyze-json",
+            data="not valid json{",
+            headers={"Content-Type": "application/json"}
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "error" in data
+
+    async def test_error_malformed_workflow_structure(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 400 when workflow JSON has invalid structure.
+
+        The workflow parser expects specific fields. Invalid structure should
+        result in a clear error message.
+        """
+        # Setup: Workflow with invalid structure (nodes must be a dict, not a string)
+        # Workflow.from_json will raise AttributeError when trying to iterate nodes
+        malformed_workflow = {"nodes": "not_a_dict"}
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/analyze-json",
+            json={"workflow": malformed_workflow}
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "error" in data
+        # The error message should mention format/workflow
+        assert "workflow" in data["error"].lower() or "format" in data["error"].lower()
+
+    async def test_response_format_matches_analyze_endpoint(
+        self,
+        client,
+        mock_environment
+    ):
+        """Response format should exactly match /workflow/{name}/analyze endpoint.
+
+        This ensures frontend code can use the same handlers for both endpoints.
+        """
+        # Setup: Create mock with all resolution categories
+        mock_resolved_node = Mock()
+        mock_resolved_node.node_type = "TestNode"
+        mock_resolved_node.package_id = "test-pkg"
+        mock_resolved_node.package_data = Mock()
+        mock_resolved_node.package_data.display_name = "Test Package"
+        mock_resolved_node.package_data.repository = "https://github.com/example/test-pkg"
+        mock_resolved_node.package_data.versions = {"1.0.0": {}}
+        mock_resolved_node.match_confidence = 0.95
+        mock_resolved_node.match_type = "exact"
+
+        mock_model_ref = Mock()
+        mock_model_ref.node_id = "1"
+        mock_model_ref.node_type = "CheckpointLoaderSimple"
+        mock_model_ref.widget_name = "ckpt_name"
+        mock_model_ref.widget_value = "model.safetensors"
+
+        mock_resolved_model_data = Mock()
+        mock_resolved_model_data.filename = "model.safetensors"
+        mock_resolved_model_data.hash = "abc123"
+        mock_resolved_model_data.file_size = 4000000000
+        mock_resolved_model_data.category = "checkpoints"
+        mock_resolved_model_data.relative_path = "checkpoints/model.safetensors"
+        mock_resolved_model_data.base_directory = "/models"
+
+        mock_resolved_model = Mock()
+        mock_resolved_model.workflow = "test"
+        mock_resolved_model.reference = mock_model_ref
+        mock_resolved_model.resolved_model = mock_resolved_model_data
+        mock_resolved_model.model_source = None
+        mock_resolved_model.match_confidence = 1.0
+        mock_resolved_model.match_type = "exact"
+        mock_resolved_model.needs_path_sync = False
+        mock_resolved_model.is_optional = False
+        mock_resolved_model.has_category_mismatch = False
+        mock_resolved_model.target_path = None
+
+        mock_result = create_mock_resolution(
+            nodes_resolved=[mock_resolved_node],
+            nodes_unresolved=[],
+            nodes_ambiguous=[],
+            models_resolved=[mock_resolved_model],
+            models_unresolved=[],
+            models_ambiguous=[]
+        )
+
+        mock_environment.workflow_manager.resolve_workflow = Mock(return_value=mock_result)
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {"test-pkg": Mock()}
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/analyze-json",
+            json={"workflow": {"nodes": {}}, "name": "test"}
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+
+        # Verify all expected fields are present in stats (matching analyze endpoint)
+        expected_stat_fields = {
+            "total_nodes",
+            "total_models",
+            "download_intents",
+            "nodes_needing_installation",
+            "packages_needing_installation",
+            "needs_user_input",
+            "is_fully_resolved",
+            "models_with_category_mismatch"
+        }
+        assert expected_stat_fields.issubset(set(data["stats"].keys())), \
+            f"Missing stats fields: {expected_stat_fields - set(data['stats'].keys())}"
+
+        # Verify resolved node format
+        resolved_node = data["nodes"]["resolved"][0]
+        assert "reference" in resolved_node
+        assert "package" in resolved_node
+        assert "match_confidence" in resolved_node
+        assert "match_type" in resolved_node
+        assert "is_installed" in resolved_node
+
+        # Verify resolved model format
+        resolved_model = data["models"]["resolved"][0]
+        assert "reference" in resolved_model
+        assert "model" in resolved_model
+        assert "match_confidence" in resolved_model
+        assert "has_download_source" in resolved_model
+
+    async def test_handles_workflow_with_subgraphs(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should correctly analyze workflows containing subgraphs (ComfyUI v1.24.3+).
+
+        Subgraphs use scoped node IDs like 'uuid:12' to prevent ID conflicts.
+        The analyzer should handle these correctly.
+        """
+        # Setup: Workflow with subgraph (scoped node IDs)
+        workflow_json = {
+            "nodes": {
+                "1": {
+                    "type": "CheckpointLoaderSimple",
+                    "widgets_values": ["model.safetensors"]
+                },
+                "subgraph-abc:1": {  # Scoped node ID from subgraph
+                    "type": "LoraLoader",
+                    "widgets_values": ["lora.safetensors"]
+                },
+                "subgraph-abc:2": {  # Another subgraph node
+                    "type": "CustomNode",
+                    "widgets_values": []
+                }
+            }
+        }
+
+        mock_result = create_mock_resolution()
+        mock_environment.workflow_manager.resolve_workflow = Mock(return_value=mock_result)
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {}
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/analyze-json",
+            json={"workflow": workflow_json}
+        )
+
+        assert resp.status == 200
+        # The endpoint should not crash on subgraph node IDs
+
+    async def test_extracts_model_references_from_properties(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should extract model references including URLs from node properties.models.
+
+        ComfyUI nodes can have model info in properties.models array with
+        download URLs. These should be extracted as property_download_intent.
+        """
+        # Setup: Workflow with models in node properties
+        workflow_json = {
+            "nodes": {
+                "1": {
+                    "type": "VAELoader",
+                    "widgets_values": ["vae.safetensors"],
+                    "properties": {
+                        "models": [
+                            {
+                                "name": "vae.safetensors",
+                                "url": "https://huggingface.co/example/vae.safetensors",
+                                "directory": "vae"
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+
+        # Setup mock model with property_download_intent
+        mock_model_ref = Mock()
+        mock_model_ref.node_id = "1"
+        mock_model_ref.node_type = "VAELoader"
+        mock_model_ref.widget_name = "vae_name"
+        mock_model_ref.widget_value = "vae.safetensors"
+
+        mock_resolved_model = Mock()
+        mock_resolved_model.workflow = "unsaved"
+        mock_resolved_model.reference = mock_model_ref
+        mock_resolved_model.resolved_model = None  # Not downloaded yet
+        mock_resolved_model.model_source = "https://huggingface.co/example/vae.safetensors"
+        mock_resolved_model.match_confidence = 1.0
+        mock_resolved_model.match_type = "property_download_intent"
+        mock_resolved_model.needs_path_sync = False
+        mock_resolved_model.is_optional = False
+        mock_resolved_model.has_category_mismatch = False
+        mock_resolved_model.target_path = None
+
+        mock_result = create_mock_resolution(
+            models_resolved=[mock_resolved_model]
+        )
+        mock_environment.workflow_manager.resolve_workflow = Mock(return_value=mock_result)
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {}
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/analyze-json",
+            json={"workflow": workflow_json}
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+
+        # Should have a download intent
+        assert data["stats"]["download_intents"] == 1
+        assert data["stats"]["is_fully_resolved"] is False
+
+        # Model should have download source
+        assert len(data["models"]["resolved"]) == 1
+        model = data["models"]["resolved"][0]
+        assert model["has_download_source"] is True
+        assert model["download_source"] == "https://huggingface.co/example/vae.safetensors"
+
+    async def test_identifies_uninstalled_packages(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should correctly identify packages that need installation.
+
+        The endpoint should check resolved nodes against installed packages
+        and report which need to be installed.
+        """
+        # Setup: Resolved node that's not installed
+        mock_resolved_node = Mock()
+        mock_resolved_node.node_type = "ImpactPack_DetailerNode"
+        mock_resolved_node.package_id = "comfyui-impact-pack"
+        mock_resolved_node.package_data = None
+        mock_resolved_node.match_confidence = 1.0
+        mock_resolved_node.match_type = "exact"
+
+        mock_result = create_mock_resolution(
+            nodes_resolved=[mock_resolved_node]
+        )
+        mock_environment.workflow_manager.resolve_workflow = Mock(return_value=mock_result)
+
+        # Package is NOT installed (empty dict)
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {}
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/analyze-json",
+            json={"workflow": {"nodes": {}}}
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+
+        # Should report uninstalled packages
+        assert data["stats"]["nodes_needing_installation"] == 1
+        assert data["stats"]["packages_needing_installation"] == 1
+        assert data["stats"]["is_fully_resolved"] is False
+
+        # Node should be marked as not installed
+        node = data["nodes"]["resolved"][0]
+        assert node["is_installed"] is False
+
+    async def test_is_fully_resolved_when_all_nodes_installed(
+        self,
+        client,
+        mock_environment
+    ):
+        """is_fully_resolved should be True when all nodes are installed."""
+        mock_resolved_node = Mock()
+        mock_resolved_node.node_type = "TestNode"
+        mock_resolved_node.package_id = "test-pkg"
+        mock_resolved_node.package_data = None
+        mock_resolved_node.match_confidence = 1.0
+        mock_resolved_node.match_type = "exact"
+
+        mock_result = create_mock_resolution(
+            nodes_resolved=[mock_resolved_node]
+        )
+        mock_environment.workflow_manager.resolve_workflow = Mock(return_value=mock_result)
+
+        # Package IS installed
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {"test-pkg": Mock()}
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/analyze-json",
+            json={"workflow": {"nodes": {}}}
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+
+        assert data["stats"]["nodes_needing_installation"] == 0
+        assert data["stats"]["is_fully_resolved"] is True
+        assert data["nodes"]["resolved"][0]["is_installed"] is True
+
+    async def test_error_no_environment(self, client, monkeypatch):
+        """Should return 500 when no environment detected."""
+        monkeypatch.setattr(
+            "comfygit_panel.get_environment_from_cwd",
+            lambda: None
+        )
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/analyze-json",
+            json={"workflow": {"nodes": {}}}
+        )
+        assert resp.status == 500
+
+
 @pytest.mark.integration
 class TestPropertyDownloadIntentRegression:
     """Regression tests for property_download_intent handling in analyze endpoint.
@@ -1702,3 +2196,153 @@ class TestPropertyDownloadIntentRegression:
         # is_fully_resolved should be True - no download intents
         assert data["stats"]["download_intents"] == 0
         assert data["stats"]["is_fully_resolved"] is True
+
+
+@pytest.mark.integration
+class TestWorkflowIsSavedEndpoint:
+    """POST /v2/comfygit/workflow/is-saved - Check if workflow matches saved file."""
+
+    async def test_success_workflow_is_saved(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return is_saved=True when workflow hash matches saved file."""
+        # Setup: Mock environment's comfyui_path to point to workflows directory
+        mock_environment.comfyui_path = Path("/tmp/test-comfyui")
+
+        # Workflow data to test (matches what would be saved on disk)
+        workflow_data = {
+            "nodes": [{"id": 1, "type": "KSampler"}],
+            "links": [],
+            "groups": []
+        }
+
+        # Execute
+        resp = await client.post(
+            "/v2/comfygit/workflow/is-saved",
+            json={"workflow": workflow_data}
+        )
+
+        # Verify - endpoint should exist and return JSON
+        assert resp.status == 200
+        data = await resp.json()
+        assert "is_saved" in data
+        assert "filename" in data
+
+    async def test_success_workflow_not_saved(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return is_saved=False when workflow doesn't match any saved file."""
+        mock_environment.comfyui_path = Path("/tmp/test-comfyui")
+
+        # Workflow data that won't match anything
+        workflow_data = {
+            "nodes": [{"id": 999, "type": "NonexistentNode"}],
+            "links": [],
+            "groups": []
+        }
+
+        # Execute
+        resp = await client.post(
+            "/v2/comfygit/workflow/is-saved",
+            json={"workflow": workflow_data}
+        )
+
+        # Verify
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["is_saved"] is False
+        assert data["filename"] is None
+
+    async def test_normalizes_extra_ds_field(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should ignore extra.ds (viewport state) when comparing hashes."""
+        mock_environment.comfyui_path = Path("/tmp/test-comfyui")
+
+        # Two workflows that differ only in extra.ds should have same hash
+        workflow1 = {
+            "nodes": [{"id": 1, "type": "KSampler"}],
+            "extra": {"ds": {"scale": 1.0, "offset": [0, 0]}}
+        }
+        workflow2 = {
+            "nodes": [{"id": 1, "type": "KSampler"}],
+            "extra": {"ds": {"scale": 2.0, "offset": [100, 200]}}
+        }
+
+        # Execute both
+        resp1 = await client.post(
+            "/v2/comfygit/workflow/is-saved",
+            json={"workflow": workflow1}
+        )
+        resp2 = await client.post(
+            "/v2/comfygit/workflow/is-saved",
+            json={"workflow": workflow2}
+        )
+
+        # Both should succeed and endpoint should handle normalization
+        assert resp1.status == 200
+        assert resp2.status == 200
+
+    async def test_error_missing_workflow_field(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 400 when workflow field is missing."""
+        resp = await client.post(
+            "/v2/comfygit/workflow/is-saved",
+            json={"something_else": "data"}
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "error" in data
+        assert "workflow" in data["error"].lower() or "missing" in data["error"].lower()
+
+    async def test_error_invalid_json_body(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 400 for invalid JSON body."""
+        resp = await client.post(
+            "/v2/comfygit/workflow/is-saved",
+            data=b"not valid json",
+            headers={"Content-Type": "application/json"}
+        )
+
+        assert resp.status == 400
+
+    async def test_error_workflow_not_dict(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 400 when workflow is not a dict."""
+        resp = await client.post(
+            "/v2/comfygit/workflow/is-saved",
+            json={"workflow": "string instead of dict"}
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "error" in data
+
+    async def test_error_no_environment(self, client, monkeypatch):
+        """Should return 500 when no environment detected."""
+        monkeypatch.setattr(
+            "comfygit_panel.get_environment_from_cwd",
+            lambda: None
+        )
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/is-saved",
+            json={"workflow": {"nodes": []}}
+        )
+        assert resp.status == 500

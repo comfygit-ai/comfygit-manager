@@ -30,6 +30,7 @@ def mock_environment():
 
     # Mock git manager
     mock_env.git_manager = Mock()
+    mock_env.git_manager.get_version_history = Mock(return_value=[])
     mock_env.git_manager.list_branches = Mock(return_value=[])
     mock_env.git_manager.has_uncommitted_changes = Mock(return_value=False)
     mock_env.git_manager.switch_branch = Mock()

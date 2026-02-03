@@ -136,8 +136,17 @@ class TestOrchestratorLoop:
         assert orch._start_comfyui.call_count == 1
 
     def test_handle_crash_exit(self, mock_workspace, mocker):
-        """Should exit on non-standard exit code (crash)."""
+        """Should exit on non-standard exit code (crash) when retries disabled."""
         from server.orchestrator import Orchestrator
+        import json
+
+        # Disable general crash retries so test focuses on crash-exit behavior
+        config_file = mock_workspace / ".metadata" / "orchestrator_config.json"
+        config_file.write_text(json.dumps({
+            "version": "1.0",
+            "orchestrator": {"enable_control_server": False, "crash_retry_max": 0},
+            "comfyui": {"extra_args": []}
+        }))
 
         mock_proc = Mock()
         mock_proc.wait.return_value = 1  # Error

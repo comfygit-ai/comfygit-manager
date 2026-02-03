@@ -57,6 +57,13 @@ def _save_orchestrator_config(workspace_path: Path, config: dict) -> None:
         json.dump(config, f, indent=2)
 
 
+def _mask_token(token: str | None) -> str | None:
+    """Mask API token for security - only show last 4 characters."""
+    if not token:
+        return None
+    return f"***{token[-4:]}" if len(token) > 4 else "****"
+
+
 @routes.get("/v2/comfygit/config")
 async def get_config(request: web.Request) -> web.Response:
     """
@@ -95,6 +102,7 @@ async def get_config(request: web.Request) -> web.Response:
 
     # Get API credentials
     civitai_token = config_manager.get_civitai_token()
+    hf_token = config_manager.get_huggingface_token()
 
     # Get orchestrator config for extra_args
     orch_config = _load_orchestrator_config(workspace.path)
@@ -104,8 +112,8 @@ async def get_config(request: web.Request) -> web.Response:
     config = {
         "workspace_path": str(workspace.path),
         "models_path": models_path,
-        "civitai_api_key": civitai_token,
-        "huggingface_token": None,  # Not yet supported
+        "civitai_api_key": _mask_token(civitai_token),
+        "huggingface_token": _mask_token(hf_token),
         "auto_sync_models": True,   # Not yet supported - default to True
         "confirm_destructive": True, # Not yet supported - default to True
         "comfyui_extra_args": extra_args
@@ -126,7 +134,7 @@ async def update_config(request: web.Request) -> web.Response:
         {
             "models_path": str,
             "civitai_api_key": str | None,
-            "huggingface_token": str | None,  # Not yet supported
+            "huggingface_token": str | None,
             "auto_sync_models": bool,         # Not yet supported
             "confirm_destructive": bool,      # Not yet supported
             "comfyui_extra_args": list[str]
@@ -169,6 +177,11 @@ async def update_config(request: web.Request) -> web.Response:
         token = data["civitai_api_key"]
         config_manager.set_civitai_token(token)
 
+    # Update HuggingFace token if provided
+    if "huggingface_token" in data:
+        token = data["huggingface_token"]
+        config_manager.set_huggingface_token(token)
+
     # Update ComfyUI extra args if provided
     if "comfyui_extra_args" in data:
         extra_args = data["comfyui_extra_args"]
@@ -191,7 +204,6 @@ async def update_config(request: web.Request) -> web.Response:
         _save_orchestrator_config(workspace.path, orch_config)
 
     # Ignore unsupported fields for now:
-    # - huggingface_token
     # - auto_sync_models
     # - confirm_destructive
 

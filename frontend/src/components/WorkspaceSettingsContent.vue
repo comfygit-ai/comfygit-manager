@@ -36,6 +36,20 @@
               type="password"
               placeholder="Enter CivitAI API key..."
               :style="{ minWidth: '300px' }"
+              @input="civitaiTokenDirty = true"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label="HuggingFace Token"
+            description="Access token for downloading gated/private models from HuggingFace"
+          >
+            <TextInput
+              v-model="huggingfaceToken"
+              type="password"
+              placeholder="Enter HuggingFace token..."
+              :style="{ minWidth: '300px' }"
+              @input="hfTokenDirty = true"
             />
           </SettingRow>
         </div>
@@ -68,6 +82,13 @@
             description="Automatically refresh the page after branch switches and checkouts. If disabled, shows a notification with a refresh button."
           >
             <Toggle v-model="autoRefresh" @update:modelValue="saveAutoRefreshSetting" />
+          </SettingRow>
+
+          <SettingRow
+            label="Show Missing Dependencies Popup"
+            description="Show popup when loading unsaved workflows with missing nodes or models. Saved workflows are tracked in the ComfyGit panel."
+          >
+            <Toggle v-model="popupEnabled" @update:modelValue="togglePopupSetting" />
           </SettingRow>
         </div>
       </SectionGroup>
@@ -116,10 +137,16 @@ const originalConfig = ref<ConfigSettings | null>(null)
 
 // Editable fields
 const civitaiToken = ref<string>('')
+const huggingfaceToken = ref<string>('')
 const comfyuiExtraArgs = ref<string>('')  // Space-separated args shown as string
+
+// Dirty tracking for token fields (prevents saving masked values)
+const civitaiTokenDirty = ref(false)
+const hfTokenDirty = ref(false)
 
 // UI settings (stored in localStorage)
 const autoRefresh = ref(false)
+const popupEnabled = ref(true)
 
 // Helper to convert args array to space-separated string
 function argsToString(args: string[]): string {
@@ -135,11 +162,11 @@ function stringToArgs(str: string): string[] {
 const hasChanges = computed(() => {
   if (!originalConfig.value) return false
 
-  // Check all editable fields
-  const civitaiChanged = civitaiToken.value !== (originalConfig.value.civitai_api_key || '')
+  const civitaiChanged = civitaiTokenDirty.value
+  const hfChanged = hfTokenDirty.value
   const extraArgsChanged = comfyuiExtraArgs.value !== argsToString(originalConfig.value.comfyui_extra_args || [])
 
-  return civitaiChanged || extraArgsChanged
+  return civitaiChanged || hfChanged || extraArgsChanged
 })
 
 async function loadSettings() {
@@ -152,11 +179,19 @@ async function loadSettings() {
 
     // Populate editable fields
     civitaiToken.value = config.value.civitai_api_key || ''
+    huggingfaceToken.value = config.value.huggingface_token || ''
     comfyuiExtraArgs.value = argsToString(config.value.comfyui_extra_args || [])
+
+    // Reset dirty flags (values loaded from backend are not user edits)
+    civitaiTokenDirty.value = false
+    hfTokenDirty.value = false
 
     // Load UI settings from localStorage (default to true if not set)
     const storedAutoRefresh = localStorage.getItem('ComfyGit.Settings.AutoRefresh')
     autoRefresh.value = storedAutoRefresh !== 'false'
+
+    // Load popup enabled setting (default to true)
+    popupEnabled.value = localStorage.getItem('comfygit:popup-disabled') !== 'true'
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load settings'
   } finally {
@@ -171,8 +206,13 @@ async function saveSettings() {
     // Only send changed fields
     const updates: Partial<ConfigSettings> = {}
 
-    if (civitaiToken.value !== (originalConfig.value?.civitai_api_key || '')) {
+    // Only send tokens if user actually modified them (dirty tracking prevents saving masked values)
+    if (civitaiTokenDirty.value) {
       updates.civitai_api_key = civitaiToken.value || null
+    }
+
+    if (hfTokenDirty.value) {
+      updates.huggingface_token = huggingfaceToken.value || null
     }
 
     if (comfyuiExtraArgs.value !== argsToString(originalConfig.value?.comfyui_extra_args || [])) {
@@ -202,7 +242,10 @@ async function saveSettings() {
 function resetSettings() {
   if (originalConfig.value) {
     civitaiToken.value = originalConfig.value.civitai_api_key || ''
+    huggingfaceToken.value = originalConfig.value.huggingface_token || ''
     comfyuiExtraArgs.value = argsToString(originalConfig.value.comfyui_extra_args || [])
+    civitaiTokenDirty.value = false
+    hfTokenDirty.value = false
     saveStatus.value = null
   }
 }
@@ -210,6 +253,16 @@ function resetSettings() {
 function saveAutoRefreshSetting(value: boolean) {
   localStorage.setItem('ComfyGit.Settings.AutoRefresh', String(value))
   console.log('[ComfyGit] Auto-refresh setting saved:', value)
+}
+
+// Toggle popup enabled setting
+function togglePopupSetting(value: boolean) {
+  if (value) {
+    localStorage.removeItem('comfygit:popup-disabled')
+  } else {
+    localStorage.setItem('comfygit:popup-disabled', 'true')
+  }
+  console.log('[ComfyGit] Popup setting changed:', value ? 'enabled' : 'disabled')
 }
 
 // Expose methods for parent components

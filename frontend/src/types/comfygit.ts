@@ -195,6 +195,29 @@ export interface EnvironmentInfo {
   last_commit_date?: string
 }
 
+export interface EnvironmentDetail extends EnvironmentInfo {
+  workflows: {
+    synced: string[]
+    new: string[]
+    modified: string[]
+    deleted: string[]
+  }
+  nodes: Array<{
+    name: string
+    version: string | null
+    source: string
+  }>
+  models: {
+    missing: Array<{
+      filename: string
+      category: string
+      workflow_names: string[]
+      criticality: string
+      can_download: boolean
+    }>
+  }
+}
+
 export interface SwitchEnvironmentProgress {
   state: 'idle' | 'preparing' | 'syncing' | 'starting' | 'validating' | 'complete' | 'rolled_back' | 'critical_failure'
   target_env: string
@@ -1139,4 +1162,40 @@ export interface WorkerTestResult {
   message: string
   gpu_info?: string
   mode?: string
+}
+
+// =============================================================================
+// HuggingFace Integration Types
+// =============================================================================
+
+export interface HuggingFaceRepoFile {
+  path: string
+  size: number
+  is_model_file: boolean
+  shard_group?: string | null
+}
+
+export interface HuggingFaceRepoInfoResponse {
+  repo_id: string
+  revision: string
+  files: HuggingFaceRepoFile[]
+}
+
+export interface ModelsSubdirectoriesResponse {
+  directories: string[]
+  standard: string[]
+  existing: string[]
+}
+
+export interface HuggingFaceSearchResult {
+  repo_id: string
+  description: string | null
+  downloads: number
+  likes: number
+  tags: string[]
+}
+
+export interface HuggingFaceSearchResponse {
+  results: HuggingFaceSearchResult[]
+  query: string
 }

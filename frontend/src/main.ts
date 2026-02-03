@@ -4,6 +4,7 @@ import ComfyGitPanel from '@/components/ComfyGitPanel.vue'
 import CommitPopover from '@/components/CommitPopover.vue'
 import ModelDownloadQueue from '@/components/ModelDownloadQueue.vue'
 import MockControlPopover from '@/components/MockControlPopover.vue'
+import MissingResourcesPopup from '@/components/MissingResourcesPopup.vue'
 import { useModelDownloadQueue } from '@/composables/useModelDownloadQueue'
 import { isMockApi } from '@/services/mockApi'
 import type { ComfyGitStatus } from '@/types/comfygit'
@@ -19,6 +20,12 @@ document.head.appendChild(cssLink)
 // Apply initial theme
 const initialTheme = getInitialTheme()
 applyTheme(initialTheme)
+
+// Reset panel tab to default on page load (fresh navigation / refresh)
+// sessionStorage persists across close/reopen within a page, but we want
+// a fresh page load to always start on the status tab.
+sessionStorage.removeItem('ComfyGit.LastView')
+sessionStorage.removeItem('ComfyGit.LastSection')
 
 // Expose theme switcher to console for easy testing
 // Usage: window.ComfyGit.setTheme('comfy') or window.ComfyGit.setTheme('phosphor')
@@ -43,6 +50,8 @@ let downloadQueueContainer: HTMLElement | null = null
 let downloadQueueApp: ReturnType<typeof createApp> | null = null
 let mockControlPopover: HTMLElement | null = null
 let mockControlApp: ReturnType<typeof createApp> | null = null
+let missingResourcesContainer: HTMLElement | null = null
+let missingResourcesApp: ReturnType<typeof createApp> | null = null
 
 // Global status for indicator
 const globalStatus = ref<ComfyGitStatus | null>(null)
@@ -338,6 +347,21 @@ function closeMockControlPopover() {
   }
 }
 
+function mountMissingResourcesPopup() {
+  if (missingResourcesContainer) return // Already mounted
+
+  missingResourcesContainer = document.createElement('div')
+  missingResourcesContainer.className = 'comfygit-missing-resources-root'
+
+  missingResourcesApp = createApp({
+    render: () => h(MissingResourcesPopup)
+  })
+
+  missingResourcesApp.mount(missingResourcesContainer)
+  document.body.appendChild(missingResourcesContainer)
+  console.log('[ComfyGit] Missing resources popup mounted')
+}
+
 // Update commit button indicator and disabled state
 let commitButton: HTMLButtonElement | null = null
 let mockButton: HTMLButtonElement | null = null
@@ -480,6 +504,65 @@ document.head.appendChild(styles)
 app.registerExtension({
   name: 'Comfy.ComfyGitPanel',
 
+  // Commands that can be triggered by keybindings or menu items
+  commands: [
+    {
+      id: 'ComfyGit.OpenPanel',
+      label: 'Open ComfyGit Panel',
+      icon: 'pi pi-folder-open',
+      function: () => showPanel()
+    },
+    {
+      id: 'ComfyGit.QuickCommit',
+      label: 'Quick Commit',
+      icon: 'pi pi-check',
+      function: () => {
+        if (commitButton && !commitButton.disabled) {
+          showCommitPopover(commitButton)
+        }
+      }
+    }
+  ],
+
+  // Default keybindings (user can customize in Settings → Keyboard Shortcuts)
+  keybindings: [
+    {
+      commandId: 'ComfyGit.OpenPanel',
+      combo: { key: 'l', alt: true, shift: true }
+    },
+    {
+      commandId: 'ComfyGit.QuickCommit',
+      combo: { key: 'k', alt: true, shift: true }
+    }
+  ],
+
+  // Hook into workflow loading to intercept missing resources
+  async beforeConfigureGraph(graphData: any, _missingNodeTypes: any[]) {
+    // Disable ComfyUI's built-in popups - we show our own
+    try {
+      await Promise.all([
+        app.ui.settings.setSettingValueAsync('Comfy.Workflow.ShowMissingModelsWarning', false),
+        app.ui.settings.setSettingValueAsync('Comfy.Workflow.ShowMissingNodesWarning', false)
+      ])
+    } catch (e) {
+      console.warn('[ComfyGit] Failed to disable built-in warnings:', e)
+    }
+
+    // Store workflow data for afterConfigureGraph (separate hook calls)
+    ;(window as any).__comfygit_pending_workflow = graphData
+  },
+
+  async afterConfigureGraph(_missingNodeTypes: any[]) {
+    const workflow = (window as any).__comfygit_pending_workflow
+    if (!workflow) return
+    delete (window as any).__comfygit_pending_workflow
+
+    // Dispatch event for MissingResourcesPopup to handle
+    window.dispatchEvent(new CustomEvent('comfygit:workflow-loaded', {
+      detail: { workflow }
+    }))
+  },
+
   async setup() {
     // Create button group
     const btnGroup = document.createElement('div')
@@ -522,6 +605,15 @@ app.registerExtension({
 
     // Mount global download queue
     mountDownloadQueue()
+
+    // Mount missing resources popup
+    mountMissingResourcesPopup()
+
+    // Listen for panel open requests from other components
+    window.addEventListener('comfygit:open-panel', ((event: CustomEvent) => {
+      const initialView = event.detail?.initialView
+      showPanel(initialView)
+    }) as EventListener)
 
     // Load any pending downloads from previous session
     const { loadPendingDownloads } = useModelDownloadQueue()
@@ -784,6 +876,168 @@ app.registerExtension({
       }
 
       console.log('[ComfyGit] Manager error notification system initialized')
+
+      // ========== RESTART REQUIRED TOAST: Show after nodes installed ==========
+      window.addEventListener('comfygit:nodes-installed', (event: Event) => {
+        const customEvent = event as CustomEvent
+        const { count = 1 } = customEvent.detail || {}
+        showRestartRequiredNotification(count)
+      })
+
+      function showRestartRequiredNotification(nodeCount: number) {
+        // Remove any existing restart toast
+        const existing = document.getElementById('comfygit-restart-toast')
+        if (existing) existing.remove()
+
+        const toast = document.createElement('div')
+        toast.id = 'comfygit-restart-toast'
+        toast.style.cssText = `
+          position: fixed;
+          bottom: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: #1e1e1e;
+          border: 1px solid #333;
+          border-radius: 8px;
+          padding: 12px 16px;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+          z-index: 999999;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          font-family: sans-serif;
+          font-size: 14px;
+          color: #fff;
+          max-width: 550px;
+        `
+
+        // Success icon (matches Manager style)
+        const icon = document.createElement('span')
+        icon.textContent = '✅'
+        icon.style.fontSize = '20px'
+        toast.appendChild(icon)
+
+        // Message container
+        const msgContainer = document.createElement('div')
+        msgContainer.style.cssText = 'flex: 1; display: flex; flex-direction: column; gap: 2px;'
+
+        const title = document.createElement('div')
+        title.textContent = 'To apply changes, please restart ComfyUI'
+        title.style.cssText = 'font-weight: 500; color: #fff;'
+        msgContainer.appendChild(title)
+
+        const detail = document.createElement('div')
+        detail.textContent = `${nodeCount} node package${nodeCount > 1 ? 's' : ''} ready to install`
+        detail.style.cssText = 'font-size: 12px; opacity: 0.7;'
+        msgContainer.appendChild(detail)
+
+        toast.appendChild(msgContainer)
+
+        // Restart button (matches Manager's bordered style)
+        const restartBtn = document.createElement('button')
+        restartBtn.textContent = 'Apply Changes'
+        restartBtn.style.cssText = `
+          background: transparent;
+          color: #fff;
+          border: 2px solid #fff;
+          border-radius: 20px;
+          padding: 6px 14px;
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 500;
+          white-space: nowrap;
+          transition: background 0.2s;
+        `
+        restartBtn.onmouseover = () => restartBtn.style.background = 'rgba(255,255,255,0.1)'
+        restartBtn.onmouseout = () => restartBtn.style.background = 'transparent'
+        restartBtn.onclick = async () => {
+          restartBtn.disabled = true
+          restartBtn.textContent = 'Restarting...'
+          restartBtn.style.opacity = '0.7'
+
+          // Update toast appearance for restarting state
+          title.textContent = 'Restarting...'
+          detail.textContent = 'Applying changes, please wait...'
+
+          try {
+            // Set up reconnection handler BEFORE triggering reboot
+            const onReconnect = async () => {
+              console.log('[ComfyGit] Reconnected after restart, refreshing node definitions...')
+
+              try {
+                // Refresh node definitions (like Manager does)
+                if ((app as any).refreshComboInNodes) {
+                  await (app as any).refreshComboInNodes()
+                  console.log('[ComfyGit] Node definitions refreshed successfully')
+                }
+
+                // Update toast to show success
+                icon.textContent = '✅'
+                title.textContent = 'Nodes Installed'
+                title.style.color = '#4caf50'
+                detail.textContent = `${nodeCount} package${nodeCount > 1 ? 's' : ''} installed successfully!`
+                toast.style.borderColor = '#4caf50'
+                restartBtn.style.display = 'none'
+
+                // Auto-close after 3 seconds
+                setTimeout(() => {
+                  toast.remove()
+                }, 3000)
+              } catch (refreshErr) {
+                console.error('[ComfyGit] Failed to refresh nodes:', refreshErr)
+                // Still show success since restart worked
+                icon.textContent = '✅'
+                title.textContent = 'Restart Complete'
+                title.style.color = '#4caf50'
+                detail.textContent = 'Refresh the page to load new nodes.'
+                toast.style.borderColor = '#4caf50'
+                restartBtn.style.display = 'none'
+              }
+            }
+
+            // Listen for reconnection (once)
+            api.addEventListener('reconnected', onReconnect, { once: true } as any)
+
+            // Trigger reboot
+            await fetch('/v2/manager/reboot')
+            // Toast will update when reconnected
+          } catch (err) {
+            console.error('[ComfyGit] Failed to restart:', err)
+            title.textContent = 'Restart Failed'
+            title.style.color = '#e53935'
+            detail.textContent = 'Could not restart server. Try again.'
+            toast.style.borderColor = '#e53935'
+            restartBtn.textContent = 'Try Again'
+            restartBtn.disabled = false
+            restartBtn.style.opacity = '1'
+          }
+        }
+        toast.appendChild(restartBtn)
+
+        // Close button
+        const closeBtn = document.createElement('button')
+        closeBtn.textContent = '×'
+        closeBtn.title = 'Dismiss (restart later)'
+        closeBtn.style.cssText = `
+          background: transparent;
+          border: none;
+          color: #fff;
+          font-size: 24px;
+          line-height: 1;
+          cursor: pointer;
+          padding: 0 4px;
+          opacity: 0.6;
+        `
+        closeBtn.onmouseover = () => closeBtn.style.opacity = '1'
+        closeBtn.onmouseout = () => closeBtn.style.opacity = '0.6'
+        closeBtn.onclick = () => toast.remove()
+        toast.appendChild(closeBtn)
+
+        document.body.appendChild(toast)
+        console.log(`[ComfyGit] Restart required notification displayed (${nodeCount} packages installed)`)
+      }
+
+      console.log('[ComfyGit] Restart notification system initialized')
     }
   }
 })

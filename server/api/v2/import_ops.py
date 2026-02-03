@@ -3,6 +3,7 @@ import re
 import shutil
 import tempfile
 import threading
+import traceback
 from dataclasses import asdict
 from pathlib import Path
 
@@ -242,6 +243,8 @@ async def preview_import(request: web.Request) -> web.Response:
         return web.json_response(asdict(analysis))
 
     except Exception as e:
+        print(f"[ComfyGit] Import preview failed: {e}")
+        traceback.print_exc()
         return web.json_response({"error": str(e)}, status=400)
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)

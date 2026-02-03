@@ -5,8 +5,17 @@
         title="MODELS IN THIS ENVIRONMENT"
         :show-info="true"
         @info-click="showPopover = true"
-      />
-      <!-- No actions slot - environment section has no header actions -->
+      >
+        <template #actions>
+          <ActionButton variant="primary" size="sm" @click="showDownloadModal = true">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 12L3 7h3V1h4v6h3L8 12z"/>
+              <path d="M14 14H2v-2h12v2z"/>
+            </svg>
+            DOWNLOAD +
+          </ActionButton>
+        </template>
+      </PanelHeader>
     </template>
 
     <template #search>
@@ -119,6 +128,12 @@
     :identifier="selectedModelId"
     @close="selectedModelId = null"
   />
+
+  <!-- Model Download Modal -->
+  <ModelDownloadModal
+    :show="showDownloadModal"
+    @close="showDownloadModal = false"
+  />
 </template>
 
 <script setup lang="ts">
@@ -138,6 +153,7 @@ import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import ModelDetailModal from '@/components/ModelDetailModal.vue'
+import ModelDownloadModal from '@/components/ModelDownloadModal.vue'
 
 // No extended interface needed - use ModelInfo directly
 
@@ -160,6 +176,7 @@ const error = ref<string | null>(null)
 const searchQuery = ref('')
 const showPopover = ref(false)
 const selectedModelId = ref<string | null>(null)
+const showDownloadModal = ref(false)
 
 function navigateToIndex() {
   showPopover.value = false

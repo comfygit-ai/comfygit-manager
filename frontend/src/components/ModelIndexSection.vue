@@ -171,55 +171,16 @@
     </div>
   </Teleport>
 
-  <!-- Download New Model Modal -->
-  <Teleport to="body">
-    <div v-if="showDownloadModal" class="modal-overlay" @click.self="showDownloadModal = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Download New Model</h3>
-          <button class="modal-close" @click="showDownloadModal = false">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="input-group">
-            <label>Download URL</label>
-            <BaseInput
-              v-model="downloadUrl"
-              placeholder="https://civitai.com/api/download/models/..."
-            />
-          </div>
-          <div class="input-group">
-            <label>Target Path (relative to models directory)</label>
-            <BaseInput
-              v-model="downloadTargetPath"
-              placeholder="e.g. checkpoints/model.safetensors"
-            />
-          </div>
-          <p class="modal-note">
-            The model will be queued for download in the background.
-            You can monitor progress in the download queue.
-          </p>
-        </div>
-        <div class="modal-footer">
-          <BaseButton variant="secondary" @click="showDownloadModal = false">
-            Cancel
-          </BaseButton>
-          <BaseButton
-            variant="primary"
-            :disabled="!downloadUrl.trim() || !downloadTargetPath.trim()"
-            @click="handleDownloadModel"
-          >
-            Queue Download
-          </BaseButton>
-        </div>
-      </div>
-    </div>
-  </Teleport>
+  <!-- Unified Model Download Modal -->
+  <ModelDownloadModal
+    :show="showDownloadModal"
+    @close="showDownloadModal = false"
+  />
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
-import { useModelDownloadQueue } from '@/composables/useModelDownloadQueue'
 import type { ModelInfo } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
@@ -234,6 +195,7 @@ import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import ModelDetailModal from '@/components/ModelDetailModal.vue'
+import ModelDownloadModal from '@/components/ModelDownloadModal.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 
@@ -243,8 +205,6 @@ const {
   getModelsDirectory,
   setModelsDirectory
 } = useComfyGitService()
-
-const { addToQueue } = useModelDownloadQueue()
 
 const emit = defineEmits<{
   (e: 'refresh'): void
@@ -267,8 +227,6 @@ const changingDirectory = ref(false)
 
 // Download modal state
 const showDownloadModal = ref(false)
-const downloadUrl = ref('')
-const downloadTargetPath = ref('')
 
 // Progress state for indexing
 const indexingProgress = ref<{ message: string; current: number; total: number } | null>(null)
@@ -368,26 +326,6 @@ async function handleChangeDirectory() {
   } finally {
     changingDirectory.value = false
   }
-}
-
-function handleDownloadModel() {
-  if (!downloadUrl.value.trim() || !downloadTargetPath.value.trim()) return
-
-  // Extract filename from target path
-  const filename = downloadTargetPath.value.split('/').pop() || 'model.safetensors'
-
-  // Add to download queue
-  addToQueue([{
-    workflow: '__manual__',
-    filename,
-    url: downloadUrl.value.trim(),
-    targetPath: downloadTargetPath.value.trim()
-  }])
-
-  // Reset form and close modal
-  downloadUrl.value = ''
-  downloadTargetPath.value = ''
-  showDownloadModal.value = false
 }
 
 async function loadModels() {
@@ -552,6 +490,12 @@ onMounted(() => {
   padding: 8px;
   background: var(--cg-color-bg-secondary, #252542);
   border-radius: 4px;
+}
+
+.modal-error {
+  font-size: 12px;
+  color: var(--cg-color-error, #ef4444);
+  margin-top: 4px;
 }
 
 .modal-footer {

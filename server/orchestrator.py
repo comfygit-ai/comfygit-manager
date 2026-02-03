@@ -470,6 +470,8 @@ DEFAULT_CONFIG = {
         "log_level": "info",
         "health_check_timeout_s": 180,
         "sync_timeout_s": 600,
+        "crash_retry_max": 3,
+        "crash_retry_delay_s": 10,
     },
     "comfyui": {
         "default_port": 8188,
@@ -678,6 +680,9 @@ class Orchestrator:
         # Crash recovery flags for extra_args bypass
         self._skip_extra_args = False  # Set True after crash to retry without user args
         self._used_extra_args = False  # Tracks whether extra_args were used in last start
+
+        # General crash retry state
+        self._crash_retry_count = 0
 
         # Cleanup stale temp files from previous runs
         cleanup_stale_temp_files(self.metadata_dir)
@@ -1012,7 +1017,10 @@ class Orchestrator:
 
     def _handle_crash_for_recovery(self, exit_code: int) -> bool:
         """
-        Handle crash and determine if we should retry without extra_args.
+        Handle crash and determine if we should retry.
+
+        Strategy 1: If extra_args were used, retry without them first.
+        Strategy 2: General retry with delay (handles OOM, transient failures).
 
         Args:
             exit_code: The exit code from ComfyUI
@@ -1020,10 +1028,11 @@ class Orchestrator:
         Returns:
             True if should retry (loop continues), False if should exit
         """
-        # If we used extra_args and haven't tried skipping them yet, retry
+        # Strategy 1: If we used extra_args and haven't tried skipping them yet, retry
         if self._used_extra_args and not self._skip_extra_args:
             print("[Orchestrator] Crash detected with extra_args, retrying without them...")
             self._skip_extra_args = True
+            self._crash_retry_count += 1
 
             # Write status for frontend to show recovery attempt
             write_switch_status(
@@ -1036,13 +1045,26 @@ class Orchestrator:
 
             return True  # Retry
 
-        # Either no extra_args were used, or we already tried without them
+        # Strategy 2: General retry with delay (handles OOM, transient failures)
+        max_retries = self.config["orchestrator"].get("crash_retry_max", 3)
+        retry_delay = self.config["orchestrator"].get("crash_retry_delay_s", 10)
+
+        if self._crash_retry_count < max_retries:
+            self._crash_retry_count += 1
+            print(f"[Orchestrator] Crash retry {self._crash_retry_count}/{max_retries} "
+                  f"(exit {exit_code}), waiting {retry_delay}s...")
+            time.sleep(retry_delay)
+            return True
+
+        # All retries exhausted
+        print(f"[Orchestrator] All {max_retries} retries exhausted")
         return False
 
     def _clear_crash_recovery_flags(self) -> None:
         """Clear crash recovery flags after successful start."""
         self._skip_extra_args = False
         self._used_extra_args = False
+        self._crash_retry_count = 0
 
     def _handle_switch_request(self) -> bool:
         """

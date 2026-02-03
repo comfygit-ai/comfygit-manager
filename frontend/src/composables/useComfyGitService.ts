@@ -11,6 +11,7 @@ import type {
   CreateBranchResult,
   SwitchBranchResult,
   EnvironmentInfo,
+  EnvironmentDetail,
   SwitchEnvironmentProgress,
   CreateEnvironmentRequest,
   CreateEnvironmentResult,
@@ -60,7 +61,10 @@ import type {
   WorkerTestResult,
   CustomWorkerSystemInfo,
   WorkerInstancesResponse,
-  DeployToWorkerRequest
+  DeployToWorkerRequest,
+  HuggingFaceRepoInfoResponse,
+  HuggingFaceSearchResponse,
+  ModelsSubdirectoriesResponse
 } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
 import { useMockControls } from '@/composables/useMockControls'
@@ -78,6 +82,20 @@ declare global {
 
 // Toggle between mock and real API (set VITE_USE_MOCK_API=false in .env to disable)
 const USE_MOCK = isMockApi()
+
+// UUID generator that works in non-secure contexts (HTTP)
+// generateUUID() only works in secure contexts (HTTPS/localhost)
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return generateUUID()
+  }
+  // Fallback for non-secure contexts
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
 
 // ============================================================================
 // MOCK STATE MANAGEMENT
@@ -285,7 +303,12 @@ export function useComfyGitService() {
       throw new Error(errorData.error || errorData.message || `Request failed: ${response.status}`)
     }
 
-    return response.json()
+    // Handle empty responses (some endpoints return 200 with no body)
+    const text = await response.text()
+    if (!text) {
+      return undefined as T
+    }
+    return JSON.parse(text)
   }
 
   async function getStatus(forceRefresh = false): Promise<ComfyGitStatus> {
@@ -314,6 +337,14 @@ export function useComfyGitService() {
     }
 
     return fetchApi<LogResult>(`/v2/comfygit/log?limit=${limit}&offset=${offset}`)
+  }
+
+  async function getBranchHistory(branchName: string, limit = 50): Promise<LogResult> {
+    if (USE_MOCK) {
+      const commits = await mockApi.getCommitHistory(limit)
+      return { commits, has_more: false, current_branch: branchName }
+    }
+    return fetchApi<LogResult>(`/v2/comfygit/log?branch=${encodeURIComponent(branchName)}&limit=${limit}`)
   }
 
   async function exportEnv(outputPath?: string): Promise<ExportResult> {
@@ -436,6 +467,15 @@ export function useComfyGitService() {
       } catch {
         return []
       }
+    }
+  }
+
+  async function getEnvironmentDetails(name: string): Promise<EnvironmentDetail | null> {
+    if (USE_MOCK) return null
+    try {
+      return await fetchApi<EnvironmentDetail>(`/v2/comfygit/environments/${encodeURIComponent(name)}`)
+    } catch {
+      return null
     }
   }
 
@@ -701,6 +741,45 @@ export function useComfyGitService() {
     })
   }
 
+  async function getHuggingFaceRepoInfo(url: string): Promise<HuggingFaceRepoInfoResponse> {
+    if (USE_MOCK) {
+      return {
+        repo_id: 'mock/repo',
+        revision: 'main',
+        files: [
+          { path: 'model.safetensors', size: 1024 * 1024 * 100, is_model_file: true, shard_group: null }
+        ]
+      }
+    }
+    const params = new URLSearchParams({ url })
+    return fetchApi(`/v2/workspace/huggingface/repo-info?${params}`)
+  }
+
+  async function getModelsSubdirectories(): Promise<ModelsSubdirectoriesResponse> {
+    if (USE_MOCK) {
+      return {
+        directories: ['checkpoints', 'loras', 'vae', 'controlnet'],
+        standard: ['checkpoints', 'loras', 'vae'],
+        existing: ['checkpoints', 'controlnet']
+      }
+    }
+    return fetchApi('/v2/workspace/models/subdirectories')
+  }
+
+  async function searchHuggingFaceRepos(query: string, limit = 10): Promise<HuggingFaceSearchResponse> {
+    if (USE_MOCK) {
+      return {
+        query,
+        results: [
+          { repo_id: 'black-forest-labs/FLUX.1-dev', description: 'FLUX.1 development model', downloads: 1200000, likes: 4500, tags: ['text-to-image', 'diffusers'] },
+          { repo_id: 'stabilityai/stable-diffusion-xl-base-1.0', description: 'SDXL base model', downloads: 890000, likes: 3200, tags: ['text-to-image'] }
+        ]
+      }
+    }
+    const params = new URLSearchParams({ query, limit: String(limit) })
+    return fetchApi(`/v2/workspace/huggingface/search?${params}`)
+  }
+
   // Settings
   async function getConfig(workspacePath?: string): Promise<ConfigSettings> {
     if (USE_MOCK) return mockApi.getConfig()
@@ -848,6 +927,64 @@ export function useComfyGitService() {
     return fetchApi(`/v2/comfygit/nodes/${encodeURIComponent(nodeName)}/install`, {
       method: 'POST'
     })
+  }
+
+  /**
+   * Queue a node install via Manager queue API.
+   * This routes through the Manager's sequential queue to avoid race conditions.
+   * Returns the ui_id for tracking via WebSocket events.
+   */
+  async function queueNodeInstall(params: {
+    id: string
+    version?: string
+    selected_version?: string
+    repository?: string
+    mode?: string
+    channel?: string
+  }): Promise<{ ui_id: string }> {
+    if (USE_MOCK) {
+      await mockApi.installNode(params.id)
+      return { ui_id: generateUUID() }
+    }
+
+    const ui_id = generateUUID()
+
+    // Get client_id from ComfyUI's API if available
+    const client_id = (window as any).app?.api?.clientId ??
+                      (window as any).app?.api?.initialClientId ??
+                      'comfygit-panel'
+
+    const task = {
+      kind: 'install',
+      params: {
+        id: params.id,
+        version: params.version || params.selected_version || 'latest',
+        selected_version: params.selected_version || 'latest',
+        repository: params.repository || '',
+        mode: params.mode || 'remote',
+        channel: params.channel || 'default'
+      },
+      ui_id,
+      client_id
+    }
+
+    // Queue the task
+    await fetchApi<void>('/v2/manager/queue/task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(task)
+    })
+
+    console.log('[ComfyGit] Task queued with ui_id:', ui_id, 'for package:', params.id)
+
+    // Return ui_id BEFORE starting queue processing
+    // This allows caller to set up event tracking before events fire
+    // Fire-and-forget the start - don't await (avoids race condition)
+    fetchApi<void>('/v2/manager/queue/start').catch(err => {
+      console.error('[ComfyGit] Queue start failed:', err)
+    })
+
+    return { ui_id }
   }
 
   async function updateNode(nodeName: string): Promise<{ status: 'success' | 'error', message?: string }> {
@@ -1551,6 +1688,7 @@ export function useComfyGitService() {
     getStatus,
     commit,
     getHistory,
+    getBranchHistory,
     exportEnv,
     validateExport,
     validateDeploy,
@@ -1564,6 +1702,7 @@ export function useComfyGitService() {
     deleteBranch,
     // Environment Management
     getEnvironments,
+    getEnvironmentDetails,
     switchEnvironment,
     getSwitchProgress,
     createEnvironment,
@@ -1588,6 +1727,9 @@ export function useComfyGitService() {
     scanWorkspaceModels,
     getModelsDirectory,
     setModelsDirectory,
+    getHuggingFaceRepoInfo,
+    getModelsSubdirectories,
+    searchHuggingFaceRepos,
     // Settings
     getConfig,
     updateConfig,
@@ -1603,6 +1745,7 @@ export function useComfyGitService() {
     getNodes,
     trackNodeAsDev,
     installNode,
+    queueNodeInstall,
     updateNode,
     uninstallNode,
     // Git Remotes

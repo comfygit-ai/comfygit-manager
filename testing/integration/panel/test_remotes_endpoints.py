@@ -518,6 +518,10 @@ class TestPullPreviewEndpoint:
             "ahead": 0,
             "behind": 2
         })
+        mock_environment.git_manager.get_version_history = Mock(return_value=[
+            {"hash": "abc1234", "refs": "", "message": "Add new features", "date": "2025-01-15 11:00:00", "date_relative": "1 hour ago"},
+            {"hash": "def5678", "refs": "", "message": "Fix bug", "date": "2025-01-15 10:00:00", "date_relative": "2 hours ago"}
+        ])
         mock_environment.get_current_branch.return_value = "main"
         mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
 
@@ -528,8 +532,12 @@ class TestPullPreviewEndpoint:
         assert data["remote"] == "origin"
         assert data["branch"] == "main"
         assert data["commits_behind"] == 2
+        assert len(data["commits"]) == 2
+        assert data["commits"][0]["hash"] == "abc1234"
+        assert data["commits"][0]["message"] == "Add new features"
         assert data["can_pull"] is True
         assert data["has_uncommitted_changes"] is False
+        mock_environment.git_manager.get_version_history.assert_called_once_with(2, "HEAD..origin/main")
 
     async def test_blocked_by_uncommitted_changes(
         self,
@@ -739,11 +747,16 @@ class TestPushPreviewEndpoint:
         client,
         mock_environment
     ):
-        """Should return outgoing commits preview."""
+        """Should return outgoing commits preview with commit details."""
         mock_environment.git_manager.get_sync_status = Mock(return_value={
-            "ahead": 1,
-            "behind": 0
+            "ahead": 2,
+            "behind": 0,
+            "remote_branch_exists": True
         })
+        mock_environment.git_manager.get_version_history = Mock(return_value=[
+            {"hash": "abc1234", "refs": "", "message": "Add new feature", "date": "2025-01-15 11:00:00", "date_relative": "1 hour ago"},
+            {"hash": "def5678", "refs": "", "message": "Fix bug", "date": "2025-01-15 10:00:00", "date_relative": "2 hours ago"},
+        ])
         mock_environment.get_current_branch.return_value = "main"
         mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
 
@@ -753,9 +766,40 @@ class TestPushPreviewEndpoint:
         data = await resp.json()
         assert data["remote"] == "origin"
         assert data["branch"] == "main"
-        assert data["commits_ahead"] == 1
+        assert data["commits_ahead"] == 2
         assert data["can_push"] is True
         assert data["needs_force"] is False
+        # Verify actual commit details are returned
+        assert len(data["commits"]) == 2
+        assert data["commits"][0]["hash"] == "abc1234"
+        assert data["commits"][0]["message"] == "Add new feature"
+        assert data["commits"][1]["hash"] == "def5678"
+
+    async def test_success_first_push_returns_commits(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return commits for first push (no remote branch)."""
+        mock_environment.git_manager.get_sync_status = Mock(return_value={
+            "ahead": 1,
+            "behind": 0,
+            "remote_branch_exists": False
+        })
+        mock_environment.git_manager.get_version_history = Mock(return_value=[
+            {"hash": "abc1234", "refs": "HEAD -> main", "message": "Initial commit", "date": "2025-01-15 11:00:00", "date_relative": "1 hour ago"},
+        ])
+        mock_environment.get_current_branch.return_value = "main"
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
+
+        resp = await client.get("/v2/comfygit/remotes/origin/push-preview")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["is_first_push"] is True
+        assert len(data["commits"]) == 1
+        assert data["commits"][0]["hash"] == "abc1234"
+        assert data["commits"][0]["message"] == "Initial commit"
 
     async def test_needs_force_when_remote_ahead(
         self,

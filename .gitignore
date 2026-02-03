@@ -57,6 +57,8 @@ logs/
 .coverage
 htmlcov/
 tests/output/
+playwright-report/
+test-results/
 
 # Frontend (Node.js/Vue)
 frontend/node_modules/
@@ -75,3 +77,4 @@ web/.meow/
 .browserflow/
 node_modules/
 packages/
+legacy/
