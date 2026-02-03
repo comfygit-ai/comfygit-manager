@@ -88,9 +88,22 @@ def cmd_restore() -> int:
     return 0
 
 
+def cmd_filter() -> int:
+    """Read from stdin, strip sources, write to stdout. For use as git clean filter."""
+    content = sys.stdin.read()
+    sys.stdout.write(strip_sources(content))
+    return 0
+
+
 if __name__ == "__main__":
-    if len(sys.argv) != 2 or sys.argv[1] not in ("strip", "restore"):
-        print(f"Usage: {sys.argv[0]} strip|restore", file=sys.stderr)
+    if len(sys.argv) != 2 or sys.argv[1] not in ("strip", "restore", "filter"):
+        print(f"Usage: {sys.argv[0]} strip|restore|filter", file=sys.stderr)
         sys.exit(1)
 
-    sys.exit(cmd_strip() if sys.argv[1] == "strip" else cmd_restore())
+    cmd = sys.argv[1]
+    if cmd == "strip":
+        sys.exit(cmd_strip())
+    elif cmd == "restore":
+        sys.exit(cmd_restore())
+    else:
+        sys.exit(cmd_filter())

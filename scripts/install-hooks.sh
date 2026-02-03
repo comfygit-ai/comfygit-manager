@@ -19,6 +19,12 @@ cp "$SCRIPT_DIR/hooks/post-commit" "$HOOKS_DIR/post-commit"
 chmod +x "$HOOKS_DIR/post-commit"
 echo "  Installed: post-commit"
 
+# Configure git clean filter to strip [tool.uv.sources] from pyproject.toml
+# This makes git status/diff ignore the local editable source override
+git config filter.strip-uv-sources.clean 'python3 scripts/strip-dev-sources.py filter'
+git config filter.strip-uv-sources.smudge cat
+echo "  Configured: strip-uv-sources filter"
+
 # Chain with bd (beads) if available
 # This renames our pre-commit to pre-commit.old and installs a bd shim
 # that calls our hook first, then runs bd's beads sync
