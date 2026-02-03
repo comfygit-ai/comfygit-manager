@@ -140,6 +140,15 @@ def _get_environment_info(env, current_env):
     }
 
 
+def _get_orchestrator_info(workspace) -> dict:
+    """Check if an orchestrator process is running for this workspace."""
+    metadata_dir = workspace.path / ".metadata"
+    orch_pid = orchestrator.read_orchestrator_pid(metadata_dir)
+    if orch_pid is not None and orchestrator._is_process_running(orch_pid):
+        return {"active": True, "environment": None}
+    return {"active": False, "environment": None}
+
+
 @routes.get("/v2/comfygit/environments")
 async def list_environments(request: web.Request) -> web.Response:
     """List all environments in workspace."""
@@ -149,10 +158,14 @@ async def list_environments(request: web.Request) -> web.Response:
         return web.json_response({
             "environments": [],
             "current": None,
-            "is_managed": False
+            "is_managed": False,
+            "orchestrator_active": False,
+            "orchestrator_environment": None,
+            "is_supervised": os.environ.get("COMFYGIT_SUPERVISED") == "1",
         })
 
     try:
+        orch_info = _get_orchestrator_info(workspace)
         # Get all environment objects
         all_envs = await run_sync(workspace.list_environments)
 
@@ -177,7 +190,10 @@ async def list_environments(request: web.Request) -> web.Response:
         return web.json_response({
             "environments": environments,
             "current": current_env.name if current_env else None,
-            "is_managed": True
+            "is_managed": True,
+            "orchestrator_active": orch_info["active"],
+            "orchestrator_environment": orch_info["environment"],
+            "is_supervised": os.environ.get("COMFYGIT_SUPERVISED") == "1",
         })
 
     except Exception as e:
@@ -310,6 +326,18 @@ async def switch_environment(request: web.Request) -> web.Response:
         }, status=409)
 
     try:
+        orch_info = _get_orchestrator_info(workspace)
+        if orch_info["active"] and os.environ.get("COMFYGIT_SUPERVISED") != "1":
+            orchestrator.release_switch_lock(metadata_dir)
+            return web.json_response({
+                "error": "orchestrator_active",
+                "message": (
+                    "An orchestrator is already managing this workspace. "
+                    "Switch environments from the managed ComfyUI instance, "
+                    "or stop the orchestrator first."
+                )
+            }, status=409)
+
         # Spawn orchestrator - always needed when switching from unmanaged
         if orchestrator.should_spawn_orchestrator_for_switch():
             spawn_orchestrator(target_env_obj, target_env)

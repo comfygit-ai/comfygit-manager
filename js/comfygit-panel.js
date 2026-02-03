@@ -6730,18 +6730,32 @@ function Xe() {
     } catch {
       try {
         const Q = await a();
-        return { environments: [{
-          name: Q.environment,
-          is_current: !0,
-          path: "~/comfygit/environments/" + Q.environment,
-          created_at: (/* @__PURE__ */ new Date()).toISOString(),
-          workflow_count: Q.workflows.total,
-          node_count: 0,
-          model_count: 0,
-          current_branch: Q.branch
-        }], current: Q.environment, is_managed: !0 };
+        return {
+          environments: [{
+            name: Q.environment,
+            is_current: !0,
+            path: "~/comfygit/environments/" + Q.environment,
+            created_at: (/* @__PURE__ */ new Date()).toISOString(),
+            workflow_count: Q.workflows.total,
+            node_count: 0,
+            model_count: 0,
+            current_branch: Q.branch
+          }],
+          current: Q.environment,
+          is_managed: !0,
+          orchestrator_active: !1,
+          orchestrator_environment: null,
+          is_supervised: !1
+        };
       } catch {
-        return { environments: [], current: null, is_managed: !1 };
+        return {
+          environments: [],
+          current: null,
+          is_managed: !1,
+          orchestrator_active: !1,
+          orchestrator_environment: null,
+          is_supervised: !1
+        };
       }
     }
   }
