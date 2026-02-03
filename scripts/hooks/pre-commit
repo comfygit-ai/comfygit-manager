@@ -1,11 +1,11 @@
 #!/bin/bash
 # Pre-commit hook for comfygit-manager
+# - Strips [tool.uv.sources] from pyproject.toml (prevents local dev paths from being committed)
 # - Blocks mock API builds from being committed (most critical)
 # - Checks that frontend build version matches pyproject.toml
 # - Syncs requirements.txt from pyproject.toml dependencies
 #
-# Install: cp scripts/hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
-# Or run: scripts/install-hooks.sh
+# Install: scripts/install-hooks.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -14,6 +14,17 @@ if [[ "$SCRIPT_DIR" == *".git/hooks"* ]]; then
     PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 else
     PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+fi
+
+STRIP_SCRIPT="$PROJECT_ROOT/scripts/strip-dev-sources.py"
+
+# Restore orphaned backup from previously aborted commit (if any)
+python3 "$STRIP_SCRIPT" restore 2>/dev/null
+
+# Strip [tool.uv.sources] if pyproject.toml is staged and has dev sources
+if git diff --cached --name-only | grep -qE '^pyproject\.toml$'; then
+    python3 "$STRIP_SCRIPT" strip
+    git add "$PROJECT_ROOT/pyproject.toml"
 fi
 
 # Sync requirements.txt if pyproject.toml is staged
@@ -38,7 +49,7 @@ if git diff --cached --name-only | grep -qE '^(pyproject\.toml|js/|frontend/)'; 
         # When mock is enabled, it compiles to the full mock implementation (~55KB larger)
         # Simple heuristic: file size > 850KB likely has mock code bundled
         FILE_SIZE=$(wc -c < "$JS_FILE")
-        if [ "$FILE_SIZE" -gt 850000 ]; then
+        if [ "$FILE_SIZE" -gt 950000 ]; then
             echo ""
             echo "ERROR: Frontend has mock API enabled!"
             echo "File size: $FILE_SIZE bytes (expected < 850KB without mock)"

@@ -1,0 +1,16 @@
+#!/bin/bash
+# Post-commit hook for comfygit-manager
+# Restores [tool.uv.sources] after commit (stripped by pre-commit hook)
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ "$SCRIPT_DIR" == *".git/hooks"* ]]; then
+    PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+else
+    PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+fi
+
+# Restore dev sources if they were stripped
+python3 "$PROJECT_ROOT/scripts/strip-dev-sources.py" restore
+
+exit 0
