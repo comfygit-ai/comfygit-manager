@@ -741,7 +741,7 @@ class TestGetEnvironmentDetailEndpoint:
         mock_env.status = Mock(return_value=self._make_mock_status())
         mock_env.list_nodes = Mock(return_value=self._make_mock_nodes())
 
-        mock_workspace = self._setup_managed_workspace(monkeypatch, mock_env)
+        self._setup_managed_workspace(monkeypatch, mock_env)
 
         resp = await client.get("/v2/comfygit/environments/my-env")
 
