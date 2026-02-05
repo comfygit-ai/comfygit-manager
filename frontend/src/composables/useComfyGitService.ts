@@ -444,17 +444,47 @@ export function useComfyGitService() {
   }
 
   // Environment Management
-  async function getEnvironments(): Promise<EnvironmentInfo[]> {
-    if (USE_MOCK) return mockApi.getEnvironments()
+  type EnvironmentListResponse = {
+    environments: EnvironmentInfo[]
+    current: string | null
+    is_managed: boolean
+    orchestrator_active?: boolean
+    orchestrator_environment?: string | null
+    is_supervised?: boolean
+  }
+
+  async function listEnvironments(): Promise<EnvironmentListResponse> {
+    if (USE_MOCK) {
+      const { state: mockState } = useMockControls()
+      if (!mockState.isManaged) {
+        return {
+          environments: [],
+          current: null,
+          is_managed: false,
+          orchestrator_active: false,
+          orchestrator_environment: null,
+          is_supervised: false
+        }
+      }
+      const environments = await mockApi.getEnvironments()
+      const current = environments.find((env) => env.is_current)?.name ?? null
+      return {
+        environments,
+        current,
+        is_managed: true,
+        orchestrator_active: true,
+        orchestrator_environment: current,
+        is_supervised: true
+      }
+    }
 
     try {
-      const response = await fetchApi<{ environments: EnvironmentInfo[], current: string | null, is_managed: boolean }>('/v2/comfygit/environments')
-      return response.environments
+      return await fetchApi<EnvironmentListResponse>('/v2/comfygit/environments')
     } catch {
       // Fallback: try to build single environment from status
       try {
         const status = await getStatus()
-        return [{
+        const environment: EnvironmentInfo = {
           name: status.environment,
           is_current: true,
           path: '~/comfygit/environments/' + status.environment,
@@ -463,11 +493,31 @@ export function useComfyGitService() {
           node_count: 0,
           model_count: 0,
           current_branch: status.branch
-        }]
+        }
+        return {
+          environments: [environment],
+          current: status.environment,
+          is_managed: true,
+          orchestrator_active: false,
+          orchestrator_environment: null,
+          is_supervised: false
+        }
       } catch {
-        return []
+        return {
+          environments: [],
+          current: null,
+          is_managed: false,
+          orchestrator_active: false,
+          orchestrator_environment: null,
+          is_supervised: false
+        }
       }
     }
+  }
+
+  async function getEnvironments(): Promise<EnvironmentInfo[]> {
+    const response = await listEnvironments()
+    return response.environments
   }
 
   async function getEnvironmentDetails(name: string): Promise<EnvironmentDetail | null> {
@@ -1701,6 +1751,7 @@ export function useComfyGitService() {
     switchBranch,
     deleteBranch,
     // Environment Management
+    listEnvironments,
     getEnvironments,
     getEnvironmentDetails,
     switchEnvironment,

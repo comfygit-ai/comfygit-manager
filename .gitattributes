@@ -1,3 +1,7 @@
 
+# Strip [tool.uv.sources] from pyproject.toml so git status stays clean
+# Requires: ./scripts/install-hooks.sh (configures the filter in git config)
+pyproject.toml filter=strip-uv-sources
+
 # Use bd merge for beads JSONL files
 .beads/issues.jsonl merge=beads

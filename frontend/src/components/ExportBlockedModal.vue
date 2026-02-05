@@ -1,6 +1,6 @@
 <template>
   <BaseModal
-    title="Cannot Export"
+    :title="hasCommittableIssues ? 'Commit & Export' : 'Cannot Export'"
     size="md"
     @close="$emit('close')"
   >
@@ -16,7 +16,9 @@
           <div class="error-summary">
             <h3 class="error-title">Export blocked</h3>
             <p class="error-description">
-              The following issues must be resolved before exporting.
+              {{ hasCommittableIssues
+                ? 'Commit your changes to proceed with export.'
+                : 'The following issues must be resolved before exporting.' }}
             </p>
           </div>
         </div>
@@ -58,32 +60,101 @@
             </div>
           </div>
         </div>
+
+        <!-- Commit Section (only when there are committable issues) -->
+        <div v-if="hasCommittableIssues" class="commit-section">
+          <!-- Allow issues checkbox (only when unresolved issues also present) -->
+          <div v-if="hasUnresolvedIssues" class="issues-warning">
+            <div class="warning-header">
+              <span class="warning-icon-badge">!</span>
+              <span class="warning-label">Some workflow issues cannot be fixed by committing</span>
+            </div>
+            <BaseCheckbox v-model="allowIssues" class="allow-issues-toggle">
+              Commit anyway (ignore issues)
+            </BaseCheckbox>
+          </div>
+
+          <BaseTextarea
+            v-model="message"
+            placeholder="Describe your changes..."
+            :disabled="isCommitting || isBlockedByIssues"
+            :rows="3"
+            :submit-on-enter="true"
+            @submit="handleCommitAndExport"
+            @ctrl-enter="handleCommitAndExport"
+          />
+
+          <div v-if="commitError" class="commit-error">
+            {{ commitError }}
+          </div>
+        </div>
       </div>
     </template>
 
     <template #footer>
-      <BaseButton variant="primary" @click="$emit('close')">
-        Understood
-      </BaseButton>
+      <template v-if="hasCommittableIssues">
+        <BaseButton variant="secondary" @click="$emit('close')">
+          Cancel
+        </BaseButton>
+        <BaseButton
+          :variant="allowIssues ? 'danger' : 'primary'"
+          :disabled="!canCommit"
+          :loading="isCommitting"
+          @click="handleCommitAndExport"
+        >
+          {{ isCommitting ? 'Committing...' : allowIssues ? 'Force Commit & Export' : 'Commit & Export' }}
+        </BaseButton>
+      </template>
+      <template v-else>
+        <BaseButton variant="primary" @click="$emit('close')">
+          Understood
+        </BaseButton>
+      </template>
     </template>
   </BaseModal>
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import BaseModal from './base/BaseModal.vue'
 import BaseButton from './base/BaseButton.vue'
+import BaseTextarea from './base/BaseTextarea.vue'
+import BaseCheckbox from './base/BaseCheckbox.vue'
+import { useComfyGitService } from '@/composables/useComfyGitService'
 import type { ExportBlockingIssue } from '@/types/comfygit'
 
 const props = defineProps<{
   issues: ExportBlockingIssue[]
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   close: []
+  committed: []
 }>()
 
+const { commit } = useComfyGitService()
+
+const message = ref('')
+const isCommitting = ref(false)
+const allowIssues = ref(false)
+const commitError = ref('')
 const showAllDetails = reactive<Record<number, boolean>>({})
+
+const hasCommittableIssues = computed(() =>
+  props.issues.some(i => i.type === 'uncommitted_workflows' || i.type === 'uncommitted_git_changes')
+)
+
+const hasUnresolvedIssues = computed(() =>
+  props.issues.some(i => i.type === 'unresolved_issues')
+)
+
+const isBlockedByIssues = computed(() =>
+  hasUnresolvedIssues.value && !allowIssues.value
+)
+
+const canCommit = computed(() =>
+  hasCommittableIssues.value && message.value.trim() !== '' && !isCommitting.value && !isBlockedByIssues.value
+)
 
 function visibleDetails(index: number): string[] {
   const issue = props.issues[index]
@@ -91,6 +162,30 @@ function visibleDetails(index: number): string[] {
     return issue.details
   }
   return issue.details.slice(0, 3)
+}
+
+async function handleCommitAndExport() {
+  if (!canCommit.value) return
+
+  isCommitting.value = true
+  commitError.value = ''
+
+  try {
+    const res = await commit(message.value.trim(), allowIssues.value)
+
+    if (res.status === 'success') {
+      emit('committed')
+    } else if (res.status === 'blocked') {
+      const issuesList = res.issues?.map(i => `${i.name}: ${i.issue}`).join('; ') || 'Unknown issues'
+      commitError.value = `Commit blocked: ${issuesList}`
+    } else {
+      commitError.value = res.message || 'Commit failed'
+    }
+  } catch (err) {
+    commitError.value = err instanceof Error ? err.message : 'Commit failed'
+  } finally {
+    isCommitting.value = false
+  }
 }
 </script>
 
@@ -191,5 +286,57 @@ function visibleDetails(index: number): string[] {
   font-size: var(--cg-font-size-xs);
   color: var(--cg-color-text-muted);
   font-style: italic;
+}
+
+/* Commit Section */
+.commit-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-3);
+  padding-top: var(--cg-space-3);
+  border-top: 1px solid var(--cg-color-border);
+}
+
+.issues-warning {
+  background: var(--cg-color-warning-muted);
+  border: 1px solid var(--cg-color-warning);
+  border-radius: var(--cg-radius-md);
+  padding: var(--cg-space-3);
+}
+
+.warning-header {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  margin-bottom: var(--cg-space-2);
+  font-size: var(--cg-font-size-xs);
+  color: var(--cg-color-text-secondary);
+}
+
+.warning-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: var(--cg-color-warning);
+  color: var(--cg-color-bg-primary);
+  border-radius: 50%;
+  font-size: var(--cg-font-size-xs);
+  font-weight: var(--cg-font-weight-bold);
+  flex-shrink: 0;
+}
+
+.allow-issues-toggle {
+  font-size: var(--cg-font-size-xs);
+}
+
+.commit-error {
+  font-size: var(--cg-font-size-xs);
+  color: var(--cg-color-error);
+  padding: var(--cg-space-2);
+  background: var(--cg-color-error-muted);
+  border: 1px solid var(--cg-color-error);
+  border-radius: var(--cg-radius-md);
 }
 </style>

@@ -7,8 +7,12 @@
     <div v-if="!isManaged" class="warning-banner">
       ⚠️ Not in ComfyGit workspace. Environment switching is disabled.
     </div>
+    <div v-else-if="orchestratorActive && !isSupervised" class="warning-banner">
+      ⚠️ An orchestrator is managing this workspace from another ComfyUI instance.
+      Switch environments from that instance, or stop the orchestrator first.
+    </div>
 
-    <div v-else class="env-selector">
+    <div v-if="isManaged" class="env-selector">
       <select
         v-model="selectedEnv"
         :disabled="switching || environments.length === 0"
@@ -86,10 +90,13 @@ const switchStatus = ref({
 })
 const criticalFailure = ref<any>(null)
 const isManaged = ref(true)
+const orchestratorActive = ref(false)
+const isSupervised = ref(false)
 
 // Computed
 const canSwitch = computed(() => {
   return isManaged.value &&
+         !(orchestratorActive.value && !isSupervised.value) &&
          selectedEnv.value !== currentEnv.value &&
          !switching.value &&
          environments.value.length > 0
@@ -103,9 +110,12 @@ async function loadEnvironments() {
   try {
     const response = await service.listEnvironments()
     environments.value = response.environments || []
-    currentEnv.value = response.current || ''
-    selectedEnv.value = currentEnv.value
+    const current = response.current || environments.value.find((env) => env.is_current)?.name || ''
+    currentEnv.value = current
+    selectedEnv.value = current
     isManaged.value = response.is_managed !== false
+    orchestratorActive.value = response.orchestrator_active === true
+    isSupervised.value = response.is_supervised === true
   } catch (error) {
     console.error('Failed to load environments:', error)
     emit('toast', 'Failed to load environments', 'error')
@@ -135,7 +145,10 @@ function startStatusPolling() {
 
   statusPollInterval = window.setInterval(async () => {
     try {
-      const status = await service.getSwitchStatus()
+      const status = await service.getSwitchProgress()
+      if (!status) {
+        return
+      }
 
       switchStatus.value = status
 

@@ -134,6 +134,7 @@
     v-if="showBlockedModal && validationResult"
     :issues="validationResult.blocking_issues"
     @close="showBlockedModal = false"
+    @committed="handleBlockedCommitted"
   />
 
   <!-- Export Warnings Modal -->
@@ -213,6 +214,35 @@ async function handleExport() {
 async function handleExportConfirmed() {
   showWarningsModal.value = false
   await executeExport()
+}
+
+async function handleBlockedCommitted() {
+  showBlockedModal.value = false
+
+  // Re-validate after successful commit
+  isValidating.value = true
+  try {
+    const result = await validateExport()
+    validationResult.value = result
+
+    if (!result.can_export) {
+      // Still blocked — re-show modal with updated issues
+      showBlockedModal.value = true
+    } else if (result.warnings.models_without_sources.length > 0) {
+      // Warnings only — show warnings modal
+      showWarningsModal.value = true
+    } else {
+      // Clean — auto-export
+      await executeExport()
+    }
+  } catch (err) {
+    exportResult.value = {
+      status: 'error',
+      message: err instanceof Error ? err.message : 'Re-validation failed'
+    }
+  } finally {
+    isValidating.value = false
+  }
 }
 
 async function handleRevalidate() {

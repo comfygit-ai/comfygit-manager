@@ -16,6 +16,7 @@ class TestListEnvironmentsEndpoint:
         mock_workspace = Mock()
         mock_current_env = Mock()
         mock_current_env.name = "env1"
+        mock_workspace.path = Path("/workspace")
 
         # Mock workspace.list_environments()
         mock_env1 = Mock()
@@ -33,6 +34,8 @@ class TestListEnvironmentsEndpoint:
             return (True, mock_workspace, mock_current_env)
 
         monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.read_orchestrator_pid", lambda _: None)
+        monkeypatch.setenv("COMFYGIT_SUPERVISED", "1")
 
         # Mock _get_environment_info to return basic info
         def mock_get_info(env, current_env):
@@ -62,6 +65,8 @@ class TestListEnvironmentsEndpoint:
         assert data["environments"][0]["is_current"] is True
         assert data["environments"][1]["name"] == "env2"
         assert data["environments"][1]["is_current"] is False
+        assert data["orchestrator_active"] is False
+        assert data["is_supervised"] is True
 
     async def test_success_not_managed(self, client, monkeypatch):
         """Should return empty list when not in managed workspace."""
@@ -70,6 +75,7 @@ class TestListEnvironmentsEndpoint:
             return (False, None, None)
 
         monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setenv("COMFYGIT_SUPERVISED", "0")
 
         # Execute
         resp = await client.get("/v2/comfygit/environments")
@@ -80,11 +86,55 @@ class TestListEnvironmentsEndpoint:
         assert data["is_managed"] is False
         assert data["current"] is None
         assert data["environments"] == []
+        assert data["orchestrator_active"] is False
+        assert data["is_supervised"] is False
+
+    async def test_orchestrator_active_flag(self, client, monkeypatch, tmp_path):
+        """Should report orchestrator_active when PID is alive."""
+        mock_workspace = Mock()
+        mock_workspace.path = tmp_path
+        mock_current_env = Mock()
+        mock_current_env.name = "env1"
+
+        mock_env = Mock()
+        mock_env.name = "env1"
+        mock_env.path = tmp_path / "env1"
+        mock_workspace.list_environments.return_value = [mock_env]
+
+        def mock_detect():
+            return (True, mock_workspace, mock_current_env)
+
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.read_orchestrator_pid", lambda _: 123)
+        monkeypatch.setattr("orchestrator._is_process_running", lambda _: True)
+        monkeypatch.setenv("COMFYGIT_SUPERVISED", "0")
+
+        def mock_get_info(env, current_env):
+            return {
+                "name": env.name,
+                "is_current": True,
+                "path": str(env.path),
+                "created_at": "2025-01-01T00:00:00Z",
+                "workflow_count": 1,
+                "node_count": 1,
+                "model_count": 1,
+                "current_branch": "main"
+            }
+
+        monkeypatch.setattr("api.v2.environments._get_environment_info", mock_get_info)
+
+        resp = await client.get("/v2/comfygit/environments")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["orchestrator_active"] is True
+        assert data["is_supervised"] is False
 
     async def test_error_list_environments_fails(self, client, monkeypatch):
         """Should return 500 when list_environments raises exception."""
         # Setup
         mock_workspace = Mock()
+        mock_workspace.path = Path("/workspace")
         mock_current_env = Mock()
         mock_current_env.name = "env1"
         mock_workspace.list_environments.side_effect = Exception("List failed")
@@ -93,6 +143,7 @@ class TestListEnvironmentsEndpoint:
             return (True, mock_workspace, mock_current_env)
 
         monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.read_orchestrator_pid", lambda _: None)
 
         # Execute
         resp = await client.get("/v2/comfygit/environments")
@@ -127,6 +178,7 @@ class TestSwitchEnvironmentEndpoint:
 
         # Mock orchestrator methods
         monkeypatch.setattr("orchestrator.acquire_switch_lock", lambda _: True)
+        monkeypatch.setattr("orchestrator.read_orchestrator_pid", lambda _: None)
         monkeypatch.setattr("orchestrator.should_spawn_orchestrator_for_switch", lambda: False)
         monkeypatch.setattr("orchestrator.write_switch_request", Mock())
 
@@ -238,6 +290,98 @@ class TestSwitchEnvironmentEndpoint:
         data = await resp.json()
         assert "error" in data
         assert "already in progress" in data["error"]
+
+    async def test_error_orchestrator_active_unsupervised(self, client, monkeypatch, tmp_path):
+        """Should block switch when orchestrator is active and not supervised."""
+        mock_workspace = Mock()
+        mock_workspace.path = tmp_path
+        mock_current_env = Mock()
+        mock_current_env.name = "env1"
+        mock_workspace.get_environment.return_value = Mock()
+
+        def mock_detect():
+            return (True, mock_workspace, mock_current_env)
+
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.acquire_switch_lock", lambda _: True)
+        monkeypatch.setattr("orchestrator.read_orchestrator_pid", lambda _: 999)
+        monkeypatch.setattr("orchestrator._is_process_running", lambda _: True)
+        monkeypatch.setenv("COMFYGIT_SUPERVISED", "0")
+
+        release_mock = Mock()
+        monkeypatch.setattr("orchestrator.release_switch_lock", release_mock)
+        should_spawn_mock = Mock()
+        monkeypatch.setattr("orchestrator.should_spawn_orchestrator_for_switch", should_spawn_mock)
+
+        resp = await client.post("/v2/comfygit/switch_environment", json={
+            "target_env": "env2"
+        })
+
+        assert resp.status == 409
+        data = await resp.json()
+        assert data["error"] == "orchestrator_active"
+        release_mock.assert_called_once()
+        should_spawn_mock.assert_not_called()
+
+    async def test_switch_allows_supervised_with_orchestrator(self, client, monkeypatch, tmp_path):
+        """Supervised process should proceed even if orchestrator is active."""
+        mock_workspace = Mock()
+        mock_workspace.path = tmp_path
+        mock_current_env = Mock()
+        mock_current_env.name = "env1"
+        mock_workspace.get_environment.return_value = Mock()
+
+        def mock_detect():
+            return (True, mock_workspace, mock_current_env)
+
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.acquire_switch_lock", lambda _: True)
+        monkeypatch.setattr("orchestrator.read_orchestrator_pid", lambda _: 999)
+        monkeypatch.setattr("orchestrator._is_process_running", lambda _: True)
+        monkeypatch.setenv("COMFYGIT_SUPERVISED", "1")
+
+        monkeypatch.setattr("orchestrator.should_spawn_orchestrator_for_switch", lambda: False)
+        write_mock = Mock()
+        monkeypatch.setattr("orchestrator.write_switch_request", write_mock)
+
+        resp = await client.post("/v2/comfygit/switch_environment", json={
+            "target_env": "env2"
+        })
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "switching"
+        write_mock.assert_called_once()
+
+    async def test_switch_allows_when_orchestrator_pid_stale(self, client, monkeypatch, tmp_path):
+        """Unsupervised process should proceed when orchestrator PID is stale."""
+        mock_workspace = Mock()
+        mock_workspace.path = tmp_path
+        mock_current_env = Mock()
+        mock_current_env.name = "env1"
+        mock_workspace.get_environment.return_value = Mock()
+
+        def mock_detect():
+            return (True, mock_workspace, mock_current_env)
+
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.acquire_switch_lock", lambda _: True)
+        monkeypatch.setattr("orchestrator.read_orchestrator_pid", lambda _: 999)
+        monkeypatch.setattr("orchestrator._is_process_running", lambda _: False)
+        monkeypatch.setenv("COMFYGIT_SUPERVISED", "0")
+
+        monkeypatch.setattr("orchestrator.should_spawn_orchestrator_for_switch", lambda: False)
+        write_mock = Mock()
+        monkeypatch.setattr("orchestrator.write_switch_request", write_mock)
+
+        resp = await client.post("/v2/comfygit/switch_environment", json={
+            "target_env": "env2"
+        })
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "switching"
+        write_mock.assert_called_once()
 
 
 @pytest.mark.integration
@@ -597,7 +741,7 @@ class TestGetEnvironmentDetailEndpoint:
         mock_env.status = Mock(return_value=self._make_mock_status())
         mock_env.list_nodes = Mock(return_value=self._make_mock_nodes())
 
-        mock_workspace = self._setup_managed_workspace(monkeypatch, mock_env)
+        self._setup_managed_workspace(monkeypatch, mock_env)
 
         resp = await client.get("/v2/comfygit/environments/my-env")
 
