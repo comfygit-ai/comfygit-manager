@@ -401,7 +401,7 @@ wheels = [
 
 [[package]]
 name = "comfygit-core"
-version = "0.3.15"
+version = "0.3.16"
 source = { editable = "../comfygit/packages/core" }
 dependencies = [
     { name = "aiohttp" },
@@ -437,7 +437,7 @@ dev = [{ name = "pytest", specifier = ">=8.4.1" }]
 
 [[package]]
 name = "comfygit-manager"
-version = "0.0.18"
+version = "0.0.19"
 source = { virtual = "." }
 dependencies = [
     { name = "comfygit-core" },
