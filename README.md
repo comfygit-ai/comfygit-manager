@@ -7,7 +7,7 @@
 Workflows. Models. Custom nodes. Environments. All tracked, all switchable, all shareable.
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Docs](https://img.shields.io/badge/docs-comfyhub.org-green)](https://docs.comfyhub.org/comfygit/)
+[![Docs](https://img.shields.io/badge/docs-comfygit.org-green)](https://docs.comfygit.org/)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/2h5rSTeh6Y)
 
 <img width="2400" height="944" alt="Gemini_Generated_Image_47nqq547nqq547nq" src="https://github.com/user-attachments/assets/eba259a1-241b-4ef4-ba30-a089a98c9c60" />
@@ -67,7 +67,7 @@ Customize these in ComfyUI's **Settings → Keyboard Shortcuts**.
 
 ## Getting Started
 
-For installation and setup instructions, visit the **[ComfyGit Documentation](https://docs.comfyhub.org/comfygit/)**.
+For installation and setup instructions, visit the **[ComfyGit Documentation](https://docs.comfygit.org/)**.
 
 ---
 
