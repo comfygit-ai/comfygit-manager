@@ -87,7 +87,7 @@ const USE_MOCK = isMockApi()
 // generateUUID() only works in secure contexts (HTTPS/localhost)
 function generateUUID(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return generateUUID()
+    return crypto.randomUUID()
   }
   // Fallback for non-secure contexts
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {

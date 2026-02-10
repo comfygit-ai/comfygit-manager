@@ -67,6 +67,17 @@ Before starting any work, familiarize yourself with the codebase by reviewing th
 
 - **Pin comfygit-core to exact versions** - Always use `==X.Y.Z` (not `>=`) for the core dependency in pyproject.toml. This ensures reproducible builds and prevents unexpected breakage from core updates.
 
+## Version Bump Protocol
+
+When asked to "bump core and version" or similar, follow this sequence:
+
+1. Bump `comfygit-core==X.Y.Z` in `pyproject.toml` dependencies
+2. Bump `version` in `pyproject.toml`
+3. `uv lock` - Update the lockfile
+4. `cd frontend && npm run build` - Rebuild frontend (version is injected at build time)
+5. Stage `pyproject.toml`, `uv.lock`, `js/`, `requirements.txt` and commit
+6. Push to remote
+
 ## General
 Don't make any implementation overly complex. This is a one-person dev MVP project.
 We are still pre-customer - any unnecessary fallbacks, unnecessary versioning, testing overkill should be avoided.

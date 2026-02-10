@@ -61,6 +61,7 @@ else:
 task_queue: list[dict] = []
 task_history: dict[str, dict] = {}
 running_task: dict | None = None
+_queue_lock = asyncio.Lock()
 
 # Comfygit workspace/environment references (lazy loaded)
 _workspace = None
@@ -232,44 +233,51 @@ async def queue_task(request):
 
 @routes.get("/v2/manager/queue/start")
 async def start_queue(request):
-    """Start processing queued tasks."""
+    """Start processing queued tasks.
+
+    Uses a lock so concurrent requests wait rather than racing on the
+    shared running_task global.  The first request drains the full queue
+    (including tasks added while it runs), so subsequent requests that
+    were waiting simply find an empty queue and return immediately.
+    """
     global running_task
 
-    while task_queue:
-        running_task = task_queue.pop(0)
+    async with _queue_lock:
+        while task_queue:
+            running_task = task_queue.pop(0)
 
-        # Broadcast task started
-        PromptServer.instance.send_sync("cm-task-started", {
-            "ui_id": running_task.get("ui_id"),
-            "state": get_current_state()
-        })
+            # Broadcast task started
+            PromptServer.instance.send_sync("cm-task-started", {
+                "ui_id": running_task.get("ui_id"),
+                "state": get_current_state()
+            })
 
-        # Process the task
-        result = await process_task(running_task)
+            # Process the task
+            result = await process_task(running_task)
 
-        # Log errors to console
-        if result.get("status_str") == "error":
-            print(f"[ComfyGit] Task failed: {result.get('messages', [])}")
-            if result.get("uv_error"):
-                print(f"[ComfyGit] UV Error Details:\n{result['uv_error']}")
+            # Log errors to console
+            if result.get("status_str") == "error":
+                print(f"[ComfyGit] Task failed: {result.get('messages', [])}")
+                if result.get("uv_error"):
+                    print(f"[ComfyGit] UV Error Details:\n{result['uv_error']}")
 
-        # Add to history
-        task_id = running_task.get("ui_id", str(uuid.uuid4()))
-        task_history[task_id] = {
-            **running_task,
-            "result": result.get("status_str", "unknown"),
-            "status": result,
-            "timestamp": datetime.utcnow().isoformat() + "Z"
-        }
+            # Add to history
+            task_id = running_task.get("ui_id", str(uuid.uuid4()))
+            task_history[task_id] = {
+                **running_task,
+                "result": result.get("status_str", "unknown"),
+                "status": result,
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
 
-        running_task = None
+            running_task = None
 
-        # Broadcast task completed
-        PromptServer.instance.send_sync("cm-task-completed", {
-            "ui_id": task_id,
-            "status": result,
-            "state": get_current_state()
-        })
+            # Broadcast task completed
+            PromptServer.instance.send_sync("cm-task-completed", {
+                "ui_id": task_id,
+                "status": result,
+                "state": get_current_state()
+            })
 
     return web.Response(status=200)
 

@@ -1,4 +1,4 @@
-comfygit-core==0.3.15
+comfygit-core==0.3.16
 watchdog>=6.0.0
 xxhash>=3.6.0
 zeroconf>=0.131.0
