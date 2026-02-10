@@ -30,6 +30,16 @@
       </div>
     </div>
 
+    <!-- Manager Update Notice -->
+    <UpdateNoticeBanner
+      v-if="updateNoticeVisible && updateCheck"
+      :info="updateCheck"
+      :updating="isUpdatingManager"
+      @update="handleUpdateManager"
+      @dismiss="dismissUpdateNotice"
+      @release-notes="openReleaseNotes"
+    />
+
     <!-- Environment Switcher -->
     <div class="env-switcher">
       <div class="env-switcher-header">
@@ -452,10 +462,12 @@ import SyncEnvironmentModal from './base/molecules/SyncEnvironmentModal.vue'
 import SocialButtons from './base/molecules/SocialButtons.vue'
 import FooterInfo from './base/atoms/FooterInfo.vue'
 import FirstTimeSetupWizard from './FirstTimeSetupWizard.vue'
+import UpdateNoticeBanner from './UpdateNoticeBanner.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import { useOrchestratorService } from '@/composables/useOrchestratorService'
 import { useDeployInstances } from '@/composables/useDeployInstances'
-import type { ComfyGitStatus, CommitInfo, BranchInfo, EnvironmentInfo, SetupStatus, SetupState } from '@/types/comfygit'
+import type { ComfyGitStatus, CommitInfo, BranchInfo, EnvironmentInfo, SetupStatus, SetupState, UpdateCheckResponse } from '@/types/comfygit'
+import { dismissVersion, shouldShowUpdateNotice } from '@/utils/updateNotice'
 
 const props = defineProps<{
   initialView?: string
@@ -480,7 +492,9 @@ const {
   deleteEnvironment,
   syncEnvironmentManually,
   repairWorkflowModels,
-  getSetupStatus
+  getSetupStatus,
+  getUpdateCheck,
+  updateManager
 } = useComfyGitService()
 
 const orchestratorService = useOrchestratorService()
@@ -511,6 +525,12 @@ const isLoading = ref(false)
 const error = ref<string | null>(null)
 const selectedCommit = ref<CommitInfo | null>(null)
 const showEnvironmentSelector = ref(false)
+
+// Manager update notice state
+const updateCheck = ref<UpdateCheckResponse | null>(null)
+const updateNoticeHidden = ref(false)
+const isUpdatingManager = ref(false)
+const updateNoticeVisible = computed(() => !updateNoticeHidden.value && shouldShowUpdateNotice(updateCheck.value))
 
 // Ref to child components for triggering reloads
 const workflowsSectionRef = ref<{ loadWorkflows: (forceRefresh?: boolean) => Promise<void> } | null>(null)
@@ -656,6 +676,83 @@ function removeToast(id: number) {
 
 function handleToast(message: string, type: Toast['type']) {
   showToast(message, type)
+}
+
+async function loadUpdateNotice() {
+  updateCheck.value = null
+  updateNoticeHidden.value = false
+  try {
+    updateCheck.value = await getUpdateCheck()
+  } catch {
+    // Silently fail - banner should not appear and panel load must not break.
+  }
+}
+
+function openReleaseNotes() {
+  const url = updateCheck.value?.release_url
+  if (!url) return
+  try {
+    window.open(url, '_blank', 'noopener,noreferrer')
+  } catch {
+    // Ignore popup blockers
+  }
+}
+
+function dismissUpdateNotice() {
+  const version = updateCheck.value?.latest_version
+  if (version) dismissVersion(version)
+  updateNoticeHidden.value = true
+}
+
+async function handleUpdateManager() {
+  if (isUpdatingManager.value) return
+  isUpdatingManager.value = true
+
+  const toastId = showToast('Updating comfygit-manager...', 'info', 0)
+  try {
+    const result = await updateManager()
+    removeToast(toastId)
+
+    if (result.status !== 'success') {
+      showToast(result.message || 'Update failed', 'error')
+      if (result.manual_instructions) {
+        const details = result.manual_instructions
+          .split('\n')
+          .map(s => s.trim())
+          .filter(Boolean)
+        confirmDialog.value = {
+          title: 'Manual Update Required',
+          message: 'Self-update failed. Follow these steps:',
+          details,
+          confirmLabel: 'OK',
+          cancelLabel: 'Close',
+          onConfirm: () => {
+            confirmDialog.value = null
+          }
+        }
+      }
+      return
+    }
+
+    showToast(result.message || 'Update complete', 'success')
+    dismissUpdateNotice()
+
+    if (result.restart_required) {
+      setRefreshFlag()
+      try {
+        // This will drop the connection; expected.
+        await window.app?.api?.fetchApi('/v2/manager/reboot')
+      } catch {
+        // Expected on restart
+      }
+    }
+  } catch (e) {
+    removeToast(toastId)
+    const msg = e instanceof Error ? e.message : 'Update failed'
+    showToast(msg, 'error')
+  } finally {
+    isUpdatingManager.value = false
+  }
 }
 
 const statusColor = computed(() => {
@@ -1357,7 +1454,10 @@ onMounted(async () => {
     console.warn('Setup status check failed, proceeding normally:', err)
   }
 
-  await refresh()
+  await Promise.all([
+    refresh(),
+    loadUpdateNotice()
+  ])
 })
 </script>
 

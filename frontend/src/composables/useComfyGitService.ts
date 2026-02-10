@@ -40,6 +40,8 @@ import type {
   ImportResult,
   ImportProgress,
   SetupStatus,
+  UpdateCheckResponse,
+  UpdateManagerResponse,
   InitializeWorkspaceRequest,
   InitializeProgress,
   ValidatePathRequest,
@@ -1472,6 +1474,37 @@ export function useComfyGitService() {
     return fetchApi<SetupStatus>('/v2/setup/status')
   }
 
+  async function getUpdateCheck(): Promise<UpdateCheckResponse> {
+    if (USE_MOCK) {
+      return {
+        current_version: '0.0.0',
+        latest_version: null,
+        update_available: false,
+        release_url: null,
+        changelog_summary: null,
+        checked_at: null
+      }
+    }
+
+    return fetchApi<UpdateCheckResponse>('/v2/comfygit/update-check')
+  }
+
+  async function updateManager(): Promise<UpdateManagerResponse> {
+    if (USE_MOCK) {
+      return {
+        status: 'success',
+        changed: false,
+        old_version: null,
+        new_version: null,
+        message: 'Mock update',
+        restart_required: false,
+        manual_instructions: null
+      }
+    }
+
+    return fetchApi<UpdateManagerResponse>('/v2/comfygit/update', { method: 'POST' })
+  }
+
   async function initializeWorkspace(request: InitializeWorkspaceRequest): Promise<{ status: string; task_id: string }> {
     if (USE_MOCK) {
       // Start the mock initialization process
@@ -1825,6 +1858,9 @@ export function useComfyGitService() {
     getImportProgress,
     // First-Time Setup
     getSetupStatus,
+    // Manager Update Notice
+    getUpdateCheck,
+    updateManager,
     initializeWorkspace,
     getInitializeProgress,
     validatePath,
