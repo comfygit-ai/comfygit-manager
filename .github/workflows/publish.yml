@@ -7,11 +7,6 @@ on:
       - main
     paths:
       - "pyproject.toml"
-  pull_request:
-    branches:
-      - main
-    types:
-      - closed
 
 permissions:
   contents: write  # Needed for creating releases
@@ -23,8 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       github.event.repository.fork == false &&
-      github.repository_owner == 'comfygit-ai' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true)
+      github.repository_owner == 'comfygit-ai'
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
