@@ -20,6 +20,8 @@ ComfyGit brings real version control to ComfyUI. Create isolated environments fo
 
 ComfyGit Manager is the visual control panel that lives inside ComfyUI, giving you point-and-click access to everything ComfyGit can do.
 
+[comfygit-demo-full2-small.webm](https://github.com/user-attachments/assets/063a397a-bfa2-4108-a7ba-c36a16281027)
+
 ---
 
 ## Features
