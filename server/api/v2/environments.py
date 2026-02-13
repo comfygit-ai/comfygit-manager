@@ -9,6 +9,7 @@ from aiohttp import web
 from pathlib import Path
 
 from cgm_utils.async_helpers import run_sync
+from cgm_utils.environment_name_validation import validate_environment_name
 from comfygit_core.factories.workspace_factory import WorkspaceFactory
 from comfygit_core.models.exceptions import CDWorkspaceNotFoundError, CDEnvironmentNotFoundError
 import orchestrator
@@ -525,6 +526,14 @@ async def create_environment(request: web.Request) -> web.Response:
         return web.json_response({
             "status": "error",
             "message": "Invalid JSON"
+        }, status=400)
+
+    # Validate name format (shared with import validation and core rules)
+    is_valid_name, name_error = validate_environment_name(name)
+    if not is_valid_name:
+        return web.json_response({
+            "status": "error",
+            "message": name_error
         }, status=400)
 
     # Get workspace - use explicit path if provided (first-time setup), otherwise detect

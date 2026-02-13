@@ -1308,13 +1308,28 @@ export function useComfyGitService() {
   async function validateEnvironmentName(name: string): Promise<ValidateNameResult> {
     if (USE_MOCK) {
       await new Promise(resolve => setTimeout(resolve, 200))
-      // Simulate name validation
+
       if (name === 'existing-env') {
         return { valid: false, error: "Environment 'existing-env' already exists" }
       }
-      if (name.includes('/') || name.includes(' ')) {
-        return { valid: false, error: 'Name contains invalid characters' }
+
+      const reserved = new Set(['workspace', 'logs', 'models', 'input', 'output', '.comfygit'])
+      if (reserved.has(name.toLowerCase())) {
+        return { valid: false, error: `"${name}" is reserved` }
       }
+
+      if (name.length > 128) {
+        return { valid: false, error: 'Name must be 128 characters or less' }
+      }
+
+      const pattern = /^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$/
+      if (!pattern.test(name)) {
+        return {
+          valid: false,
+          error: 'Name contains invalid characters. Use only letters, numbers, dots, hyphens, and underscores. Name must start and end with a letter or number.'
+        }
+      }
+
       return { valid: true, name }
     }
 
@@ -1322,7 +1337,6 @@ export function useComfyGitService() {
       `/v2/workspace/environments/validate?name=${encodeURIComponent(name)}`
     )
   }
-
   async function executeImport(
     file: File,
     name: string,

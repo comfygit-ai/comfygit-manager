@@ -4,6 +4,7 @@ from unittest.mock import Mock, MagicMock
 import json
 from pathlib import Path
 from comfygit_core.models.exceptions import CDEnvironmentNotFoundError
+import api.v2.environments as env_module
 
 
 @pytest.mark.integration
@@ -501,7 +502,6 @@ class TestCreateEnvironmentEndpoint:
     @pytest.fixture(autouse=True)
     def reset_create_state(self):
         """Reset global create task state before each test."""
-        import api.v2.environments as env_module
         with env_module._create_task_lock:
             env_module._create_task_state = {
                 "state": "idle",
@@ -557,7 +557,6 @@ class TestCreateEnvironmentEndpoint:
         but the backend ignores it and calls orchestrator.detect_environment_type()
         which fails because the workspace was just created and isn't detectable.
         """
-        import api.v2.environments as env_module
 
         # Setup: Mock workspace
         mock_workspace = Mock()
@@ -595,7 +594,6 @@ class TestCreateEnvironmentEndpoint:
         self, client, monkeypatch, tmp_path
     ):
         """Should fall back to orchestrator detection when workspace_path not provided."""
-        import api.v2.environments as env_module
 
         # Setup: Managed workspace detected
         mock_workspace = Mock()
@@ -629,7 +627,6 @@ class TestCreateEnvironmentEndpoint:
         def mock_find(path):
             raise CDWorkspaceNotFoundError(f"Workspace not found at {path}")
 
-        import api.v2.environments as env_module
         monkeypatch.setattr(env_module.WorkspaceFactory, "find", mock_find)
 
         # Execute: POST with invalid workspace_path
@@ -663,6 +660,42 @@ class TestCreateEnvironmentEndpoint:
         data = await resp.json()
         assert "name" in data["message"].lower()
 
+
+    async def test_validation_rejects_invalid_name(self, client, monkeypatch, tmp_path):
+        """Should return 400 when name fails shared validation rules."""
+
+        mock_workspace = Mock()
+        mock_workspace.path = tmp_path
+
+        monkeypatch.setattr("orchestrator.detect_environment_type", lambda: (True, mock_workspace, None))
+
+        resp = await client.post("/v2/workspace/environments", json={
+            "name": "invalid-",
+            "python_version": "3.12"
+        })
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert data["status"] == "error"
+        assert "start and end" in data["message"].lower()
+
+    async def test_validation_rejects_reserved_name(self, client, monkeypatch, tmp_path):
+        """Should return 400 when name is reserved."""
+
+        mock_workspace = Mock()
+        mock_workspace.path = tmp_path
+
+        monkeypatch.setattr("orchestrator.detect_environment_type", lambda: (True, mock_workspace, None))
+
+        resp = await client.post("/v2/workspace/environments", json={
+            "name": "models",
+            "python_version": "3.12"
+        })
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert data["status"] == "error"
+        assert "reserved" in data["message"].lower()
 
 @pytest.mark.integration
 class TestGetEnvironmentDetailEndpoint:
