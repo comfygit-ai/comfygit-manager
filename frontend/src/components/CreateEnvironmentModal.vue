@@ -11,14 +11,21 @@
         <!-- Environment Name -->
         <div class="form-field">
           <label class="form-label">Name</label>
-          <input
-            ref="nameInput"
-            v-model="name"
-            type="text"
-            class="form-input"
-            placeholder="my-environment"
-            @keyup.enter="handleCreate"
-          />
+          <div class="input-wrapper">
+            <input
+              ref="nameInput"
+              v-model="name"
+              type="text"
+              :class="['form-input', { error: !!nameError, valid: nameValid }]"
+              placeholder="my-environment"
+              @keyup.enter="handleCreate"
+              @blur="handleNameBlur"
+            />
+            <span v-if="isValidatingName" class="validating-indicator">...</span>
+            <span v-else-if="nameValid" class="valid-indicator">&#10003;</span>
+          </div>
+          <div v-if="nameError" class="field-error">{{ nameError }}</div>
+          <div class="field-hint">Use letters, numbers, dots, hyphens, and underscores.</div>
         </div>
 
         <!-- Python Version -->
@@ -90,7 +97,7 @@
       <template v-if="!isCreating">
         <BaseButton
           variant="primary"
-          :disabled="!name.trim()"
+          :disabled="!canCreate"
           @click="handleCreate"
         >
           Create
@@ -118,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, onUnmounted } from 'vue'
+import { ref, onMounted, nextTick, onUnmounted, computed, watch } from 'vue'
 import type { ComfyUIRelease, CreateEnvironmentRequest } from '@/types/comfygit'
 import { PYTHON_VERSIONS, DEFAULT_PYTHON_VERSION, TORCH_BACKENDS, DEFAULT_TORCH_BACKEND } from '@/constants/environment'
 import { useComfyGitService } from '@/composables/useComfyGitService'
@@ -131,7 +138,7 @@ const emit = defineEmits<{
   created: [environmentName: string, switchAfter: boolean]
 }>()
 
-const { getComfyUIReleases, createEnvironment, getCreateProgress } = useComfyGitService()
+const { getComfyUIReleases, createEnvironment, getCreateProgress, validateEnvironmentName } = useComfyGitService()
 
 // Form state
 const name = ref('')
@@ -139,6 +146,17 @@ const pythonVersion = ref(DEFAULT_PYTHON_VERSION)
 const comfyUIVersion = ref('latest')
 const torchBackend = ref(DEFAULT_TORCH_BACKEND)
 const switchAfter = ref(false)
+
+// Name validation state
+const nameError = ref<string | null>(null)
+const isValidatingName = ref(false)
+const nameValid = ref(false)
+let nameValidationDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let latestNameValidationToken = 0
+
+const canCreate = computed(() => {
+  return !!name.value.trim() && nameValid.value && !nameError.value && !isValidatingName.value && !isCreating.value
+})
 
 // Releases loading
 const releases = ref<ComfyUIRelease[]>([{ tag_name: 'latest', name: 'Latest', published_at: '' }])
@@ -172,6 +190,73 @@ const creationSteps = [
 // Input ref for autofocus
 const nameInput = ref<HTMLInputElement | null>(null)
 
+watch(name, (nextName) => {
+  nameValid.value = false
+
+  if (nameValidationDebounceTimer) {
+    clearTimeout(nameValidationDebounceTimer)
+    nameValidationDebounceTimer = null
+  }
+
+  const trimmed = nextName.trim()
+  if (!trimmed) {
+    nameError.value = null
+    isValidatingName.value = false
+    return
+  }
+
+  isValidatingName.value = true
+  nameValidationDebounceTimer = setTimeout(() => {
+    void validateName(trimmed)
+  }, 400)
+})
+
+async function validateName(rawName: string, forceRequiredError = false): Promise<boolean> {
+  const trimmed = rawName.trim()
+  if (!trimmed) {
+    nameValid.value = false
+    isValidatingName.value = false
+    nameError.value = forceRequiredError ? 'Environment name is required' : null
+    return false
+  }
+
+  const token = ++latestNameValidationToken
+  isValidatingName.value = true
+
+  try {
+    const result = await validateEnvironmentName(trimmed)
+
+    // Ignore stale validation responses
+    if (token !== latestNameValidationToken) {
+      return false
+    }
+
+    nameError.value = result.valid ? null : (result.error || 'Invalid name')
+    nameValid.value = !!result.valid
+    return !!result.valid
+  } catch {
+    if (token !== latestNameValidationToken) {
+      return false
+    }
+
+    nameError.value = 'Failed to validate name'
+    nameValid.value = false
+    return false
+  } finally {
+    if (token === latestNameValidationToken) {
+      isValidatingName.value = false
+    }
+  }
+}
+
+async function handleNameBlur() {
+  if (nameValidationDebounceTimer) {
+    clearTimeout(nameValidationDebounceTimer)
+    nameValidationDebounceTimer = null
+  }
+  await validateName(name.value, true)
+}
+
 function handleClose() {
   if (!isCreating.value) {
     emit('close')
@@ -180,7 +265,20 @@ function handleClose() {
 
 async function handleCreate() {
   const trimmedName = name.value.trim()
-  if (!trimmedName) return
+  if (!trimmedName) {
+    nameError.value = 'Environment name is required'
+    return
+  }
+
+  if (nameValidationDebounceTimer) {
+    clearTimeout(nameValidationDebounceTimer)
+    nameValidationDebounceTimer = null
+  }
+
+  const isNameValid = await validateName(trimmedName, true)
+  if (!isNameValid) {
+    return
+  }
 
   isCreating.value = true
   createProgress.value = { progress: 0, message: 'Starting...', phase: 'init' }
@@ -240,7 +338,7 @@ function startPolling() {
         stopPolling()
         createProgress.value.error = 'Creation was interrupted. Please try again.'
       }
-    } catch (err) {
+    } catch {
       pollFailures++
       if (pollFailures >= MAX_POLL_FAILURES) {
         stopPolling()
@@ -282,6 +380,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
   stopPolling()
+  if (nameValidationDebounceTimer) {
+    clearTimeout(nameValidationDebounceTimer)
+    nameValidationDebounceTimer = null
+  }
 })
 </script>
 
@@ -311,14 +413,25 @@ onUnmounted(() => {
   letter-spacing: var(--cg-letter-spacing-wide);
 }
 
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
 .form-input,
 .form-select {
+  width: 100%;
   background: var(--cg-color-bg-primary);
   border: 1px solid var(--cg-color-border-subtle);
   color: var(--cg-color-text-primary);
   padding: var(--cg-space-2) var(--cg-space-3);
   font-family: var(--cg-font-mono);
   font-size: var(--cg-font-size-sm);
+}
+
+.form-input {
+  padding-right: var(--cg-space-8);
 }
 
 .form-input:hover,
@@ -330,6 +443,36 @@ onUnmounted(() => {
 .form-select:focus {
   outline: none;
   border-color: var(--cg-color-accent);
+}
+
+.form-input.error {
+  border-color: var(--cg-color-error);
+}
+
+.form-input.valid {
+  border-color: var(--cg-color-success);
+}
+
+.validating-indicator,
+.valid-indicator {
+  position: absolute;
+  right: var(--cg-space-3);
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-sm);
+}
+
+.valid-indicator {
+  color: var(--cg-color-success);
+}
+
+.field-error {
+  color: var(--cg-color-error);
+  font-size: var(--cg-font-size-sm);
+}
+
+.field-hint {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
 }
 
 .form-select {

@@ -298,6 +298,57 @@ class TestValidateEnvironmentNameEndpoint:
         assert resp.status == 400
 
 
+    async def test_dot_in_name_returns_success(self, client, monkeypatch):
+        """Should allow dots in environment names."""
+        mock_workspace = Mock()
+        mock_workspace.path = Path("/tmp/test-workspace")
+        mock_workspace.list_environments = Mock(return_value=[])
+
+        def mock_detect():
+            return (True, mock_workspace, Mock())
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+
+        resp = await client.get("/v2/workspace/environments/validate?name=my.env-1")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["valid"] is True
+        assert data["name"] == "my.env-1"
+
+    async def test_name_must_end_with_alphanumeric(self, client, monkeypatch):
+        """Should reject names ending with non-alphanumeric chars."""
+        mock_workspace = Mock()
+        mock_workspace.path = Path("/tmp/test-workspace")
+        mock_workspace.list_environments = Mock(return_value=[])
+
+        def mock_detect():
+            return (True, mock_workspace, Mock())
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+
+        resp = await client.get("/v2/workspace/environments/validate?name=invalid-")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["valid"] is False
+        assert "start and end" in data["error"].lower()
+
+    async def test_reserved_name_returns_error(self, client, monkeypatch):
+        """Should reject reserved environment names."""
+        mock_workspace = Mock()
+        mock_workspace.path = Path("/tmp/test-workspace")
+        mock_workspace.list_environments = Mock(return_value=[])
+
+        def mock_detect():
+            return (True, mock_workspace, Mock())
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+
+        resp = await client.get("/v2/workspace/environments/validate?name=models")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["valid"] is False
+        assert "reserved" in data["error"].lower()
+
 @pytest.mark.integration
 class TestImportEndpoint:
     """POST /v2/workspace/import - Start tarball import (polling-based)."""

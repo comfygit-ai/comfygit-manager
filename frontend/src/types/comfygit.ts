@@ -1030,6 +1030,26 @@ export interface SetupStatus {
   cli_path: string | null
 }
 
+// Manager Update Notice Types
+export interface UpdateCheckResponse {
+  current_version: string | null
+  latest_version: string | null
+  update_available: boolean
+  release_url: string | null
+  changelog_summary: string | null
+  checked_at: string | null
+}
+
+export interface UpdateManagerResponse {
+  status: 'success' | 'error'
+  changed: boolean
+  old_version: string | null
+  new_version: string | null
+  message: string
+  restart_required: boolean
+  manual_instructions: string | null
+}
+
 export interface InitializeWorkspaceRequest {
   workspace_path?: string
   models_directory?: string | null

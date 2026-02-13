@@ -1,5 +1,4 @@
 """Import operations API - Preview and execute environment imports."""
-import re
 import shutil
 import tempfile
 import threading
@@ -10,12 +9,11 @@ from pathlib import Path
 from aiohttp import web
 
 from cgm_utils.async_helpers import run_sync
+from cgm_utils.environment_name_validation import validate_environment_name as validate_environment_name_format
 import orchestrator
 
 routes = web.RouteTableDef()
 
-# Valid environment name pattern: alphanumeric, hyphens, underscores
-ENV_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_-]*$')
 
 # Import task state (similar to create environment pattern)
 _import_task_lock = threading.Lock()
@@ -112,13 +110,7 @@ def _validate_env_name(name: str) -> tuple[bool, str | None]:
 
     Returns (is_valid, error_message).
     """
-    if not name:
-        return False, "Name is required"
-    if len(name) > 64:
-        return False, "Name must be 64 characters or less"
-    if not ENV_NAME_PATTERN.match(name):
-        return False, "Name contains invalid characters. Use only letters, numbers, hyphens, and underscores."
-    return True, None
+    return validate_environment_name_format(name)
 
 
 def _run_import_environment(workspace, tarball_path: Path, name: str, model_strategy: str, torch_backend: str):
