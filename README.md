@@ -6,7 +6,7 @@
 
 Workflows. Models. Custom nodes. Environments. All tracked, all switchable, all shareable.
 
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Docs](https://img.shields.io/badge/docs-comfygit.org-green)](https://docs.comfygit.org/)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/2h5rSTeh6Y)
 
@@ -94,4 +94,4 @@ For installation and setup instructions, visit the **[ComfyGit Documentation](ht
 
 ## License
 
-[AGPL-3.0](LICENSE)
+[GPL-3.0](LICENSE)
