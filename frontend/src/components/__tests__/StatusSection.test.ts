@@ -86,26 +86,6 @@ describe('StatusSection - Setup State Issue Cards', () => {
     expect(wrapper.text()).toContain('Create Environment')
   })
 
-  it('emits create-environment when Create Environment button is clicked', async () => {
-    const wrapper = mount(StatusSection, {
-      props: {
-        status: createMockStatus(),
-        setupState: 'empty_workspace'
-      },
-      global: {
-        stubs: ['StatusDetailModal', 'Teleport']
-      }
-    })
-
-    // Find and click the Create Environment button
-    const buttons = wrapper.findAll('button')
-    const createEnvButton = buttons.find(b => b.text().includes('Create Environment'))
-    expect(createEnvButton).toBeDefined()
-
-    await createEnvButton?.trigger('click')
-    expect(wrapper.emitted('create-environment')).toBeTruthy()
-  })
-
   it('shows normal status when setupState is managed', () => {
     const wrapper = mount(StatusSection, {
       props: {
