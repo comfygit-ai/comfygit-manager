@@ -7,7 +7,7 @@ requires-python = ">=3.10"
 dependencies = [
     "comfygit-core==0.3.19",
     "watchdog>=6.0.0",
-    "xxhash>=3.6.0",
+    "xxhash>=3.5.0",
     "zeroconf>=0.131.0",
 ]
 
