@@ -16,6 +16,7 @@ export interface AnalyzedWorkflow {
   unresolved_nodes_count: number
   nodes_version_gated_count?: number
   nodes_uninstallable_count?: number
+  version_gated_guidance?: string[]
   unresolved_models_count: number
   ambiguous_models_count: number
   ambiguous_nodes_count: number
@@ -282,6 +283,7 @@ export interface WorkflowInfo {
   missing_nodes: number // Count of missing nodes
   version_gated_count?: number
   uninstallable_count?: number
+  issue_summary?: string
   missing_models: number // Count of missing models
   pending_downloads?: number // Count of models with download intents
   path?: string
@@ -320,7 +322,12 @@ export interface WorkflowDetails {
   path: string
   status: 'broken' | 'new' | 'modified' | 'synced'
   models: ModelUsageInfo[]
-  nodes: Array<{ name: string; version?: string; status: 'installed' | 'missing' }>
+  nodes: Array<{
+    name: string
+    version?: string
+    status: 'installed' | 'missing' | 'version_gated' | 'uninstallable'
+    guidance?: string
+  }>
 }
 
 export interface WorkflowResolutionPlan {

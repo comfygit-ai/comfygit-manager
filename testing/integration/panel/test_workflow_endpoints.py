@@ -32,6 +32,7 @@ class TestWorkflowsListEndpoint:
         mock_wf1.download_intents_count = 0
         mock_wf1.has_path_sync_issues = False
         mock_wf1.models_needing_path_sync_count = 0
+        mock_wf1.issue_summary = "No issues"
         mock_wf1.resolution = Mock()
         mock_wf1.resolution.models_unresolved = []
         mock_wf1.resolution.models_ambiguous = []
@@ -46,6 +47,7 @@ class TestWorkflowsListEndpoint:
         mock_wf2.download_intents_count = 1
         mock_wf2.has_path_sync_issues = False
         mock_wf2.models_needing_path_sync_count = 0
+        mock_wf2.issue_summary = "1 node requires ComfyUI >= 0.3.10, 2 uninstallable mappings"
         mock_wf2.resolution = Mock()
         mock_wf2.resolution.models_unresolved = [Mock()]
         mock_wf2.resolution.models_ambiguous = []
@@ -67,11 +69,13 @@ class TestWorkflowsListEndpoint:
         assert data[0]["status"] == "synced"
         assert data[0]["version_gated_count"] == 0
         assert data[0]["uninstallable_count"] == 0
+        assert data[0]["issue_summary"] == "No issues"
         assert data[1]["name"] == "workflow2.json"
         assert data[1]["status"] == "broken"
         assert data[1]["version_gated_count"] == 1
         assert data[1]["uninstallable_count"] == 2
         assert data[1]["missing_nodes"] == 2
+        assert data[1]["issue_summary"] == "1 node requires ComfyUI >= 0.3.10, 2 uninstallable mappings"
 
     async def test_success_empty_workflows(
         self,
@@ -277,6 +281,59 @@ class TestWorkflowDetailsEndpoint:
         # Verify all nodes have the correct type
         for node in model["loaded_by"]:
             assert node["node_type"] == "CheckpointLoaderSimple"
+
+    async def test_includes_version_gated_and_uninstallable_nodes_with_guidance(
+        self,
+        client,
+        mock_environment,
+        mock_env_status
+    ):
+        """Workflow details should include blocked nodes and their guidance text."""
+        mock_wf = Mock()
+        mock_wf.name = "test.json"
+        mock_wf.has_issues = True
+        mock_wf.sync_state = "synced"
+        mock_wf.uninstalled_nodes = []
+        mock_wf.dependencies = Mock()
+        mock_wf.dependencies.found_models = []
+
+        version_gated = Mock()
+        version_gated.reference = Mock()
+        version_gated.reference.node_type = "SetNode"
+        version_gated.guidance = "Requires ComfyUI >= 0.3.10"
+
+        uninstallable = Mock()
+        uninstallable.reference = Mock()
+        uninstallable.reference.node_type = "LegacyNode"
+        uninstallable.guidance = "No compatible package version for this environment"
+
+        mock_wf.resolution = create_mock_resolution(
+            models_resolved=[],
+            models_unresolved=[],
+            nodes_resolved=[],
+            nodes_version_gated=[version_gated],
+            nodes_uninstallable=[uninstallable],
+            node_guidance={}
+        )
+
+        mock_env_status.workflow.analyzed_workflows = [mock_wf]
+        mock_environment.status.return_value = mock_env_status
+
+        resp = await client.get("/v2/comfygit/workflow/test.json/details")
+
+        assert resp.status == 200
+        data = await resp.json()
+
+        blocked_nodes = [node for node in data["nodes"] if node["status"] in {"version_gated", "uninstallable"}]
+        assert len(blocked_nodes) == 2
+
+        version_gated_node = next(node for node in blocked_nodes if node["status"] == "version_gated")
+        assert version_gated_node["name"] == "SetNode"
+        assert version_gated_node["guidance"] == "Requires ComfyUI >= 0.3.10"
+
+        uninstallable_node = next(node for node in blocked_nodes if node["status"] == "uninstallable")
+        assert uninstallable_node["name"] == "LegacyNode"
+        assert uninstallable_node["guidance"] == "No compatible package version for this environment"
 
 
 @pytest.mark.integration

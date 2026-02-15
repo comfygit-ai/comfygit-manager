@@ -112,15 +112,21 @@
               No custom nodes used in this workflow
             </div>
             <div
-              v-for="node in details.nodes"
-              :key="node.name"
+              v-for="(node, index) in details.nodes"
+              :key="`${node.name}-${node.status}-${index}`"
               class="node-item"
             >
-              <span :class="['node-status', node.status === 'installed' ? 'installed' : 'missing']">
-                {{ node.status === 'installed' ? '✓' : '✕' }}
+              <span :class="['node-status', getNodeStatusClass(node.status)]">
+                {{ getNodeStatusIcon(node.status) }}
               </span>
-              <span class="node-name">{{ node.name }}</span>
-              <span v-if="node.version" class="node-version">v{{ node.version }}</span>
+              <div class="node-content">
+                <div class="node-main">
+                  <span class="node-name">{{ node.name }}</span>
+                  <span class="node-badge">{{ getNodeStatusLabel(node.status) }}</span>
+                  <span v-if="node.version" class="node-version">v{{ node.version }}</span>
+                </div>
+                <div v-if="node.guidance" class="node-guidance">{{ node.guidance }}</div>
+              </div>
             </div>
           </section>
         </template>
@@ -222,6 +228,48 @@ function getStatusLabel(status: string): string {
     case 'missing':
     default:
       return '✗ Missing'
+  }
+}
+
+function getNodeStatusClass(status: WorkflowDetails['nodes'][number]['status']): string {
+  switch (status) {
+    case 'installed':
+      return 'installed'
+    case 'version_gated':
+      return 'version-gated'
+    case 'uninstallable':
+      return 'uninstallable'
+    case 'missing':
+    default:
+      return 'missing'
+  }
+}
+
+function getNodeStatusIcon(status: WorkflowDetails['nodes'][number]['status']): string {
+  switch (status) {
+    case 'installed':
+      return '✓'
+    case 'version_gated':
+      return '⚠'
+    case 'uninstallable':
+      return '✕'
+    case 'missing':
+    default:
+      return '✕'
+  }
+}
+
+function getNodeStatusLabel(status: WorkflowDetails['nodes'][number]['status']): string {
+  switch (status) {
+    case 'installed':
+      return 'Installed'
+    case 'version_gated':
+      return 'Needs newer ComfyUI'
+    case 'uninstallable':
+      return 'Uninstallable'
+    case 'missing':
+    default:
+      return 'Missing'
   }
 }
 
@@ -440,13 +488,28 @@ onMounted(loadDetails)
 
 .node-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 8px;
   border: 1px solid var(--cg-color-border-subtle);
   background: var(--cg-color-bg-tertiary);
   margin-bottom: 4px;
   font-size: var(--cg-font-size-sm);
+}
+
+.node-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.node-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .node-status {
@@ -462,13 +525,32 @@ onMounted(loadDetails)
   color: var(--cg-color-error);
 }
 
+.node-status.version-gated {
+  color: var(--cg-color-warning, #f59e0b);
+}
+
+.node-status.uninstallable {
+  color: var(--cg-color-error);
+}
+
 .node-name {
   color: var(--cg-color-text-primary);
-  flex: 1;
+}
+
+.node-badge {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  letter-spacing: var(--cg-letter-spacing-wide);
+  text-transform: uppercase;
 }
 
 .node-version {
   color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+}
+
+.node-guidance {
+  color: var(--cg-color-text-secondary);
   font-size: var(--cg-font-size-xs);
 }
 </style>

@@ -524,7 +524,9 @@ async def get_workflows(request: web.Request, env) -> web.Response:
     for wf in status.workflow.analyzed_workflows:
         version_gated_count = len(_safe_sequence(getattr(wf.resolution, "nodes_version_gated", None)))
         uninstallable_count = len(_safe_sequence(getattr(wf.resolution, "nodes_uninstallable", None)))
-        workflows.append({
+        issue_summary = _safe_str(getattr(wf, "issue_summary", None))
+
+        workflow_data = {
             "name": wf.name,
             "status": "broken" if wf.has_issues else wf.sync_state,
             "missing_nodes": wf.uninstalled_count,
@@ -538,7 +540,11 @@ async def get_workflows(request: web.Request, env) -> web.Response:
             # Category mismatch (blocking issue)
             "has_category_mismatch_issues": getattr(wf, 'has_category_mismatch_issues', False) is True,
             "models_with_category_mismatch": _safe_int(getattr(wf, 'models_with_category_mismatch_count', 0)),
-        })
+        }
+        if issue_summary:
+            workflow_data["issue_summary"] = issue_summary
+
+        workflows.append(workflow_data)
 
     return web.json_response(workflows)
 

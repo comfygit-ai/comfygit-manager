@@ -185,7 +185,7 @@
             icon="⚠"
             :title="`${allBrokenWorkflows.length} workflow${allBrokenWorkflows.length === 1 ? '' : 's'} can't run`"
             :description="brokenWorkflowDescription"
-            :items="allBrokenWorkflows.map(w => `${w.name} — ${w.issue_summary}`)"
+            :items="allBrokenWorkflows.map(formatBrokenWorkflowItem)"
           >
             <template #actions>
               <ActionButton variant="primary" size="sm" @click="$emit('view-workflows')">
@@ -296,7 +296,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import type { ComfyGitStatus, SetupState } from '@/types/comfygit'
+import type { AnalyzedWorkflow, ComfyGitStatus, SetupState } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
 import SectionTitle from '@/components/base/atoms/SectionTitle.vue'
@@ -441,11 +441,63 @@ const hasBrokenWorkflows = computed(() => {
   return allBrokenWorkflows.value.length > 0
 })
 
+function extractVersionTarget(guidance: string): string | null {
+  const patterns = [
+    />=\s*v?(\d+(?:\.\d+){1,3})/i,
+    /requires\s+comfyui\s*v?(\d+(?:\.\d+){1,3})/i,
+    /comfyui\s*v?(\d+(?:\.\d+){1,3})\+/i
+  ]
+
+  for (const pattern of patterns) {
+    const match = guidance.match(pattern)
+    if (match?.[1]) {
+      return match[1]
+    }
+  }
+
+  return null
+}
+
+function getVersionTargetsFromGuidance(guidanceList: string[]): string[] {
+  const targets = guidanceList
+    .map(extractVersionTarget)
+    .filter((target): target is string => Boolean(target))
+  return [...new Set(targets)]
+}
+
+function formatWorkflowVersionTargetSummary(targets: string[]): string {
+  if (targets.length === 0) return ''
+  if (targets.length === 1) return ` (>= ${targets[0]})`
+
+  const shownTargets = targets.slice(0, 2).map(target => `>= ${target}`).join(', ')
+  const hasMore = targets.length > 2
+  return ` (${shownTargets}${hasMore ? ', ...' : ''})`
+}
+
+function formatBrokenWorkflowItem(wf: AnalyzedWorkflow): string {
+  const summary = wf.issue_summary || 'Has issues'
+  const summaryHasVersionInfo = /(?:>=|v?\d+\.\d+)/i.test(summary)
+  const versionTargets = getVersionTargetsFromGuidance(wf.version_gated_guidance || [])
+
+  if ((wf.nodes_version_gated_count || 0) > 0 && versionTargets.length > 0 && !summaryHasVersionInfo) {
+    return `${wf.name} — ${summary} (needs ComfyUI ${versionTargets.map(target => `>= ${target}`).join(', ')})`
+  }
+
+  return `${wf.name} — ${summary}`
+}
+
 const totalVersionGatedNodes = computed(() => {
   return allBrokenWorkflows.value.reduce(
     (sum, wf) => sum + (wf.nodes_version_gated_count || 0),
     0
   )
+})
+
+const versionGatedTargets = computed(() => {
+  const targets = allBrokenWorkflows.value.flatMap(wf =>
+    getVersionTargetsFromGuidance(wf.version_gated_guidance || [])
+  )
+  return [...new Set(targets)]
 })
 
 const totalUninstallableNodes = computed(() => {
@@ -458,7 +510,9 @@ const totalUninstallableNodes = computed(() => {
 const brokenWorkflowDescription = computed(() => {
   const blockedParts: string[] = []
   if (totalVersionGatedNodes.value > 0) {
-    blockedParts.push(`${totalVersionGatedNodes.value} require newer ComfyUI`)
+    blockedParts.push(
+      `${totalVersionGatedNodes.value} require newer ComfyUI${formatWorkflowVersionTargetSummary(versionGatedTargets.value)}`
+    )
   }
   if (totalUninstallableNodes.value > 0) {
     blockedParts.push(`${totalUninstallableNodes.value} are uninstallable`)

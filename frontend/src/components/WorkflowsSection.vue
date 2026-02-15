@@ -307,6 +307,10 @@ async function handleRestart() {
 }
 
 function formatWorkflowIssues(wf: WorkflowInfo): string {
+  if (wf.issue_summary && wf.issue_summary.trim().length > 0) {
+    return wf.issue_summary
+  }
+
   const parts: string[] = []
 
   if (wf.version_gated_count && wf.version_gated_count > 0) {
