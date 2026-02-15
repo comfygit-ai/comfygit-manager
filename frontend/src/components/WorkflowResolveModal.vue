@@ -55,6 +55,16 @@
                     <span class="stat-count">{{ analysisResult.nodes.ambiguous.length }}</span>
                     <span class="stat-label">ambiguous</span>
                   </div>
+                  <div v-if="versionGatedNodes.length > 0" class="stat-item warning">
+                    <span class="stat-icon">⚠</span>
+                    <span class="stat-count">{{ versionGatedNodes.length }}</span>
+                    <span class="stat-label">requires newer ComfyUI</span>
+                  </div>
+                  <div v-if="uninstallableNodes.length > 0" class="stat-item error">
+                    <span class="stat-icon">⛔</span>
+                    <span class="stat-count">{{ uninstallableNodes.length }}</span>
+                    <span class="stat-label">uninstallable</span>
+                  </div>
                   <div v-if="analysisResult.nodes.unresolved.length > 0" class="stat-item error">
                     <span class="stat-icon">✗</span>
                     <span class="stat-count">{{ analysisResult.nodes.unresolved.length }}</span>
@@ -100,6 +110,10 @@
               <span class="status-icon">⚠</span>
               <span class="status-text">{{ unresolvedAndAmbiguousNodes.length + unresolvedAndAmbiguousModels.length }} items need your input</span>
             </div>
+            <div v-else-if="hasBlockedNodeIssues" class="status-message warning">
+              <span class="status-icon">⚠</span>
+              <span class="status-text">{{ versionGatedNodes.length + uninstallableNodes.length }} node type{{ (versionGatedNodes.length + uninstallableNodes.length) > 1 ? 's are' : ' is' }} blocked and require manual action</span>
+            </div>
             <div v-else-if="hasNodesToInstall" class="status-message info">
               <span class="status-icon">⬇</span>
               <span class="status-text">{{ analysisResult.stats.packages_needing_installation }} package{{ analysisResult.stats.packages_needing_installation > 1 ? 's' : '' }} to install ({{ analysisResult.stats.nodes_needing_installation }} node type{{ analysisResult.stats.nodes_needing_installation > 1 ? 's' : '' }}){{ hasDownloadIntents ? `, ${analysisResult.stats.download_intents} model${analysisResult.stats.download_intents > 1 ? 's' : ''} to download` : '' }}</span>
@@ -134,6 +148,21 @@
                   >
                     Open File Location
                   </BaseButton>
+                </div>
+              </div>
+            </div>
+
+            <!-- Version-gated / uninstallable details -->
+            <div v-if="hasBlockedNodeIssues" class="category-mismatch-section">
+              <h4 class="section-subtitle">Blocked node types:</h4>
+              <div class="mismatch-list">
+                <div v-for="node in versionGatedNodes" :key="`vg-${node.reference.node_type}`" class="mismatch-item">
+                  <code class="mismatch-path">{{ node.reference.node_type }}</code>
+                  <span class="status-text">{{ node.guidance || analysisResult.node_guidance?.[node.reference.node_type] || 'Requires a newer ComfyUI version.' }}</span>
+                </div>
+                <div v-for="node in uninstallableNodes" :key="`un-${node.reference.node_type}-${node.package.package_id}`" class="mismatch-item">
+                  <code class="mismatch-path">{{ node.reference.node_type }}</code>
+                  <span class="status-text">{{ node.guidance || analysisResult.node_guidance?.[node.reference.node_type] || 'No installable package version found for the current environment.' }}</span>
                 </div>
               </div>
             </div>
@@ -470,6 +499,20 @@ const wizardSteps = computed(() => {
 const needsUserInput = computed(() => {
   if (!analysisResult.value) return false
   return analysisResult.value.stats.needs_user_input
+})
+
+const versionGatedNodes = computed(() => {
+  if (!analysisResult.value) return []
+  return analysisResult.value.nodes.version_gated || []
+})
+
+const uninstallableNodes = computed(() => {
+  if (!analysisResult.value) return []
+  return analysisResult.value.nodes.uninstallable || []
+})
+
+const hasBlockedNodeIssues = computed(() => {
+  return versionGatedNodes.value.length > 0 || uninstallableNodes.value.length > 0
 })
 
 const needsNodeResolution = computed(() => {

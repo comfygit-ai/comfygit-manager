@@ -87,6 +87,38 @@
           </div>
         </div>
 
+        <!-- Version-gated builtins -->
+        <div v-if="versionGatedNodes.length > 0" class="section">
+          <div class="section-header">
+            <span class="section-title">Requires Newer ComfyUI ({{ versionGatedNodes.length }})</span>
+          </div>
+          <div class="item-list">
+            <div v-for="node in versionGatedNodes.slice(0, 5)" :key="`vg-${node.node_type}`" class="item">
+              <code class="node-type">{{ node.node_type }}</code>
+              <span class="not-found">{{ node.guidance || 'Requires a newer ComfyUI version' }}</span>
+            </div>
+            <div v-if="versionGatedNodes.length > 5" class="overflow-note">
+              ...and {{ versionGatedNodes.length - 5 }} more
+            </div>
+          </div>
+        </div>
+
+        <!-- Uninstallable nodes -->
+        <div v-if="uninstallableNodes.length > 0" class="section">
+          <div class="section-header">
+            <span class="section-title">No Installable Package Version ({{ uninstallableNodes.length }})</span>
+          </div>
+          <div class="item-list">
+            <div v-for="node in uninstallableNodes.slice(0, 5)" :key="`un-${node.node_type}-${node.package_id || 'none'}`" class="item">
+              <code class="node-type">{{ node.node_type }}</code>
+              <span class="not-found">{{ node.guidance || 'No compatible package version is available for this environment' }}</span>
+            </div>
+            <div v-if="uninstallableNodes.length > 5" class="overflow-note">
+              ...and {{ uninstallableNodes.length - 5 }} more
+            </div>
+          </div>
+        </div>
+
         <!-- Missing Models Section -->
         <div v-if="missingModels.length > 0" class="section">
           <div class="section-header">
@@ -199,6 +231,17 @@ interface UnresolvedNode {
   node_type: string
 }
 
+interface VersionGatedNodeItem {
+  node_type: string
+  guidance: string | null
+}
+
+interface UninstallableNodeItem {
+  node_type: string
+  package_id: string | null
+  guidance: string | null
+}
+
 const loading = ref(false)
 const error = ref<string | null>(null)
 const analysis = ref<any>(null)
@@ -225,6 +268,8 @@ const { queueNodeInstall } = useComfyGitService()
 const hasIssues = computed(() => {
   return missingPackages.value.length > 0 ||
     unresolvedNodes.value.length > 0 ||
+    versionGatedNodes.value.length > 0 ||
+    uninstallableNodes.value.length > 0 ||
     missingModels.value.length > 0
 })
 
@@ -268,6 +313,31 @@ const unresolvedNodes = computed<UnresolvedNode[]>(() => {
   return (analysis.value.nodes.unresolved || []).map((n: any) => ({
     node_type: n.reference?.node_type || n.node_type
   }))
+})
+
+const versionGatedNodes = computed<VersionGatedNodeItem[]>(() => {
+  if (!analysis.value?.nodes) return []
+  const guidance = analysis.value.node_guidance || {}
+  return (analysis.value.nodes.version_gated || []).map((n: any) => {
+    const nodeType = n.reference?.node_type || n.node_type
+    return {
+      node_type: nodeType,
+      guidance: n.guidance || guidance[nodeType] || null,
+    }
+  })
+})
+
+const uninstallableNodes = computed<UninstallableNodeItem[]>(() => {
+  if (!analysis.value?.nodes) return []
+  const guidance = analysis.value.node_guidance || {}
+  return (analysis.value.nodes.uninstallable || []).map((n: any) => {
+    const nodeType = n.reference?.node_type || n.node_type
+    return {
+      node_type: nodeType,
+      package_id: n.package?.package_id || null,
+      guidance: n.guidance || guidance[nodeType] || null,
+    }
+  })
 })
 
 // Missing models with download info

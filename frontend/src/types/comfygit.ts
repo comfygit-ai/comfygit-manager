@@ -14,6 +14,8 @@ export interface AnalyzedWorkflow {
   has_path_sync_issues: boolean
   uninstalled_nodes: number
   unresolved_nodes_count: number
+  nodes_version_gated_count?: number
+  nodes_uninstallable_count?: number
   unresolved_models_count: number
   ambiguous_models_count: number
   ambiguous_nodes_count: number
@@ -278,6 +280,8 @@ export interface WorkflowInfo {
   name: string
   status: 'broken' | 'new' | 'modified' | 'synced'
   missing_nodes: number // Count of missing nodes
+  version_gated_count?: number
+  uninstallable_count?: number
   missing_models: number // Count of missing models
   pending_downloads?: number // Count of models with download intents
   path?: string
@@ -390,6 +394,8 @@ export interface NodeInfo {
   download_url?: string | null
   description?: string
   used_in_workflows?: string[]
+  issue_type?: 'version_gated' | 'uninstallable' | null
+  issue_guidance?: string | null
 }
 
 export interface NodesResult {
@@ -398,6 +404,7 @@ export interface NodesResult {
   installed_count: number
   missing_count: number
   untracked_count: number
+  blocked_count?: number
 }
 
 export interface TrackDevResult {
@@ -544,6 +551,27 @@ export interface UnresolvedNode {
   reason: string
 }
 
+export interface VersionGatedNode {
+  reference: NodeReference
+  reason: string
+  guidance?: string | null
+}
+
+export interface UninstallableNode {
+  reference: NodeReference
+  package: {
+    package_id: string
+    title: string
+    repository?: string | null
+    latest_version?: string | null
+  }
+  match_confidence: number
+  match_type: string
+  is_installed: boolean
+  reason: string
+  guidance?: string | null
+}
+
 export interface AmbiguousNode {
   reference: NodeReference
   options: Array<{
@@ -608,8 +636,11 @@ export interface FullResolutionResult {
   nodes: {
     resolved: ResolvedNode[]
     unresolved: UnresolvedNode[]
+    version_gated: VersionGatedNode[]
+    uninstallable: UninstallableNode[]
     ambiguous: AmbiguousNode[]
   }
+  node_guidance?: Record<string, string>
   models: {
     resolved: ResolvedModel[]
     unresolved: UnresolvedModel[]

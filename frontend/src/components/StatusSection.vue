@@ -184,7 +184,7 @@
             severity="error"
             icon="⚠"
             :title="`${allBrokenWorkflows.length} workflow${allBrokenWorkflows.length === 1 ? '' : 's'} can't run`"
-            description="These workflows have missing dependencies that must be resolved before they can run."
+            :description="brokenWorkflowDescription"
             :items="allBrokenWorkflows.map(w => `${w.name} — ${w.issue_summary}`)"
           >
             <template #actions>
@@ -439,6 +439,35 @@ const pathSyncWorkflows = computed(() => {
 
 const hasBrokenWorkflows = computed(() => {
   return allBrokenWorkflows.value.length > 0
+})
+
+const totalVersionGatedNodes = computed(() => {
+  return allBrokenWorkflows.value.reduce(
+    (sum, wf) => sum + (wf.nodes_version_gated_count || 0),
+    0
+  )
+})
+
+const totalUninstallableNodes = computed(() => {
+  return allBrokenWorkflows.value.reduce(
+    (sum, wf) => sum + (wf.nodes_uninstallable_count || 0),
+    0
+  )
+})
+
+const brokenWorkflowDescription = computed(() => {
+  const blockedParts: string[] = []
+  if (totalVersionGatedNodes.value > 0) {
+    blockedParts.push(`${totalVersionGatedNodes.value} require newer ComfyUI`)
+  }
+  if (totalUninstallableNodes.value > 0) {
+    blockedParts.push(`${totalUninstallableNodes.value} are uninstallable`)
+  }
+
+  if (blockedParts.length > 0) {
+    return `These workflows have missing or blocked dependencies (${blockedParts.join(', ')}) that must be resolved before they can run.`
+  }
+  return 'These workflows have missing dependencies that must be resolved before they can run.'
 })
 
 // Issues that are actual problems (not just uncommitted work)

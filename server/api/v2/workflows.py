@@ -104,11 +104,7 @@ def _serialize_resolved_node(node: ResolvedNodePackage, workflow_name: str, unin
     """Convert ResolvedNodePackage to frontend ResolvedNode format."""
     uninstalled_set = uninstalled_set or set()
 
-    # Extract latest version from package_data.versions if available
-    latest_version = None
-    if node.package_data and node.package_data.versions:
-        # versions is a dict - get the first key (latest version)
-        latest_version = next(iter(node.package_data.versions.keys()), None)
+    latest_version = _get_latest_package_version(node.package_data)
 
     return {
         "reference": {
@@ -124,6 +120,51 @@ def _serialize_resolved_node(node: ResolvedNodePackage, workflow_name: str, unin
         "match_confidence": node.match_confidence,
         "match_type": node.match_type,
         "is_installed": node.package_id not in uninstalled_set
+    }
+
+
+def _get_latest_package_version(package_data) -> str | None:
+    """Get latest package version from package_data when available."""
+    if package_data and getattr(package_data, "versions", None):
+        return next(iter(package_data.versions.keys()), None)
+    return None
+
+
+def _serialize_version_gated_node(node, workflow_name: str, node_guidance: dict[str, str] | None = None) -> dict:
+    """Convert version-gated WorkflowNode to frontend format."""
+    node_guidance = node_guidance or {}
+    node_type = getattr(node, "type", None)
+    return {
+        "reference": {
+            "node_type": node_type,
+            "workflow": workflow_name,
+            "node_id": getattr(node, "id", "")
+        },
+        "reason": "requires_newer_comfyui",
+        "guidance": node_guidance.get(node_type),
+    }
+
+
+def _serialize_uninstallable_node(node: ResolvedNodePackage, workflow_name: str, node_guidance: dict[str, str] | None = None) -> dict:
+    """Convert uninstallable ResolvedNodePackage to frontend format."""
+    node_guidance = node_guidance or {}
+    latest_version = _get_latest_package_version(node.package_data)
+    return {
+        "reference": {
+            "node_type": node.node_type,
+            "workflow": workflow_name
+        },
+        "package": {
+            "package_id": node.package_id,
+            "title": node.package_data.display_name if node.package_data else node.package_id,
+            "repository": node.package_data.repository if node.package_data else None,
+            "latest_version": latest_version,
+        },
+        "match_confidence": node.match_confidence,
+        "match_type": node.match_type,
+        "is_installed": False,
+        "reason": "no_installable_package_version",
+        "guidance": node_guidance.get(node.node_type),
     }
 
 
@@ -145,11 +186,6 @@ def _serialize_ambiguous_node(options: list[ResolvedNodePackage], workflow_name:
         return None
     uninstalled_set = uninstalled_set or set()
 
-    def get_latest_version(opt):
-        if opt.package_data and opt.package_data.versions:
-            return next(iter(opt.package_data.versions.keys()), None)
-        return None
-
     return {
         "reference": {
             "node_type": options[0].node_type,
@@ -161,7 +197,7 @@ def _serialize_ambiguous_node(options: list[ResolvedNodePackage], workflow_name:
                     "package_id": opt.package_id,
                     "title": opt.package_data.display_name if opt.package_data else opt.package_id,
                     "repository": opt.package_data.repository if opt.package_data else None,
-                    "latest_version": get_latest_version(opt)
+                    "latest_version": _get_latest_package_version(opt.package_data)
                 },
                 "match_confidence": opt.match_confidence,
                 "match_type": opt.match_type,
@@ -240,6 +276,22 @@ def _safe_int(value) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
+
+
+def _safe_sequence(value) -> list:
+    """Safely convert sequence-like values to a list."""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return list(value)
+    return []
+
+
+def _safe_dict(value) -> dict:
+    """Safely convert value to a dict."""
+    if isinstance(value, dict):
+        return value
+    return {}
 
 
 def _serialize_unresolved_model(ref: WorkflowNodeWidgetRef, workflow_name: str) -> dict:
@@ -470,10 +522,14 @@ async def get_workflows(request: web.Request, env) -> web.Response:
 
     workflows = []
     for wf in status.workflow.analyzed_workflows:
+        version_gated_count = len(_safe_sequence(getattr(wf.resolution, "nodes_version_gated", None)))
+        uninstallable_count = len(_safe_sequence(getattr(wf.resolution, "nodes_uninstallable", None)))
         workflows.append({
             "name": wf.name,
             "status": "broken" if wf.has_issues else wf.sync_state,
             "missing_nodes": wf.uninstalled_count,
+            "version_gated_count": version_gated_count,
+            "uninstallable_count": uninstallable_count,
             "missing_models": len(wf.resolution.models_unresolved) + len(wf.resolution.models_ambiguous),
             "pending_downloads": wf.download_intents_count,
             "sync_state": wf.sync_state,
@@ -750,6 +806,10 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
     # Count unique packages to install (for display purposes)
     packages_needing_installation = len(uninstalled_set)
 
+    version_gated_nodes = _safe_sequence(getattr(result, "nodes_version_gated", None))
+    uninstallable_nodes = _safe_sequence(getattr(result, "nodes_uninstallable", None))
+    node_guidance = _safe_dict(getattr(result, "node_guidance", None))
+
     # needs_user_input: user must make choices for unresolved/ambiguous items
     needs_user_input = bool(
         result.nodes_unresolved or result.nodes_ambiguous or
@@ -762,11 +822,14 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
         if m.match_type in ("download_intent", "property_download_intent")
     )
 
+    has_blocked_nodes = bool(version_gated_nodes or uninstallable_nodes)
+
     # is_fully_resolved: workflow is ready to run (no user input needed AND all nodes installed AND no pending downloads)
     is_fully_resolved = (
         not needs_user_input
         and nodes_needing_installation == 0
         and download_intents_count == 0
+        and not has_blocked_nodes
     )
 
     # Transform to frontend format
@@ -775,6 +838,8 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
         "nodes": {
             "resolved": [_serialize_resolved_node(n, name, uninstalled_set) for n in result.nodes_resolved],
             "unresolved": [_serialize_unresolved_node(n, name) for n in result.nodes_unresolved],
+            "version_gated": [_serialize_version_gated_node(n, name, node_guidance) for n in version_gated_nodes],
+            "uninstallable": [_serialize_uninstallable_node(n, name, node_guidance) for n in uninstallable_nodes],
             "ambiguous": [
                 amb for amb in [_serialize_ambiguous_node(opts, name, uninstalled_set) for opts in result.nodes_ambiguous]
                 if amb is not None
@@ -788,8 +853,15 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
                 if amb is not None
             ]
         },
+        "node_guidance": node_guidance,
         "stats": {
-            "total_nodes": len(result.nodes_resolved) + len(result.nodes_unresolved) + len(result.nodes_ambiguous),
+            "total_nodes": (
+                len(result.nodes_resolved)
+                + len(result.nodes_unresolved)
+                + len(result.nodes_ambiguous)
+                + len(version_gated_nodes)
+                + len(uninstallable_nodes)
+            ),
             "total_models": len(result.models_resolved) + len(result.models_unresolved) + len(result.models_ambiguous),
             "download_intents": download_intents_count,
             "nodes_needing_installation": nodes_needing_installation,  # Node types count
@@ -837,7 +909,8 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
         parser = WorkflowDependencyParser(
             workflow=workflow_obj,
             workflow_name=workflow_name,
-            cec_path=env.cec_path
+            cec_path=env.cec_path,
+            builtin_versions_repository=getattr(env.workflow_manager, "builtin_versions_repository", None),
         )
         dependencies = parser.analyze_dependencies()
 
@@ -865,6 +938,9 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
         1 for n in result.nodes_resolved if n.package_id in uninstalled_set
     )
     packages_needing_installation = len(uninstalled_set)
+    version_gated_nodes = _safe_sequence(getattr(result, "nodes_version_gated", None))
+    uninstallable_nodes = _safe_sequence(getattr(result, "nodes_uninstallable", None))
+    node_guidance = _safe_dict(getattr(result, "node_guidance", None))
     needs_user_input = bool(
         result.nodes_unresolved or result.nodes_ambiguous or
         result.models_unresolved or result.models_ambiguous
@@ -873,10 +949,12 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
         1 for m in result.models_resolved
         if m.match_type in ("download_intent", "property_download_intent")
     )
+    has_blocked_nodes = bool(version_gated_nodes or uninstallable_nodes)
     is_fully_resolved = (
         not needs_user_input
         and nodes_needing_installation == 0
         and download_intents_count == 0
+        and not has_blocked_nodes
     )
 
     # Transform to frontend format (same structure as analyze_workflow)
@@ -887,6 +965,14 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
     unresolved_nodes = [
         _serialize_unresolved_node(n, workflow_name)
         for n in result.nodes_unresolved
+    ]
+    version_gated_serialized = [
+        _serialize_version_gated_node(n, workflow_name, node_guidance)
+        for n in version_gated_nodes
+    ]
+    uninstallable_serialized = [
+        _serialize_uninstallable_node(n, workflow_name, node_guidance)
+        for n in uninstallable_nodes
     ]
     ambiguous_nodes = [
         amb for amb in [
@@ -914,6 +1000,8 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
         len(result.nodes_resolved)
         + len(result.nodes_unresolved)
         + len(result.nodes_ambiguous)
+        + len(version_gated_nodes)
+        + len(uninstallable_nodes)
     )
     total_models = (
         len(result.models_resolved)
@@ -930,6 +1018,8 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
         "nodes": {
             "resolved": resolved_nodes,
             "unresolved": unresolved_nodes,
+            "version_gated": version_gated_serialized,
+            "uninstallable": uninstallable_serialized,
             "ambiguous": ambiguous_nodes,
         },
         "models": {
@@ -937,6 +1027,7 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
             "unresolved": unresolved_models,
             "ambiguous": ambiguous_models,
         },
+        "node_guidance": node_guidance,
         "stats": {
             "total_nodes": total_nodes,
             "total_models": total_models,

@@ -35,6 +35,8 @@ class TestWorkflowsListEndpoint:
         mock_wf1.resolution = Mock()
         mock_wf1.resolution.models_unresolved = []
         mock_wf1.resolution.models_ambiguous = []
+        mock_wf1.resolution.nodes_version_gated = []
+        mock_wf1.resolution.nodes_uninstallable = []
 
         mock_wf2 = Mock()
         mock_wf2.name = "workflow2.json"
@@ -47,6 +49,8 @@ class TestWorkflowsListEndpoint:
         mock_wf2.resolution = Mock()
         mock_wf2.resolution.models_unresolved = [Mock()]
         mock_wf2.resolution.models_ambiguous = []
+        mock_wf2.resolution.nodes_version_gated = [Mock()]
+        mock_wf2.resolution.nodes_uninstallable = [Mock(), Mock()]
 
         mock_env_status.workflow.analyzed_workflows = [mock_wf1, mock_wf2]
         mock_environment.status.return_value = mock_env_status
@@ -61,8 +65,13 @@ class TestWorkflowsListEndpoint:
         assert len(data) == 2
         assert data[0]["name"] == "workflow1.json"
         assert data[0]["status"] == "synced"
+        assert data[0]["version_gated_count"] == 0
+        assert data[0]["uninstallable_count"] == 0
         assert data[1]["name"] == "workflow2.json"
         assert data[1]["status"] == "broken"
+        assert data[1]["version_gated_count"] == 1
+        assert data[1]["uninstallable_count"] == 2
+        assert data[1]["missing_nodes"] == 2
 
     async def test_success_empty_workflows(
         self,
@@ -537,6 +546,62 @@ class TestWorkflowAnalyzeEndpoint:
         assert resp.status == 200
         data = await resp.json()
         assert data["stats"]["needs_user_input"] is False
+
+    async def test_version_gated_and_uninstallable_are_blocking_but_not_user_input(
+        self, client, mock_environment
+    ):
+        """Version-gated/uninstallable nodes should block readiness but not require choices."""
+        mock_version_gated = Mock()
+        mock_version_gated.type = "SetNode"
+        mock_version_gated.id = "17"
+
+        mock_pkg_data = Mock()
+        mock_pkg_data.display_name = "KJ Nodes"
+        mock_pkg_data.repository = "https://github.com/kijai/ComfyUI-KJNodes"
+        mock_pkg_data.versions = {"1.2.0": {}}
+
+        mock_uninstallable = Mock()
+        mock_uninstallable.node_type = "GetNode"
+        mock_uninstallable.package_id = "kj-nodes"
+        mock_uninstallable.package_data = mock_pkg_data
+        mock_uninstallable.match_confidence = 1.0
+        mock_uninstallable.match_type = "auto_selected"
+
+        mock_result = create_mock_resolution(
+            nodes_resolved=[],
+            nodes_version_gated=[mock_version_gated],
+            nodes_uninstallable=[mock_uninstallable],
+            nodes_unresolved=[],
+            nodes_ambiguous=[],
+            models_resolved=[],
+            models_unresolved=[],
+            models_ambiguous=[],
+            node_guidance={
+                "SetNode": "Upgrade ComfyUI to >= v0.3.18",
+                "GetNode": "No compatible package version for your current environment",
+            },
+        )
+        mock_environment.workflow_manager.analyze_and_resolve_workflow.return_value = (Mock(), mock_result)
+
+        mock_wf_status = Mock()
+        mock_wf_status.name = "test.json"
+        mock_wf_status.uninstalled_nodes = []
+        mock_status = Mock()
+        mock_status.workflow = Mock()
+        mock_status.workflow.analyzed_workflows = [mock_wf_status]
+        mock_environment.status.return_value = mock_status
+
+        resp = await client.post("/v2/comfygit/workflow/test.json/analyze")
+
+        assert resp.status == 200
+        data = await resp.json()
+
+        assert data["nodes"]["version_gated"][0]["reference"]["node_type"] == "SetNode"
+        assert data["nodes"]["uninstallable"][0]["reference"]["node_type"] == "GetNode"
+        assert data["node_guidance"]["SetNode"] == "Upgrade ComfyUI to >= v0.3.18"
+        assert data["stats"]["needs_user_input"] is False
+        assert data["stats"]["is_fully_resolved"] is False
+        assert data["stats"]["total_nodes"] == 2
 
     async def test_resolved_nodes_include_installation_status(self, client, mock_environment):
         """Resolved nodes should include is_installed=True/False based on actual install state.
@@ -1782,12 +1847,104 @@ class TestAnalyzeWorkflowJsonEndpoint:
         assert "match_type" in resolved_node
         assert "is_installed" in resolved_node
 
+        # New node categories should always be present
+        assert "version_gated" in data["nodes"]
+        assert "uninstallable" in data["nodes"]
+        assert "node_guidance" in data
+
         # Verify resolved model format
         resolved_model = data["models"]["resolved"][0]
         assert "reference" in resolved_model
         assert "model" in resolved_model
         assert "match_confidence" in resolved_model
         assert "has_download_source" in resolved_model
+
+    async def test_analyze_json_passes_builtin_versions_repository(
+        self,
+        client,
+        mock_environment,
+        monkeypatch
+    ):
+        """Parser for analyze-json should receive builtin_versions_repository."""
+        import api.v2.workflows as workflow_api
+
+        captured_kwargs = {}
+        fake_dependencies = Mock()
+
+        class FakeParser:
+            def __init__(self, **kwargs):
+                captured_kwargs.update(kwargs)
+
+            def analyze_dependencies(self):
+                return fake_dependencies
+
+        builtin_repo = object()
+        mock_environment.workflow_manager.builtin_versions_repository = builtin_repo
+        mock_environment.workflow_manager.resolve_workflow = Mock(return_value=create_mock_resolution())
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {}
+
+        monkeypatch.setattr(workflow_api, "WorkflowDependencyParser", FakeParser)
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/analyze-json",
+            json={"workflow": {"nodes": {}}, "name": "test"}
+        )
+
+        assert resp.status == 200
+        assert captured_kwargs["builtin_versions_repository"] is builtin_repo
+        assert captured_kwargs["workflow_name"] == "test"
+
+    async def test_analyze_json_version_gated_blocks_fully_resolved_not_user_input(
+        self,
+        client,
+        mock_environment
+    ):
+        """Version-gated/uninstallable nodes block readiness, but do not require user choices."""
+        mock_version_gated = Mock()
+        mock_version_gated.type = "SetNode"
+        mock_version_gated.id = "10"
+
+        mock_pkg_data = Mock()
+        mock_pkg_data.display_name = "KJ Nodes"
+        mock_pkg_data.repository = "https://github.com/kijai/ComfyUI-KJNodes"
+        mock_pkg_data.versions = {"1.2.0": {}}
+
+        mock_uninstallable = Mock()
+        mock_uninstallable.node_type = "GetNode"
+        mock_uninstallable.package_id = "kj-nodes"
+        mock_uninstallable.package_data = mock_pkg_data
+        mock_uninstallable.match_confidence = 1.0
+        mock_uninstallable.match_type = "auto_selected"
+
+        mock_result = create_mock_resolution(
+            nodes_resolved=[],
+            nodes_version_gated=[mock_version_gated],
+            nodes_uninstallable=[mock_uninstallable],
+            nodes_unresolved=[],
+            nodes_ambiguous=[],
+            models_resolved=[],
+            models_unresolved=[],
+            models_ambiguous=[],
+            node_guidance={"SetNode": "Upgrade ComfyUI to >= v0.3.18"},
+        )
+        mock_environment.workflow_manager.resolve_workflow = Mock(return_value=mock_result)
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {}
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/analyze-json",
+            json={"workflow": {"nodes": {}}, "name": "unsaved"}
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert len(data["nodes"]["version_gated"]) == 1
+        assert len(data["nodes"]["uninstallable"]) == 1
+        assert data["stats"]["needs_user_input"] is False
+        assert data["stats"]["is_fully_resolved"] is False
 
     async def test_handles_workflow_with_subgraphs(
         self,

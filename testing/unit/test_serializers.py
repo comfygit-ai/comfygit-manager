@@ -221,6 +221,8 @@ class TestSerializeEnvironmentStatus:
         wf_broken.model_count = 3
         wf_broken.resolution = Mock()
         wf_broken.resolution.nodes_unresolved = [Mock(), Mock()]  # 2 unresolved
+        wf_broken.resolution.nodes_version_gated = [Mock(), Mock(), Mock()]  # 3 version-gated
+        wf_broken.resolution.nodes_uninstallable = [Mock()]  # 1 uninstallable
         wf_broken.resolution.models_unresolved = [Mock()]  # 1 unresolved
         wf_broken.resolution.models_ambiguous = []
         wf_broken.resolution.nodes_ambiguous = []
@@ -236,6 +238,8 @@ class TestSerializeEnvironmentStatus:
         wf_healthy.model_count = 2
         wf_healthy.resolution = Mock()
         wf_healthy.resolution.nodes_unresolved = []
+        wf_healthy.resolution.nodes_version_gated = []
+        wf_healthy.resolution.nodes_uninstallable = []
         wf_healthy.resolution.models_unresolved = []
         wf_healthy.resolution.models_ambiguous = []
         wf_healthy.resolution.nodes_ambiguous = []
@@ -274,6 +278,8 @@ class TestSerializeEnvironmentStatus:
         assert broken["has_issues"] is True
         assert broken["uninstalled_nodes"] == 1
         assert broken["unresolved_nodes_count"] == 2
+        assert broken["nodes_version_gated_count"] == 3
+        assert broken["nodes_uninstallable_count"] == 1
         assert broken["unresolved_models_count"] == 1
         assert broken["ambiguous_models_count"] == 0
         assert broken["ambiguous_nodes_count"] == 0
@@ -288,6 +294,8 @@ class TestSerializeEnvironmentStatus:
         assert healthy["has_issues"] is False
         assert healthy["uninstalled_nodes"] == 0
         assert healthy["unresolved_nodes_count"] == 0
+        assert healthy["nodes_version_gated_count"] == 0
+        assert healthy["nodes_uninstallable_count"] == 0
         assert healthy["unresolved_models_count"] == 0
 
     def test_analyzed_workflows_with_ambiguous_matches(self):
@@ -314,6 +322,8 @@ class TestSerializeEnvironmentStatus:
         wf.model_count = 4
         wf.resolution = Mock()
         wf.resolution.nodes_unresolved = []
+        wf.resolution.nodes_version_gated = []
+        wf.resolution.nodes_uninstallable = []
         wf.resolution.models_unresolved = []
         wf.resolution.models_ambiguous = [[Mock(), Mock()], [Mock(), Mock()]]  # 2 ambiguous
         wf.resolution.nodes_ambiguous = [[Mock(), Mock()]]  # 1 ambiguous
@@ -347,3 +357,5 @@ class TestSerializeEnvironmentStatus:
         assert analyzed["ambiguous_nodes_count"] == 1
         assert analyzed["unresolved_models_count"] == 0
         assert analyzed["unresolved_nodes_count"] == 0
+        assert analyzed["nodes_version_gated_count"] == 0
+        assert analyzed["nodes_uninstallable_count"] == 0

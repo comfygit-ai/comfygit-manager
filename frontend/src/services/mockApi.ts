@@ -1817,7 +1817,7 @@ export const mockApi = {
     }
 
     // Return scenario-specific data or default to existing mock
-    return scenarios[workflowName] || {
+    const payload = scenarios[workflowName] || {
       workflow: workflowName,
       nodes: {
         resolved: [
@@ -1883,6 +1883,12 @@ export const mockApi = {
         needs_user_input: true
       }
     }
+
+    payload.nodes.version_gated = payload.nodes.version_gated || []
+    payload.nodes.uninstallable = payload.nodes.uninstallable || []
+    payload.node_guidance = payload.node_guidance || {}
+
+    return payload
   },
 
   /**

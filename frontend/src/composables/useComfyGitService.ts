@@ -627,13 +627,37 @@ export function useComfyGitService() {
       const workflows: WorkflowInfo[] = []
 
       status.workflows.new.forEach(name => {
-        workflows.push({ name, status: 'new', missing_nodes: 0, missing_models: 0, path: name })
+        workflows.push({
+          name,
+          status: 'new',
+          missing_nodes: 0,
+          version_gated_count: 0,
+          uninstallable_count: 0,
+          missing_models: 0,
+          path: name
+        })
       })
       status.workflows.modified.forEach(name => {
-        workflows.push({ name, status: 'modified', missing_nodes: 0, missing_models: 0, path: name })
+        workflows.push({
+          name,
+          status: 'modified',
+          missing_nodes: 0,
+          version_gated_count: 0,
+          uninstallable_count: 0,
+          missing_models: 0,
+          path: name
+        })
       })
       status.workflows.synced.forEach(name => {
-        workflows.push({ name, status: 'synced', missing_nodes: 0, missing_models: 0, path: name })
+        workflows.push({
+          name,
+          status: 'synced',
+          missing_nodes: 0,
+          version_gated_count: 0,
+          uninstallable_count: 0,
+          missing_models: 0,
+          path: name
+        })
       })
 
       return workflows

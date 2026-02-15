@@ -66,6 +66,11 @@ export function useWorkflowResolution() {
         )
       }
 
+      // Normalize newly-added node categories for older payloads/mocks
+      data.nodes.version_gated = data.nodes.version_gated || []
+      data.nodes.uninstallable = data.nodes.uninstallable || []
+      data.node_guidance = data.node_guidance || {}
+
       result.value = data
       return data
     } catch (err) {

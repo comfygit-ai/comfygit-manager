@@ -8,18 +8,90 @@ from cgm_utils.async_helpers import run_sync
 routes = web.RouteTableDef()
 
 
+def _safe_sequence(value):
+    """Safely convert sequence-like values to list."""
+    if isinstance(value, (list, tuple, set)):
+        return list(value)
+    return []
+
+
+def _safe_mapping(value):
+    """Safely convert mapping-like values to dict."""
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
 def _build_workflow_usage_map(analyzed_workflows):
     """Build a map of package_id -> list of workflow names that use it."""
     usage_map = defaultdict(list)
     for wf in analyzed_workflows:
-        for resolved_node in wf.resolution.nodes_resolved:
+        for resolved_node in _safe_sequence(getattr(wf.resolution, "nodes_resolved", None)):
             if resolved_node.package_id:
                 if wf.name not in usage_map[resolved_node.package_id]:
                     usage_map[resolved_node.package_id].append(wf.name)
     return usage_map
 
 
-def _serialize_node(node, tracked: bool, installed: bool, used_in_workflows: list):
+def _build_blocked_node_map(analyzed_workflows):
+    """Build a map of blocked node_type -> issue metadata."""
+    blocked_map = {}
+
+    for wf in analyzed_workflows:
+        resolution = getattr(wf, "resolution", None)
+        if resolution is None:
+            continue
+
+        node_guidance = _safe_mapping(getattr(resolution, "node_guidance", None))
+
+        for node in _safe_sequence(getattr(resolution, "nodes_version_gated", None)):
+            node_type = getattr(node, "type", None)
+            if not node_type:
+                continue
+
+            if node_type not in blocked_map:
+                blocked_map[node_type] = {
+                    "issue_type": "version_gated",
+                    "registry_id": None,
+                    "issue_guidance": node_guidance.get(node_type),
+                    "used_in_workflows": set(),
+                }
+            blocked_map[node_type]["used_in_workflows"].add(wf.name)
+            if not blocked_map[node_type]["issue_guidance"]:
+                blocked_map[node_type]["issue_guidance"] = node_guidance.get(node_type)
+
+        for pkg in _safe_sequence(getattr(resolution, "nodes_uninstallable", None)):
+            node_type = getattr(pkg, "node_type", None) or getattr(pkg, "package_id", None)
+            if not node_type:
+                continue
+
+            package_id = getattr(pkg, "package_id", None)
+            guidance_key = getattr(pkg, "node_type", None) or node_type
+
+            if node_type not in blocked_map:
+                blocked_map[node_type] = {
+                    "issue_type": "uninstallable",
+                    "registry_id": package_id,
+                    "issue_guidance": node_guidance.get(guidance_key),
+                    "used_in_workflows": set(),
+                }
+            blocked_map[node_type]["used_in_workflows"].add(wf.name)
+            if not blocked_map[node_type]["registry_id"] and package_id:
+                blocked_map[node_type]["registry_id"] = package_id
+            if not blocked_map[node_type]["issue_guidance"]:
+                blocked_map[node_type]["issue_guidance"] = node_guidance.get(guidance_key)
+
+    return blocked_map
+
+
+def _serialize_node(
+    node,
+    tracked: bool,
+    installed: bool,
+    used_in_workflows: list,
+    issue_type: str | None = None,
+    issue_guidance: str | None = None,
+):
     """Serialize a node to API response format."""
     return {
         "name": node.name,
@@ -29,7 +101,9 @@ def _serialize_node(node, tracked: bool, installed: bool, used_in_workflows: lis
         "repository": node.repository,
         "version": node.version,
         "source": node.source,
-        "used_in_workflows": used_in_workflows
+        "used_in_workflows": used_in_workflows,
+        "issue_type": issue_type,
+        "issue_guidance": issue_guidance,
     }
 
 
@@ -51,6 +125,7 @@ async def get_nodes(request: web.Request, env) -> web.Response:
 
         # Build workflow usage map
         usage_map = _build_workflow_usage_map(status.workflow.analyzed_workflows)
+        blocked_node_map = _build_blocked_node_map(status.workflow.analyzed_workflows)
 
         result_nodes = []
         seen_names = set()
@@ -61,10 +136,10 @@ async def get_nodes(request: web.Request, env) -> web.Response:
             seen_names.add(node.name)
             result_nodes.append(_serialize_node(
                 node,
-                tracked=True,
-                installed=True,
-                used_in_workflows=usage_map.get(identifier, [])
-            ))
+                    tracked=True,
+                    installed=True,
+                    used_in_workflows=usage_map.get(identifier, [])
+                ))
 
         # 2. Add missing nodes (tracked in manifest but not installed)
         for missing_name in status.comparison.missing_nodes:
@@ -79,7 +154,26 @@ async def get_nodes(request: web.Request, env) -> web.Response:
                     "repository": None,
                     "version": None,
                     "source": "unknown",
-                    "used_in_workflows": usage_map.get(missing_name, [])
+                    "used_in_workflows": usage_map.get(missing_name, []),
+                    "issue_type": None,
+                    "issue_guidance": None,
+                })
+
+        # 2.5. Add blocked nodes from workflow resolution (version-gated/uninstallable)
+        for node_name, issue_data in blocked_node_map.items():
+            if node_name not in seen_names:
+                seen_names.add(node_name)
+                result_nodes.append({
+                    "name": node_name,
+                    "installed": False,
+                    "tracked": False,
+                    "registry_id": issue_data.get("registry_id"),
+                    "repository": None,
+                    "version": None,
+                    "source": "unknown",
+                    "used_in_workflows": sorted(issue_data.get("used_in_workflows", [])),
+                    "issue_type": issue_data.get("issue_type"),
+                    "issue_guidance": issue_data.get("issue_guidance"),
                 })
 
         # 3. Add untracked nodes (on filesystem but not in manifest)
@@ -94,20 +188,24 @@ async def get_nodes(request: web.Request, env) -> web.Response:
                     "repository": None,
                     "version": None,
                     "source": "untracked",
-                    "used_in_workflows": usage_map.get(extra_name, [])
+                    "used_in_workflows": usage_map.get(extra_name, []),
+                    "issue_type": None,
+                    "issue_guidance": None,
                 })
 
         # Calculate counts
         installed_count = sum(1 for n in result_nodes if n["installed"] and n["tracked"])
-        missing_count = sum(1 for n in result_nodes if not n["installed"] and n["tracked"])
+        missing_count = sum(1 for n in result_nodes if not n["installed"] and n["tracked"] and not n.get("issue_type"))
         untracked_count = sum(1 for n in result_nodes if not n["tracked"])
+        blocked_count = sum(1 for n in result_nodes if n.get("issue_type") in ("version_gated", "uninstallable"))
 
         return web.json_response({
             "nodes": result_nodes,
             "total_count": len(result_nodes),
             "installed_count": installed_count,
             "missing_count": missing_count,
-            "untracked_count": untracked_count
+            "untracked_count": untracked_count,
+            "blocked_count": blocked_count,
         })
     except Exception as e:
         return web.json_response({

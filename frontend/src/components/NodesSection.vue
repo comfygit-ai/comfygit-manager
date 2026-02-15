@@ -37,6 +37,7 @@
         <SummaryBar v-if="nodesData.total_count" variant="compact">
           {{ nodesData.installed_count }} installed
           <template v-if="nodesData.missing_count"> • {{ nodesData.missing_count }} missing</template>
+          <template v-if="nodesData.blocked_count"> • {{ nodesData.blocked_count }} blocked</template>
           <template v-if="nodesData.untracked_count"> • {{ nodesData.untracked_count }} untracked</template>
         </SummaryBar>
 
@@ -73,6 +74,46 @@
                 @click="emit('repair-environment')"
               >
                 Repair
+              </ActionButton>
+            </template>
+          </ItemCard>
+        </SectionGroup>
+
+        <!-- Blocked Nodes (version-gated or uninstallable) -->
+        <SectionGroup
+          v-if="filteredBlocked.length"
+          title="BLOCKED"
+          :count="filteredBlocked.length"
+          collapsible
+          :initially-expanded="true"
+        >
+          <ItemCard
+            v-for="node in filteredBlocked"
+            :key="`blocked-${node.name}`"
+            status="warning"
+          >
+            <template #icon>⛔</template>
+            <template #title>{{ node.name }}</template>
+            <template #subtitle>
+              <span style="color: var(--cg-color-warning)">{{ getBlockedSubtitle(node) }}</span>
+            </template>
+            <template #details>
+              <DetailRow
+                label="Guidance:"
+                :value="node.issue_guidance || getBlockedGuidance(node)"
+              />
+              <DetailRow
+                label="Used by:"
+                :value="getUsageLabel(node)"
+              />
+            </template>
+            <template #actions>
+              <ActionButton
+                variant="secondary"
+                size="xs"
+                @click="showDetails(node)"
+              >
+                View Details
               </ActionButton>
             </template>
           </ItemCard>
@@ -220,7 +261,7 @@
 
         <!-- Empty state -->
         <EmptyState
-          v-if="!filteredInstalled.length && !filteredMissing.length && !filteredUntracked.length"
+          v-if="!filteredInstalled.length && !filteredMissing.length && !filteredBlocked.length && !filteredUntracked.length"
           icon="📭"
           :message="searchQuery ? `No nodes match '${searchQuery}'` : 'No custom nodes found.'"
         />
@@ -242,6 +283,7 @@
       <p style="margin-top: var(--cg-space-2)">
         <strong>Installed:</strong> Tracked nodes available in this environment<br>
         <strong>Missing:</strong> Tracked nodes that need to be installed<br>
+        <strong>Blocked:</strong> Node types that cannot be resolved in the current environment<br>
         <strong>Untracked:</strong> Nodes on filesystem but not in manifest
       </p>
       <p style="margin-top: var(--cg-space-2); color: var(--cg-color-text-muted)">
@@ -315,7 +357,8 @@ const nodesData = ref<NodesResult>({
   total_count: 0,
   installed_count: 0,
   missing_count: 0,
-  untracked_count: 0
+  untracked_count: 0,
+  blocked_count: 0
 })
 
 const loading = ref(false)
@@ -353,12 +396,17 @@ const filteredInstalled = computed(() =>
 
 // Missing: tracked but NOT on filesystem
 const filteredMissing = computed(() =>
-  filteredNodes.value.filter(n => !n.installed && n.tracked)
+  filteredNodes.value.filter(n => !n.installed && n.tracked && !n.issue_type)
 )
 
 // Untracked: on filesystem but NOT tracked
 const filteredUntracked = computed(() =>
   filteredNodes.value.filter(n => n.installed && !n.tracked)
+)
+
+// Blocked: version-gated or uninstallable node types
+const filteredBlocked = computed(() =>
+  filteredNodes.value.filter(n => n.issue_type === 'version_gated' || n.issue_type === 'uninstallable')
 )
 
 // Helper functions
@@ -387,6 +435,26 @@ function getUsageLabel(node: NodeInfo): string {
     return node.used_in_workflows[0]
   }
   return `${node.used_in_workflows.length} workflows`
+}
+
+function getBlockedSubtitle(node: NodeInfo): string {
+  if (node.issue_type === 'version_gated') {
+    return 'Requires newer ComfyUI version'
+  }
+  if (node.issue_type === 'uninstallable') {
+    return 'No installable package version'
+  }
+  return 'Blocked'
+}
+
+function getBlockedGuidance(node: NodeInfo): string {
+  if (node.issue_type === 'version_gated') {
+    return 'Upgrade ComfyUI to a version that includes this builtin node.'
+  }
+  if (node.issue_type === 'uninstallable') {
+    return 'Select a different node package or update environment constraints.'
+  }
+  return 'Manual intervention required.'
 }
 
 function showDetails(node: NodeInfo) {

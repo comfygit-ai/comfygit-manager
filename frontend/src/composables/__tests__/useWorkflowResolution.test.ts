@@ -59,6 +59,9 @@ describe('useWorkflowResolution', () => {
       expect(result.value?.nodes.resolved[0].node_type).toBe('TestNode')
       expect(result.value?.nodes.ambiguous).toHaveLength(0)
       expect(result.value?.nodes.unresolved).toHaveLength(0)
+      expect(result.value?.nodes.version_gated).toHaveLength(0)
+      expect(result.value?.nodes.uninstallable).toHaveLength(0)
+      expect(result.value?.node_guidance).toEqual({})
       expect(isLoading.value).toBe(false)
     })
 
@@ -141,6 +144,62 @@ describe('useWorkflowResolution', () => {
       expect(result.value?.nodes.ambiguous).toHaveLength(1)
       expect(result.value?.nodes.ambiguous[0].options).toHaveLength(2)
       expect(result.value?.stats.needs_user_input).toBe(true)
+    })
+
+    it('should preserve version-gated and uninstallable node fields from API', async () => {
+      const { analyzeWorkflow, result } = useWorkflowResolution()
+
+      global.window = {
+        app: {
+          api: {
+            fetchApi: vi.fn().mockResolvedValue({
+              ok: true,
+              json: vi.fn().mockResolvedValue({
+                workflow: 'test-workflow',
+                nodes: {
+                  resolved: [],
+                  unresolved: [],
+                  ambiguous: [],
+                  version_gated: [
+                    {
+                      reference: { node_type: 'SetNode', workflow: 'test-workflow' },
+                      reason: 'requires_newer_comfyui',
+                      guidance: 'Upgrade ComfyUI to >= v0.3.18'
+                    }
+                  ],
+                  uninstallable: [
+                    {
+                      reference: { node_type: 'GetNode', workflow: 'test-workflow' },
+                      package: { package_id: 'kj-nodes', title: 'KJ Nodes' },
+                      match_confidence: 1.0,
+                      match_type: 'auto_selected',
+                      is_installed: false,
+                      reason: 'no_installable_package_version'
+                    }
+                  ]
+                },
+                node_guidance: { SetNode: 'Upgrade ComfyUI to >= v0.3.18' },
+                models: {
+                  resolved: [],
+                  unresolved: [],
+                  ambiguous: []
+                },
+                stats: {
+                  total_nodes: 2,
+                  total_models: 0,
+                  needs_user_input: false
+                }
+              })
+            })
+          }
+        }
+      } as any
+
+      await analyzeWorkflow('test-workflow')
+
+      expect(result.value?.nodes.version_gated).toHaveLength(1)
+      expect(result.value?.nodes.uninstallable).toHaveLength(1)
+      expect(result.value?.node_guidance?.SetNode).toContain('Upgrade ComfyUI')
     })
   })
 

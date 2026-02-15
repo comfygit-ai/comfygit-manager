@@ -191,6 +191,10 @@ def serialize_environment_status(status, env_name: str, env=None) -> dict:
     # Serialize analyzed workflows with full resolution state
     analyzed = []
     for wf in status.workflow.analyzed_workflows:
+        raw_version_gated = getattr(wf.resolution, "nodes_version_gated", None)
+        raw_uninstallable = getattr(wf.resolution, "nodes_uninstallable", None)
+        version_gated_count = len(raw_version_gated) if isinstance(raw_version_gated, (list, tuple, set)) else 0
+        uninstallable_count = len(raw_uninstallable) if isinstance(raw_uninstallable, (list, tuple, set)) else 0
         analyzed.append({
             "name": wf.name,
             "sync_state": wf.sync_state,
@@ -199,6 +203,8 @@ def serialize_environment_status(status, env_name: str, env=None) -> dict:
             "has_path_sync_issues": wf.has_path_sync_issues,
             "uninstalled_nodes": len(wf.uninstalled_nodes),
             "unresolved_nodes_count": len(wf.resolution.nodes_unresolved),
+            "nodes_version_gated_count": version_gated_count,
+            "nodes_uninstallable_count": uninstallable_count,
             "unresolved_models_count": len(wf.resolution.models_unresolved),
             "ambiguous_models_count": len(wf.resolution.models_ambiguous),
             "ambiguous_nodes_count": len(wf.resolution.nodes_ambiguous),

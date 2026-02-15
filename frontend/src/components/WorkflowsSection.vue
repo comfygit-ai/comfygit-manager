@@ -309,6 +309,12 @@ async function handleRestart() {
 function formatWorkflowIssues(wf: WorkflowInfo): string {
   const parts: string[] = []
 
+  if (wf.version_gated_count && wf.version_gated_count > 0) {
+    parts.push(`${wf.version_gated_count} node${wf.version_gated_count > 1 ? 's' : ''} require newer ComfyUI`)
+  }
+  if (wf.uninstallable_count && wf.uninstallable_count > 0) {
+    parts.push(`${wf.uninstallable_count} uninstallable node mapping${wf.uninstallable_count > 1 ? 's' : ''}`)
+  }
   if (wf.missing_nodes > 0) {
     parts.push(`${wf.missing_nodes} missing node${wf.missing_nodes > 1 ? 's' : ''}`)
   }
