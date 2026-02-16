@@ -65,3 +65,29 @@ async def test_process_install_uses_repository_for_explicit_git_source(mock_env)
     )
     mock_env.node_manager.update_node.assert_not_called()
     assert result["status_str"] == "success"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_process_install_invalid_install_source_raises_value_error(mock_env):
+    """Unknown install_source values should raise ValueError."""
+    params = {
+        "id": "kj-nodes",
+        "install_source": "github",
+    }
+
+    with pytest.raises(ValueError, match="Invalid install_source"):
+        await comfygit_server.process_install(mock_env, params)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_process_install_git_source_without_repository_raises_value_error(mock_env):
+    """install_source=git must include repository."""
+    params = {
+        "id": "kj-nodes",
+        "install_source": "git",
+    }
+
+    with pytest.raises(ValueError, match="requires a non-empty repository"):
+        await comfygit_server.process_install(mock_env, params)

@@ -1,6 +1,7 @@
 """Workflow operations API."""
 import asyncio
 import json
+import logging
 from pathlib import Path
 
 import xxhash
@@ -16,9 +17,11 @@ from comfygit_core.analyzers.workflow_dependency_parser import WorkflowDependenc
 
 from cgm_core.decorators import requires_environment, logged_operation
 from cgm_core.serializers import serialize_workflow_details
+from cgm_core.version_utils import get_latest_version
 from cgm_utils.async_helpers import run_sync
 
 routes = web.RouteTableDef()
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -104,7 +107,7 @@ def _serialize_resolved_node(node: ResolvedNodePackage, workflow_name: str, unin
     """Convert ResolvedNodePackage to frontend ResolvedNode format."""
     uninstalled_set = uninstalled_set or set()
 
-    latest_version = _get_latest_package_version(node.package_data)
+    latest_version = get_latest_version(getattr(node.package_data, "versions", None))
 
     return {
         "reference": {
@@ -121,20 +124,6 @@ def _serialize_resolved_node(node: ResolvedNodePackage, workflow_name: str, unin
         "match_type": node.match_type,
         "is_installed": node.package_id not in uninstalled_set
     }
-
-
-def _get_latest_package_version(package_data) -> str | None:
-    """Get latest package version from package_data when available."""
-    versions = getattr(package_data, "versions", None)
-    if not package_data or not versions:
-        return None
-
-    try:
-        from packaging.version import InvalidVersion, Version
-
-        return str(max(versions.keys(), key=lambda v: Version(v)))
-    except (InvalidVersion, ValueError):
-        return sorted(versions.keys(), reverse=True)[0]
 
 
 def _serialize_version_gated_node(node, workflow_name: str, node_guidance: dict[str, str] | None = None) -> dict:
@@ -155,7 +144,7 @@ def _serialize_version_gated_node(node, workflow_name: str, node_guidance: dict[
 def _serialize_uninstallable_node(node: ResolvedNodePackage, workflow_name: str, node_guidance: dict[str, str] | None = None) -> dict:
     """Convert uninstallable ResolvedNodePackage to frontend format."""
     node_guidance = node_guidance or {}
-    latest_version = _get_latest_package_version(node.package_data)
+    latest_version = get_latest_version(getattr(node.package_data, "versions", None))
     return {
         "reference": {
             "node_type": node.node_type,
@@ -204,7 +193,7 @@ def _serialize_ambiguous_node(options: list[ResolvedNodePackage], workflow_name:
                     "package_id": opt.package_id,
                     "title": opt.package_data.display_name if opt.package_data else opt.package_id,
                     "repository": opt.package_data.repository if opt.package_data else None,
-                    "latest_version": _get_latest_package_version(opt.package_data)
+                    "latest_version": get_latest_version(getattr(opt.package_data, "versions", None))
                 },
                 "match_confidence": opt.match_confidence,
                 "match_type": opt.match_type,
@@ -308,6 +297,41 @@ def _get_package_aliases(workflow_manager) -> dict[str, str]:
     global_mappings = getattr(repository, "global_mappings", None)
     aliases = getattr(global_mappings, "package_aliases", None)
     return _safe_dict(aliases)
+
+
+def _collect_uninstallable_nodes_to_install(
+    result,
+    installed: dict,
+    skipped_packages: set[str],
+    node_choices: dict[str, dict],
+) -> list[str]:
+    """Collect uninstallable node package ids selected for install by user."""
+    nodes_to_install: list[str] = []
+    uninstallable_nodes = getattr(result, "nodes_uninstallable", []) or []
+
+    for node in uninstallable_nodes:
+        package_id = getattr(node, "package_id", None)
+        if not package_id or package_id in installed or package_id in skipped_packages:
+            continue
+
+        node_type = getattr(node, "node_type", None)
+        node_choice = node_choices.get(node_type, {})
+        action = node_choice.get("action")
+
+        if action == "install":
+            nodes_to_install.append(package_id)
+            continue
+
+        if action == "skip" or not node_choice:
+            continue
+
+        logger.warning(
+            "Ignoring invalid uninstallable action '%s' for node_type '%s'; valid actions are 'install' or 'skip'",
+            action,
+            node_type,
+        )
+
+    return nodes_to_install
 
 
 def _serialize_unresolved_model(ref: WorkflowNodeWidgetRef, workflow_name: str) -> dict:
@@ -892,6 +916,8 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
             "download_intents": download_intents_count,
             "nodes_needing_installation": nodes_needing_installation,  # Node types count
             "packages_needing_installation": packages_needing_installation,  # Unique packages count
+            "has_blocked_nodes": has_blocked_nodes,
+            "has_uninstallable": has_uninstallable,
             "needs_user_input": needs_user_input,
             "is_fully_resolved": is_fully_resolved,
             "models_with_category_mismatch": sum(1 for m in result.models_resolved if getattr(m, 'has_category_mismatch', False))
@@ -1064,6 +1090,8 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
             "download_intents": download_intents_count,
             "nodes_needing_installation": nodes_needing_installation,
             "packages_needing_installation": packages_needing_installation,
+            "has_blocked_nodes": has_blocked_nodes,
+            "has_uninstallable": has_uninstallable,
             "needs_user_input": needs_user_input,
             "is_fully_resolved": is_fully_resolved,
             "models_with_category_mismatch": category_mismatch_count,
@@ -1224,13 +1252,14 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
             if node.package_id not in installed and node.package_id not in skipped_packages:
                 nodes_to_install.append(node.package_id)
 
-    uninstallable_nodes = getattr(result, "nodes_uninstallable", []) or []
-    for node in uninstallable_nodes:
-        if node.package_id and node.package_id not in installed and node.package_id not in skipped_packages:
-            node_choice = node_choices.get(getattr(node, "node_type", None), {})
-            action = node_choice.get("action", "install")
-            if action == "install":
-                nodes_to_install.append(node.package_id)
+    nodes_to_install.extend(
+        _collect_uninstallable_nodes_to_install(
+            result=result,
+            installed=installed,
+            skipped_packages=skipped_packages,
+            node_choices=node_choices,
+        )
+    )
 
     # Handle user overrides for existing download intents
     # Get current workflow models from pyproject to check for download intents
@@ -1484,13 +1513,14 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
                     if node.package_id not in installed and node.package_id not in skipped_packages:
                         nodes_to_install.append(node.package_id)
 
-            uninstallable_nodes = getattr(result, "nodes_uninstallable", []) or []
-            for node in uninstallable_nodes:
-                if node.package_id and node.package_id not in installed and node.package_id not in skipped_packages:
-                    node_choice = node_choices.get(getattr(node, "node_type", None), {})
-                    action = node_choice.get("action", "install")
-                    if action == "install":
-                        nodes_to_install.append(node.package_id)
+            nodes_to_install.extend(
+                _collect_uninstallable_nodes_to_install(
+                    result=result,
+                    installed=installed,
+                    skipped_packages=skipped_packages,
+                    node_choices=node_choices,
+                )
+            )
 
             # Get download results
             download_results = []

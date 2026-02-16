@@ -673,8 +673,90 @@ class TestWorkflowAnalyzeEndpoint:
         assert data["nodes"]["uninstallable"][0]["package"]["latest_version"] == "1.10.0"
         assert data["node_guidance"]["SetNode"] == "Upgrade ComfyUI to >= v0.3.18"
         assert data["stats"]["needs_user_input"] is False
+        assert data["stats"]["has_blocked_nodes"] is True
+        assert data["stats"]["has_uninstallable"] is True
         assert data["stats"]["is_fully_resolved"] is False
         assert data["stats"]["total_nodes"] == 2
+
+    async def test_only_uninstallable_nodes_set_stats_flags(
+        self, client, mock_environment
+    ):
+        """Uninstallable-only workflows should expose blocked-state summary flags."""
+        mock_pkg_data = Mock()
+        mock_pkg_data.display_name = "Legacy Pack"
+        mock_pkg_data.repository = "https://github.com/example/legacy-pack"
+        mock_pkg_data.versions = {"1.0.0": {}}
+
+        mock_uninstallable = Mock()
+        mock_uninstallable.node_type = "LegacyNode"
+        mock_uninstallable.package_id = "legacy-pack"
+        mock_uninstallable.package_data = mock_pkg_data
+        mock_uninstallable.match_confidence = 1.0
+        mock_uninstallable.match_type = "auto_selected"
+
+        mock_result = create_mock_resolution(
+            nodes_resolved=[],
+            nodes_version_gated=[],
+            nodes_uninstallable=[mock_uninstallable],
+            nodes_unresolved=[],
+            nodes_ambiguous=[],
+            models_resolved=[],
+            models_unresolved=[],
+            models_ambiguous=[],
+        )
+        mock_environment.workflow_manager.analyze_and_resolve_workflow.return_value = (Mock(), mock_result)
+
+        mock_wf_status = Mock()
+        mock_wf_status.name = "test.json"
+        mock_wf_status.uninstalled_nodes = []
+        mock_status = Mock()
+        mock_status.workflow = Mock()
+        mock_status.workflow.analyzed_workflows = [mock_wf_status]
+        mock_environment.status.return_value = mock_status
+
+        resp = await client.post("/v2/comfygit/workflow/test.json/analyze")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["stats"]["has_blocked_nodes"] is False
+        assert data["stats"]["has_uninstallable"] is True
+        assert data["stats"]["is_fully_resolved"] is False
+
+    async def test_only_version_gated_nodes_set_stats_flags(
+        self, client, mock_environment
+    ):
+        """Version-gated-only workflows should expose blocked-state summary flags."""
+        mock_version_gated = Mock()
+        mock_version_gated.type = "FutureNode"
+        mock_version_gated.id = "42"
+
+        mock_result = create_mock_resolution(
+            nodes_resolved=[],
+            nodes_version_gated=[mock_version_gated],
+            nodes_uninstallable=[],
+            nodes_unresolved=[],
+            nodes_ambiguous=[],
+            models_resolved=[],
+            models_unresolved=[],
+            models_ambiguous=[],
+        )
+        mock_environment.workflow_manager.analyze_and_resolve_workflow.return_value = (Mock(), mock_result)
+
+        mock_wf_status = Mock()
+        mock_wf_status.name = "test.json"
+        mock_wf_status.uninstalled_nodes = []
+        mock_status = Mock()
+        mock_status.workflow = Mock()
+        mock_status.workflow.analyzed_workflows = [mock_wf_status]
+        mock_environment.status.return_value = mock_status
+
+        resp = await client.post("/v2/comfygit/workflow/test.json/analyze")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["stats"]["has_blocked_nodes"] is True
+        assert data["stats"]["has_uninstallable"] is False
+        assert data["stats"]["is_fully_resolved"] is False
 
     async def test_resolved_nodes_include_installation_status(self, client, mock_environment):
         """Resolved nodes should include is_installed=True/False based on actual install state.
@@ -1064,6 +1146,49 @@ class TestApplyResolutionEndpoint:
         assert resp.status == 200
         data = await resp.json()
         assert "kj-nodes" in data["nodes_to_install"]
+
+    async def test_uninstallable_nodes_ignore_unknown_action(self, client, mock_environment, caplog):
+        """Unknown uninstallable actions should warn and not auto-install."""
+        mock_uninstallable_node = Mock()
+        mock_uninstallable_node.node_type = "GetNode"
+        mock_uninstallable_node.package_id = "kj-nodes"
+        mock_uninstallable_node.match_type = "auto_selected"
+
+        mock_result = create_mock_resolution(
+            nodes_resolved=[],
+            nodes_uninstallable=[mock_uninstallable_node],
+            nodes_unresolved=[],
+            models_resolved=[],
+            models_unresolved=[],
+            models_ambiguous=[],
+        )
+        mock_environment.workflow_manager.analyze_and_resolve_workflow.return_value = (Mock(), mock_result)
+        mock_environment.workflow_manager.fix_resolution.return_value = mock_result
+
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {}
+        mock_environment.pyproject.workflows = Mock()
+        mock_environment.pyproject.workflows.get_workflow_models.return_value = []
+        mock_environment.pyproject.workflows.get_all_with_resolutions.return_value = {}
+
+        caplog.set_level("WARNING")
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/test.json/apply-resolution",
+            json={
+                "node_choices": {"GetNode": {"action": "optional"}},
+                "model_choices": {},
+            },
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert "kj-nodes" not in data["nodes_to_install"]
+        assert any(
+            "Ignoring invalid uninstallable action" in record.message
+            for record in caplog.records
+        )
 
     async def test_success_with_model_download(self, client, mock_environment):
         """Should include models to download in response."""
@@ -1989,6 +2114,8 @@ class TestAnalyzeWorkflowJsonEndpoint:
             "download_intents",
             "nodes_needing_installation",
             "packages_needing_installation",
+            "has_blocked_nodes",
+            "has_uninstallable",
             "needs_user_input",
             "is_fully_resolved",
             "models_with_category_mismatch"
@@ -2108,6 +2235,8 @@ class TestAnalyzeWorkflowJsonEndpoint:
         assert len(data["nodes"]["version_gated"]) == 1
         assert len(data["nodes"]["uninstallable"]) == 1
         assert data["nodes"]["uninstallable"][0]["package"]["latest_version"] == "1.10.0"
+        assert data["stats"]["has_blocked_nodes"] is True
+        assert data["stats"]["has_uninstallable"] is True
         assert data["stats"]["needs_user_input"] is False
         assert data["stats"]["is_fully_resolved"] is False
 
