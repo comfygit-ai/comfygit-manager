@@ -161,7 +161,14 @@
                 >Failed ⚠</span>
                 <span v-else class="installed-badge">Installed</span>
               </template>
-              <span v-else class="no-url">Manual setup required</span>
+              <template v-else>
+                <span
+                  v-if="failedPackages.has(pkg.item_id)"
+                  class="failed-badge"
+                  :title="failedPackages.get(pkg.item_id)"
+                >Failed ⚠</span>
+                <span v-else class="no-url">Manual setup required</span>
+              </template>
             </div>
             <div
               v-if="communityMappedPackages.length >= 5"
@@ -308,7 +315,7 @@ const analysis = ref<any>(null)
 const visible = ref(false)
 const installedPackages = ref<Set<string>>(new Set())  // Packages that have been installed
 const queuedPackages = ref<Set<string>>(new Set())     // Packages queued for install (via Manager queue)
-const failedPackages = ref<Map<string, string>>(new Map())  // package_id -> error message
+const failedPackages = ref<Map<string, string>>(new Map())  // package_id or item_id -> error message
 const queuedModels = ref<Set<string>>(new Set())       // Models queued for download
 const dontShowAgain = ref(false)
 const installingPackage = ref<string | null>(null)     // Currently installing package (from WebSocket cm-task-started)
@@ -321,6 +328,8 @@ const shownWorkflowIds = ref<Set<string>>(new Set())
 
 // Map ui_id to package_id for tracking queue task completion
 const pendingInstalls = ref<Map<string, string>>(new Map())
+const queueTimeouts = ref<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+const QUEUE_START_TIMEOUT_MS = 30_000
 
 const { addToQueue } = useModelDownloadQueue()
 const { queueNodeInstall } = useComfyGitService()
@@ -342,6 +351,67 @@ function canonicalizePackageId(packageId: string | null | undefined): string | n
   }
 
   return current
+}
+
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) {
+    return err.message
+  }
+  if (typeof err === 'string' && err.trim().length > 0) {
+    return err
+  }
+  return fallback
+}
+
+function clearPendingInstallByPackageId(packageId: string) {
+  for (const [taskId, pendingPackageId] of pendingInstalls.value.entries()) {
+    if (pendingPackageId === packageId) {
+      pendingInstalls.value.delete(taskId)
+    }
+  }
+}
+
+function clearQueueTimeout(packageId: string) {
+  if (!queueTimeouts.value.has(packageId)) return
+  const timeoutId = queueTimeouts.value.get(packageId)!
+  clearTimeout(timeoutId)
+  queueTimeouts.value.delete(packageId)
+}
+
+function clearAllQueueTimeouts() {
+  for (const timeoutId of queueTimeouts.value.values()) {
+    clearTimeout(timeoutId)
+  }
+  queueTimeouts.value = new Map()
+}
+
+function startQueueTimeout(packageId: string) {
+  clearQueueTimeout(packageId)
+
+  const timeoutId = setTimeout(() => {
+    queueTimeouts.value.delete(packageId)
+    if (!queuedPackages.value.has(packageId)) return
+
+    clearPendingInstallByPackageId(packageId)
+    queuedPackages.value.delete(packageId)
+
+    if (installingPackage.value === packageId) {
+      installingPackage.value = null
+    }
+
+    const timeoutMessage = 'Queue timeout — please retry'
+    failedPackages.value.set(packageId, timeoutMessage)
+    console.warn('[ComfyGit] Queue timeout waiting for cm-task-started:', packageId)
+  }, QUEUE_START_TIMEOUT_MS)
+
+  queueTimeouts.value.set(packageId, timeoutId)
+}
+
+function markCommunityPackageIdError(item: { item_id: string; title: string }) {
+  const message = `Cannot install "${item.title}" - package_id is missing`
+  failedPackages.value.set(item.item_id, message)
+  error.value = message
+  console.warn('[ComfyGit] Community install requested without package_id:', item)
 }
 
 const hasIssues = computed(() => {
@@ -607,7 +677,11 @@ function handleDetailAction(item: ResourceItem, actionKey?: string) {
     if (pkg) installPackage(pkg)
   } else if (activeDetailView.value === 'community') {
     const pkg = communityMappedPackages.value.find(p => (p.package_id || p.item_id) === item.id)
-    if (!pkg || !pkg.package_id) return
+    if (!pkg) return
+    if (!pkg.package_id) {
+      markCommunityPackageIdError({ item_id: pkg.item_id, title: pkg.title })
+      return
+    }
     const installMode = actionKey === 'install_git' ? 'git' : 'registry'
     installCommunityPackage(pkg, installMode)
   }
@@ -620,13 +694,16 @@ function handleDetailBulkAction() {
 }
 
 // Queue a single package install via Manager queue
-async function installPackage(pkg: MissingPackage) {
-  await queueInstallRequest(pkg.package_id, pkg.latest_version, 'registry')
+async function installPackage(pkg: MissingPackage): Promise<boolean> {
+  return queueInstallRequest(pkg.package_id, pkg.latest_version, 'registry')
 }
 
-async function installCommunityPackage(pkg: UninstallableNodeItem, installMode: 'registry' | 'git') {
-  if (!pkg.package_id) return
-  await queueInstallRequest(pkg.package_id, pkg.latest_version, installMode, pkg.repository)
+async function installCommunityPackage(pkg: UninstallableNodeItem, installMode: 'registry' | 'git'): Promise<boolean> {
+  if (!pkg.package_id) {
+    markCommunityPackageIdError({ item_id: pkg.item_id, title: pkg.title })
+    return false
+  }
+  return queueInstallRequest(pkg.package_id, pkg.latest_version, installMode, pkg.repository)
 }
 
 async function queueInstallRequest(
@@ -634,15 +711,18 @@ async function queueInstallRequest(
   latestVersion: string | null,
   installMode: 'registry' | 'git',
   repository?: string | null
-) {
+): Promise<boolean> {
   const canonicalPackageId = canonicalizePackageId(packageId) || packageId
   const selectedVersion = latestVersion || 'latest'
   if (installedPackages.value.has(canonicalPackageId) ||
       queuedPackages.value.has(canonicalPackageId) ||
-      failedPackages.value.has(canonicalPackageId)) return
+      failedPackages.value.has(canonicalPackageId)) {
+    return true
+  }
 
   ensureEventListeners()
   installingPackage.value = canonicalPackageId
+  let queuedTaskId: string | null = null
 
   try {
     const installParams: {
@@ -666,13 +746,45 @@ async function queueInstallRequest(
       installParams.install_source = 'git'
     }
 
-    const { ui_id } = await queueNodeInstall(installParams)
-    pendingInstalls.value.set(ui_id, canonicalPackageId)
-    queuedPackages.value.add(canonicalPackageId)
-    console.log('[ComfyGit] Registered pending install:', { ui_id, packageId: canonicalPackageId, pendingInstalls: Array.from(pendingInstalls.value.entries()) })
+    const { ui_id } = await queueNodeInstall(installParams, {
+      beforeQueueStart: (taskId) => {
+        queuedTaskId = taskId
+        pendingInstalls.value.set(taskId, canonicalPackageId)
+        queuedPackages.value.add(canonicalPackageId)
+        startQueueTimeout(canonicalPackageId)
+        console.log('[ComfyGit] Registered pending install:', {
+          ui_id: taskId,
+          packageId: canonicalPackageId,
+          pendingInstalls: Array.from(pendingInstalls.value.entries())
+        })
+      }
+    })
+
+    // Fallback for older service implementations that may ignore beforeQueueStart.
+    if (!queuedTaskId) {
+      queuedTaskId = ui_id
+      pendingInstalls.value.set(ui_id, canonicalPackageId)
+      queuedPackages.value.add(canonicalPackageId)
+      startQueueTimeout(canonicalPackageId)
+      console.log('[ComfyGit] Registered pending install (fallback):', {
+        ui_id,
+        packageId: canonicalPackageId,
+        pendingInstalls: Array.from(pendingInstalls.value.entries())
+      })
+    }
+
+    return true
   } catch (e) {
+    const errorMessage = getErrorMessage(e, 'Failed to queue install request')
     console.error('[ComfyGit] Failed to queue package install:', e)
-    failedPackages.value.set(canonicalPackageId, 'Failed to queue install request')
+    if (queuedTaskId) {
+      pendingInstalls.value.delete(queuedTaskId)
+    }
+    clearPendingInstallByPackageId(canonicalPackageId)
+    clearQueueTimeout(canonicalPackageId)
+    queuedPackages.value.delete(canonicalPackageId)
+    failedPackages.value.set(canonicalPackageId, errorMessage)
+    return false
   } finally {
     installingPackage.value = null
   }
@@ -692,34 +804,51 @@ function downloadModel(model: MissingModelItem) {
 }
 
 // Queue all missing nodes for install
-async function installAllNodes() {
+interface InstallBatchSummary {
+  attempted: number
+  failed: number
+}
+
+async function installAllNodes(): Promise<InstallBatchSummary> {
+  const summary: InstallBatchSummary = { attempted: 0, failed: 0 }
   for (const pkg of missingPackages.value) {
     // Skip already installed, queued, or failed packages
     if (!installedPackages.value.has(pkg.package_id) &&
         !queuedPackages.value.has(pkg.package_id) &&
         !failedPackages.value.has(pkg.package_id)) {
-      await installPackage(pkg)
+      summary.attempted++
+      const success = await installPackage(pkg)
+      if (!success) {
+        summary.failed++
+      }
     }
   }
+  return summary
 }
 
-async function installAllCommunityPackages() {
+async function installAllCommunityPackages(): Promise<InstallBatchSummary> {
+  const summary: InstallBatchSummary = { attempted: 0, failed: 0 }
   for (const pkg of actionableCommunityPackages.value) {
     const packageId = pkg.package_id!
     if (!installedPackages.value.has(packageId) &&
         !queuedPackages.value.has(packageId) &&
         !failedPackages.value.has(packageId)) {
-      await installCommunityPackage(pkg, 'registry')
+      summary.attempted++
+      const success = await installCommunityPackage(pkg, 'registry')
+      if (!success) {
+        summary.failed++
+      }
     }
   }
+  return summary
 }
 
 // Download all models
-function downloadAllModels() {
+function downloadAllModels(): number {
   const toDownload = downloadableModels.value.filter(
     m => !queuedModels.value.has(m.url!)
   )
-  if (toDownload.length === 0) return
+  if (toDownload.length === 0) return 0
 
   addToQueue(toDownload.map(m => ({
     workflow: 'unsaved',
@@ -731,13 +860,22 @@ function downloadAllModels() {
   for (const m of toDownload) {
     queuedModels.value.add(m.url!)
   }
+
+  return toDownload.length
 }
 
 // Download everything (nodes + models)
-function downloadAll() {
-  installAllNodes()
-  installAllCommunityPackages()
+async function downloadAll() {
+  const nodeSummary = await installAllNodes()
+  const communitySummary = await installAllCommunityPackages()
   downloadAllModels()
+
+  const attempted = nodeSummary.attempted + communitySummary.attempted
+  const failed = nodeSummary.failed + communitySummary.failed
+  if (attempted > 0 && failed > 0) {
+    const succeeded = attempted - failed
+    error.value = `${succeeded} of ${attempted} installs queued, ${failed} failed`
+  }
 }
 
 // Handle "don't show this popup" change (global setting)
@@ -815,6 +953,7 @@ async function analyzeWorkflow(workflow: any) {
   error.value = null
 
   // Reset state
+  clearAllQueueTimeouts()
   installedPackages.value = new Set()
   queuedPackages.value = new Set()
   failedPackages.value = new Map()
@@ -855,6 +994,7 @@ async function analyzeWorkflow(workflow: any) {
 }
 
 function dismiss() {
+  clearAllQueueTimeouts()
   visible.value = false
   analysis.value = null
 }
@@ -876,6 +1016,7 @@ function handleTaskStarted(event: CustomEvent) {
   })
   const packageId = pendingInstalls.value.get(taskId)
   if (packageId) {
+    clearQueueTimeout(packageId)
     installingPackage.value = packageId
     console.log('[ComfyGit] Installing package:', packageId)
   } else {
@@ -895,6 +1036,7 @@ function handleTaskCompleted(event: CustomEvent) {
   const packageId = pendingInstalls.value.get(taskId)
 
   if (packageId) {
+    clearQueueTimeout(packageId)
     pendingInstalls.value.delete(taskId)
     queuedPackages.value.delete(packageId)
 
@@ -957,6 +1099,7 @@ function ensureEventListeners() {
 function handleWorkflowSaved(event: CustomEvent) {
   const { change_type } = event.detail
   if ((change_type === 'created' || change_type === 'modified') && visible.value) {
+    clearAllQueueTimeouts()
     visible.value = false
     console.log('[ComfyGit] Workflow saved, auto-dismissing popup')
   }
@@ -972,6 +1115,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  clearAllQueueTimeouts()
   window.removeEventListener('comfygit:workflow-loaded', handleWorkflowLoaded as EventListener)
 
   // Clean up Manager queue event listeners if they were registered

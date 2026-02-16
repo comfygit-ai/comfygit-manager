@@ -150,6 +150,9 @@ describe('MissingResourcesPopup alias dedupe', () => {
     expect(mockQueueNodeInstall).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'comfyui_ryanonyheinside'
+      }),
+      expect.objectContaining({
+        beforeQueueStart: expect.any(Function)
       })
     )
 
