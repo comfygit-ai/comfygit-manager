@@ -103,18 +103,73 @@
           </div>
         </div>
 
-        <!-- Uninstallable nodes -->
-        <div v-if="uninstallableNodes.length > 0" class="section">
+        <!-- Community-mapped packages -->
+        <div v-if="communityMappedPackages.length > 0" class="section">
           <div class="section-header">
-            <span class="section-title">No Installable Package Version ({{ uninstallableNodes.length }})</span>
+            <span class="section-title">Community-Mapped Packages ({{ communityMappedPackages.length }})</span>
+            <BaseButton
+              v-if="actionableCommunityPackages.length > 1"
+              size="sm"
+              variant="secondary"
+              :disabled="allCommunityPackagesDone"
+              @click="installAllCommunityPackages"
+            >
+              {{ allCommunityPackagesDone ? 'All Queued' : 'Install All' }}
+            </BaseButton>
           </div>
           <div class="item-list">
-            <div v-for="node in uninstallableNodes.slice(0, 5)" :key="`un-${node.node_type}-${node.package_id || 'none'}`" class="item">
-              <code class="node-type">{{ node.node_type }}</code>
-              <span class="not-found">{{ node.guidance || 'No compatible package version is available for this environment' }}</span>
+            <div
+              v-for="pkg in displayedCommunityPackages"
+              :key="`community-${pkg.item_id}`"
+              class="package-item"
+            >
+              <div class="package-info community-info">
+                <div class="community-title-row">
+                  <span class="package-name">{{ pkg.title }}</span>
+                  <span class="node-count">({{ pkg.node_count }} {{ pkg.node_count === 1 ? 'node' : 'nodes' }})</span>
+                </div>
+                <div class="community-mapping-note">
+                  Found via community mapping — registry metadata may be incomplete<span v-if="pkg.guidance">. {{ pkg.guidance }}</span>
+                </div>
+              </div>
+              <template v-if="pkg.package_id">
+                <div v-if="!installedPackages.has(pkg.package_id) && !queuedPackages.has(pkg.package_id) && !failedPackages.has(pkg.package_id)" class="community-actions">
+                  <BaseButton
+                    size="sm"
+                    variant="secondary"
+                    :disabled="installingPackage === pkg.package_id"
+                    @click="installCommunityPackage(pkg, 'registry')"
+                  >
+                    {{ installingPackage === pkg.package_id ? 'Queueing...' : 'Install' }}
+                  </BaseButton>
+                  <BaseButton
+                    v-if="pkg.repository"
+                    size="sm"
+                    variant="ghost"
+                    :disabled="installingPackage === pkg.package_id"
+                    @click="installCommunityPackage(pkg, 'git')"
+                  >
+                    Install via Git
+                  </BaseButton>
+                </div>
+                <span v-else-if="installingPackage === pkg.package_id" class="installing-badge">Installing...</span>
+                <span v-else-if="queuedPackages.has(pkg.package_id)" class="queued-badge">Queued</span>
+                <span
+                  v-else-if="failedPackages.has(pkg.package_id)"
+                  class="failed-badge"
+                  :title="failedPackages.get(pkg.package_id)"
+                >Failed ⚠</span>
+                <span v-else class="installed-badge">Installed</span>
+              </template>
+              <span v-else class="no-url">Manual setup required</span>
             </div>
-            <div v-if="uninstallableNodes.length > 5" class="overflow-note">
-              ...and {{ uninstallableNodes.length - 5 }} more
+            <div
+              v-if="communityMappedPackages.length >= 5"
+              class="show-all-row"
+              @click="activeDetailView = 'community'"
+            >
+              <span>Show all {{ communityMappedPackages.length }} packages...</span>
+              <span class="show-all-arrow">→</span>
             </div>
           </div>
         </div>
@@ -192,9 +247,9 @@
     :items="detailModalItems"
     :item-type="activeDetailView"
     :queued-items="activeDetailView === 'models' ? queuedModels : queuedPackages"
-    :installed-items="activeDetailView === 'packages' ? installedPackages : undefined"
-    :failed-items="activeDetailView === 'packages' ? failedPackages : undefined"
-    :installing-item="activeDetailView === 'packages' ? installingPackage : undefined"
+    :installed-items="activeDetailView === 'models' ? undefined : installedPackages"
+    :failed-items="activeDetailView === 'models' ? undefined : failedPackages"
+    :installing-item="activeDetailView === 'models' ? undefined : installingPackage"
     @close="activeDetailView = null"
     @action="handleDetailAction"
     @bulk-action="handleDetailBulkAction"
@@ -206,7 +261,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import BaseModal from './base/BaseModal.vue'
 import BaseButton from './base/BaseButton.vue'
 import BaseCheckbox from './base/BaseCheckbox.vue'
-import MissingResourcesDetailModal, { type ResourceItem } from './MissingResourcesDetailModal.vue'
+import MissingResourcesDetailModal, { type ResourceItem, type ResourceAction } from './MissingResourcesDetailModal.vue'
 import { useModelDownloadQueue } from '@/composables/useModelDownloadQueue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 
@@ -237,8 +292,13 @@ interface VersionGatedNodeItem {
 }
 
 interface UninstallableNodeItem {
+  item_id: string
   node_type: string
+  title: string
+  node_count: number
   package_id: string | null
+  repository: string | null
+  latest_version: string | null
   guidance: string | null
 }
 
@@ -253,7 +313,7 @@ const queuedModels = ref<Set<string>>(new Set())       // Models queued for down
 const dontShowAgain = ref(false)
 const installingPackage = ref<string | null>(null)     // Currently installing package (from WebSocket cm-task-started)
 const installedCount = ref(0)  // Track total installed for restart notification
-const activeDetailView = ref<'models' | 'packages' | null>(null)
+const activeDetailView = ref<'models' | 'packages' | 'community' | null>(null)
 
 // Session-based suppression - workflow IDs that have shown popup this session
 // Cleared on browser refresh (in-memory only)
@@ -269,7 +329,7 @@ const hasIssues = computed(() => {
   return missingPackages.value.length > 0 ||
     unresolvedNodes.value.length > 0 ||
     versionGatedNodes.value.length > 0 ||
-    uninstallableNodes.value.length > 0 ||
+    communityMappedPackages.value.length > 0 ||
     missingModels.value.length > 0
 })
 
@@ -327,18 +387,75 @@ const versionGatedNodes = computed<VersionGatedNodeItem[]>(() => {
   })
 })
 
-const uninstallableNodes = computed<UninstallableNodeItem[]>(() => {
+const communityMappedPackages = computed<UninstallableNodeItem[]>(() => {
   if (!analysis.value?.nodes) return []
   const guidance = analysis.value.node_guidance || {}
-  return (analysis.value.nodes.uninstallable || []).map((n: any) => {
+  const packageMap = new Map<string, UninstallableNodeItem>()
+
+  for (const n of (analysis.value.nodes.uninstallable || [])) {
     const nodeType = n.reference?.node_type || n.node_type
-    return {
-      node_type: nodeType,
-      package_id: n.package?.package_id || null,
-      guidance: n.guidance || guidance[nodeType] || null,
+    const packageId = n.package?.package_id || null
+    const key = packageId || `node:${nodeType}`
+
+    if (!packageMap.has(key)) {
+      packageMap.set(key, {
+        item_id: key,
+        node_type: nodeType,
+        title: n.package?.title || packageId || nodeType,
+        node_count: 0,
+        package_id: packageId,
+        repository: n.package?.repository || null,
+        latest_version: n.package?.latest_version || null,
+        guidance: n.guidance || guidance[nodeType] || null,
+      })
     }
-  })
+
+    const pkg = packageMap.get(key)!
+    pkg.node_count++
+    if (!pkg.guidance) {
+      pkg.guidance = n.guidance || guidance[nodeType] || null
+    }
+    if (!pkg.repository && n.package?.repository) {
+      pkg.repository = n.package.repository
+    }
+    if (!pkg.latest_version && n.package?.latest_version) {
+      pkg.latest_version = n.package.latest_version
+    }
+  }
+
+  return Array.from(packageMap.values())
 })
+
+const actionableCommunityPackages = computed(() => {
+  return communityMappedPackages.value.filter(pkg => !!pkg.package_id)
+})
+
+const displayedCommunityPackages = computed(() => {
+  if (communityMappedPackages.value.length >= 5) {
+    return communityMappedPackages.value.slice(0, 4)
+  }
+  return communityMappedPackages.value
+})
+
+const allCommunityPackagesDone = computed(() => {
+  return actionableCommunityPackages.value.length > 0 &&
+    actionableCommunityPackages.value.every(pkg => {
+      const packageId = pkg.package_id!
+      return installedPackages.value.has(packageId) ||
+        queuedPackages.value.has(packageId) ||
+        failedPackages.value.has(packageId)
+    })
+})
+
+function communityActionsFor(pkg: UninstallableNodeItem): ResourceAction[] {
+  const actions: ResourceAction[] = [
+    { key: 'install_registry', label: 'Install', variant: 'secondary' }
+  ]
+  if (pkg.repository) {
+    actions.push({ key: 'install_git', label: 'Install via Git', variant: 'ghost' })
+  }
+  return actions
+}
 
 // Missing models with download info
 const missingModels = computed<MissingModelItem[]>(() => {
@@ -408,12 +525,16 @@ const allModelsQueued = computed(() => {
 
 // Check if there are any downloadable items
 const hasDownloadableItems = computed(() => {
-  return missingPackages.value.length > 0 || downloadableModels.value.length > 0
+  return missingPackages.value.length > 0 ||
+    actionableCommunityPackages.value.length > 0 ||
+    downloadableModels.value.length > 0
 })
 
 // Check if all items are done (packages installed, models queued)
 const allItemsDone = computed(() => {
-  const packagesDone = missingPackages.value.length === 0 || allPackagesInstalled.value
+  const packagesDone =
+    (missingPackages.value.length === 0 || allPackagesInstalled.value) &&
+    (actionableCommunityPackages.value.length === 0 || allCommunityPackagesDone.value)
   const modelsDone = downloadableModels.value.length === 0 || allModelsQueued.value
   return packagesDone && modelsDone
 })
@@ -422,6 +543,7 @@ const allItemsDone = computed(() => {
 const detailModalTitle = computed(() => {
   if (activeDetailView.value === 'models') return `Missing Models (${missingModels.value.length})`
   if (activeDetailView.value === 'packages') return `Missing Custom Nodes (${totalMissingNodeCount.value})`
+  if (activeDetailView.value === 'community') return `Community-Mapped Packages (${communityMappedPackages.value.length})`
   return ''
 })
 
@@ -442,61 +564,93 @@ const detailModalItems = computed<ResourceItem[]>(() => {
       canAction: true
     }))
   }
+  if (activeDetailView.value === 'community') {
+    return communityMappedPackages.value.map(p => ({
+      id: p.package_id || p.item_id,
+      name: p.title,
+      subtitle: `(${p.node_count} ${p.node_count === 1 ? 'node' : 'nodes'})`,
+      canAction: !!p.package_id,
+      actionDisabledReason: p.package_id ? undefined : 'Manual setup required',
+      actions: p.package_id ? communityActionsFor(p) : []
+    }))
+  }
   return []
 })
 
 // Detail modal handlers
-function handleDetailAction(item: ResourceItem) {
+function handleDetailAction(item: ResourceItem, actionKey?: string) {
   if (activeDetailView.value === 'models') {
     const model = missingModels.value.find(m => m.url === item.id || m.widget_value === item.id)
     if (model) downloadModel(model)
   } else if (activeDetailView.value === 'packages') {
     const pkg = missingPackages.value.find(p => p.package_id === item.id)
     if (pkg) installPackage(pkg)
+  } else if (activeDetailView.value === 'community') {
+    const pkg = communityMappedPackages.value.find(p => (p.package_id || p.item_id) === item.id)
+    if (!pkg || !pkg.package_id) return
+    const installMode = actionKey === 'install_git' ? 'git' : 'registry'
+    installCommunityPackage(pkg, installMode)
   }
 }
 
 function handleDetailBulkAction() {
   if (activeDetailView.value === 'models') downloadAllModels()
   else if (activeDetailView.value === 'packages') installAllNodes()
+  else if (activeDetailView.value === 'community') installAllCommunityPackages()
 }
 
 // Queue a single package install via Manager queue
 async function installPackage(pkg: MissingPackage) {
-  const packageId = pkg.package_id
+  await queueInstallRequest(pkg.package_id, pkg.latest_version, 'registry')
+}
 
-  // Skip if already installed, queued, or failed
+async function installCommunityPackage(pkg: UninstallableNodeItem, installMode: 'registry' | 'git') {
+  if (!pkg.package_id) return
+  await queueInstallRequest(pkg.package_id, pkg.latest_version, installMode, pkg.repository)
+}
+
+async function queueInstallRequest(
+  packageId: string,
+  latestVersion: string | null,
+  installMode: 'registry' | 'git',
+  repository?: string | null
+) {
+  const selectedVersion = latestVersion || 'latest'
   if (installedPackages.value.has(packageId) ||
       queuedPackages.value.has(packageId) ||
       failedPackages.value.has(packageId)) return
 
-  // Ensure WebSocket listeners are registered before starting install
-  // (lazy registration because window.app may not exist at mount time)
   ensureEventListeners()
-
   installingPackage.value = packageId
+
   try {
-    // Queue the install via Manager queue API
-    // Pass repository and version from package data
-    const { ui_id } = await queueNodeInstall({
+    const installParams: {
+      id: string
+      version: string
+      selected_version: string
+      mode: string
+      channel: string
+      repository?: string
+      install_source?: 'registry' | 'git'
+    } = {
       id: packageId,
-      version: pkg.latest_version || 'latest',
-      selected_version: pkg.latest_version || 'latest',
-      repository: pkg.repository || undefined,
+      version: selectedVersion,
+      selected_version: selectedVersion,
       mode: 'remote',
       channel: 'default'
-    })
+    }
 
-    // Track this task for completion handling
-    // IMPORTANT: This must happen BEFORE queue processing starts (handled by fire-and-forget in queueNodeInstall)
+    if (installMode === 'git' && repository) {
+      installParams.repository = repository
+      installParams.install_source = 'git'
+    }
+
+    const { ui_id } = await queueNodeInstall(installParams)
     pendingInstalls.value.set(ui_id, packageId)
     queuedPackages.value.add(packageId)
     console.log('[ComfyGit] Registered pending install:', { ui_id, packageId, pendingInstalls: Array.from(pendingInstalls.value.entries()) })
-
-    // Note: installedCount is updated in handleTaskCompleted on success
   } catch (e) {
     console.error('[ComfyGit] Failed to queue package install:', e)
-    // Mark as failed if we couldn't even queue it
     failedPackages.value.set(packageId, 'Failed to queue install request')
   } finally {
     installingPackage.value = null
@@ -528,6 +682,17 @@ async function installAllNodes() {
   }
 }
 
+async function installAllCommunityPackages() {
+  for (const pkg of actionableCommunityPackages.value) {
+    const packageId = pkg.package_id!
+    if (!installedPackages.value.has(packageId) &&
+        !queuedPackages.value.has(packageId) &&
+        !failedPackages.value.has(packageId)) {
+      await installCommunityPackage(pkg, 'registry')
+    }
+  }
+}
+
 // Download all models
 function downloadAllModels() {
   const toDownload = downloadableModels.value.filter(
@@ -550,6 +715,7 @@ function downloadAllModels() {
 // Download everything (nodes + models)
 function downloadAll() {
   installAllNodes()
+  installAllCommunityPackages()
   downloadAllModels()
 }
 
@@ -876,6 +1042,32 @@ onUnmounted(() => {
   gap: var(--cg-space-2);
   flex: 1;
   min-width: 0;
+}
+
+.community-info {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: var(--cg-space-1);
+}
+
+.community-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  flex-wrap: wrap;
+}
+
+.community-mapping-note {
+  color: var(--cg-color-text-muted);
+  font-style: italic;
+  font-size: var(--cg-font-size-xs);
+  line-height: 1.3;
+}
+
+.community-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cg-space-1);
 }
 
 .package-name {

@@ -1,0 +1,62 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { useComfyGitService } from '../useComfyGitService'
+
+describe('useComfyGitService queueNodeInstall', () => {
+  beforeEach(() => {
+    ;(window as any).app = {
+      api: {
+        fetchApi: vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          text: async () => ''
+        })
+      }
+    }
+  })
+
+  it('queues registry installs without git source fields', async () => {
+    const svc = useComfyGitService()
+
+    const result = await svc.queueNodeInstall({
+      id: 'kj-nodes',
+      version: '1.2.3',
+      selected_version: '1.2.3',
+      repository: 'https://github.com/kijai/ComfyUI-KJNodes'
+    })
+
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    const calls = (window as any).app.api.fetchApi.mock.calls
+    expect(calls[0][0]).toBe('/v2/manager/queue/task')
+    expect(calls[1][0]).toBe('/v2/manager/queue/start')
+    expect(result.ui_id).toBeTruthy()
+
+    const body = JSON.parse(calls[0][1].body)
+    expect(body.kind).toBe('install')
+    expect(body.params.id).toBe('kj-nodes')
+    expect(body.params.version).toBe('1.2.3')
+    expect(body.params.selected_version).toBe('1.2.3')
+    expect(body.params.install_source).toBeUndefined()
+    expect(body.params.repository).toBeUndefined()
+  })
+
+  it('queues explicit git installs with install_source and repository', async () => {
+    const svc = useComfyGitService()
+
+    await svc.queueNodeInstall({
+      id: 'kj-nodes',
+      repository: 'https://github.com/kijai/ComfyUI-KJNodes',
+      install_source: 'git'
+    })
+
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    const calls = (window as any).app.api.fetchApi.mock.calls
+    const body = JSON.parse(calls[0][1].body)
+    expect(body.params.id).toBe('kj-nodes')
+    expect(body.params.version).toBe('latest')
+    expect(body.params.selected_version).toBe('latest')
+    expect(body.params.install_source).toBe('git')
+    expect(body.params.repository).toBe('https://github.com/kijai/ComfyUI-KJNodes')
+  })
+})

@@ -1017,6 +1017,7 @@ export function useComfyGitService() {
     repository?: string
     mode?: string
     channel?: string
+    install_source?: 'registry' | 'git'
   }): Promise<{ ui_id: string }> {
     if (USE_MOCK) {
       await mockApi.installNode(params.id)
@@ -1030,16 +1031,33 @@ export function useComfyGitService() {
                       (window as any).app?.api?.initialClientId ??
                       'comfygit-panel'
 
+    const taskParams: {
+      id: string
+      version: string
+      selected_version: string
+      mode: string
+      channel: string
+      repository?: string
+      install_source?: 'registry' | 'git'
+    } = {
+      id: params.id,
+      version: params.version || params.selected_version || 'latest',
+      selected_version: params.selected_version || 'latest',
+      mode: params.mode || 'remote',
+      channel: params.channel || 'default'
+    }
+
+    // Explicit source control: only include git fields for explicit git installs.
+    if (params.install_source) {
+      taskParams.install_source = params.install_source
+    }
+    if (params.install_source === 'git' && params.repository) {
+      taskParams.repository = params.repository
+    }
+
     const task = {
       kind: 'install',
-      params: {
-        id: params.id,
-        version: params.version || params.selected_version || 'latest',
-        selected_version: params.selected_version || 'latest',
-        repository: params.repository || '',
-        mode: params.mode || 'remote',
-        channel: params.channel || 'default'
-      },
+      params: taskParams,
       ui_id,
       client_id
     }

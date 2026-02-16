@@ -474,8 +474,16 @@ function formatWorkflowVersionTargetSummary(targets: string[]): string {
   return ` (${shownTargets}${hasMore ? ', ...' : ''})`
 }
 
+function normalizeIssueTerminology(summary: string): string {
+  return summary
+    .replace(/uninstallable node mappings?/gi, (match) => match.toLowerCase().endsWith('s') ? 'community packages' : 'community package')
+    .replace(/no installable package versions?/gi, 'need community packages')
+    .replace(/\bare uninstallable\b/gi, 'need community packages')
+    .replace(/\buninstallable\b/gi, 'community-mapped')
+}
+
 function formatBrokenWorkflowItem(wf: AnalyzedWorkflow): string {
-  const summary = wf.issue_summary || 'Has issues'
+  const summary = normalizeIssueTerminology(wf.issue_summary || 'Has issues')
   const summaryHasVersionInfo = /(?:>=|v?\d+\.\d+)/i.test(summary)
   const versionTargets = getVersionTargetsFromGuidance(wf.version_gated_guidance || [])
 
@@ -515,11 +523,11 @@ const brokenWorkflowDescription = computed(() => {
     )
   }
   if (totalUninstallableNodes.value > 0) {
-    blockedParts.push(`${totalUninstallableNodes.value} are uninstallable`)
+    blockedParts.push(`${totalUninstallableNodes.value} need community packages`)
   }
 
   if (blockedParts.length > 0) {
-    return `These workflows have missing or blocked dependencies (${blockedParts.join(', ')}) that must be resolved before they can run.`
+    return `These workflows have missing, blocked, or actionable dependencies (${blockedParts.join(', ')}) that must be resolved before they can run.`
   }
   return 'These workflows have missing dependencies that must be resolved before they can run.'
 })

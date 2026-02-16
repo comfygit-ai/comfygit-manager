@@ -124,6 +124,19 @@
                   <span class="node-name">{{ node.name }}</span>
                   <span class="node-badge">{{ getNodeStatusLabel(node.status) }}</span>
                   <span v-if="node.version" class="node-version">v{{ node.version }}</span>
+                  <button
+                    v-if="node.status === 'uninstallable' && node.package_id && !queuedNodeInstalls.has(node.package_id)"
+                    class="node-install-link"
+                    @click="handleQueueNodeInstall(node)"
+                  >
+                    Install
+                  </button>
+                  <span
+                    v-else-if="node.status === 'uninstallable' && node.package_id && queuedNodeInstalls.has(node.package_id)"
+                    class="node-install-queued"
+                  >
+                    Queued
+                  </span>
                 </div>
                 <div v-if="node.guidance" class="node-guidance">{{ node.guidance }}</div>
               </div>
@@ -183,7 +196,7 @@ const emit = defineEmits<{
   refresh: []
 }>()
 
-const { getWorkflowDetails, setModelImportance, openFileLocation } = useComfyGitService()
+const { getWorkflowDetails, setModelImportance, openFileLocation, queueNodeInstall } = useComfyGitService()
 
 const details = ref<WorkflowDetails | null>(null)
 const loading = ref(false)
@@ -192,6 +205,7 @@ const hasChanges = ref(false)
 const importanceChanges = ref<Record<string, string>>({})
 const showImportanceInfo = ref(false)
 const expandedNodeLists = ref<Set<string>>(new Set())
+const queuedNodeInstalls = ref<Set<string>>(new Set())
 
 const importanceOptions = [
   { label: 'Required', value: 'required' },
@@ -238,7 +252,7 @@ function getNodeStatusClass(status: WorkflowDetails['nodes'][number]['status']):
     case 'version_gated':
       return 'version-gated'
     case 'uninstallable':
-      return 'uninstallable'
+      return 'community-mapped'
     case 'missing':
     default:
       return 'missing'
@@ -252,7 +266,7 @@ function getNodeStatusIcon(status: WorkflowDetails['nodes'][number]['status']): 
     case 'version_gated':
       return '⚠'
     case 'uninstallable':
-      return '✕'
+      return '⚠'
     case 'missing':
     default:
       return '✕'
@@ -266,7 +280,7 @@ function getNodeStatusLabel(status: WorkflowDetails['nodes'][number]['status']):
     case 'version_gated':
       return 'Needs newer ComfyUI'
     case 'uninstallable':
-      return 'Uninstallable'
+      return 'Community-Mapped'
     case 'missing':
     default:
       return 'Missing'
@@ -319,6 +333,23 @@ async function handleOpenFileLocation(relativePath: string) {
     await openFileLocation(relativePath)
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to open file location'
+  }
+}
+
+async function handleQueueNodeInstall(node: WorkflowDetails['nodes'][number]) {
+  if (!node.package_id) return
+  try {
+    const selectedVersion = node.latest_version || 'latest'
+    await queueNodeInstall({
+      id: node.package_id,
+      version: selectedVersion,
+      selected_version: selectedVersion,
+      mode: 'remote',
+      channel: 'default'
+    })
+    queuedNodeInstalls.value.add(node.package_id)
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to queue node install'
   }
 }
 
@@ -529,8 +560,8 @@ onMounted(loadDetails)
   color: var(--cg-color-warning, #f59e0b);
 }
 
-.node-status.uninstallable {
-  color: var(--cg-color-error);
+.node-status.community-mapped {
+  color: var(--cg-color-warning, #f59e0b);
 }
 
 .node-name {
@@ -547,6 +578,22 @@ onMounted(loadDetails)
 .node-version {
   color: var(--cg-color-text-muted);
   font-size: var(--cg-font-size-xs);
+}
+
+.node-install-link {
+  border: none;
+  background: transparent;
+  color: var(--cg-color-accent);
+  cursor: pointer;
+  font-size: var(--cg-font-size-xs);
+  padding: 0;
+  text-decoration: underline;
+}
+
+.node-install-queued {
+  color: var(--cg-color-warning);
+  font-size: var(--cg-font-size-xs);
+  font-weight: var(--cg-font-weight-medium);
 }
 
 .node-guidance {

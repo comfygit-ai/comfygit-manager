@@ -146,4 +146,45 @@ describe('StatusSection - Setup State Issue Cards', () => {
     expect(wrapper.text()).toContain('require newer ComfyUI (>= 0.3.10)')
     expect(wrapper.text()).toContain('needs ComfyUI >= 0.3.10')
   })
+
+  it('uses community package terminology for uninstallable counts', () => {
+    const status = createMockStatus()
+    status.workflows.analyzed = [
+      {
+        name: 'community.json',
+        sync_state: 'synced',
+        status: 'broken',
+        has_issues: true,
+        has_path_sync_issues: false,
+        uninstalled_nodes: 0,
+        unresolved_nodes_count: 0,
+        nodes_version_gated_count: 0,
+        nodes_uninstallable_count: 2,
+        version_gated_guidance: [],
+        unresolved_models_count: 0,
+        ambiguous_models_count: 0,
+        ambiguous_nodes_count: 0,
+        models_needing_path_sync_count: 0,
+        pending_downloads_count: 0,
+        issue_summary: '2 uninstallable node mappings',
+        node_count: 10,
+        model_count: 2,
+        has_category_mismatch_issues: false,
+        models_with_category_mismatch_count: 0
+      }
+    ]
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed'
+      },
+      global: {
+        stubs: ['StatusDetailModal', 'Teleport']
+      }
+    })
+
+    expect(wrapper.text()).toContain('community packages')
+    expect(wrapper.text().toLowerCase()).not.toContain('uninstallable node mappings')
+  })
 })

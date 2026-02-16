@@ -327,6 +327,9 @@ export interface WorkflowDetails {
     version?: string
     status: 'installed' | 'missing' | 'version_gated' | 'uninstallable'
     guidance?: string
+    package_id?: string | null
+    repository?: string | null
+    latest_version?: string | null
   }>
 }
 
@@ -669,6 +672,9 @@ export interface NodeChoice {
   action: 'install' | 'optional' | 'skip' | 'manual'
   package_id?: string
   manual_url?: string
+  install_source?: 'registry' | 'git'
+  repository?: string
+  version?: string | null
 }
 
 export interface ModelChoice {

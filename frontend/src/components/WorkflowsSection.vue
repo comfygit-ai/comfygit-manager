@@ -306,9 +306,17 @@ async function handleRestart() {
   }
 }
 
+function normalizeIssueTerminology(summary: string): string {
+  return summary
+    .replace(/uninstallable node mappings?/gi, (match) => match.toLowerCase().endsWith('s') ? 'community packages' : 'community package')
+    .replace(/no installable package versions?/gi, 'need community packages')
+    .replace(/\bare uninstallable\b/gi, 'need community packages')
+    .replace(/\buninstallable\b/gi, 'community-mapped')
+}
+
 function formatWorkflowIssues(wf: WorkflowInfo): string {
   if (wf.issue_summary && wf.issue_summary.trim().length > 0) {
-    return wf.issue_summary
+    return normalizeIssueTerminology(wf.issue_summary)
   }
 
   const parts: string[] = []
@@ -317,7 +325,7 @@ function formatWorkflowIssues(wf: WorkflowInfo): string {
     parts.push(`${wf.version_gated_count} node${wf.version_gated_count > 1 ? 's' : ''} require newer ComfyUI`)
   }
   if (wf.uninstallable_count && wf.uninstallable_count > 0) {
-    parts.push(`${wf.uninstallable_count} uninstallable node mapping${wf.uninstallable_count > 1 ? 's' : ''}`)
+    parts.push(`${wf.uninstallable_count} node${wf.uninstallable_count > 1 ? 's' : ''} need community packages`)
   }
   if (wf.missing_nodes > 0) {
     parts.push(`${wf.missing_nodes} missing node${wf.missing_nodes > 1 ? 's' : ''}`)

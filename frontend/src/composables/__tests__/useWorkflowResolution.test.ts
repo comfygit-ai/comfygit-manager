@@ -270,6 +270,46 @@ describe('useWorkflowResolution', () => {
       await expect(applyResolution('test', nodeChoices, modelChoices)).rejects.toThrow('Invalid choices provided')
       expect(error.value).toContain('Invalid choices provided')
     })
+
+    it('serializes uninstallable git choice fields in apply-resolution payload', async () => {
+      const { applyResolution } = useWorkflowResolution()
+      const fetchApi = vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          status: 'success',
+          nodes_to_install: [],
+          models_to_download: [],
+          estimated_time_seconds: 0
+        })
+      })
+
+      global.window = {
+        app: {
+          api: { fetchApi }
+        }
+      } as any
+
+      const nodeChoices = new Map([
+        ['GetNode', {
+          action: 'install',
+          package_id: 'kj-nodes',
+          install_source: 'git',
+          repository: 'https://github.com/kijai/ComfyUI-KJNodes'
+        }]
+      ])
+
+      await applyResolution('test-workflow', nodeChoices, new Map())
+
+      const request = fetchApi.mock.calls[0]
+      expect(request[0]).toBe('/v2/comfygit/workflow/test-workflow/apply-resolution')
+      const payload = JSON.parse(request[1].body)
+      expect(payload.node_choices.GetNode).toMatchObject({
+        action: 'install',
+        package_id: 'kj-nodes',
+        install_source: 'git',
+        repository: 'https://github.com/kijai/ComfyUI-KJNodes'
+      })
+    })
   })
 
   describe('searchNodes', () => {
