@@ -848,10 +848,11 @@ onUnmounted(() => {
 
 .item {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: var(--cg-space-2);
   padding: var(--cg-space-1) var(--cg-space-2);
   font-size: var(--cg-font-size-sm);
+  flex-wrap: wrap;
 }
 
 .package-item,
@@ -911,7 +912,8 @@ onUnmounted(() => {
   color: var(--cg-color-warning);
   font-style: italic;
   font-size: var(--cg-font-size-xs);
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .queued-badge,
