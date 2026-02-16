@@ -1,4 +1,5 @@
 """Integration tests for workflow-related panel endpoints."""
+import json
 import pytest
 from unittest.mock import Mock
 import sys
@@ -604,10 +605,10 @@ class TestWorkflowAnalyzeEndpoint:
         data = await resp.json()
         assert data["stats"]["needs_user_input"] is False
 
-    async def test_version_gated_and_uninstallable_are_blocking_but_not_user_input(
+    async def test_version_gated_and_uninstallable_are_actionable_without_user_input(
         self, client, mock_environment
     ):
-        """Version-gated/uninstallable nodes should block readiness but not require choices."""
+        """Version-gated/uninstallable nodes should not require user choices."""
         mock_version_gated = Mock()
         mock_version_gated.type = "SetNode"
         mock_version_gated.id = "17"
@@ -615,7 +616,11 @@ class TestWorkflowAnalyzeEndpoint:
         mock_pkg_data = Mock()
         mock_pkg_data.display_name = "KJ Nodes"
         mock_pkg_data.repository = "https://github.com/kijai/ComfyUI-KJNodes"
-        mock_pkg_data.versions = {"1.2.0": {}}
+        mock_pkg_data.versions = {
+            "1.2.0": {},
+            "1.10.0": {},
+            "1.3.0": {},
+        }
 
         mock_uninstallable = Mock()
         mock_uninstallable.node_type = "GetNode"
@@ -655,6 +660,7 @@ class TestWorkflowAnalyzeEndpoint:
 
         assert data["nodes"]["version_gated"][0]["reference"]["node_type"] == "SetNode"
         assert data["nodes"]["uninstallable"][0]["reference"]["node_type"] == "GetNode"
+        assert data["nodes"]["uninstallable"][0]["package"]["latest_version"] == "1.10.0"
         assert data["node_guidance"]["SetNode"] == "Upgrade ComfyUI to >= v0.3.18"
         assert data["stats"]["needs_user_input"] is False
         assert data["stats"]["is_fully_resolved"] is False
@@ -1010,6 +1016,45 @@ class TestApplyResolutionEndpoint:
         # Should have one node to install
         assert "comfyui-impact-pack" in data["nodes_to_install"]
 
+    async def test_includes_uninstallable_nodes_with_install_action(self, client, mock_environment):
+        """Should include uninstallable package choices in nodes_to_install."""
+        mock_uninstallable_node = Mock()
+        mock_uninstallable_node.node_type = "GetNode"
+        mock_uninstallable_node.package_id = "kj-nodes"
+        mock_uninstallable_node.match_type = "auto_selected"
+
+        mock_result = create_mock_resolution(
+            nodes_resolved=[],
+            nodes_uninstallable=[mock_uninstallable_node],
+            nodes_unresolved=[],
+            models_resolved=[],
+            models_unresolved=[],
+            models_ambiguous=[]
+        )
+        mock_environment.workflow_manager.analyze_and_resolve_workflow.return_value = (Mock(), mock_result)
+        mock_environment.workflow_manager.fix_resolution.return_value = mock_result
+
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {}
+        mock_environment.pyproject.workflows = Mock()
+        mock_environment.pyproject.workflows.get_workflow_models.return_value = []
+        mock_environment.pyproject.workflows.get_all_with_resolutions.return_value = {}
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/test.json/apply-resolution",
+            json={
+                "node_choices": {
+                    "GetNode": {"action": "install"}
+                },
+                "model_choices": {}
+            }
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert "kj-nodes" in data["nodes_to_install"]
+
     async def test_success_with_model_download(self, client, mock_environment):
         """Should include models to download in response."""
         # Setup mock model with download intent
@@ -1219,6 +1264,45 @@ class TestApplyResolutionStreamEndpoint:
             json={}
         )
         assert resp.status == 500
+
+    async def test_stream_includes_uninstallable_nodes_for_install(self, client, mock_environment):
+        """Done payload should include uninstallable install choices."""
+        mock_uninstallable_node = Mock()
+        mock_uninstallable_node.node_type = "GetNode"
+        mock_uninstallable_node.package_id = "kj-nodes"
+        mock_uninstallable_node.match_type = "auto_selected"
+
+        mock_result = create_mock_resolution(
+            nodes_resolved=[],
+            nodes_uninstallable=[mock_uninstallable_node],
+            nodes_unresolved=[],
+            models_resolved=[],
+            models_unresolved=[],
+            models_ambiguous=[]
+        )
+        mock_result.download_results = []
+
+        mock_environment.resolve_workflow.return_value = mock_result
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {}
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/test.json/apply-resolution-stream",
+            json={
+                "node_choices": {"GetNode": {"action": "install"}},
+                "model_choices": {}
+            }
+        )
+
+        assert resp.status == 200
+        body = await resp.text()
+        done_data_line = next(
+            line for line in body.splitlines()
+            if line.startswith("data: ") and '"type": "done"' in line
+        )
+        done_payload = json.loads(done_data_line[len("data: "):])
+        assert done_payload["nodes_to_install"] == ["kj-nodes"]
 
 
 @pytest.mark.integration
@@ -1953,12 +2037,12 @@ class TestAnalyzeWorkflowJsonEndpoint:
         assert captured_kwargs["builtin_versions_repository"] is builtin_repo
         assert captured_kwargs["workflow_name"] == "test"
 
-    async def test_analyze_json_version_gated_blocks_fully_resolved_not_user_input(
+    async def test_analyze_json_version_gated_and_uninstallable_require_action_not_user_input(
         self,
         client,
         mock_environment
     ):
-        """Version-gated/uninstallable nodes block readiness, but do not require user choices."""
+        """Version-gated/uninstallable nodes require action, not user disambiguation."""
         mock_version_gated = Mock()
         mock_version_gated.type = "SetNode"
         mock_version_gated.id = "10"
@@ -1966,7 +2050,11 @@ class TestAnalyzeWorkflowJsonEndpoint:
         mock_pkg_data = Mock()
         mock_pkg_data.display_name = "KJ Nodes"
         mock_pkg_data.repository = "https://github.com/kijai/ComfyUI-KJNodes"
-        mock_pkg_data.versions = {"1.2.0": {}}
+        mock_pkg_data.versions = {
+            "1.2.0": {},
+            "1.10.0": {},
+            "1.3.0": {},
+        }
 
         mock_uninstallable = Mock()
         mock_uninstallable.node_type = "GetNode"
@@ -2000,6 +2088,7 @@ class TestAnalyzeWorkflowJsonEndpoint:
         data = await resp.json()
         assert len(data["nodes"]["version_gated"]) == 1
         assert len(data["nodes"]["uninstallable"]) == 1
+        assert data["nodes"]["uninstallable"][0]["package"]["latest_version"] == "1.10.0"
         assert data["stats"]["needs_user_input"] is False
         assert data["stats"]["is_fully_resolved"] is False
 

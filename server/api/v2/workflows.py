@@ -125,9 +125,16 @@ def _serialize_resolved_node(node: ResolvedNodePackage, workflow_name: str, unin
 
 def _get_latest_package_version(package_data) -> str | None:
     """Get latest package version from package_data when available."""
-    if package_data and getattr(package_data, "versions", None):
-        return next(iter(package_data.versions.keys()), None)
-    return None
+    versions = getattr(package_data, "versions", None)
+    if not package_data or not versions:
+        return None
+
+    try:
+        from packaging.version import InvalidVersion, Version
+
+        return str(max(versions.keys(), key=lambda v: Version(v)))
+    except (InvalidVersion, ValueError):
+        return sorted(versions.keys(), reverse=True)[0]
 
 
 def _serialize_version_gated_node(node, workflow_name: str, node_guidance: dict[str, str] | None = None) -> dict:
@@ -828,7 +835,8 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
         if m.match_type in ("download_intent", "property_download_intent")
     )
 
-    has_blocked_nodes = bool(version_gated_nodes or uninstallable_nodes)
+    has_blocked_nodes = bool(version_gated_nodes)
+    has_uninstallable = bool(uninstallable_nodes)
 
     # is_fully_resolved: workflow is ready to run (no user input needed AND all nodes installed AND no pending downloads)
     is_fully_resolved = (
@@ -836,6 +844,7 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
         and nodes_needing_installation == 0
         and download_intents_count == 0
         and not has_blocked_nodes
+        and not has_uninstallable
     )
 
     # Transform to frontend format
@@ -955,12 +964,14 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
         1 for m in result.models_resolved
         if m.match_type in ("download_intent", "property_download_intent")
     )
-    has_blocked_nodes = bool(version_gated_nodes or uninstallable_nodes)
+    has_blocked_nodes = bool(version_gated_nodes)
+    has_uninstallable = bool(uninstallable_nodes)
     is_fully_resolved = (
         not needs_user_input
         and nodes_needing_installation == 0
         and download_intents_count == 0
         and not has_blocked_nodes
+        and not has_uninstallable
     )
 
     # Transform to frontend format (same structure as analyze_workflow)
@@ -1200,6 +1211,14 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
             if node.package_id not in installed and node.package_id not in skipped_packages:
                 nodes_to_install.append(node.package_id)
 
+    uninstallable_nodes = getattr(result, "nodes_uninstallable", []) or []
+    for node in uninstallable_nodes:
+        if node.package_id and node.package_id not in installed and node.package_id not in skipped_packages:
+            node_choice = node_choices.get(getattr(node, "node_type", None), {})
+            action = node_choice.get("action", "install")
+            if action == "install":
+                nodes_to_install.append(node.package_id)
+
     # Handle user overrides for existing download intents
     # Get current workflow models from pyproject to check for download intents
     try:
@@ -1377,6 +1396,7 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
 
     node_choices = body.get("node_choices", {})
     model_choices = body.get("model_choices", {})
+    skipped_packages = set(body.get("skipped_packages", []))
 
     # Set up SSE response
     response = web.StreamResponse(
@@ -1445,10 +1465,18 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
 
             # Collect nodes to install
             nodes_to_install = []
+            installed = env.pyproject.nodes.get_existing()
             for node in result.nodes_resolved:
                 if node.package_id and node.match_type != "optional":
-                    installed = env.pyproject.nodes.get_existing()
-                    if node.package_id not in installed:
+                    if node.package_id not in installed and node.package_id not in skipped_packages:
+                        nodes_to_install.append(node.package_id)
+
+            uninstallable_nodes = getattr(result, "nodes_uninstallable", []) or []
+            for node in uninstallable_nodes:
+                if node.package_id and node.package_id not in installed and node.package_id not in skipped_packages:
+                    node_choice = node_choices.get(getattr(node, "node_type", None), {})
+                    action = node_choice.get("action", "install")
+                    if action == "install":
                         nodes_to_install.append(node.package_id)
 
             # Get download results

@@ -494,6 +494,8 @@ async def process_install(env, params: dict) -> dict:
     import shutil
     pack_id = params.get("id")
     version = params.get("selected_version") or params.get("version")
+    repository = params.get("repository")
+    install_source = params.get("install_source", "registry")
 
     # Check if already installed
     existing_nodes = env.pyproject.nodes.get_existing()
@@ -529,8 +531,11 @@ async def process_install(env, params: dict) -> dict:
                 "messages": [f"Successfully updated {pack_id} to latest"]
             }
 
-        # Build identifier with version if specified
-        if version and version != "latest":
+        # Build install identifier using explicit source selection.
+        # Default source remains registry for backward compatibility.
+        if install_source == "git" and repository:
+            identifier = repository
+        elif version and version != "latest":
             identifier = f"{pack_id}@{version}"
         else:
             identifier = pack_id
