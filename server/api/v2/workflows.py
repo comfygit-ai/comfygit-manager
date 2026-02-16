@@ -301,6 +301,15 @@ def _safe_dict(value) -> dict:
     return {}
 
 
+def _get_package_aliases(workflow_manager) -> dict[str, str]:
+    """Return package alias metadata when available."""
+    resolver = getattr(workflow_manager, "global_node_resolver", None)
+    repository = getattr(resolver, "repository", None)
+    global_mappings = getattr(repository, "global_mappings", None)
+    aliases = getattr(global_mappings, "package_aliases", None)
+    return _safe_dict(aliases)
+
+
 def _serialize_unresolved_model(ref: WorkflowNodeWidgetRef, workflow_name: str) -> dict:
     """Convert WorkflowNodeWidgetRef to frontend UnresolvedModel format."""
     return {
@@ -822,6 +831,7 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
     version_gated_nodes = _safe_sequence(getattr(result, "nodes_version_gated", None))
     uninstallable_nodes = _safe_sequence(getattr(result, "nodes_uninstallable", None))
     node_guidance = _safe_dict(getattr(result, "node_guidance", None))
+    package_aliases = _get_package_aliases(env.workflow_manager)
 
     # needs_user_input: user must make choices for unresolved/ambiguous items
     needs_user_input = bool(
@@ -868,6 +878,7 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
                 if amb is not None
             ]
         },
+        "package_aliases": package_aliases,
         "node_guidance": node_guidance,
         "stats": {
             "total_nodes": (
@@ -956,6 +967,7 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
     version_gated_nodes = _safe_sequence(getattr(result, "nodes_version_gated", None))
     uninstallable_nodes = _safe_sequence(getattr(result, "nodes_uninstallable", None))
     node_guidance = _safe_dict(getattr(result, "node_guidance", None))
+    package_aliases = _get_package_aliases(env.workflow_manager)
     needs_user_input = bool(
         result.nodes_unresolved or result.nodes_ambiguous or
         result.models_unresolved or result.models_ambiguous
@@ -1044,6 +1056,7 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
             "unresolved": unresolved_models,
             "ambiguous": ambiguous_models,
         },
+        "package_aliases": package_aliases,
         "node_guidance": node_guidance,
         "stats": {
             "total_nodes": total_nodes,

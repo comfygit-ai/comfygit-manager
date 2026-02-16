@@ -643,6 +643,7 @@ export interface AmbiguousModel {
 
 export interface FullResolutionResult {
   workflow: string
+  package_aliases?: Record<string, string>
   nodes: {
     resolved: ResolvedNode[]
     unresolved: UnresolvedNode[]

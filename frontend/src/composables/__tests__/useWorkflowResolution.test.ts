@@ -62,6 +62,7 @@ describe('useWorkflowResolution', () => {
       expect(result.value?.nodes.version_gated).toHaveLength(0)
       expect(result.value?.nodes.uninstallable).toHaveLength(0)
       expect(result.value?.node_guidance).toEqual({})
+      expect(result.value?.package_aliases).toEqual({})
       expect(isLoading.value).toBe(false)
     })
 
@@ -200,6 +201,47 @@ describe('useWorkflowResolution', () => {
       expect(result.value?.nodes.version_gated).toHaveLength(1)
       expect(result.value?.nodes.uninstallable).toHaveLength(1)
       expect(result.value?.node_guidance?.SetNode).toContain('Upgrade ComfyUI')
+    })
+
+    it('should preserve package aliases from API payload', async () => {
+      const { analyzeWorkflow, result } = useWorkflowResolution()
+
+      global.window = {
+        app: {
+          api: {
+            fetchApi: vi.fn().mockResolvedValue({
+              ok: true,
+              json: vi.fn().mockResolvedValue({
+                workflow: 'test-workflow',
+                package_aliases: {
+                  comfyui_ryanontheinside: 'comfyui_ryanonyheinside'
+                },
+                nodes: {
+                  resolved: [],
+                  unresolved: [],
+                  ambiguous: []
+                },
+                models: {
+                  resolved: [],
+                  unresolved: [],
+                  ambiguous: []
+                },
+                stats: {
+                  total_nodes: 0,
+                  total_models: 0,
+                  needs_user_input: false
+                }
+              })
+            })
+          }
+        }
+      } as any
+
+      await analyzeWorkflow('test-workflow')
+
+      expect(result.value?.package_aliases).toEqual({
+        comfyui_ryanontheinside: 'comfyui_ryanonyheinside'
+      })
     })
   })
 

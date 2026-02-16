@@ -509,6 +509,12 @@ class TestWorkflowAnalyzeEndpoint:
         )
         # analyze_and_resolve_workflow returns (dependencies, result) tuple
         mock_environment.workflow_manager.analyze_and_resolve_workflow.return_value = (Mock(), mock_result)
+        mock_environment.workflow_manager.global_node_resolver = Mock()
+        mock_environment.workflow_manager.global_node_resolver.repository = Mock()
+        mock_environment.workflow_manager.global_node_resolver.repository.global_mappings = Mock()
+        mock_environment.workflow_manager.global_node_resolver.repository.global_mappings.package_aliases = {
+            "comfyui_ryanontheinside": "comfyui_ryanonyheinside"
+        }
 
         # Mock env.status() to return workflow with uninstalled_nodes
         mock_wf_status = Mock()
@@ -530,6 +536,10 @@ class TestWorkflowAnalyzeEndpoint:
         assert data["workflow"] == "test.json"
         assert "nodes" in data
         assert "models" in data
+        assert "package_aliases" in data
+        assert data["package_aliases"] == {
+            "comfyui_ryanontheinside": "comfyui_ryanonyheinside"
+        }
         assert "stats" in data
 
         # Check nodes structure
@@ -1954,6 +1964,12 @@ class TestAnalyzeWorkflowJsonEndpoint:
         )
 
         mock_environment.workflow_manager.resolve_workflow = Mock(return_value=mock_result)
+        mock_environment.workflow_manager.global_node_resolver = Mock()
+        mock_environment.workflow_manager.global_node_resolver.repository = Mock()
+        mock_environment.workflow_manager.global_node_resolver.repository.global_mappings = Mock()
+        mock_environment.workflow_manager.global_node_resolver.repository.global_mappings.package_aliases = {
+            "comfyui_ryanontheinside": "comfyui_ryanonyheinside"
+        }
         mock_environment.pyproject = Mock()
         mock_environment.pyproject.nodes = Mock()
         mock_environment.pyproject.nodes.get_existing.return_value = {"test-pkg": Mock()}
@@ -1992,6 +2008,9 @@ class TestAnalyzeWorkflowJsonEndpoint:
         assert "version_gated" in data["nodes"]
         assert "uninstallable" in data["nodes"]
         assert "node_guidance" in data
+        assert data["package_aliases"] == {
+            "comfyui_ryanontheinside": "comfyui_ryanonyheinside"
+        }
 
         # Verify resolved model format
         resolved_model = data["models"]["resolved"][0]

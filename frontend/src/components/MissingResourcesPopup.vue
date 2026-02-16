@@ -325,6 +325,25 @@ const pendingInstalls = ref<Map<string, string>>(new Map())
 const { addToQueue } = useModelDownloadQueue()
 const { queueNodeInstall } = useComfyGitService()
 
+const packageAliases = computed<Record<string, string>>(() => {
+  return analysis.value?.package_aliases || {}
+})
+
+function canonicalizePackageId(packageId: string | null | undefined): string | null {
+  if (!packageId) return null
+
+  const aliases = packageAliases.value
+  let current = packageId
+  const seen = new Set<string>()
+
+  while (aliases[current] && !seen.has(current)) {
+    seen.add(current)
+    current = aliases[current]
+  }
+
+  return current
+}
+
 const hasIssues = computed(() => {
   return missingPackages.value.length > 0 ||
     unresolvedNodes.value.length > 0 ||
@@ -343,7 +362,8 @@ const missingPackages = computed<MissingPackage[]>(() => {
     .filter((n: any) => !n.is_installed && n.package?.package_id)
 
   for (const node of uninstalledResolved) {
-    const pkgId = node.package.package_id
+    const pkgId = canonicalizePackageId(node.package.package_id)
+    if (!pkgId) continue
     if (!packageMap.has(pkgId)) {
       packageMap.set(pkgId, {
         package_id: pkgId,
@@ -394,7 +414,7 @@ const communityMappedPackages = computed<UninstallableNodeItem[]>(() => {
 
   for (const n of (analysis.value.nodes.uninstallable || [])) {
     const nodeType = n.reference?.node_type || n.node_type
-    const packageId = n.package?.package_id || null
+    const packageId = canonicalizePackageId(n.package?.package_id || null)
     const key = packageId || `node:${nodeType}`
 
     if (!packageMap.has(key)) {
@@ -615,13 +635,14 @@ async function queueInstallRequest(
   installMode: 'registry' | 'git',
   repository?: string | null
 ) {
+  const canonicalPackageId = canonicalizePackageId(packageId) || packageId
   const selectedVersion = latestVersion || 'latest'
-  if (installedPackages.value.has(packageId) ||
-      queuedPackages.value.has(packageId) ||
-      failedPackages.value.has(packageId)) return
+  if (installedPackages.value.has(canonicalPackageId) ||
+      queuedPackages.value.has(canonicalPackageId) ||
+      failedPackages.value.has(canonicalPackageId)) return
 
   ensureEventListeners()
-  installingPackage.value = packageId
+  installingPackage.value = canonicalPackageId
 
   try {
     const installParams: {
@@ -633,7 +654,7 @@ async function queueInstallRequest(
       repository?: string
       install_source?: 'registry' | 'git'
     } = {
-      id: packageId,
+      id: canonicalPackageId,
       version: selectedVersion,
       selected_version: selectedVersion,
       mode: 'remote',
@@ -646,12 +667,12 @@ async function queueInstallRequest(
     }
 
     const { ui_id } = await queueNodeInstall(installParams)
-    pendingInstalls.value.set(ui_id, packageId)
-    queuedPackages.value.add(packageId)
-    console.log('[ComfyGit] Registered pending install:', { ui_id, packageId, pendingInstalls: Array.from(pendingInstalls.value.entries()) })
+    pendingInstalls.value.set(ui_id, canonicalPackageId)
+    queuedPackages.value.add(canonicalPackageId)
+    console.log('[ComfyGit] Registered pending install:', { ui_id, packageId: canonicalPackageId, pendingInstalls: Array.from(pendingInstalls.value.entries()) })
   } catch (e) {
     console.error('[ComfyGit] Failed to queue package install:', e)
-    failedPackages.value.set(packageId, 'Failed to queue install request')
+    failedPackages.value.set(canonicalPackageId, 'Failed to queue install request')
   } finally {
     installingPackage.value = null
   }
