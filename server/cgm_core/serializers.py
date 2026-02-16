@@ -1,4 +1,5 @@
 """Convert core library types to JSON-serializable dicts."""
+from packaging.version import InvalidVersion, Version
 
 
 def _safe_list(value) -> list:
@@ -27,6 +28,22 @@ def _safe_sequence(value) -> list:
     if isinstance(value, (list, tuple, set)):
         return list(value)
     return []
+
+
+def _get_latest_version_safe(versions_dict) -> str | None:
+    """Get latest version from mapping using semver-safe comparison with fallback."""
+    if not versions_dict or not hasattr(versions_dict, "keys"):
+        return None
+
+    versions = list(versions_dict.keys())
+    if not versions:
+        return None
+
+    try:
+        return str(max(versions, key=lambda v: Version(v)))
+    except (InvalidVersion, ValueError):
+        sorted_versions = sorted(versions, reverse=True)
+        return str(sorted_versions[0]) if sorted_versions else None
 
 
 def _extract_node_type(node) -> str | None:
@@ -229,10 +246,15 @@ def serialize_workflow_details(
         if key in seen_blocked_nodes:
             continue
         seen_blocked_nodes.add(key)
+        package_data = getattr(node, "package_data", None)
+        package_versions = getattr(package_data, "versions", None) if package_data is not None else None
         node_entry = {
             "name": node_name,
             "version": None,
             "status": "uninstallable",
+            "package_id": _safe_str(getattr(node, "package_id", None)),
+            "repository": _safe_str(getattr(package_data, "repository", None)) if package_data is not None else None,
+            "latest_version": _get_latest_version_safe(package_versions),
         }
         guidance = _extract_node_guidance(node, node_guidance)
         if guidance:

@@ -22,6 +22,13 @@ def _safe_mapping(value):
     return {}
 
 
+def _safe_str(value):
+    """Safely return string values."""
+    if isinstance(value, str):
+        return value
+    return None
+
+
 def _build_workflow_usage_map(analyzed_workflows):
     """Build a map of package_id -> list of workflow names that use it."""
     usage_map = defaultdict(list)
@@ -45,7 +52,7 @@ def _build_blocked_node_map(analyzed_workflows):
         node_guidance = _safe_mapping(getattr(resolution, "node_guidance", None))
 
         for node in _safe_sequence(getattr(resolution, "nodes_version_gated", None)):
-            node_type = getattr(node, "type", None)
+            node_type = _safe_str(getattr(node, "type", None))
             if not node_type:
                 continue
 
@@ -61,23 +68,28 @@ def _build_blocked_node_map(analyzed_workflows):
                 blocked_map[node_type]["issue_guidance"] = node_guidance.get(node_type)
 
         for pkg in _safe_sequence(getattr(resolution, "nodes_uninstallable", None)):
-            node_type = getattr(pkg, "node_type", None) or getattr(pkg, "package_id", None)
+            node_type = _safe_str(getattr(pkg, "node_type", None)) or _safe_str(getattr(pkg, "package_id", None))
             if not node_type:
                 continue
 
-            package_id = getattr(pkg, "package_id", None)
-            guidance_key = getattr(pkg, "node_type", None) or node_type
+            package_id = _safe_str(getattr(pkg, "package_id", None))
+            package_data = getattr(pkg, "package_data", None)
+            repository = _safe_str(getattr(package_data, "repository", None)) if package_data is not None else None
+            guidance_key = _safe_str(getattr(pkg, "node_type", None)) or node_type
 
             if node_type not in blocked_map:
                 blocked_map[node_type] = {
                     "issue_type": "uninstallable",
                     "registry_id": package_id,
+                    "repository": repository,
                     "issue_guidance": node_guidance.get(guidance_key),
                     "used_in_workflows": set(),
                 }
             blocked_map[node_type]["used_in_workflows"].add(wf.name)
             if not blocked_map[node_type]["registry_id"] and package_id:
                 blocked_map[node_type]["registry_id"] = package_id
+            if not blocked_map[node_type].get("repository") and repository:
+                blocked_map[node_type]["repository"] = repository
             if not blocked_map[node_type]["issue_guidance"]:
                 blocked_map[node_type]["issue_guidance"] = node_guidance.get(guidance_key)
 
@@ -168,7 +180,7 @@ async def get_nodes(request: web.Request, env) -> web.Response:
                     "installed": False,
                     "tracked": False,
                     "registry_id": issue_data.get("registry_id"),
-                    "repository": None,
+                    "repository": issue_data.get("repository"),
                     "version": None,
                     "source": "unknown",
                     "used_in_workflows": sorted(issue_data.get("used_in_workflows", [])),

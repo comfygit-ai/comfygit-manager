@@ -405,6 +405,14 @@ class TestSerializeWorkflowDetails:
         uninstallable = Mock()
         uninstallable.reference = Mock()
         uninstallable.reference.node_type = "LegacyNode"
+        uninstallable.package_id = "legacy-node-pack"
+        uninstallable.package_data = Mock()
+        uninstallable.package_data.repository = "https://github.com/example/legacy-node-pack"
+        uninstallable.package_data.versions = {
+            "1.2.0": {},
+            "1.10.0": {},
+            "1.3.0": {},
+        }
         uninstallable.guidance = "No compatible package version for this ComfyUI"
 
         workflow.resolution.nodes_version_gated = [version_gated]
@@ -420,3 +428,35 @@ class TestSerializeWorkflowDetails:
         assert "uninstallable" in nodes_by_status
         assert nodes_by_status["uninstallable"]["name"] == "LegacyNode"
         assert nodes_by_status["uninstallable"]["guidance"] == "No compatible package version for this ComfyUI"
+        assert nodes_by_status["uninstallable"]["package_id"] == "legacy-node-pack"
+        assert nodes_by_status["uninstallable"]["repository"] == "https://github.com/example/legacy-node-pack"
+        assert nodes_by_status["uninstallable"]["latest_version"] == "1.10.0"
+
+    def test_uninstallable_node_metadata_null_safe(self):
+        """Workflow details should return null uninstallable metadata when package data is missing."""
+        workflow = Mock()
+        workflow.has_issues = True
+        workflow.sync_state = "synced"
+        workflow.uninstalled_nodes = []
+        workflow.dependencies = Mock()
+        workflow.dependencies.found_models = []
+        workflow.resolution = Mock()
+        workflow.resolution.models_resolved = []
+        workflow.resolution.nodes_resolved = []
+        workflow.resolution.node_guidance = {}
+        workflow.resolution.nodes_version_gated = []
+
+        uninstallable = Mock()
+        uninstallable.reference = Mock()
+        uninstallable.reference.node_type = "LegacyNode"
+        uninstallable.package_id = None
+        uninstallable.package_data = None
+        uninstallable.guidance = None
+        workflow.resolution.nodes_uninstallable = [uninstallable]
+
+        result = serialize_workflow_details(workflow, "test.json")
+        uninstallable_node = next(node for node in result["nodes"] if node["status"] == "uninstallable")
+
+        assert uninstallable_node["package_id"] is None
+        assert uninstallable_node["repository"] is None
+        assert uninstallable_node["latest_version"] is None
