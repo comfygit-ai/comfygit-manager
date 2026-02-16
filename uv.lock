@@ -460,7 +460,7 @@ dev = [
 requires-dist = [
     { name = "comfygit-core", editable = "../comfygit/packages/core" },
     { name = "watchdog", specifier = ">=6.0.0" },
-    { name = "xxhash", specifier = ">=3.6.0" },
+    { name = "xxhash", specifier = ">=3.5.0" },
     { name = "zeroconf", specifier = ">=0.131.0" },
 ]
 
