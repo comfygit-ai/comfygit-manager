@@ -13,7 +13,7 @@
 #
 # This script:
 #   1. Replaces registry-installed comfygit-manager with a symlink to this repo
-#   2. Configures editable comfygit-core dependency in .cec/pyproject.toml
+#   2. Adds comfygit-core as editable local source via .local-uv-config (not tracked in git)
 #   3. Marks comfygit-manager as a development node (skips version checks)
 
 set -e
@@ -184,56 +184,39 @@ setup_environment() {
         ln -s "$MANAGER_PATH" "$manager_link"
     fi
 
-    # Update .cec/pyproject.toml
-    if [[ ! -f "$pyproject" ]]; then
-        echo "  Warning: .cec/pyproject.toml not found, skipping config"
-    else
-        echo "  Updating .cec/pyproject.toml..."
+    # Add comfygit-core as local source (writes to .local-uv-config, not tracked in git)
+    echo "  Configuring comfygit-core local source..."
+    COMFYGIT_HOME="$WORKSPACE_PATH" cg -e "$env_name" env-config local-sources add comfygit-core \
+        --path "$CORE_PATH" --editable 2>/dev/null \
+        && echo "  Core source: Configured in .local-uv-config" \
+        || echo "  Core source: Failed to configure (is cg installed?)"
 
-        # Use Python to safely update TOML
+    # Mark comfygit-manager as development node + clean up old pyproject injection
+    if [[ ! -f "$pyproject" ]]; then
+        echo "  Warning: .cec/pyproject.toml not found, skipping dev node config"
+    else
         python3 << PYEOF
 import re
 
 pyproject_path = "$pyproject"
-core_path = "$CORE_PATH"
-manager_path = "$MANAGER_PATH"
 
 with open(pyproject_path, "r") as f:
     content = f.read()
 
 modified = False
 
-# 1. Update comfygit-core source for editable install
+# Clean up old direct pyproject injection of comfygit-core source (now in .local-uv-config)
 if '[tool.uv.sources.comfygit-core]' in content:
-    if f'path = "{core_path}"' in content:
-        print("  Core source: Already configured")
-    else:
-        # Remove existing section and re-add
-        content = re.sub(
-            r'\[tool\.uv\.sources\.comfygit-core\][^\[]*',
-            '',
-            content,
-            flags=re.DOTALL
-        )
-        modified = True
-else:
+    content = re.sub(
+        r'\n?\[tool\.uv\.sources\.comfygit-core\][^\[]*',
+        '',
+        content,
+        flags=re.DOTALL
+    )
+    print("  Cleaned up old [tool.uv.sources.comfygit-core] from pyproject.toml")
     modified = True
 
-if modified or '[tool.uv.sources.comfygit-core]' not in content:
-    content = content.rstrip() + f'''
-
-[tool.uv.sources.comfygit-core]
-path = "{core_path}"
-editable = true
-'''
-    print("  Core source: Configured")
-    modified = True
-
-# 2. Mark comfygit-manager as development node (skips version checks)
-# Change source = "registry" to source = "development" for comfygit-manager
 if '[tool.comfygit.nodes.comfygit-manager]' in content:
-    # Check if already set to development
-    # Look for source = "development" within the comfygit-manager node section
     node_section_match = re.search(
         r'\[tool\.comfygit\.nodes\.comfygit-manager\](.*?)(?=\n\[|\Z)',
         content,
@@ -247,13 +230,12 @@ if '[tool.comfygit.nodes.comfygit-manager]' in content:
             content = content.replace(
                 'source = "registry"',
                 'source = "development"',
-                1  # Only replace first occurrence (in the node section)
+                1
             )
             print("  Node source: Changed to development")
             modified = True
         else:
             print("  Node source: No source field found (will add)")
-            # Add source = "development" to the node section
             content = re.sub(
                 r'(\[tool\.comfygit\.nodes\.comfygit-manager\]\n)',
                 r'\1source = "development"\n',

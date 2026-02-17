@@ -4,6 +4,7 @@ Provides /v2/ endpoints that the built-in Manager UI expects.
 """
 
 import asyncio
+import logging
 import sys
 import uuid
 from pathlib import Path
@@ -21,6 +22,7 @@ except ImportError:
 
 # Get the routes object
 routes = PromptServer.instance.routes
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # Feature Flag & CLI Argument Injection
@@ -494,6 +496,19 @@ async def process_install(env, params: dict) -> dict:
     import shutil
     pack_id = params.get("id")
     version = params.get("selected_version") or params.get("version")
+    repository = params.get("repository")
+    install_source = params.get("install_source", "registry")
+    valid_install_sources = {"registry", "git"}
+
+    if install_source not in valid_install_sources:
+        raise ValueError(
+            f"Invalid install_source '{install_source}'. Expected one of: registry, git"
+        )
+
+    if install_source == "git" and not repository:
+        raise ValueError(
+            "install_source='git' requires a non-empty repository"
+        )
 
     # Check if already installed
     existing_nodes = env.pyproject.nodes.get_existing()
@@ -529,10 +544,26 @@ async def process_install(env, params: dict) -> dict:
                 "messages": [f"Successfully updated {pack_id} to latest"]
             }
 
-        # Build identifier with version if specified
-        if version and version != "latest":
+        # Build install identifier using explicit source selection.
+        if install_source == "git":
+            logger.info(
+                "process_install selecting git source for '%s' using repository '%s'",
+                pack_id,
+                repository,
+            )
+            identifier = repository
+        elif version and version != "latest":
+            logger.info(
+                "process_install selecting registry source for '%s' at version '%s'",
+                pack_id,
+                version,
+            )
             identifier = f"{pack_id}@{version}"
         else:
+            logger.info(
+                "process_install selecting registry source for '%s' at latest/default",
+                pack_id,
+            )
             identifier = pack_id
 
         await loop.run_in_executor(

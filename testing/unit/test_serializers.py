@@ -9,7 +9,7 @@ server_dir = Path(__file__).parent.parent.parent / "server"
 if str(server_dir) not in sys.path:
     sys.path.insert(0, str(server_dir))
 
-from cgm_core.serializers import serialize_environment_status  # noqa: E402
+from cgm_core.serializers import serialize_environment_status, serialize_workflow_details  # noqa: E402
 
 
 @pytest.mark.unit
@@ -221,9 +221,24 @@ class TestSerializeEnvironmentStatus:
         wf_broken.model_count = 3
         wf_broken.resolution = Mock()
         wf_broken.resolution.nodes_unresolved = [Mock(), Mock()]  # 2 unresolved
+        vg_1 = Mock()
+        vg_1.guidance = "Requires ComfyUI >= 0.3.10"
+        vg_1.reference = Mock()
+        vg_1.reference.node_type = "SetNode"
+        vg_2 = Mock()
+        vg_2.guidance = "Requires ComfyUI >= 0.3.10"  # duplicate guidance should be deduped
+        vg_2.reference = Mock()
+        vg_2.reference.node_type = "SetNode"
+        vg_3 = Mock()
+        vg_3.guidance = "Requires ComfyUI >= 0.3.12"
+        vg_3.reference = Mock()
+        vg_3.reference.node_type = "AnotherNode"
+        wf_broken.resolution.nodes_version_gated = [vg_1, vg_2, vg_3]  # 3 version-gated
+        wf_broken.resolution.nodes_uninstallable = [Mock()]  # 1 uninstallable
         wf_broken.resolution.models_unresolved = [Mock()]  # 1 unresolved
         wf_broken.resolution.models_ambiguous = []
         wf_broken.resolution.nodes_ambiguous = []
+        wf_broken.resolution.node_guidance = {}
 
         # Create mock workflow analysis without issues
         wf_healthy = Mock()
@@ -236,9 +251,12 @@ class TestSerializeEnvironmentStatus:
         wf_healthy.model_count = 2
         wf_healthy.resolution = Mock()
         wf_healthy.resolution.nodes_unresolved = []
+        wf_healthy.resolution.nodes_version_gated = []
+        wf_healthy.resolution.nodes_uninstallable = []
         wf_healthy.resolution.models_unresolved = []
         wf_healthy.resolution.models_ambiguous = []
         wf_healthy.resolution.nodes_ambiguous = []
+        wf_healthy.resolution.node_guidance = {}
 
         status.workflow = Mock()
         status.workflow.sync_status = Mock()
@@ -274,6 +292,12 @@ class TestSerializeEnvironmentStatus:
         assert broken["has_issues"] is True
         assert broken["uninstalled_nodes"] == 1
         assert broken["unresolved_nodes_count"] == 2
+        assert broken["nodes_version_gated_count"] == 3
+        assert broken["nodes_uninstallable_count"] == 1
+        assert broken["version_gated_guidance"] == [
+            "Requires ComfyUI >= 0.3.10",
+            "Requires ComfyUI >= 0.3.12",
+        ]
         assert broken["unresolved_models_count"] == 1
         assert broken["ambiguous_models_count"] == 0
         assert broken["ambiguous_nodes_count"] == 0
@@ -288,6 +312,9 @@ class TestSerializeEnvironmentStatus:
         assert healthy["has_issues"] is False
         assert healthy["uninstalled_nodes"] == 0
         assert healthy["unresolved_nodes_count"] == 0
+        assert healthy["nodes_version_gated_count"] == 0
+        assert healthy["nodes_uninstallable_count"] == 0
+        assert healthy["version_gated_guidance"] == []
         assert healthy["unresolved_models_count"] == 0
 
     def test_analyzed_workflows_with_ambiguous_matches(self):
@@ -314,6 +341,8 @@ class TestSerializeEnvironmentStatus:
         wf.model_count = 4
         wf.resolution = Mock()
         wf.resolution.nodes_unresolved = []
+        wf.resolution.nodes_version_gated = []
+        wf.resolution.nodes_uninstallable = []
         wf.resolution.models_unresolved = []
         wf.resolution.models_ambiguous = [[Mock(), Mock()], [Mock(), Mock()]]  # 2 ambiguous
         wf.resolution.nodes_ambiguous = [[Mock(), Mock()]]  # 1 ambiguous
@@ -347,3 +376,87 @@ class TestSerializeEnvironmentStatus:
         assert analyzed["ambiguous_nodes_count"] == 1
         assert analyzed["unresolved_models_count"] == 0
         assert analyzed["unresolved_nodes_count"] == 0
+        assert analyzed["nodes_version_gated_count"] == 0
+        assert analyzed["nodes_uninstallable_count"] == 0
+
+
+@pytest.mark.unit
+class TestSerializeWorkflowDetails:
+    """Unit tests for serialize_workflow_details node status serialization."""
+
+    def test_includes_version_gated_and_uninstallable_nodes(self):
+        """Workflow details should include blocked node entries with guidance text."""
+        workflow = Mock()
+        workflow.has_issues = True
+        workflow.sync_state = "synced"
+        workflow.uninstalled_nodes = []
+        workflow.dependencies = Mock()
+        workflow.dependencies.found_models = []
+        workflow.resolution = Mock()
+        workflow.resolution.models_resolved = []
+        workflow.resolution.nodes_resolved = []
+        workflow.resolution.node_guidance = {}
+
+        version_gated = Mock()
+        version_gated.reference = Mock()
+        version_gated.reference.node_type = "SetNode"
+        version_gated.guidance = "Requires ComfyUI >= 0.3.10"
+
+        uninstallable = Mock()
+        uninstallable.reference = Mock()
+        uninstallable.reference.node_type = "LegacyNode"
+        uninstallable.package_id = "legacy-node-pack"
+        uninstallable.package_data = Mock()
+        uninstallable.package_data.repository = "https://github.com/example/legacy-node-pack"
+        uninstallable.package_data.versions = {
+            "1.2.0": {},
+            "1.10.0": {},
+            "1.3.0": {},
+        }
+        uninstallable.guidance = "No compatible package version for this ComfyUI"
+
+        workflow.resolution.nodes_version_gated = [version_gated]
+        workflow.resolution.nodes_uninstallable = [uninstallable]
+
+        result = serialize_workflow_details(workflow, "test.json")
+
+        nodes_by_status = {node["status"]: node for node in result["nodes"]}
+        assert "version_gated" in nodes_by_status
+        assert nodes_by_status["version_gated"]["name"] == "SetNode"
+        assert nodes_by_status["version_gated"]["guidance"] == "Requires ComfyUI >= 0.3.10"
+
+        assert "uninstallable" in nodes_by_status
+        assert nodes_by_status["uninstallable"]["name"] == "LegacyNode"
+        assert nodes_by_status["uninstallable"]["guidance"] == "No compatible package version for this ComfyUI"
+        assert nodes_by_status["uninstallable"]["package_id"] == "legacy-node-pack"
+        assert nodes_by_status["uninstallable"]["repository"] == "https://github.com/example/legacy-node-pack"
+        assert nodes_by_status["uninstallable"]["latest_version"] == "1.10.0"
+
+    def test_uninstallable_node_metadata_null_safe(self):
+        """Workflow details should return null uninstallable metadata when package data is missing."""
+        workflow = Mock()
+        workflow.has_issues = True
+        workflow.sync_state = "synced"
+        workflow.uninstalled_nodes = []
+        workflow.dependencies = Mock()
+        workflow.dependencies.found_models = []
+        workflow.resolution = Mock()
+        workflow.resolution.models_resolved = []
+        workflow.resolution.nodes_resolved = []
+        workflow.resolution.node_guidance = {}
+        workflow.resolution.nodes_version_gated = []
+
+        uninstallable = Mock()
+        uninstallable.reference = Mock()
+        uninstallable.reference.node_type = "LegacyNode"
+        uninstallable.package_id = None
+        uninstallable.package_data = None
+        uninstallable.guidance = None
+        workflow.resolution.nodes_uninstallable = [uninstallable]
+
+        result = serialize_workflow_details(workflow, "test.json")
+        uninstallable_node = next(node for node in result["nodes"] if node["status"] == "uninstallable")
+
+        assert uninstallable_node["package_id"] is None
+        assert uninstallable_node["repository"] is None
+        assert uninstallable_node["latest_version"] is None

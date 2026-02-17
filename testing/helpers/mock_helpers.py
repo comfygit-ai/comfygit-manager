@@ -134,8 +134,11 @@ def create_mock_commit(hash_val="abc123", message="Test commit"):
 
 def create_mock_resolution(
     nodes_resolved=None,
+    nodes_version_gated=None,
+    nodes_uninstallable=None,
     nodes_unresolved=None,
     nodes_ambiguous=None,
+    node_guidance=None,
     models_resolved=None,
     models_unresolved=None,
     models_ambiguous=None
@@ -145,8 +148,11 @@ def create_mock_resolution(
 
     Args:
         nodes_resolved: List of resolved node objects
+        nodes_version_gated: List of version-gated builtin nodes
+        nodes_uninstallable: List of uninstallable node package candidates
         nodes_unresolved: List of unresolved node type strings
         nodes_ambiguous: List of lists of ambiguous node options
+        node_guidance: Dict of node_type -> guidance string
         models_resolved: List of resolved model objects
         models_unresolved: List of unresolved model references
         models_ambiguous: List of lists of ambiguous model options
@@ -156,8 +162,11 @@ def create_mock_resolution(
     """
     resolution = Mock()
     resolution.nodes_resolved = nodes_resolved or []
+    resolution.nodes_version_gated = nodes_version_gated or []
+    resolution.nodes_uninstallable = nodes_uninstallable or []
     resolution.nodes_unresolved = nodes_unresolved or []
     resolution.nodes_ambiguous = nodes_ambiguous or []
+    resolution.node_guidance = node_guidance or {}
     resolution.models_resolved = models_resolved or []
     resolution.models_unresolved = models_unresolved or []
     resolution.models_ambiguous = models_ambiguous or []

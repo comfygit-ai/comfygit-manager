@@ -1,5 +1,7 @@
 """Convert core library types to JSON-serializable dicts."""
 
+from cgm_core.version_utils import get_latest_version
+
 
 def _safe_list(value) -> list:
     """Safely convert value to list, handling None and non-iterables (like Mock objects)."""
@@ -17,6 +19,43 @@ def _safe_str(value) -> str | None:
         return None
     if isinstance(value, str):
         return value
+    return None
+
+
+def _safe_sequence(value) -> list:
+    """Safely convert sequence-like values to a list."""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return list(value)
+    return []
+
+
+def _extract_node_type(node) -> str | None:
+    """Extract node type from different resolution object shapes."""
+    reference = getattr(node, "reference", None)
+    node_type = _safe_str(getattr(reference, "node_type", None))
+    if node_type:
+        return node_type
+
+    node_type = _safe_str(getattr(node, "node_type", None))
+    if node_type:
+        return node_type
+
+    return _safe_str(getattr(node, "type", None))
+
+
+def _extract_node_guidance(node, node_guidance: dict | None = None) -> str | None:
+    """Extract guidance from node, falling back to resolution.node_guidance."""
+    guidance = _safe_str(getattr(node, "guidance", None))
+    if guidance:
+        return guidance
+
+    if isinstance(node_guidance, dict):
+        node_type = _extract_node_type(node)
+        if node_type:
+            return _safe_str(node_guidance.get(node_type))
+
     return None
 
 
@@ -141,24 +180,71 @@ def serialize_workflow_details(
     # Transform nodes
     nodes = []
     seen_packages = set()
-    uninstalled_set = set(workflow.uninstalled_nodes)
+    uninstalled_set = set(_safe_sequence(getattr(workflow, "uninstalled_nodes", None)))
+    node_guidance = getattr(workflow.resolution, "node_guidance", None)
+    if not isinstance(node_guidance, dict):
+        node_guidance = {}
 
-    for node in workflow.resolution.nodes_resolved:
-        if node.package_id and node.package_id not in seen_packages:
-            seen_packages.add(node.package_id)
+    for node in _safe_sequence(getattr(workflow.resolution, "nodes_resolved", None)):
+        package_id = _safe_str(getattr(node, "package_id", None))
+        if package_id and package_id not in seen_packages:
+            seen_packages.add(package_id)
             nodes.append({
-                "name": node.package_id,
+                "name": package_id,
                 "version": None,
-                "status": "missing" if node.package_id in uninstalled_set else "installed"
+                "status": "missing" if package_id in uninstalled_set else "installed"
             })
 
-    for package_id in workflow.uninstalled_nodes:
+    for package_id in _safe_sequence(getattr(workflow, "uninstalled_nodes", None)):
         if package_id not in seen_packages:
             nodes.append({
                 "name": package_id,
                 "version": None,
                 "status": "missing"
             })
+
+    seen_blocked_nodes = set()
+
+    for node in _safe_sequence(getattr(workflow.resolution, "nodes_version_gated", None)):
+        node_name = _extract_node_type(node)
+        if not node_name:
+            continue
+        key = ("version_gated", node_name)
+        if key in seen_blocked_nodes:
+            continue
+        seen_blocked_nodes.add(key)
+        node_entry = {
+            "name": node_name,
+            "version": None,
+            "status": "version_gated",
+        }
+        guidance = _extract_node_guidance(node, node_guidance)
+        if guidance:
+            node_entry["guidance"] = guidance
+        nodes.append(node_entry)
+
+    for node in _safe_sequence(getattr(workflow.resolution, "nodes_uninstallable", None)):
+        node_name = _extract_node_type(node)
+        if not node_name:
+            continue
+        key = ("uninstallable", node_name)
+        if key in seen_blocked_nodes:
+            continue
+        seen_blocked_nodes.add(key)
+        package_data = getattr(node, "package_data", None)
+        package_versions = getattr(package_data, "versions", None) if package_data is not None else None
+        node_entry = {
+            "name": node_name,
+            "version": None,
+            "status": "uninstallable",
+            "package_id": _safe_str(getattr(node, "package_id", None)),
+            "repository": _safe_str(getattr(package_data, "repository", None)) if package_data is not None else None,
+            "latest_version": get_latest_version(package_versions),
+        }
+        guidance = _extract_node_guidance(node, node_guidance)
+        if guidance:
+            node_entry["guidance"] = guidance
+        nodes.append(node_entry)
 
     return {
         "name": name,
@@ -191,6 +277,26 @@ def serialize_environment_status(status, env_name: str, env=None) -> dict:
     # Serialize analyzed workflows with full resolution state
     analyzed = []
     for wf in status.workflow.analyzed_workflows:
+        resolution = getattr(wf, "resolution", None)
+
+        version_gated_nodes = _safe_sequence(getattr(resolution, "nodes_version_gated", None))
+        uninstallable_nodes = _safe_sequence(getattr(resolution, "nodes_uninstallable", None))
+        unresolved_nodes = _safe_sequence(getattr(resolution, "nodes_unresolved", None))
+        unresolved_models = _safe_sequence(getattr(resolution, "models_unresolved", None))
+        ambiguous_models = _safe_sequence(getattr(resolution, "models_ambiguous", None))
+        ambiguous_nodes = _safe_sequence(getattr(resolution, "nodes_ambiguous", None))
+        node_guidance = getattr(resolution, "node_guidance", None)
+        if not isinstance(node_guidance, dict):
+            node_guidance = {}
+
+        version_gated_guidance = []
+        seen_guidance = set()
+        for node in version_gated_nodes:
+            guidance = _extract_node_guidance(node, node_guidance)
+            if guidance and guidance not in seen_guidance:
+                seen_guidance.add(guidance)
+                version_gated_guidance.append(guidance)
+
         analyzed.append({
             "name": wf.name,
             "sync_state": wf.sync_state,
@@ -198,10 +304,13 @@ def serialize_environment_status(status, env_name: str, env=None) -> dict:
             "has_issues": wf.has_issues,
             "has_path_sync_issues": wf.has_path_sync_issues,
             "uninstalled_nodes": len(wf.uninstalled_nodes),
-            "unresolved_nodes_count": len(wf.resolution.nodes_unresolved),
-            "unresolved_models_count": len(wf.resolution.models_unresolved),
-            "ambiguous_models_count": len(wf.resolution.models_ambiguous),
-            "ambiguous_nodes_count": len(wf.resolution.nodes_ambiguous),
+            "unresolved_nodes_count": len(unresolved_nodes),
+            "nodes_version_gated_count": len(version_gated_nodes),
+            "nodes_uninstallable_count": len(uninstallable_nodes),
+            "version_gated_guidance": version_gated_guidance,
+            "unresolved_models_count": len(unresolved_models),
+            "ambiguous_models_count": len(ambiguous_models),
+            "ambiguous_nodes_count": len(ambiguous_nodes),
             "models_needing_path_sync_count": wf.models_needing_path_sync_count,
             "pending_downloads_count": wf.download_intents_count,
             "issue_summary": wf.issue_summary,  # Use core's property directly

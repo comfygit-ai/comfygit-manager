@@ -193,6 +193,73 @@ class TestGetNodesEndpoint:
         assert node is not None
         assert "my_workflow" in node["used_in_workflows"]
 
+    async def test_success_with_blocked_nodes(
+        self,
+        client,
+        mock_environment,
+        mock_env_status
+    ):
+        """Should include blocked nodes from version-gated/uninstallable resolution states."""
+        mock_environment.list_nodes.return_value = []
+        mock_env_status.comparison.missing_nodes = set()
+        mock_env_status.comparison.extra_nodes = set()
+
+        mock_version_gated = Mock()
+        mock_version_gated.type = "SetNode"
+
+        mock_uninstallable = Mock()
+        mock_uninstallable.node_type = "GetNode"
+        mock_uninstallable.package_id = "kj-nodes"
+        mock_uninstallable.package_data = Mock()
+        mock_uninstallable.package_data.repository = "https://github.com/kijai/ComfyUI-KJNodes"
+
+        mock_uninstallable_no_repo = Mock()
+        mock_uninstallable_no_repo.node_type = "LegacyNode"
+        mock_uninstallable_no_repo.package_id = "legacy-pack"
+        mock_uninstallable_no_repo.package_data = None
+
+        mock_wf = Mock()
+        mock_wf.name = "workflow.json"
+        mock_wf.resolution = Mock()
+        mock_wf.resolution.nodes_resolved = []
+        mock_wf.resolution.nodes_version_gated = [mock_version_gated]
+        mock_wf.resolution.nodes_uninstallable = [mock_uninstallable, mock_uninstallable_no_repo]
+        mock_wf.resolution.node_guidance = {
+            "SetNode": "Upgrade ComfyUI to >= v0.3.18",
+            "GetNode": "No compatible package version for your current environment",
+            "LegacyNode": "No compatible package version for your current environment",
+        }
+        mock_env_status.workflow.analyzed_workflows = [mock_wf]
+        mock_environment.status.return_value = mock_env_status
+
+        resp = await client.get("/v2/comfygit/nodes")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["blocked_count"] == 3
+
+        version_gated = next((n for n in data["nodes"] if n["name"] == "SetNode"), None)
+        uninstallable = next((n for n in data["nodes"] if n["name"] == "GetNode"), None)
+        uninstallable_no_repo = next((n for n in data["nodes"] if n["name"] == "LegacyNode"), None)
+
+        assert version_gated is not None
+        assert version_gated["issue_type"] == "version_gated"
+        assert "Upgrade ComfyUI" in version_gated["issue_guidance"]
+        assert version_gated["repository"] is None
+        assert version_gated["tracked"] is False
+        assert version_gated["installed"] is False
+
+        assert uninstallable is not None
+        assert uninstallable["issue_type"] == "uninstallable"
+        assert uninstallable["registry_id"] == "kj-nodes"
+        assert uninstallable["repository"] == "https://github.com/kijai/ComfyUI-KJNodes"
+        assert "No compatible package version" in uninstallable["issue_guidance"]
+        assert uninstallable["tracked"] is False
+        assert uninstallable["installed"] is False
+
+        assert uninstallable_no_repo is not None
+        assert uninstallable_no_repo["repository"] is None
+
     async def test_success_development_node(
         self,
         client,

@@ -29,9 +29,17 @@
             <span v-else-if="isFailed(item)" class="failed-badge" :title="getFailureReason(item)">Failed ⚠</span>
             <span v-else-if="isInstalled(item)" class="installed-badge">Installed</span>
             <span v-else-if="isQueued(item)" class="queued-badge">Queued</span>
-            <BaseButton v-else size="sm" variant="secondary" @click="emit('action', item)">
-              {{ actionLabel }}
-            </BaseButton>
+            <div v-else class="action-buttons">
+              <BaseButton
+                v-for="action in getItemActions(item)"
+                :key="`${item.id}-${action.key}`"
+                size="sm"
+                :variant="action.variant || 'secondary'"
+                @click="emit('action', item, action.key)"
+              >
+                {{ action.label }}
+              </BaseButton>
+            </div>
           </template>
 
           <!-- Non-actionable items: show reason -->
@@ -51,18 +59,25 @@ import { computed } from 'vue'
 import BaseModal from './base/BaseModal.vue'
 import BaseButton from './base/BaseButton.vue'
 
+export interface ResourceAction {
+  key: string
+  label: string
+  variant?: 'primary' | 'secondary' | 'ghost'
+}
+
 export interface ResourceItem {
   id: string
   name: string
   subtitle?: string
   canAction: boolean
   actionDisabledReason?: string
+  actions?: ResourceAction[]
 }
 
 const props = defineProps<{
   title: string
   items: ResourceItem[]
-  itemType: 'model' | 'package'
+  itemType: 'models' | 'packages' | 'community'
   queuedItems: Set<string>
   installedItems?: Set<string>
   failedItems?: Map<string, string>
@@ -71,11 +86,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  action: [item: ResourceItem]
+  action: [item: ResourceItem, actionKey?: string]
   'bulk-action': []
 }>()
-
-const actionLabel = computed(() => props.itemType === 'model' ? 'Download' : 'Install')
 
 const actionableItems = computed(() => props.items.filter(i => i.canAction))
 
@@ -90,7 +103,7 @@ const allDone = computed(() => {
 
 const bulkActionLabel = computed(() => {
   if (allDone.value) return 'All Queued'
-  return props.itemType === 'model' ? 'Download All' : 'Install All'
+  return props.itemType === 'models' ? 'Download All' : 'Install All'
 })
 
 function isQueued(item: ResourceItem): boolean {
@@ -111,6 +124,18 @@ function isFailed(item: ResourceItem): boolean {
 
 function getFailureReason(item: ResourceItem): string {
   return props.failedItems?.get(item.id) || 'Unknown error'
+}
+
+function getItemActions(item: ResourceItem): ResourceAction[] {
+  if (item.actions && item.actions.length > 0) {
+    return item.actions
+  }
+
+  return [{
+    key: 'default',
+    label: props.itemType === 'models' ? 'Download' : 'Install',
+    variant: 'secondary'
+  }]
 }
 </script>
 
@@ -147,6 +172,12 @@ function getFailureReason(item: ResourceItem): string {
 
 .resource-item:not(:last-child) {
   border-bottom: 1px solid var(--cg-color-border);
+}
+
+.action-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cg-space-1);
 }
 
 .item-info {

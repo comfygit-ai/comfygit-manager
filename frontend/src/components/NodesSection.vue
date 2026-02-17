@@ -37,6 +37,8 @@
         <SummaryBar v-if="nodesData.total_count" variant="compact">
           {{ nodesData.installed_count }} installed
           <template v-if="nodesData.missing_count"> • {{ nodesData.missing_count }} missing</template>
+          <template v-if="blockedVersionGatedCount"> • {{ blockedVersionGatedCount }} blocked</template>
+          <template v-if="actionableCommunityCount"> • {{ actionableCommunityCount }} community-mapped</template>
           <template v-if="nodesData.untracked_count"> • {{ nodesData.untracked_count }} untracked</template>
         </SummaryBar>
 
@@ -74,6 +76,106 @@
               >
                 Repair
               </ActionButton>
+            </template>
+          </ItemCard>
+        </SectionGroup>
+
+        <!-- Blocked Nodes (version-gated only) -->
+        <SectionGroup
+          v-if="filteredBlocked.length"
+          title="BLOCKED"
+          :count="filteredBlocked.length"
+          collapsible
+          :initially-expanded="true"
+        >
+          <ItemCard
+            v-for="node in filteredBlocked"
+            :key="`blocked-${node.name}`"
+            status="warning"
+          >
+            <template #icon>⛔</template>
+            <template #title>{{ node.name }}</template>
+            <template #subtitle>
+              <span style="color: var(--cg-color-warning)">{{ getBlockedSubtitle(node) }}</span>
+            </template>
+            <template #details>
+              <DetailRow
+                label="Guidance:"
+                :value="node.issue_guidance || getBlockedGuidance(node)"
+              />
+              <DetailRow
+                label="Used by:"
+                :value="getUsageLabel(node)"
+              />
+            </template>
+            <template #actions>
+              <ActionButton
+                variant="secondary"
+                size="xs"
+                @click="showDetails(node)"
+              >
+                View Details
+              </ActionButton>
+            </template>
+          </ItemCard>
+        </SectionGroup>
+
+        <SectionGroup
+          v-if="filteredCommunity.length"
+          title="COMMUNITY-MAPPED"
+          :count="filteredCommunity.length"
+          collapsible
+          :initially-expanded="true"
+        >
+          <ItemCard
+            v-for="node in filteredCommunity"
+            :key="`community-${node.name}`"
+            status="warning"
+          >
+            <template #icon>⚠</template>
+            <template #title>{{ node.name }}</template>
+            <template #subtitle>
+              <span style="color: var(--cg-color-warning)">{{ getCommunitySubtitle(node) }}</span>
+            </template>
+            <template #details>
+              <DetailRow
+                label="Guidance:"
+                :value="node.issue_guidance || getCommunityGuidance(node)"
+              />
+              <DetailRow
+                label="Used by:"
+                :value="getUsageLabel(node)"
+              />
+            </template>
+            <template #actions>
+              <ActionButton
+                variant="secondary"
+                size="xs"
+                @click="showDetails(node)"
+              >
+                View Details
+              </ActionButton>
+              <template v-if="isCommunityQueued(node)">
+                <span class="community-status-badge">Queued</span>
+              </template>
+              <template v-else>
+                <ActionButton
+                  v-if="node.registry_id"
+                  variant="primary"
+                  size="sm"
+                  @click="handleInstallCommunityRegistry(node)"
+                >
+                  Install
+                </ActionButton>
+                <ActionButton
+                  v-if="node.repository"
+                  variant="secondary"
+                  size="sm"
+                  @click="handleInstallCommunityGit(node)"
+                >
+                  Install via Git
+                </ActionButton>
+              </template>
             </template>
           </ItemCard>
         </SectionGroup>
@@ -220,7 +322,7 @@
 
         <!-- Empty state -->
         <EmptyState
-          v-if="!filteredInstalled.length && !filteredMissing.length && !filteredUntracked.length"
+          v-if="!filteredInstalled.length && !filteredMissing.length && !filteredBlocked.length && !filteredCommunity.length && !filteredUntracked.length"
           icon="📭"
           :message="searchQuery ? `No nodes match '${searchQuery}'` : 'No custom nodes found.'"
         />
@@ -242,6 +344,8 @@
       <p style="margin-top: var(--cg-space-2)">
         <strong>Installed:</strong> Tracked nodes available in this environment<br>
         <strong>Missing:</strong> Tracked nodes that need to be installed<br>
+        <strong>Blocked:</strong> Node types that require newer ComfyUI<br>
+        <strong>Community-Mapped:</strong> Actionable package mappings from community metadata<br>
         <strong>Untracked:</strong> Nodes on filesystem but not in manifest
       </p>
       <p style="margin-top: var(--cg-space-2); color: var(--cg-color-text-muted)">
@@ -308,14 +412,15 @@ const emit = defineEmits<{
   toast: [message: string, type: 'info' | 'success' | 'warning' | 'error']
 }>()
 
-const { getNodes, trackNodeAsDev, installNode, uninstallNode } = useComfyGitService()
+const { getNodes, trackNodeAsDev, installNode, uninstallNode, queueNodeInstall } = useComfyGitService()
 
 const nodesData = ref<NodesResult>({
   nodes: [],
   total_count: 0,
   installed_count: 0,
   missing_count: 0,
-  untracked_count: 0
+  untracked_count: 0,
+  blocked_count: 0
 })
 
 const loading = ref(false)
@@ -323,6 +428,7 @@ const error = ref<string | null>(null)
 const searchQuery = ref('')
 const showPopover = ref(false)
 const selectedNode = ref<NodeInfo | null>(null)
+const queuedCommunityInstalls = ref<Set<string>>(new Set())
 
 // Confirmation dialog state
 interface ConfirmDialogConfig {
@@ -353,13 +459,70 @@ const filteredInstalled = computed(() =>
 
 // Missing: tracked but NOT on filesystem
 const filteredMissing = computed(() =>
-  filteredNodes.value.filter(n => !n.installed && n.tracked)
+  filteredNodes.value.filter(n => !n.installed && n.tracked && !n.issue_type)
 )
 
 // Untracked: on filesystem but NOT tracked
 const filteredUntracked = computed(() =>
   filteredNodes.value.filter(n => n.installed && !n.tracked)
 )
+
+// Blocked: version-gated node types
+const filteredBlocked = computed(() =>
+  filteredNodes.value.filter(n => n.issue_type === 'version_gated')
+)
+
+const filteredCommunity = computed(() =>
+  filteredNodes.value.filter(n => n.issue_type === 'uninstallable')
+)
+
+const blockedVersionGatedCount = computed(() => filteredBlocked.value.length)
+const actionableCommunityCount = computed(() => filteredCommunity.value.length)
+
+function getCommunityInstallKey(node: NodeInfo): string {
+  return node.registry_id || node.name
+}
+
+function isCommunityQueued(node: NodeInfo): boolean {
+  return queuedCommunityInstalls.value.has(getCommunityInstallKey(node))
+}
+
+async function queueCommunityInstall(node: NodeInfo, installSource: 'registry' | 'git') {
+  const packageId = node.registry_id
+  if (!packageId) {
+    emit('toast', `Node "${node.name}" has no package id for install`, 'warning')
+    return
+  }
+  if (installSource === 'git' && !node.repository) {
+    emit('toast', `Node "${node.name}" has no repository URL for git install`, 'warning')
+    return
+  }
+
+  const installParams: {
+    id: string
+    version: string
+    selected_version: string
+    mode: string
+    channel: string
+    repository?: string
+    install_source?: 'registry' | 'git'
+  } = {
+    id: packageId,
+    version: 'latest',
+    selected_version: 'latest',
+    mode: 'remote',
+    channel: 'default'
+  }
+
+  if (installSource === 'git' && node.repository) {
+    installParams.repository = node.repository
+    installParams.install_source = 'git'
+  }
+
+  await queueNodeInstall(installParams)
+  queuedCommunityInstalls.value.add(getCommunityInstallKey(node))
+  emit('toast', `✓ Queued install for "${node.name}"`, 'success')
+}
 
 // Helper functions
 function getSourceLabel(source: string): string {
@@ -387,6 +550,31 @@ function getUsageLabel(node: NodeInfo): string {
     return node.used_in_workflows[0]
   }
   return `${node.used_in_workflows.length} workflows`
+}
+
+function getBlockedSubtitle(node: NodeInfo): string {
+  if (node.issue_type === 'version_gated') {
+    return 'Requires newer ComfyUI version'
+  }
+  return 'Blocked'
+}
+
+function getBlockedGuidance(node: NodeInfo): string {
+  if (node.issue_type === 'version_gated') {
+    return 'Upgrade ComfyUI to a version that includes this builtin node.'
+  }
+  return 'Manual intervention required.'
+}
+
+function getCommunitySubtitle(node: NodeInfo): string {
+  if (node.registry_id) {
+    return `Community-mapped package: ${node.registry_id}`
+  }
+  return 'Community-mapped package'
+}
+
+function getCommunityGuidance(_node: NodeInfo): string {
+  return 'Found via community mapping. Install from registry by default, or use git when needed.'
 }
 
 function showDetails(node: NodeInfo) {
@@ -478,6 +666,48 @@ function handleInstallNode(nodeName: string) {
   }
 }
 
+function handleInstallCommunityRegistry(node: NodeInfo) {
+  confirmDialog.value = {
+    title: 'Install Community-Mapped Package',
+    message: `Install "${node.name}" from the registry?`,
+    warning: 'This will queue a registry install through the manager queue.',
+    confirmLabel: 'Install',
+    destructive: false,
+    onConfirm: async () => {
+      confirmDialog.value = null
+      try {
+        loading.value = true
+        await queueCommunityInstall(node, 'registry')
+      } catch (err) {
+        emit('toast', `Error queueing install: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
+      } finally {
+        loading.value = false
+      }
+    }
+  }
+}
+
+function handleInstallCommunityGit(node: NodeInfo) {
+  confirmDialog.value = {
+    title: 'Install Community-Mapped Package via Git',
+    message: `Install "${node.name}" from git?`,
+    warning: 'Use git install only when you explicitly need the repository source.',
+    confirmLabel: 'Install via Git',
+    destructive: false,
+    onConfirm: async () => {
+      confirmDialog.value = null
+      try {
+        loading.value = true
+        await queueCommunityInstall(node, 'git')
+      } catch (err) {
+        emit('toast', `Error queueing git install: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
+      } finally {
+        loading.value = false
+      }
+    }
+  }
+}
+
 async function loadNodes() {
   loading.value = true
   error.value = null
@@ -530,5 +760,16 @@ onMounted(loadNodes)
 
 .version-expected {
   color: var(--cg-color-success);
+}
+
+.community-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--cg-space-1) var(--cg-space-2);
+  border-radius: var(--cg-radius-sm);
+  font-size: var(--cg-font-size-xs);
+  font-weight: var(--cg-font-weight-medium);
+  color: var(--cg-color-warning);
+  background: color-mix(in srgb, var(--cg-color-warning) 15%, transparent);
 }
 </style>

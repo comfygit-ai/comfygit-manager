@@ -627,13 +627,37 @@ export function useComfyGitService() {
       const workflows: WorkflowInfo[] = []
 
       status.workflows.new.forEach(name => {
-        workflows.push({ name, status: 'new', missing_nodes: 0, missing_models: 0, path: name })
+        workflows.push({
+          name,
+          status: 'new',
+          missing_nodes: 0,
+          version_gated_count: 0,
+          uninstallable_count: 0,
+          missing_models: 0,
+          path: name
+        })
       })
       status.workflows.modified.forEach(name => {
-        workflows.push({ name, status: 'modified', missing_nodes: 0, missing_models: 0, path: name })
+        workflows.push({
+          name,
+          status: 'modified',
+          missing_nodes: 0,
+          version_gated_count: 0,
+          uninstallable_count: 0,
+          missing_models: 0,
+          path: name
+        })
       })
       status.workflows.synced.forEach(name => {
-        workflows.push({ name, status: 'synced', missing_nodes: 0, missing_models: 0, path: name })
+        workflows.push({
+          name,
+          status: 'synced',
+          missing_nodes: 0,
+          version_gated_count: 0,
+          uninstallable_count: 0,
+          missing_models: 0,
+          path: name
+        })
       })
 
       return workflows
@@ -986,17 +1010,27 @@ export function useComfyGitService() {
    * This routes through the Manager's sequential queue to avoid race conditions.
    * Returns the ui_id for tracking via WebSocket events.
    */
-  async function queueNodeInstall(params: {
-    id: string
-    version?: string
-    selected_version?: string
-    repository?: string
-    mode?: string
-    channel?: string
-  }): Promise<{ ui_id: string }> {
+  async function queueNodeInstall(
+    params: {
+      id: string
+      version?: string
+      selected_version?: string
+      repository?: string
+      mode?: string
+      channel?: string
+      install_source?: 'registry' | 'git'
+    },
+    options?: {
+      beforeQueueStart?: (ui_id: string) => void | Promise<void>
+    }
+  ): Promise<{ ui_id: string }> {
     if (USE_MOCK) {
+      const ui_id = generateUUID()
+      if (options?.beforeQueueStart) {
+        await options.beforeQueueStart(ui_id)
+      }
       await mockApi.installNode(params.id)
-      return { ui_id: generateUUID() }
+      return { ui_id }
     }
 
     const ui_id = generateUUID()
@@ -1006,16 +1040,33 @@ export function useComfyGitService() {
                       (window as any).app?.api?.initialClientId ??
                       'comfygit-panel'
 
+    const taskParams: {
+      id: string
+      version: string
+      selected_version: string
+      mode: string
+      channel: string
+      repository?: string
+      install_source?: 'registry' | 'git'
+    } = {
+      id: params.id,
+      version: params.version || params.selected_version || 'latest',
+      selected_version: params.selected_version || 'latest',
+      mode: params.mode || 'remote',
+      channel: params.channel || 'default'
+    }
+
+    // Explicit source control: only include git fields for explicit git installs.
+    if (params.install_source) {
+      taskParams.install_source = params.install_source
+    }
+    if (params.install_source === 'git' && params.repository) {
+      taskParams.repository = params.repository
+    }
+
     const task = {
       kind: 'install',
-      params: {
-        id: params.id,
-        version: params.version || params.selected_version || 'latest',
-        selected_version: params.selected_version || 'latest',
-        repository: params.repository || '',
-        mode: params.mode || 'remote',
-        channel: params.channel || 'default'
-      },
+      params: taskParams,
       ui_id,
       client_id
     }
@@ -1029,11 +1080,13 @@ export function useComfyGitService() {
 
     console.log('[ComfyGit] Task queued with ui_id:', ui_id, 'for package:', params.id)
 
-    // Return ui_id BEFORE starting queue processing
-    // This allows caller to set up event tracking before events fire
-    // Fire-and-forget the start - don't await (avoids race condition)
-    fetchApi<void>('/v2/manager/queue/start').catch(err => {
-      console.error('[ComfyGit] Queue start failed:', err)
+    // Allow caller to register install tracking before queue processing starts.
+    if (options?.beforeQueueStart) {
+      await options.beforeQueueStart(ui_id)
+    }
+
+    await fetchApi<void>('/v2/manager/queue/start', {
+      method: 'POST'
     })
 
     return { ui_id }

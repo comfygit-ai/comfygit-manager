@@ -84,6 +84,32 @@ We are still pre-customer - any unnecessary fallbacks, unnecessary versioning, t
 Simple, elegant, maintainable code is the goal.
 We DONT want any legacy or backwards compatible code.
 
+## Issue Tracking (Beads)
+
+Uses beads (`bd`) with prefix **`cgm-`**. Use for multi-session or dependent work; skip for simple single-session fixes.
+
+```bash
+bd ready              # Find available work
+bd show cgm-xxx       # View issue details
+bd close cgm-xxx      # Complete work
+bd sync               # Sync with git
+```
+
+### Commit Convention — Bead References
+
+**When a commit implements, fixes, or closes a bead, include the bead ID(s) in the commit message.** This creates traceability between git history and issue tracking.
+
+Format: `<description> [<bead-id>]` or `<description> [<bead-id>, <bead-id>]`
+
+```
+Add accelerator packages panel [cgm-2v9]
+Fix switch lock stale errors [cgm-abc]
+```
+
+- Place bead ID(s) at the end of the first line in square brackets
+- Use this for commits that directly address bead work — skip for unrelated housekeeping commits
+- If a commit fully resolves a bead, also close it with `bd close`
+
 ## Cross-Platform Compatibility
 This codebase must run on **Windows, Linux, and macOS**. All engineering choices should consider cross-platform compatibility:
 - Use `pathlib.Path` instead of string concatenation for file paths

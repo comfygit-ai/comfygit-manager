@@ -12,6 +12,21 @@ bd close <id>         # Complete work
 bd sync               # Sync with git
 ```
 
+## Commit Convention — Bead References
+
+**When a commit implements, fixes, or closes a bead, include the bead ID(s) in the commit message.** This creates traceability between git history and issue tracking.
+
+Format: `<description> [<bead-id>]` or `<description> [<bead-id>, <bead-id>]`
+
+```
+Add accelerator packages panel [cgm-2v9]
+Fix switch lock stale errors [cgm-abc]
+```
+
+- Place bead ID(s) at the end of the first line in square brackets
+- Use this for commits that directly address bead work — skip for unrelated housekeeping commits
+- If a commit fully resolves a bead, also close it with `bd close`
+
 ## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.

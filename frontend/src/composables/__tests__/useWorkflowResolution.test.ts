@@ -59,6 +59,10 @@ describe('useWorkflowResolution', () => {
       expect(result.value?.nodes.resolved[0].node_type).toBe('TestNode')
       expect(result.value?.nodes.ambiguous).toHaveLength(0)
       expect(result.value?.nodes.unresolved).toHaveLength(0)
+      expect(result.value?.nodes.version_gated).toHaveLength(0)
+      expect(result.value?.nodes.uninstallable).toHaveLength(0)
+      expect(result.value?.node_guidance).toEqual({})
+      expect(result.value?.package_aliases).toEqual({})
       expect(isLoading.value).toBe(false)
     })
 
@@ -142,6 +146,103 @@ describe('useWorkflowResolution', () => {
       expect(result.value?.nodes.ambiguous[0].options).toHaveLength(2)
       expect(result.value?.stats.needs_user_input).toBe(true)
     })
+
+    it('should preserve version-gated and uninstallable node fields from API', async () => {
+      const { analyzeWorkflow, result } = useWorkflowResolution()
+
+      global.window = {
+        app: {
+          api: {
+            fetchApi: vi.fn().mockResolvedValue({
+              ok: true,
+              json: vi.fn().mockResolvedValue({
+                workflow: 'test-workflow',
+                nodes: {
+                  resolved: [],
+                  unresolved: [],
+                  ambiguous: [],
+                  version_gated: [
+                    {
+                      reference: { node_type: 'SetNode', workflow: 'test-workflow' },
+                      reason: 'requires_newer_comfyui',
+                      guidance: 'Upgrade ComfyUI to >= v0.3.18'
+                    }
+                  ],
+                  uninstallable: [
+                    {
+                      reference: { node_type: 'GetNode', workflow: 'test-workflow' },
+                      package: { package_id: 'kj-nodes', title: 'KJ Nodes' },
+                      match_confidence: 1.0,
+                      match_type: 'auto_selected',
+                      is_installed: false,
+                      reason: 'no_installable_package_version'
+                    }
+                  ]
+                },
+                node_guidance: { SetNode: 'Upgrade ComfyUI to >= v0.3.18' },
+                models: {
+                  resolved: [],
+                  unresolved: [],
+                  ambiguous: []
+                },
+                stats: {
+                  total_nodes: 2,
+                  total_models: 0,
+                  needs_user_input: false
+                }
+              })
+            })
+          }
+        }
+      } as any
+
+      await analyzeWorkflow('test-workflow')
+
+      expect(result.value?.nodes.version_gated).toHaveLength(1)
+      expect(result.value?.nodes.uninstallable).toHaveLength(1)
+      expect(result.value?.node_guidance?.SetNode).toContain('Upgrade ComfyUI')
+    })
+
+    it('should preserve package aliases from API payload', async () => {
+      const { analyzeWorkflow, result } = useWorkflowResolution()
+
+      global.window = {
+        app: {
+          api: {
+            fetchApi: vi.fn().mockResolvedValue({
+              ok: true,
+              json: vi.fn().mockResolvedValue({
+                workflow: 'test-workflow',
+                package_aliases: {
+                  comfyui_ryanontheinside: 'comfyui_ryanonyheinside'
+                },
+                nodes: {
+                  resolved: [],
+                  unresolved: [],
+                  ambiguous: []
+                },
+                models: {
+                  resolved: [],
+                  unresolved: [],
+                  ambiguous: []
+                },
+                stats: {
+                  total_nodes: 0,
+                  total_models: 0,
+                  needs_user_input: false
+                }
+              })
+            })
+          }
+        }
+      } as any
+
+      await analyzeWorkflow('test-workflow')
+
+      expect(result.value?.package_aliases).toEqual({
+        comfyui_ryanontheinside: 'comfyui_ryanonyheinside'
+      })
+    })
   })
 
   describe('applyResolution', () => {
@@ -210,6 +311,46 @@ describe('useWorkflowResolution', () => {
 
       await expect(applyResolution('test', nodeChoices, modelChoices)).rejects.toThrow('Invalid choices provided')
       expect(error.value).toContain('Invalid choices provided')
+    })
+
+    it('serializes uninstallable git choice fields in apply-resolution payload', async () => {
+      const { applyResolution } = useWorkflowResolution()
+      const fetchApi = vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          status: 'success',
+          nodes_to_install: [],
+          models_to_download: [],
+          estimated_time_seconds: 0
+        })
+      })
+
+      global.window = {
+        app: {
+          api: { fetchApi }
+        }
+      } as any
+
+      const nodeChoices = new Map([
+        ['GetNode', {
+          action: 'install',
+          package_id: 'kj-nodes',
+          install_source: 'git',
+          repository: 'https://github.com/kijai/ComfyUI-KJNodes'
+        }]
+      ])
+
+      await applyResolution('test-workflow', nodeChoices, new Map())
+
+      const request = fetchApi.mock.calls[0]
+      expect(request[0]).toBe('/v2/comfygit/workflow/test-workflow/apply-resolution')
+      const payload = JSON.parse(request[1].body)
+      expect(payload.node_choices.GetNode).toMatchObject({
+        action: 'install',
+        package_id: 'kj-nodes',
+        install_source: 'git',
+        repository: 'https://github.com/kijai/ComfyUI-KJNodes'
+      })
     })
   })
 

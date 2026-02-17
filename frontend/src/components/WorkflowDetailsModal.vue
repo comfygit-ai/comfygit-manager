@@ -112,15 +112,34 @@
               No custom nodes used in this workflow
             </div>
             <div
-              v-for="node in details.nodes"
-              :key="node.name"
+              v-for="(node, index) in details.nodes"
+              :key="`${node.name}-${node.status}-${index}`"
               class="node-item"
             >
-              <span :class="['node-status', node.status === 'installed' ? 'installed' : 'missing']">
-                {{ node.status === 'installed' ? '✓' : '✕' }}
+              <span :class="['node-status', getNodeStatusClass(node.status)]">
+                {{ getNodeStatusIcon(node.status) }}
               </span>
-              <span class="node-name">{{ node.name }}</span>
-              <span v-if="node.version" class="node-version">v{{ node.version }}</span>
+              <div class="node-content">
+                <div class="node-main">
+                  <span class="node-name">{{ node.name }}</span>
+                  <span class="node-badge">{{ getNodeStatusLabel(node.status) }}</span>
+                  <span v-if="node.version" class="node-version">v{{ node.version }}</span>
+                  <button
+                    v-if="node.status === 'uninstallable' && node.package_id && !queuedNodeInstalls.has(node.package_id)"
+                    class="node-install-link"
+                    @click="handleQueueNodeInstall(node)"
+                  >
+                    Install
+                  </button>
+                  <span
+                    v-else-if="node.status === 'uninstallable' && node.package_id && queuedNodeInstalls.has(node.package_id)"
+                    class="node-install-queued"
+                  >
+                    Queued
+                  </span>
+                </div>
+                <div v-if="node.guidance" class="node-guidance">{{ node.guidance }}</div>
+              </div>
             </div>
           </section>
         </template>
@@ -177,7 +196,7 @@ const emit = defineEmits<{
   refresh: []
 }>()
 
-const { getWorkflowDetails, setModelImportance, openFileLocation } = useComfyGitService()
+const { getWorkflowDetails, setModelImportance, openFileLocation, queueNodeInstall } = useComfyGitService()
 
 const details = ref<WorkflowDetails | null>(null)
 const loading = ref(false)
@@ -186,6 +205,7 @@ const hasChanges = ref(false)
 const importanceChanges = ref<Record<string, string>>({})
 const showImportanceInfo = ref(false)
 const expandedNodeLists = ref<Set<string>>(new Set())
+const queuedNodeInstalls = ref<Set<string>>(new Set())
 
 const importanceOptions = [
   { label: 'Required', value: 'required' },
@@ -222,6 +242,48 @@ function getStatusLabel(status: string): string {
     case 'missing':
     default:
       return '✗ Missing'
+  }
+}
+
+function getNodeStatusClass(status: WorkflowDetails['nodes'][number]['status']): string {
+  switch (status) {
+    case 'installed':
+      return 'installed'
+    case 'version_gated':
+      return 'version-gated'
+    case 'uninstallable':
+      return 'community-mapped'
+    case 'missing':
+    default:
+      return 'missing'
+  }
+}
+
+function getNodeStatusIcon(status: WorkflowDetails['nodes'][number]['status']): string {
+  switch (status) {
+    case 'installed':
+      return '✓'
+    case 'version_gated':
+      return '⚠'
+    case 'uninstallable':
+      return '⚠'
+    case 'missing':
+    default:
+      return '✕'
+  }
+}
+
+function getNodeStatusLabel(status: WorkflowDetails['nodes'][number]['status']): string {
+  switch (status) {
+    case 'installed':
+      return 'Installed'
+    case 'version_gated':
+      return 'Needs newer ComfyUI'
+    case 'uninstallable':
+      return 'Community-Mapped'
+    case 'missing':
+    default:
+      return 'Missing'
   }
 }
 
@@ -271,6 +333,23 @@ async function handleOpenFileLocation(relativePath: string) {
     await openFileLocation(relativePath)
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to open file location'
+  }
+}
+
+async function handleQueueNodeInstall(node: WorkflowDetails['nodes'][number]) {
+  if (!node.package_id) return
+  try {
+    const selectedVersion = node.latest_version || 'latest'
+    await queueNodeInstall({
+      id: node.package_id,
+      version: selectedVersion,
+      selected_version: selectedVersion,
+      mode: 'remote',
+      channel: 'default'
+    })
+    queuedNodeInstalls.value.add(node.package_id)
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to queue node install'
   }
 }
 
@@ -440,13 +519,28 @@ onMounted(loadDetails)
 
 .node-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 8px;
   border: 1px solid var(--cg-color-border-subtle);
   background: var(--cg-color-bg-tertiary);
   margin-bottom: 4px;
   font-size: var(--cg-font-size-sm);
+}
+
+.node-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.node-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .node-status {
@@ -462,13 +556,48 @@ onMounted(loadDetails)
   color: var(--cg-color-error);
 }
 
+.node-status.version-gated {
+  color: var(--cg-color-warning, #f59e0b);
+}
+
+.node-status.community-mapped {
+  color: var(--cg-color-warning, #f59e0b);
+}
+
 .node-name {
   color: var(--cg-color-text-primary);
-  flex: 1;
+}
+
+.node-badge {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  letter-spacing: var(--cg-letter-spacing-wide);
+  text-transform: uppercase;
 }
 
 .node-version {
   color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+}
+
+.node-install-link {
+  border: none;
+  background: transparent;
+  color: var(--cg-color-accent);
+  cursor: pointer;
+  font-size: var(--cg-font-size-xs);
+  padding: 0;
+  text-decoration: underline;
+}
+
+.node-install-queued {
+  color: var(--cg-color-warning);
+  font-size: var(--cg-font-size-xs);
+  font-weight: var(--cg-font-weight-medium);
+}
+
+.node-guidance {
+  color: var(--cg-color-text-secondary);
   font-size: var(--cg-font-size-xs);
 }
 </style>

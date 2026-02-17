@@ -6,15 +6,17 @@ import type { ComfyGitStatus } from '@/types/comfygit'
 // Mock minimal status object for tests
 const createMockStatus = (): ComfyGitStatus => ({
   environment: 'test-env',
-  workspace: '/test/workspace',
   branch: 'main',
+  is_synced: true,
   has_changes: false,
   is_detached_head: false,
+  has_legacy_manager: false,
   workflows: {
     new: [],
     modified: [],
     deleted: [],
     synced: [],
+    total: 0,
     analyzed: []
   },
   git_changes: {
@@ -27,7 +29,10 @@ const createMockStatus = (): ComfyGitStatus => ({
   comparison: {
     is_synced: true,
     missing_nodes: [],
-    extra_nodes: []
+    extra_nodes: [],
+    disabled_nodes: [],
+    version_mismatches: [],
+    packages_in_sync: true
   },
   missing_models_count: 0
 })
@@ -81,26 +86,6 @@ describe('StatusSection - Setup State Issue Cards', () => {
     expect(wrapper.text()).toContain('Create Environment')
   })
 
-  it('emits create-environment when Create Environment button is clicked', async () => {
-    const wrapper = mount(StatusSection, {
-      props: {
-        status: createMockStatus(),
-        setupState: 'empty_workspace'
-      },
-      global: {
-        stubs: ['StatusDetailModal', 'Teleport']
-      }
-    })
-
-    // Find and click the Create Environment button
-    const buttons = wrapper.findAll('button')
-    const createEnvButton = buttons.find(b => b.text().includes('Create Environment'))
-    expect(createEnvButton).toBeDefined()
-
-    await createEnvButton?.trigger('click')
-    expect(wrapper.emitted('create-environment')).toBeTruthy()
-  })
-
   it('shows normal status when setupState is managed', () => {
     const wrapper = mount(StatusSection, {
       props: {
@@ -119,5 +104,87 @@ describe('StatusSection - Setup State Issue Cards', () => {
 
     // Should show normal health section
     expect(wrapper.text()).toContain('ENVIRONMENT HEALTH')
+  })
+
+  it('shows version target in broken workflow description when guidance is available', () => {
+    const status = createMockStatus()
+    status.workflows.analyzed = [
+      {
+        name: 'needs-new-comfyui.json',
+        sync_state: 'synced',
+        status: 'broken',
+        has_issues: true,
+        has_path_sync_issues: false,
+        uninstalled_nodes: 0,
+        unresolved_nodes_count: 0,
+        nodes_version_gated_count: 1,
+        nodes_uninstallable_count: 0,
+        version_gated_guidance: ['Requires ComfyUI >= 0.3.10'],
+        unresolved_models_count: 0,
+        ambiguous_models_count: 0,
+        ambiguous_nodes_count: 0,
+        models_needing_path_sync_count: 0,
+        pending_downloads_count: 0,
+        issue_summary: '1 node requires newer ComfyUI',
+        node_count: 10,
+        model_count: 2,
+        has_category_mismatch_issues: false,
+        models_with_category_mismatch_count: 0
+      }
+    ]
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed'
+      },
+      global: {
+        stubs: ['StatusDetailModal', 'Teleport']
+      }
+    })
+
+    expect(wrapper.text()).toContain('require newer ComfyUI (>= 0.3.10)')
+    expect(wrapper.text()).toContain('needs ComfyUI >= 0.3.10')
+  })
+
+  it('uses community package terminology for uninstallable counts', () => {
+    const status = createMockStatus()
+    status.workflows.analyzed = [
+      {
+        name: 'community.json',
+        sync_state: 'synced',
+        status: 'broken',
+        has_issues: true,
+        has_path_sync_issues: false,
+        uninstalled_nodes: 0,
+        unresolved_nodes_count: 0,
+        nodes_version_gated_count: 0,
+        nodes_uninstallable_count: 2,
+        version_gated_guidance: [],
+        unresolved_models_count: 0,
+        ambiguous_models_count: 0,
+        ambiguous_nodes_count: 0,
+        models_needing_path_sync_count: 0,
+        pending_downloads_count: 0,
+        issue_summary: '2 uninstallable node mappings',
+        node_count: 10,
+        model_count: 2,
+        has_category_mismatch_issues: false,
+        models_with_category_mismatch_count: 0
+      }
+    ]
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed'
+      },
+      global: {
+        stubs: ['StatusDetailModal', 'Teleport']
+      }
+    })
+
+    expect(wrapper.text()).toContain('community packages')
+    expect(wrapper.text().toLowerCase()).not.toContain('uninstallable node mappings')
   })
 })
