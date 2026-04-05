@@ -574,7 +574,34 @@ const missingModels = computed<MissingModelItem[]>(() => {
     canDownload: false
   }))
 
-  return [...needsDownload, ...unresolved]
+  // Deduplicate only when the workflow provides a concrete download source URL.
+  // If there is no source URL, keep duplicates because identical filenames may
+  // still refer to different required assets.
+  const dedupedDownloadables = new Map<string, MissingModelItem>()
+  const downloadablesWithoutUrl: MissingModelItem[] = []
+  for (const model of needsDownload) {
+    if (!model.url) {
+      downloadablesWithoutUrl.push(model)
+      continue
+    }
+
+    const dedupeKey = `${model.filename}::${model.url}`
+    const existing = dedupedDownloadables.get(dedupeKey)
+    if (!existing) {
+      dedupedDownloadables.set(dedupeKey, model)
+      continue
+    }
+
+    // Prefer the richer entry if duplicates differ slightly.
+    if (!existing.targetPath && model.targetPath) {
+      existing.targetPath = model.targetPath
+    }
+    if (!existing.canDownload && model.canDownload) {
+      existing.canDownload = model.canDownload
+    }
+  }
+
+  return [...dedupedDownloadables.values(), ...downloadablesWithoutUrl, ...unresolved]
 })
 
 // Models that can be auto-downloaded
