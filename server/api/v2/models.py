@@ -638,7 +638,7 @@ async def huggingface_search(request: web.Request, env) -> web.Response:
     api = HfApi(token=token if token else None)
 
     try:
-        models = list(api.list_models(search=query, limit=limit, sort="downloads", direction=-1))
+        models = list(api.list_models(search=query, limit=limit, sort="downloads"))
     except Exception as e:
         return web.json_response({"error": f"Search failed: {e}"}, status=500)
 
