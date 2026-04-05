@@ -564,12 +564,13 @@ async def get_workflows(request: web.Request, env) -> web.Response:
     for wf in status.workflow.analyzed_workflows:
         version_gated_count = len(_safe_sequence(getattr(wf.resolution, "nodes_version_gated", None)))
         uninstallable_count = len(_safe_sequence(getattr(wf.resolution, "nodes_uninstallable", None)))
+        unresolved_nodes_count = len(_safe_sequence(getattr(wf.resolution, "nodes_unresolved", None)))
         issue_summary = _safe_str(getattr(wf, "issue_summary", None))
 
         workflow_data = {
             "name": wf.name,
             "status": "broken" if wf.has_issues else wf.sync_state,
-            "missing_nodes": wf.uninstalled_count,
+            "missing_nodes": wf.uninstalled_count + unresolved_nodes_count,
             "version_gated_count": version_gated_count,
             "uninstallable_count": uninstallable_count,
             "missing_models": len(wf.resolution.models_unresolved) + len(wf.resolution.models_ambiguous),

@@ -390,6 +390,10 @@ export interface ConfigSettings {
   auto_sync_models: boolean
   confirm_destructive: boolean
   comfyui_extra_args: string[]
+  manager_source?: 'registry' | 'git' | 'development' | 'unknown' | 'untracked'
+  manager_version?: string | null
+  manager_branch?: string | null
+  manager_commit?: string | null
 }
 
 // Node Management Types

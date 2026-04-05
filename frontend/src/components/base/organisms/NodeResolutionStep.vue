@@ -78,6 +78,7 @@
           :status-label="currentNodeStatusLabel"
           :search-results="currentNodeSearchResults"
           :is-searching="isCurrentNodeSearching"
+          :installed-node-packs="installedNodePacks"
           @mark-optional="handleMarkOptional"
           @skip="handleSkip"
           @manual-entry="handleManualEntry"
@@ -85,6 +86,7 @@
           @option-selected="handleOptionSelected"
           @clear-choice="handleClearChoice"
           @search-result-selected="handleSearchResultSelected"
+          @installed-pack-selected="handleInstalledPackSelected"
         />
       </div>
     </template>
@@ -200,11 +202,17 @@ interface AutoResolvedPackage {
   node_types_count: number
 }
 
+interface InstalledNodePack {
+  package_id: string
+  source: string
+}
+
 const props = defineProps<{
   nodes: NodeToResolve[]
   nodeChoices: Map<string, NodeChoice>
   autoResolvedPackages: AutoResolvedPackage[]
   skippedPackages: Set<string>
+  installedNodePacks: InstalledNodePack[]
 }>()
 
 const emit = defineEmits<{
@@ -395,6 +403,12 @@ function handleSearch() {
 function handleManualEntry() {
   manualPackageInput.value = ''
   showManualEntry.value = true
+}
+
+function handleInstalledPackSelected(packageId: string) {
+  if (!currentNode.value) return
+  emit('manual-entry', currentNode.value.node_type, packageId)
+  nextTick(() => advanceToNextUnresolved())
 }
 
 function closeSearch() {

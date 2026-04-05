@@ -64,6 +64,38 @@ def _mask_token(token: str | None) -> str | None:
     return f"***{token[-4:]}" if len(token) > 4 else "****"
 
 
+def _get_manager_runtime_info(request: web.Request) -> dict[str, str | None]:
+    """Return how comfygit-manager is sourced in the running environment."""
+    env = get_environment_from_request(request)
+    if not env:
+        return {
+            "manager_source": "unknown",
+            "manager_version": None,
+            "manager_branch": None,
+            "manager_commit": None,
+        }
+
+    try:
+        node = env.pyproject.nodes.get_existing().get("comfygit-manager")
+    except Exception:
+        node = None
+
+    if not node:
+        return {
+            "manager_source": "unknown",
+            "manager_version": None,
+            "manager_branch": None,
+            "manager_commit": None,
+        }
+
+    return {
+        "manager_source": node.source or "unknown",
+        "manager_version": node.version,
+        "manager_branch": node.branch,
+        "manager_commit": node.pinned_commit,
+    }
+
+
 @routes.get("/v2/comfygit/config")
 async def get_config(request: web.Request) -> web.Response:
     """
@@ -118,6 +150,7 @@ async def get_config(request: web.Request) -> web.Response:
         "confirm_destructive": True, # Not yet supported - default to True
         "comfyui_extra_args": extra_args
     }
+    config.update(_get_manager_runtime_info(request))
 
     return web.json_response(config)
 

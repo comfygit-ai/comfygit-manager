@@ -246,6 +246,24 @@ def serialize_workflow_details(
             node_entry["guidance"] = guidance
         nodes.append(node_entry)
 
+    for node in _safe_sequence(getattr(workflow.resolution, "nodes_unresolved", None)):
+        node_name = _extract_node_type(node)
+        if not node_name:
+            continue
+        key = ("missing", node_name)
+        if key in seen_blocked_nodes:
+            continue
+        seen_blocked_nodes.add(key)
+        node_entry = {
+            "name": node_name,
+            "version": None,
+            "status": "missing",
+        }
+        guidance = _extract_node_guidance(node, node_guidance)
+        if guidance:
+            node_entry["guidance"] = guidance
+        nodes.append(node_entry)
+
     return {
         "name": name,
         "path": f"workflows/{name}",

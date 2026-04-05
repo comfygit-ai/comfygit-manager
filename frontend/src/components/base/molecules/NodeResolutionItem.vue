@@ -16,7 +16,23 @@
 
       <!-- Multiple options (ambiguous) - show radio selection -->
       <div v-else-if="hasMultipleOptions && options" class="multiple-options">
-        <p class="options-prompt">Select a package to install:</p>
+        <div v-if="availableInstalledNodePacks.length > 0" class="installed-packs-section">
+          <p class="options-prompt">Or map to an installed node pack:</p>
+          <div class="installed-packs-list">
+            <button
+              v-for="pack in availableInstalledNodePacks"
+              :key="pack.package_id"
+              type="button"
+              class="installed-pack-chip"
+              @click="emit('installed-pack-selected', pack.package_id)"
+            >
+              <span class="installed-pack-name">{{ pack.package_id }}</span>
+              <span class="installed-pack-source">{{ getSourceLabel(pack.source) }}</span>
+            </button>
+          </div>
+        </div>
+
+        <p class="options-prompt">Potential matches:</p>
         <div class="options-list">
           <label
             v-for="(option, index) in options"
@@ -62,6 +78,22 @@
 
       <!-- Unresolved - show search results or loading -->
       <div v-else class="unresolved">
+        <div v-if="availableInstalledNodePacks.length > 0" class="installed-packs-section">
+          <p class="options-prompt">Map to an installed node pack:</p>
+          <div class="installed-packs-list">
+            <button
+              v-for="pack in availableInstalledNodePacks"
+              :key="pack.package_id"
+              type="button"
+              class="installed-pack-chip"
+              @click="emit('installed-pack-selected', pack.package_id)"
+            >
+              <span class="installed-pack-name">{{ pack.package_id }}</span>
+              <span class="installed-pack-source">{{ getSourceLabel(pack.source) }}</span>
+            </button>
+          </div>
+        </div>
+
         <!-- Loading state -->
         <div v-if="isSearching" class="searching-state">
           <span class="searching-spinner"></span>
@@ -134,6 +166,11 @@ interface NodeOption {
   is_installed: boolean
 }
 
+interface InstalledNodePack {
+  package_id: string
+  source: string
+}
+
 interface NodeChoice {
   action: 'install' | 'optional' | 'skip' | 'manual'
   package_id?: string
@@ -167,6 +204,7 @@ const props = defineProps<{
   // Inline search results for unresolved nodes
   searchResults?: NodeSearchResult[]
   isSearching?: boolean
+  installedNodePacks?: InstalledNodePack[]
 }>()
 
 const emit = defineEmits<{
@@ -177,6 +215,7 @@ const emit = defineEmits<{
   (e: 'option-selected', index: number): void
   (e: 'clear-choice'): void
   (e: 'search-result-selected', result: NodeSearchResult): void
+  (e: 'installed-pack-selected', packageId: string): void
 }>()
 
 function truncateDescription(desc: string, maxLength = 80): string {
@@ -188,6 +227,7 @@ function truncateDescription(desc: string, maxLength = 80): string {
 const hasChoice = computed(() => !!props.choice)
 const choiceAction = computed(() => props.choice?.action)
 const choicePackageId = computed(() => props.choice?.package_id)
+const availableInstalledNodePacks = computed(() => props.installedNodePacks || [])
 
 // Status badge variant based on status
 const statusVariant = computed(() => {
@@ -203,6 +243,19 @@ const statusVariant = computed(() => {
 
 function handleOptionClick(index: number) {
   emit('option-selected', index)
+}
+
+function getSourceLabel(source: string): string {
+  switch (source) {
+    case 'development':
+      return 'dev'
+    case 'git':
+      return 'git'
+    case 'registry':
+      return 'registry'
+    default:
+      return source || 'unknown'
+  }
 }
 </script>
 
@@ -432,5 +485,52 @@ function handleOptionClick(index: number) {
   font-size: var(--cg-font-size-xs);
   color: var(--cg-color-text-muted);
   margin-top: 2px;
+}
+
+.installed-packs-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-2);
+}
+
+.installed-packs-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cg-space-2);
+}
+
+.installed-pack-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  padding: 6px 10px;
+  border: 1px solid var(--cg-color-border-subtle);
+  border-radius: 999px;
+  background: var(--cg-color-bg-primary);
+  color: var(--cg-color-text-secondary);
+  cursor: pointer;
+  transition: all var(--cg-transition-fast);
+}
+
+.installed-pack-chip:hover {
+  border-color: var(--cg-color-accent);
+  background: var(--cg-color-bg-hover);
+  color: var(--cg-color-text-primary);
+}
+
+.installed-pack-name {
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  font-weight: var(--cg-font-weight-semibold);
+}
+
+.installed-pack-source {
+  padding: 2px 6px;
+  border-radius: var(--cg-radius-sm);
+  background: var(--cg-color-bg-tertiary);
+  color: var(--cg-color-text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
 }
 </style>

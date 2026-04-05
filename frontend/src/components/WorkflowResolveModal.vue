@@ -176,6 +176,7 @@
             :node-choices="nodeChoices"
             :auto-resolved-packages="autoResolvedPackages"
             :skipped-packages="skippedPackages"
+            :installed-node-packs="installedNodePacks"
             @mark-optional="handleNodeMarkOptional"
             @skip="handleNodeSkip"
             @option-selected="handleNodeOptionSelected"
@@ -516,7 +517,8 @@ import { useComfyGitService } from '@/composables/useComfyGitService'
 import type {
   FullResolutionResult,
   NodeChoice,
-  ModelChoice
+  ModelChoice,
+  NodeInfo,
 } from '@/types/comfygit'
 import BaseModal from './base/BaseModal.vue'
 import BaseButton from './base/BaseButton.vue'
@@ -538,10 +540,11 @@ const emit = defineEmits<{
 
 const { analyzeWorkflow, applyResolution, installNodes, queueModelDownloads, progress, resetProgress } = useWorkflowResolution()
 const { loadPendingDownloads } = useModelDownloadQueue()
-const { openFileLocation, queueNodeInstall } = useComfyGitService()
+const { openFileLocation, queueNodeInstall, getNodes } = useComfyGitService()
 
 // State
 const analysisResult = ref<FullResolutionResult | null>(null)
+const installedNodePacks = ref<Array<{ package_id: string; source: string }>>([])
 const loading = ref(false)
 const applying = ref(false)
 const error = ref<string | null>(null)
@@ -959,13 +962,47 @@ function initializeCommunityNodeChoices() {
   }
 }
 
+function sourceRank(source: string): number {
+  switch (source) {
+    case 'development':
+      return 0
+    case 'git':
+      return 1
+    case 'registry':
+      return 2
+    default:
+      return 3
+  }
+}
+
+function buildInstalledNodePackChoices(nodes: NodeInfo[]): Array<{ package_id: string; source: string }> {
+  return nodes
+    .filter((node) => node.installed && node.tracked)
+    .filter((node) => node.name !== 'comfygit-manager')
+    .map((node) => ({
+      package_id: node.registry_id || node.name,
+      source: node.source,
+    }))
+    .filter((node, index, arr) => arr.findIndex((item) => item.package_id === node.package_id) === index)
+    .sort((a, b) => {
+      const sourceDelta = sourceRank(a.source) - sourceRank(b.source)
+      if (sourceDelta !== 0) return sourceDelta
+      return a.package_id.localeCompare(b.package_id)
+    })
+}
+
 // Methods
 async function loadAnalysis() {
   loading.value = true
   error.value = null
 
   try {
-    analysisResult.value = await analyzeWorkflow(props.workflowName)
+    const [analysis, nodes] = await Promise.all([
+      analyzeWorkflow(props.workflowName),
+      getNodes(),
+    ])
+    analysisResult.value = analysis
+    installedNodePacks.value = buildInstalledNodePackChoices(nodes.nodes)
     initializeCommunityNodeChoices()
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to analyze workflow'
