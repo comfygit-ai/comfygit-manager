@@ -5,6 +5,7 @@ import CommitPopover from '@/components/CommitPopover.vue'
 import ModelDownloadQueue from '@/components/ModelDownloadQueue.vue'
 import MockControlPopover from '@/components/MockControlPopover.vue'
 import MissingResourcesPopup from '@/components/MissingResourcesPopup.vue'
+import WorkflowIOMappingOverlay from '@/components/WorkflowIOMappingOverlay.vue'
 import { useModelDownloadQueue } from '@/composables/useModelDownloadQueue'
 import { isMockApi } from '@/services/mockApi'
 import type { ComfyGitStatus } from '@/types/comfygit'
@@ -44,6 +45,7 @@ import { switchTheme, getCurrentTheme, type ThemeName } from '@/themes'
 
 // Panel state
 let panelOverlay: HTMLElement | null = null
+let panelVueApp: ReturnType<typeof createApp> | null = null
 let commitPopover: HTMLElement | null = null
 let commitVueApp: ReturnType<typeof createApp> | null = null
 let downloadQueueContainer: HTMLElement | null = null
@@ -52,6 +54,8 @@ let mockControlPopover: HTMLElement | null = null
 let mockControlApp: ReturnType<typeof createApp> | null = null
 let missingResourcesContainer: HTMLElement | null = null
 let missingResourcesApp: ReturnType<typeof createApp> | null = null
+let ioMappingContainer: HTMLElement | null = null
+let ioMappingApp: ReturnType<typeof createApp> | null = null
 
 // Global status for indicator
 const globalStatus = ref<ComfyGitStatus | null>(null)
@@ -123,9 +127,7 @@ function hasUncommittedChanges(): boolean {
 }
 
 function showPanel(initialView?: string) {
-  if (panelOverlay) {
-    panelOverlay.remove()
-  }
+  closePanel()
 
   panelOverlay = document.createElement('div')
   panelOverlay.className = 'comfygit-panel-overlay'
@@ -146,7 +148,7 @@ function showPanel(initialView?: string) {
   }
   document.addEventListener('keydown', escHandler)
 
-  const vueApp = createApp({
+  panelVueApp = createApp({
     render: () => h(ComfyGitPanel, {
       initialView,
       onClose: closePanel,
@@ -161,11 +163,15 @@ function showPanel(initialView?: string) {
     })
   })
 
-  vueApp.mount(panelContainer)
+  panelVueApp.mount(panelContainer)
   document.body.appendChild(panelOverlay)
 }
 
 function closePanel() {
+  if (panelVueApp) {
+    panelVueApp.unmount()
+    panelVueApp = null
+  }
   if (panelOverlay) {
     panelOverlay.remove()
     panelOverlay = null
@@ -360,6 +366,23 @@ function mountMissingResourcesPopup() {
   missingResourcesApp.mount(missingResourcesContainer)
   document.body.appendChild(missingResourcesContainer)
   console.log('[ComfyGit] Missing resources popup mounted')
+}
+
+function mountIOMappingOverlay() {
+  if (ioMappingContainer) return
+
+  ioMappingContainer = document.createElement('div')
+  ioMappingContainer.className = 'comfygit-io-mapping-root'
+
+  ioMappingApp = createApp({
+    render: () => h(WorkflowIOMappingOverlay, {
+      comfyApp: app,
+    })
+  })
+
+  ioMappingApp.mount(ioMappingContainer)
+  document.body.appendChild(ioMappingContainer)
+  console.log('[ComfyGit] Workflow I/O mapping overlay mounted')
 }
 
 // Update commit button indicator and disabled state
@@ -615,10 +638,17 @@ app.registerExtension({
     // Mount missing resources popup
     mountMissingResourcesPopup()
 
+    // Mount workflow I/O mapping overlay
+    mountIOMappingOverlay()
+
     // Listen for panel open requests from other components
     window.addEventListener('comfygit:open-panel', ((event: CustomEvent) => {
       const initialView = event.detail?.initialView
       showPanel(initialView)
+    }) as EventListener)
+
+    window.addEventListener('comfygit:close-panel', (() => {
+      closePanel()
     }) as EventListener)
 
     // Load any pending downloads from previous session

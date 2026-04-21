@@ -212,7 +212,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import { useOrchestratorService } from '@/composables/useOrchestratorService'
 import WorkflowDetailsModal from './WorkflowDetailsModal.vue'
@@ -330,6 +330,13 @@ function handleContract(name: string) {
   showContractModal.value = true
 }
 
+function handleOpenWorkflowContract(event: Event) {
+  const customEvent = event as CustomEvent<{ workflowName?: string }>
+  const workflowName = customEvent.detail?.workflowName
+  if (!workflowName) return
+  handleContract(workflowName)
+}
+
 function handleInstall() {
   emit('refresh')
 }
@@ -417,7 +424,14 @@ function formatContractSummary(wf: WorkflowInfo): string {
   return `${summary.input_count} in / ${summary.output_count} out`
 }
 
-onMounted(loadWorkflows)
+onMounted(() => {
+  loadWorkflows()
+  window.addEventListener('comfygit:open-workflow-contract', handleOpenWorkflowContract as EventListener)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('comfygit:open-workflow-contract', handleOpenWorkflowContract as EventListener)
+})
 </script>
 
 <style scoped>

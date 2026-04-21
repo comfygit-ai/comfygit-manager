@@ -158,6 +158,9 @@
     </template>
 
     <template #footer>
+      <BaseButton variant="secondary" @click="openMappingMode">
+        Open I/O Mapping Mode
+      </BaseButton>
       <BaseButton variant="secondary" @click="emit('close')">
         Close
       </BaseButton>
@@ -343,6 +346,14 @@ async function handleDelete() {
   } finally {
     deleting.value = false
   }
+}
+
+function openMappingMode() {
+  window.dispatchEvent(new CustomEvent('comfygit:open-io-mapping', {
+    detail: { workflowName: props.workflowName }
+  }))
+  window.dispatchEvent(new CustomEvent('comfygit:close-panel'))
+  emit('close')
 }
 
 onMounted(loadContract)
