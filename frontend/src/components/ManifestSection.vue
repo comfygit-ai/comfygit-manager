@@ -1,6 +1,6 @@
 <template>
   <PanelLayout>
-    <template #header>
+    <template v-if="!embedded" #header>
       <PanelHeader
         title="MANIFEST (PYPROJECT.TOML)"
         :show-info="true"
@@ -82,6 +82,10 @@ import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import TextViewer from '@/components/base/molecules/TextViewer.vue'
+
+defineProps<{
+  embedded?: boolean
+}>()
 
 const { getEnvironmentManifest } = useComfyGitService()
 

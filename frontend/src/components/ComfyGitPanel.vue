@@ -53,7 +53,7 @@
           </button>
         </div>
       </div>
-      <button class="env-switcher-btn" @click="selectView('environments', 'all-envs')">
+      <button class="env-switcher-btn" @click="selectView('environments', 'workspace')">
         <div v-if="status" class="header-info">
           <span>{{ currentEnvironment?.name || status?.environment || 'Loading...' }}</span>
           <span class="branch-name">({{ status.branch || 'detached' }})</span>
@@ -91,34 +91,22 @@
               MODELS
             </button>
             <button
-              :class="['sidebar-item', { active: currentView === 'branches' }]"
-              @click="selectView('branches', 'this-env')"
-            >
-              BRANCHES
-            </button>
-            <button
-              :class="['sidebar-item', { active: currentView === 'history' }]"
-              @click="selectView('history', 'this-env')"
-            >
-              HISTORY
-            </button>
-            <button
               :class="['sidebar-item', { active: currentView === 'nodes' }]"
               @click="selectView('nodes', 'this-env')"
             >
               NODES
             </button>
             <button
-              :class="['sidebar-item', { active: currentView === 'manifest' }]"
-              @click="selectView('manifest', 'this-env')"
+              :class="['sidebar-item', { active: currentView === 'version-control' }]"
+              @click="openVersionControl('history')"
             >
-              MANIFEST
+              VERSION CONTROL
             </button>
             <button
-              :class="['sidebar-item', { active: currentView === 'debug-env' }]"
-              @click="selectView('debug-env', 'this-env')"
+              :class="['sidebar-item', { active: currentView === 'diagnostics' }]"
+              @click="openDiagnostics('manifest')"
             >
-              DEBUG
+              DIAGNOSTICS
             </button>
           </div>
 
@@ -129,59 +117,35 @@
             <div class="sidebar-section-title">WORKSPACE</div>
             <button
               :class="['sidebar-item', { active: currentView === 'environments' }]"
-              @click="selectView('environments', 'all-envs')"
+              @click="selectView('environments', 'workspace')"
             >
               ENVIRONMENTS
             </button>
             <button
               :class="['sidebar-item', { active: currentView === 'model-index' }]"
-              @click="selectView('model-index', 'all-envs')"
+              @click="selectView('model-index', 'workspace')"
             >
               MODEL INDEX
             </button>
             <button
               :class="['sidebar-item', { active: currentView === 'settings' }]"
-              @click="selectView('settings', 'all-envs')"
+              @click="selectView('settings', 'workspace')"
             >
               SETTINGS
-            </button>
-            <button
-              :class="['sidebar-item', { active: currentView === 'debug-workspace' }]"
-              @click="selectView('debug-workspace', 'all-envs')"
-            >
-              DEBUG
             </button>
           </div>
 
           <div class="sidebar-divider"></div>
 
-          <!-- SHARING Section -->
+          <!-- CLOUD Section -->
           <div class="sidebar-section">
-            <div class="sidebar-section-title">SHARING</div>
+            <div class="sidebar-section-title">CLOUD</div>
             <button
               :class="['sidebar-item', { active: currentView === 'deploy' }]"
-              @click="selectView('deploy', 'sharing')"
+              @click="selectView('deploy', 'cloud')"
             >
-              DEPLOY
+              PUBLISH
               <span v-if="liveInstanceCount > 0" class="sidebar-badge">{{ liveInstanceCount }}</span>
-            </button>
-            <button
-              :class="['sidebar-item', { active: currentView === 'export' }]"
-              @click="selectView('export', 'sharing')"
-            >
-              EXPORT
-            </button>
-            <button
-              :class="['sidebar-item', { active: currentView === 'import' }]"
-              @click="selectView('import', 'sharing')"
-            >
-              IMPORT
-            </button>
-            <button
-              :class="['sidebar-item', { active: currentView === 'remotes' }]"
-              @click="selectView('remotes', 'sharing')"
-            >
-              REMOTES
             </button>
           </div>
         </div>
@@ -211,13 +175,13 @@
             @commit-changes="showCommitModal = true"
             @sync-environment="showSyncModal = true"
             @view-workflows="selectView('workflows', 'this-env')"
-            @view-history="selectView('history', 'this-env')"
-            @view-debug="selectView('debug-env', 'this-env')"
+            @view-history="openVersionControl('history')"
+            @view-debug="openDiagnostics('env')"
             @view-nodes="selectView('nodes', 'this-env')"
             @repair-missing-models="handleRepairMissingModels"
             @repair-environment="handleRepairEnvironment"
             @start-setup="showSetupWizard = true"
-            @view-environments="selectView('environments', 'all-envs')"
+            @view-environments="selectView('environments', 'workspace')"
             @create-environment="handleCreateEnvironmentFromStatus"
           />
 
@@ -234,23 +198,20 @@
             @navigate="handleNavigate"
           />
 
-          <!-- Branches View -->
-          <BranchSection
-            v-else-if="currentView === 'branches'"
+          <!-- Version Control View -->
+          <VersionControlSection
+            v-else-if="currentView === 'version-control'"
+            :commits="commits"
+            :current-ref="status?.branch"
             :branches="branches"
             :current="status?.branch || null"
+            :initial-tab="versionControlTab"
+            @select="handleCommitSelect"
+            @checkout="handleCheckout"
             @switch="handleBranchSwitch"
             @create="handleBranchCreate"
             @delete="handleBranchDelete"
-          />
-
-          <!-- History View -->
-          <HistorySection
-            v-else-if="currentView === 'history'"
-            :commits="commits"
-            :current-ref="status?.branch"
-            @select="handleCommitSelect"
-            @checkout="handleCheckout"
+            @toast="handleToast"
           />
 
           <!-- Nodes View -->
@@ -262,11 +223,11 @@
             @toast="handleToast"
           />
 
-          <!-- Manifest View -->
-          <ManifestSection v-else-if="currentView === 'manifest'" />
-
-          <!-- Debug (Environment) View -->
-          <DebugEnvSection v-else-if="currentView === 'debug-env'" />
+          <!-- Diagnostics View -->
+          <DiagnosticsSection
+            v-else-if="currentView === 'diagnostics'"
+            :initial-tab="diagnosticsTab"
+          />
 
           <!-- Environments View -->
           <EnvironmentsSection
@@ -275,6 +236,8 @@
             @switch="handleEnvironmentSwitch"
             @created="handleEnvironmentCreated"
             @delete="handleEnvironmentDelete"
+            @import="handleOpenImportFromEnvironments"
+            @export="handleOpenExportFromEnvironments"
           />
 
           <!-- Model Index View -->
@@ -283,9 +246,6 @@
           <!-- Settings View -->
           <WorkspaceSettingsSection v-else-if="currentView === 'settings'" />
 
-          <!-- Debug (Workspace) View -->
-          <WorkspaceDebugSection v-else-if="currentView === 'debug-workspace'" />
-
           <!-- Deploy View -->
           <DeploySection
             v-else-if="currentView === 'deploy'"
@@ -293,17 +253,6 @@
             @navigate="handleNavigate"
           />
 
-          <!-- Export View -->
-          <ExportSection v-else-if="currentView === 'export'" />
-
-          <!-- Import View -->
-          <ImportSection
-            v-else-if="currentView === 'import'"
-            @import-complete-switch="handleImportCompleteSwitch"
-          />
-
-          <!-- Remotes View -->
-          <RemotesSection v-else-if="currentView === 'remotes'" @toast="handleToast" />
         </template>
       </div>
     </div>
@@ -332,6 +281,36 @@
       @cancel="confirmDialog = null"
       @secondary="confirmDialog.onSecondary"
     />
+
+    <BaseModal
+      v-if="showImportModal"
+      title="IMPORT ENVIRONMENT"
+      size="xl"
+      fixed-height
+      @close="showImportModal = false"
+    >
+      <template #body>
+        <ImportSection
+          embedded
+          @import-complete-switch="handleImportCompleteSwitch"
+        />
+      </template>
+    </BaseModal>
+
+    <BaseModal
+      v-if="showExportModal"
+      :title="selectedExportEnvironment ? `EXPORT ENVIRONMENT: ${selectedExportEnvironment.toUpperCase()}` : 'EXPORT ENVIRONMENT'"
+      size="lg"
+      fixed-height
+      @close="closeExportModal"
+    >
+      <template #body>
+        <ExportSection
+          embedded
+          :environment-name="selectedExportEnvironment"
+        />
+      </template>
+    </BaseModal>
 
     <!-- Environment Switching Modals -->
     <ConfirmSwitchModal
@@ -448,23 +427,20 @@
 import { ref, computed, onMounted } from 'vue'
 import EnvironmentSwitcher from './EnvironmentSwitcher.vue'
 import StatusSection from './StatusSection.vue'
-import BranchSection from './BranchSection.vue'
-import HistorySection from './HistorySection.vue'
 import WorkflowsSection from './WorkflowsSection.vue'
 import ModelsEnvSection from './ModelsEnvSection.vue'
 import ModelIndexSection from './ModelIndexSection.vue'
 import NodesSection from './NodesSection.vue'
-import ManifestSection from './ManifestSection.vue'
-import RemotesSection from './RemotesSection.vue'
 import WorkspaceSettingsSection from './WorkspaceSettingsSection.vue'
-import WorkspaceDebugSection from './WorkspaceDebugSection.vue'
-import DebugEnvSection from './DebugEnvSection.vue'
 import EnvironmentsSection from './EnvironmentsSection.vue'
 import ExportSection from './ExportSection.vue'
 import ImportSection from './ImportSection.vue'
 import DeploySection from './DeploySection.vue'
+import VersionControlSection from './VersionControlSection.vue'
+import DiagnosticsSection from './DiagnosticsSection.vue'
 import CommitDetailModal from './CommitDetailModal.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
+import BaseModal from './base/BaseModal.vue'
 import CommitPopover from './CommitPopover.vue'
 import ConfirmSwitchModal from './base/molecules/ConfirmSwitchModal.vue'
 import SwitchProgressModal from './base/molecules/SwitchProgressModal.vue'
@@ -512,17 +488,22 @@ const orchestratorService = useOrchestratorService()
 // Get live instance count for sidebar badge (autoStart fetches on panel load)
 const { liveInstanceCount } = useDeployInstances({ autoStart: true })
 
-type ViewName = 'status' | 'workflows' | 'models-env' | 'branches' | 'history' | 'nodes' | 'manifest' | 'debug-env' |
-                'environments' | 'model-index' | 'settings' | 'debug-workspace' |
-                'export' | 'import' | 'remotes' | 'deploy'
+type ViewName = 'status' | 'workflows' | 'models-env' | 'nodes' | 'version-control' |
+                'environments' | 'model-index' | 'settings' | 'diagnostics' |
+                'deploy'
 
-type SectionName = 'this-env' | 'all-envs' | 'sharing'
+type SectionName = 'this-env' | 'version-control' | 'workspace' | 'cloud' | 'diagnostics'
 
 const status = ref<ComfyGitStatus | null>(null)
 const commits = ref<CommitInfo[]>([])
 const branches = ref<BranchInfo[]>([])
 const environments = ref<EnvironmentInfo[]>([])
 const currentEnvironment = computed(() => environments.value.find(e => e.is_current))
+const selectedExportEnvironment = ref<string | null>(null)
+const showImportModal = ref(false)
+const showExportModal = ref(false)
+const versionControlTab = ref<'history' | 'branches' | 'remotes'>('history')
+const diagnosticsTab = ref<'manifest' | 'env' | 'workspace'>('manifest')
 
 // First-time setup state
 const setupStatus = ref<SetupStatus | null>(null)
@@ -558,9 +539,12 @@ let progressSimulationInterval: number | null = null
 
 // Map initial view prop to view/section
 const initialViewMap: Record<string, { view: ViewName; section: SectionName }> = {
-  'manifest': { view: 'manifest', section: 'this-env' },
-  'debug-env': { view: 'debug-env', section: 'this-env' },
-  'debug-workspace': { view: 'debug-workspace', section: 'all-envs' },
+  'manifest': { view: 'diagnostics', section: 'diagnostics' },
+  'debug-env': { view: 'diagnostics', section: 'diagnostics' },
+  'debug-workspace': { view: 'diagnostics', section: 'diagnostics' },
+  'history': { view: 'version-control', section: 'version-control' },
+  'branches': { view: 'version-control', section: 'version-control' },
+  'remotes': { view: 'version-control', section: 'version-control' },
   'status': { view: 'status', section: 'this-env' }
 }
 const initialConfig = props.initialView ? initialViewMap[props.initialView] : null
@@ -570,20 +554,28 @@ const VIEW_STORAGE_KEY = 'ComfyGit.LastView'
 const SECTION_STORAGE_KEY = 'ComfyGit.LastSection'
 
 // Valid values for validation
-const validViews: ViewName[] = ['status', 'workflows', 'models-env', 'branches', 'history', 'nodes', 'manifest', 'debug-env',
-                                'environments', 'model-index', 'settings', 'debug-workspace',
-                                'export', 'import', 'remotes', 'deploy']
-const validSections: SectionName[] = ['this-env', 'all-envs', 'sharing']
+const validViews: ViewName[] = ['status', 'workflows', 'models-env', 'nodes', 'version-control',
+                                'environments', 'model-index', 'settings', 'diagnostics',
+                                'deploy']
+const validSections: SectionName[] = ['this-env', 'version-control', 'workspace', 'cloud', 'diagnostics']
 
 // Read saved view from sessionStorage (with validation)
 function getSavedView(): { view: ViewName; section: SectionName } | null {
   try {
     const savedView = sessionStorage.getItem(VIEW_STORAGE_KEY)
     const savedSection = sessionStorage.getItem(SECTION_STORAGE_KEY)
+    const normalizedView =
+      savedView === 'branches' || savedView === 'history' || savedView === 'remotes' ? 'version-control' :
+      savedView === 'manifest' || savedView === 'debug-env' || savedView === 'debug-workspace' ? 'diagnostics' :
+      savedView
+    const normalizedSection =
+      savedSection === 'all-envs' ? 'workspace' :
+      savedSection === 'sharing' ? 'cloud' :
+      savedSection
     if (savedView && savedSection &&
-        validViews.includes(savedView as ViewName) &&
-        validSections.includes(savedSection as SectionName)) {
-      return { view: savedView as ViewName, section: savedSection as SectionName }
+        validViews.includes(normalizedView as ViewName) &&
+        validSections.includes(normalizedSection as SectionName)) {
+      return { view: normalizedView as ViewName, section: normalizedSection as SectionName }
     }
   } catch {
     // sessionStorage may be unavailable
@@ -609,8 +601,8 @@ function selectView(view: ViewName, section: SectionName) {
 
 function handleNavigate(view: string) {
   const viewMap: Record<string, { view: ViewName; section: SectionName }> = {
-    'model-index': { view: 'model-index', section: 'all-envs' },
-    'remotes': { view: 'remotes', section: 'sharing' }
+    'model-index': { view: 'model-index', section: 'workspace' },
+    'remotes': { view: 'version-control', section: 'version-control' }
   }
   const target = viewMap[view]
   if (target) {
@@ -618,8 +610,18 @@ function handleNavigate(view: string) {
   }
 }
 
+function openVersionControl(tab: 'history' | 'branches' | 'remotes') {
+  versionControlTab.value = tab
+  selectView('version-control', 'version-control')
+}
+
+function openDiagnostics(tab: 'manifest' | 'env' | 'workspace') {
+  diagnosticsTab.value = tab
+  selectView('diagnostics', 'diagnostics')
+}
+
 function handleSwitchBranchClick() {
-  selectView('branches', 'this-env')
+  openVersionControl('branches')
 }
 
 function handleOpenNodeManager() {
@@ -1401,11 +1403,27 @@ async function handleEnvironmentSwitchFromWizard(envName: string, workspacePath:
 }
 
 async function handleImportCompleteSwitch(environmentName: string) {
+  showImportModal.value = false
   // Refresh environments list first
   await refresh()
 
   // Trigger the standard environment switch flow
   await handleEnvironmentSwitch(environmentName)
+}
+
+function handleOpenImportFromEnvironments() {
+  selectedExportEnvironment.value = null
+  showImportModal.value = true
+}
+
+function handleOpenExportFromEnvironments(environmentName: string) {
+  selectedExportEnvironment.value = environmentName
+  showExportModal.value = true
+}
+
+function closeExportModal() {
+  showExportModal.value = false
+  selectedExportEnvironment.value = null
 }
 
 async function handleEnvironmentCreatedNoSwitch(envName: string) {
@@ -1419,7 +1437,7 @@ async function handleEnvironmentCreatedNoSwitch(envName: string) {
 
 function handleCreateEnvironmentFromStatus() {
   // Navigate to environments section and trigger create modal
-  selectView('environments', 'all-envs')
+  selectView('environments', 'workspace')
   // Give time for section to mount, then open create modal
   setTimeout(() => {
     environmentsSectionRef.value?.openCreateModal()

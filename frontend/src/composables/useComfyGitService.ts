@@ -399,6 +399,26 @@ export function useComfyGitService() {
     })
   }
 
+  async function validateEnvironmentExport(environmentName: string): Promise<ExportValidationResult> {
+    if (USE_MOCK) return mockApi.validateExport()
+
+    return fetchApi<ExportValidationResult>(`/v2/comfygit/environment_export/${encodeURIComponent(environmentName)}/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    })
+  }
+
+  async function exportEnvironmentWithForce(environmentName: string, outputPath?: string): Promise<ExportResult> {
+    if (USE_MOCK) return mockApi.exportEnvWithForce(outputPath)
+
+    return fetchApi<ExportResult>(`/v2/comfygit/environment_export/${encodeURIComponent(environmentName)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ output_path: outputPath, force: true })
+    })
+  }
+
   // Phase 2 APIs
 
   async function getBranches(): Promise<BranchesResult> {
@@ -1903,6 +1923,8 @@ export function useComfyGitService() {
     validateExport,
     validateDeploy,
     exportEnvWithForce,
+    validateEnvironmentExport,
+    exportEnvironmentWithForce,
     // Git Operations
     getBranches,
     getCommitDetail,

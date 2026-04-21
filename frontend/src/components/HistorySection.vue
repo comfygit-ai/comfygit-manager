@@ -1,6 +1,6 @@
 <template>
   <PanelLayout>
-    <template #header>
+    <template v-if="!embedded" #header>
       <PanelHeader :title="headerTitle" />
     </template>
 
@@ -51,6 +51,7 @@ import EmptyState from '@/components/base/molecules/EmptyState.vue'
 const props = defineProps<{
   commits: CommitInfo[]
   currentRef?: string | null
+  embedded?: boolean
 }>()
 
 const headerTitle = computed(() => {

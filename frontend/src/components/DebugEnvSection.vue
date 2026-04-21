@@ -1,6 +1,6 @@
 <template>
   <PanelLayout>
-    <template #header>
+    <template v-if="!embedded" #header>
       <PanelHeader
         title="DEBUG (ENVIRONMENT LOGS)"
         :show-info="true"
@@ -88,6 +88,10 @@ import ActionButton from '@/components/base/atoms/ActionButton.vue'
 import LogViewer from '@/components/base/molecules/LogViewer.vue'
 
 const { getEnvironmentLogs, getStatus, getEnvironmentLogPath, openFile } = useComfyGitService()
+
+defineProps<{
+  embedded?: boolean
+}>()
 
 const logs = ref<LogEntry[]>([])
 const loading = ref(false)

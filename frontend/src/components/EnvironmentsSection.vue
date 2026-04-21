@@ -17,9 +17,9 @@
           <ActionButton
             variant="secondary"
             size="sm"
-            @click="loadEnvironments"
+            @click="$emit('import')"
           >
-            Refresh
+            Import
           </ActionButton>
         </template>
       </PanelHeader>
@@ -65,6 +65,13 @@
                 @click="showEnvironmentDetails(env)"
               >
                 Details
+              </ActionButton>
+              <ActionButton
+                variant="secondary"
+                size="sm"
+                @click="$emit('export', env.name)"
+              >
+                Export
               </ActionButton>
             </template>
           </EnvironmentListItem>
@@ -125,6 +132,7 @@
     :can-delete="environments.length > 1"
     @close="selectedEnvironment = null; environmentDetail = null"
     @delete="handleDetailsDelete"
+    @export="handleDetailsExport"
   />
 
   <!-- Create Environment Modal -->
@@ -156,6 +164,8 @@ const emit = defineEmits<{
   switch: [environmentName: string]
   created: [environmentName: string, switchAfter: boolean]
   delete: [environmentName: string]
+  import: []
+  export: [environmentName: string]
 }>()
 
 const { getEnvironments, getEnvironmentDetails } = useComfyGitService()
@@ -198,6 +208,12 @@ function handleDetailsDelete(name: string) {
   selectedEnvironment.value = null
   environmentDetail.value = null
   emit('delete', name)
+}
+
+function handleDetailsExport(name: string) {
+  selectedEnvironment.value = null
+  environmentDetail.value = null
+  emit('export', name)
 }
 
 async function loadEnvironments() {

@@ -12,6 +12,7 @@ docs/
   specs/
     workflow-contract-authoring.md
     graph-integration-and-selection.md
+    panel-information-architecture.md
   architecture/
     service-boundaries.md
 ```
@@ -37,3 +38,4 @@ Future implementation work in this repo should reference clause IDs when changin
 - workflow graph integration
 - manager workflow summary/detail payloads
 - manager-owned workflow actions
+- panel information architecture and navigation grouping

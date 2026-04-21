@@ -1,6 +1,6 @@
 <template>
   <PanelLayout>
-    <template #header>
+    <template v-if="!embedded" #header>
       <PanelHeader
         title="IMPORT ENVIRONMENT"
         :show-info="true"
@@ -60,6 +60,10 @@ import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
 import ImportFlow from './ImportFlow.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
+
+defineProps<{
+  embedded?: boolean
+}>()
 
 const emit = defineEmits<{
   'import-complete-switch': [environmentName: string]

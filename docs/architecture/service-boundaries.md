@@ -21,6 +21,8 @@ The manager owns:
 - manager-specific workflow actions
 - workflow contract authoring UX
 - graph-aware overlay behavior used for contract selection
+- local panel information architecture
+- lightweight cloud bridge UX owned by the local panel
 - API endpoints consumed by the manager frontend
 
 The manager should not become the durable source of truth for portable workflow contracts. It should read/write that state through core persistence.
@@ -38,6 +40,17 @@ Core should not own:
 - ComfyUI overlay behavior
 - cloud deployment semantics
 
+## Cloud Dashboard
+
+The cloud dashboard owns:
+- account and workspace identity
+- revision registry and publication destination
+- deployment lifecycle and runtime operations
+- published workflow identity and API exposure
+
+The local manager may link to and publish into the cloud, but it should not
+become a second full control-plane dashboard.
+
 ## Contract Direction
 
 ### CGM-SB-01 [PLANNED]: The manager should own local contract authoring UX while core owns durable contract persistence
@@ -51,3 +64,15 @@ Validation: HUMAN_REVIEW
 
 ### CGM-SB-04 [PLANNED]: Portable workflow contract state should remain valid without any cloud layer present
 Validation: HUMAN_REVIEW
+
+### CGM-SB-05 [PLANNED]: The local panel may provide cloud linkage and revision publication without duplicating full cloud control-plane behavior
+Validation: HUMAN_REVIEW
+
+The manager may expose a `Cloud` domain for:
+- authentication or account-link state
+- revision publication
+- recent cloud-linked revision visibility
+- open-dashboard affordances
+
+It should not attempt to fully replace cloud-side deployment and publication
+administration.

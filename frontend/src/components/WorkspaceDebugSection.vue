@@ -1,6 +1,6 @@
 <template>
   <PanelLayout>
-    <template #header>
+    <template v-if="!embedded" #header>
       <PanelHeader
         title="DEBUG (LOGS)"
         :show-info="true"
@@ -29,7 +29,7 @@
     </template>
 
     <!-- Tabs above scroll area -->
-    <template #search>
+    <template v-if="!embedded" #search>
       <BaseTabs
         v-model="activeTab"
         :tabs="[
@@ -113,6 +113,10 @@ const {
   getOrchestratorLogPath,
   openFile
 } = useComfyGitService()
+
+defineProps<{
+  embedded?: boolean
+}>()
 
 const activeTab = ref<'workspace' | 'orchestrator'>('workspace')
 const logs = ref<LogEntry[]>([])

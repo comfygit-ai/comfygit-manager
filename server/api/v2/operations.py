@@ -10,16 +10,13 @@ from cgm_utils.async_helpers import run_sync
 routes = web.RouteTableDef()
 
 
-@routes.post("/v2/comfygit/export/validate")
-@requires_environment
-async def validate_export(request: web.Request, env) -> web.Response:
-    """Validate environment export readiness and return warnings."""
+async def build_export_validation(env) -> dict:
+    """Validate whether an environment can be exported."""
     blocking_issues = []
     warnings = {
         "models_without_sources": [],
     }
 
-    # Check for uncommitted workflow changes
     status = await run_sync(env.workflow_manager.get_workflow_status)
     if status.sync_status.has_changes:
         uncommitted = (
@@ -33,7 +30,6 @@ async def validate_export(request: web.Request, env) -> web.Response:
             "details": uncommitted
         })
 
-    # Check for uncommitted git changes
     has_git_changes = await run_sync(env.git_manager.has_uncommitted_changes)
     if has_git_changes:
         blocking_issues.append({
@@ -42,7 +38,6 @@ async def validate_export(request: web.Request, env) -> web.Response:
             "details": []
         })
 
-    # Check for unresolved workflow issues
     if not status.is_commit_safe:
         blocking_issues.append({
             "type": "unresolved_issues",
@@ -50,9 +45,7 @@ async def validate_export(request: web.Request, env) -> web.Response:
             "details": []
         })
 
-    # If no blocking issues, check for warnings
     if not blocking_issues:
-        # Check for models without sources
         pyproject = env.pyproject
         models_by_hash = {
             m.hash: m
@@ -83,11 +76,42 @@ async def validate_export(request: web.Request, env) -> web.Response:
 
             warnings["models_without_sources"] = models_without_sources
 
-    return web.json_response({
+    return {
         "can_export": len(blocking_issues) == 0,
         "blocking_issues": blocking_issues,
         "warnings": warnings
-    })
+    }
+
+
+async def execute_environment_export(env, output_path: str | None = None) -> dict:
+    """Export an environment and return the result payload."""
+    if output_path:
+        path = Path(output_path)
+    else:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = Path.cwd().parent / f"{env.name}_export_{timestamp}.tar.gz"
+
+    models_without_sources = []
+
+    class ExportCallbacks:
+        def on_models_without_sources(self, models):
+            models_without_sources.extend(models)
+
+    callbacks = ExportCallbacks()
+    tarball_path = await run_sync(env.export_environment, path, callbacks=callbacks)
+
+    return {
+        "status": "success",
+        "path": str(tarball_path),
+        "models_without_sources": len(models_without_sources),
+    }
+
+
+@routes.post("/v2/comfygit/export/validate")
+@requires_environment
+async def validate_export(request: web.Request, env) -> web.Response:
+    """Validate environment export readiness and return warnings."""
+    return web.json_response(await build_export_validation(env))
 
 
 @routes.post("/v2/comfygit/export")
@@ -97,30 +121,8 @@ async def export_environment(request: web.Request, env) -> web.Response:
     json_data = await request.json()
     output_path = json_data.get("output_path")
 
-    # Determine output path
-    if output_path:
-        path = Path(output_path)
-    else:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = Path.cwd().parent / f"{env.name}_export_{timestamp}.tar.gz"
-
-    # Track models without sources
-    models_without_sources = []
-
-    class ExportCallbacks:
-        def on_models_without_sources(self, models):
-            models_without_sources.extend(models)
-
-    callbacks = ExportCallbacks()
-
     try:
-        tarball_path = await run_sync(env.export_environment, path, callbacks=callbacks)
-
-        return web.json_response({
-            "status": "success",
-            "path": str(tarball_path),
-            "models_without_sources": len(models_without_sources),
-        })
+        return web.json_response(await execute_environment_export(env, output_path))
     except Exception as e:
         return web.json_response({
             "status": "error",

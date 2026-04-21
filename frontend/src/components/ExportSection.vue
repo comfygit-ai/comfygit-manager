@@ -1,8 +1,8 @@
 <template>
   <PanelLayout>
-    <template #header>
+    <template v-if="!embedded" #header>
       <PanelHeader
-        title="EXPORT ENVIRONMENT"
+        :title="headerTitle"
         :show-info="true"
         @info-click="showInfo = true"
       />
@@ -54,7 +54,7 @@
             {{ exportResult.status === 'success' ? 'Export Completed Successfully' : 'Export Failed' }}
           </template>
           <template #subtitle>
-            {{ exportResult.status === 'success' ? 'Your environment has been exported' : exportResult.message }}
+            {{ exportResult.status === 'success' ? successMessage : exportResult.message }}
           </template>
           <template v-if="exportResult.status === 'success'" #details>
             <DetailRow label="Saved to:">
@@ -163,7 +163,12 @@ import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import ExportBlockedModal from '@/components/ExportBlockedModal.vue'
 import ExportWarningsModal from '@/components/ExportWarningsModal.vue'
 
-const { validateExport, exportEnvWithForce } = useComfyGitService()
+const props = defineProps<{
+  environmentName?: string | null
+  embedded?: boolean
+}>()
+
+const { validateExport, exportEnvWithForce, validateEnvironmentExport, exportEnvironmentWithForce } = useComfyGitService()
 
 const outputPath = ref('')
 const isValidating = ref(false)
@@ -177,6 +182,20 @@ const validationResult = ref<ExportValidationResult | null>(null)
 const showBlockedModal = ref(false)
 const showWarningsModal = ref(false)
 
+const targetEnvironmentName = computed(() => props.environmentName?.trim() || null)
+
+const headerTitle = computed(() => {
+  return targetEnvironmentName.value
+    ? `EXPORT ENVIRONMENT: ${targetEnvironmentName.value.toUpperCase()}`
+    : 'EXPORT ENVIRONMENT'
+})
+
+const successMessage = computed(() => {
+  return targetEnvironmentName.value
+    ? `Environment '${targetEnvironmentName.value}' has been exported`
+    : 'Your environment has been exported'
+})
+
 const buttonLabel = computed(() => {
   if (isValidating.value) return 'Validating...'
   if (isExporting.value) return 'Exporting...'
@@ -188,7 +207,9 @@ async function handleExport() {
   exportResult.value = null
 
   try {
-    const result = await validateExport()
+    const result = targetEnvironmentName.value
+      ? await validateEnvironmentExport(targetEnvironmentName.value)
+      : await validateExport()
     validationResult.value = result
 
     if (!result.can_export) {
@@ -222,7 +243,9 @@ async function handleBlockedCommitted() {
   // Re-validate after successful commit
   isValidating.value = true
   try {
-    const result = await validateExport()
+    const result = targetEnvironmentName.value
+      ? await validateEnvironmentExport(targetEnvironmentName.value)
+      : await validateExport()
     validationResult.value = result
 
     if (!result.can_export) {
@@ -247,7 +270,9 @@ async function handleBlockedCommitted() {
 
 async function handleRevalidate() {
   try {
-    const result = await validateExport()
+    const result = targetEnvironmentName.value
+      ? await validateEnvironmentExport(targetEnvironmentName.value)
+      : await validateExport()
     validationResult.value = result
   } catch (err) {
     console.error('Re-validation failed:', err)
@@ -258,7 +283,9 @@ async function executeExport() {
   isExporting.value = true
 
   try {
-    const result = await exportEnvWithForce(outputPath.value || undefined)
+    const result = targetEnvironmentName.value
+      ? await exportEnvironmentWithForce(targetEnvironmentName.value, outputPath.value || undefined)
+      : await exportEnvWithForce(outputPath.value || undefined)
     exportResult.value = result
   } catch (err) {
     exportResult.value = {

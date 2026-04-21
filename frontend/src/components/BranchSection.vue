@@ -1,6 +1,6 @@
 <template>
   <PanelLayout>
-    <template #header>
+    <template v-if="!embedded" #header>
       <PanelHeader title="BRANCHES">
         <template #actions>
           <ActionButton
@@ -81,6 +81,7 @@ import BranchDetailModal from '@/components/BranchDetailModal.vue'
 defineProps<{
   branches: BranchInfo[]
   current: string | null
+  embedded?: boolean
 }>()
 
 const emit = defineEmits<{

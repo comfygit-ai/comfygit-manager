@@ -1,6 +1,6 @@
 <template>
   <PanelLayout>
-    <template #header>
+    <template v-if="!embedded" #header>
       <PanelHeader
         title="GIT REMOTES"
         :show-info="true"
@@ -19,7 +19,7 @@
       </PanelHeader>
     </template>
 
-    <template #search>
+    <template v-if="!embedded" #search>
       <SearchBar
         v-if="!showForm"
         v-model="searchQuery"
@@ -35,6 +35,22 @@
         <ErrorState :message="error" :retry="true" @retry="loadRemotes" />
       </template>
       <template v-else>
+        <div v-if="embedded && !showForm" class="embedded-toolbar">
+          <div class="embedded-toolbar-search">
+            <SearchBar
+              v-model="searchQuery"
+              placeholder="🔍 Search remotes..."
+            />
+          </div>
+          <ActionButton
+            variant="primary"
+            size="sm"
+            @click="handleAddRemote"
+          >
+            + Add Remote
+          </ActionButton>
+        </div>
+
         <!-- Add/Edit Form -->
         <RemoteForm
           v-if="showForm"
@@ -192,6 +208,10 @@ import PullModal from '@/components/base/molecules/PullModal.vue'
 import PushModal from '@/components/base/molecules/PushModal.vue'
 import WorkflowResolutionModal from '@/components/WorkflowResolutionModal.vue'
 import ValidationResultsModal from '@/components/ValidationResultsModal.vue'
+
+defineProps<{
+  embedded?: boolean
+}>()
 
 const {
   getRemotes,
@@ -564,6 +584,27 @@ function handlePullFirst() {
 
 onMounted(loadRemotes)
 </script>
+
+<style scoped>
+.embedded-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-3);
+  margin-bottom: var(--cg-space-3);
+}
+
+.embedded-toolbar-search {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .embedded-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+</style>
 
 <style scoped>
 /* Minimal custom CSS - all styling comes from atomic components */

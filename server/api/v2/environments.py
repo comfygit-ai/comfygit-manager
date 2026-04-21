@@ -13,6 +13,7 @@ from cgm_utils.environment_name_validation import validate_environment_name
 from comfygit_core.factories.workspace_factory import WorkspaceFactory
 from comfygit_core.models.exceptions import CDWorkspaceNotFoundError, CDEnvironmentNotFoundError
 import orchestrator
+from .operations import build_export_validation, execute_environment_export
 
 routes = web.RouteTableDef()
 
@@ -261,6 +262,58 @@ async def get_environment_details(request: web.Request) -> web.Response:
         })
     except Exception as e:
         return web.json_response({"error": "internal_error", "message": str(e)}, status=500)
+
+
+@routes.post("/v2/comfygit/environment_export/{name}/validate")
+async def validate_named_environment_export(request: web.Request) -> web.Response:
+    """Validate export readiness for a specific environment."""
+    is_managed, workspace, _current_env = orchestrator.detect_environment_type()
+
+    if not is_managed or not workspace:
+        return web.json_response({"error": "Not in managed workspace"}, status=500)
+
+    name = request.match_info.get("name", "").strip()
+    if not name:
+        return web.json_response({"error": "Environment name required"}, status=400)
+
+    try:
+        env = await run_sync(workspace.get_environment, name, auto_sync=False)
+    except CDEnvironmentNotFoundError:
+        return web.json_response({"error": f"Environment '{name}' not found"}, status=404)
+
+    try:
+        return web.json_response(await build_export_validation(env))
+    except Exception as e:
+        return web.json_response({"error": "internal_error", "message": str(e)}, status=500)
+
+
+@routes.post("/v2/comfygit/environment_export/{name}")
+async def export_named_environment(request: web.Request) -> web.Response:
+    """Export a specific environment without switching to it."""
+    is_managed, workspace, _current_env = orchestrator.detect_environment_type()
+
+    if not is_managed or not workspace:
+        return web.json_response({"error": "Not in managed workspace"}, status=500)
+
+    name = request.match_info.get("name", "").strip()
+    if not name:
+        return web.json_response({"error": "Environment name required"}, status=400)
+
+    try:
+        env = await run_sync(workspace.get_environment, name, auto_sync=False)
+    except CDEnvironmentNotFoundError:
+        return web.json_response({"error": f"Environment '{name}' not found"}, status=404)
+
+    json_data = await request.json()
+    output_path = json_data.get("output_path")
+
+    try:
+        return web.json_response(await execute_environment_export(env, output_path))
+    except Exception as e:
+        return web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
 
 
 @routes.post("/v2/comfygit/switch_environment")
