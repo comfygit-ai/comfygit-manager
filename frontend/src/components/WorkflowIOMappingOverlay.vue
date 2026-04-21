@@ -24,7 +24,7 @@
       <div class="io-mapping-header-main">
         <div class="io-mapping-title">I/O MAPPING MODE</div>
         <div class="io-mapping-subtitle">
-          {{ workflowName }} · Click {{ selectionMode === 'inputs' ? 'input widgets' : 'output slots' }} on the graph to add them to the contract.
+          {{ workflowName }} · Hover any input widget or output target on the graph, then click to add it to the contract.
         </div>
         <div v-if="hoverSummary" class="io-mapping-hover-summary">
           Hovering {{ hoverSummary.kind }}: {{ hoverSummary.label }}
@@ -32,21 +32,7 @@
       </div>
 
       <div class="io-mapping-header-actions">
-        <BaseButton
-          size="sm"
-          :variant="selectionMode === 'inputs' ? 'primary' : 'secondary'"
-          @click="selectionMode = 'inputs'"
-        >
-          Map Inputs
-        </BaseButton>
-        <BaseButton
-          size="sm"
-          :variant="selectionMode === 'outputs' ? 'primary' : 'secondary'"
-          @click="selectionMode = 'outputs'"
-        >
-          Map Outputs
-        </BaseButton>
-        <BaseButton size="sm" variant="secondary" @click="closeOverlay({ reopenContract: true })">
+        <BaseButton size="sm" variant="secondary" @click="closeOverlay({ reopenPanel: true })">
           Exit
         </BaseButton>
       </div>
@@ -98,9 +84,6 @@
           <section class="mapping-section">
             <div class="section-header">
               <BaseTitle variant="section">INPUTS</BaseTitle>
-              <BaseButton size="sm" variant="secondary" @click="addBlankInput">
-                Add Input
-              </BaseButton>
             </div>
 
             <div v-if="!activeContract.inputs.length" class="empty-message">
@@ -110,7 +93,7 @@
             <div
               v-for="(input, index) in activeContract.inputs"
               :key="`input-${index}`"
-              :class="['item-card', { selected: selectionMode === 'inputs' && selectedInputIndex === index }]"
+              :class="['item-card', { selected: selectedInputIndex === index }]"
               @click="selectedInputIndex = index"
             >
               <div class="item-card-header">
@@ -148,15 +131,6 @@
                     @update:model-value="input.required = $event === 'true'"
                   />
                 </BaseFormField>
-                <BaseFormField label="Node ID">
-                  <BaseInput v-model="input.node_id" full-width />
-                </BaseFormField>
-                <BaseFormField label="Widget Index">
-                  <BaseInput v-model="input.widget_idx" full-width />
-                </BaseFormField>
-                <BaseFormField label="Field Key">
-                  <BaseInput v-model="input.field_key" full-width />
-                </BaseFormField>
                 <BaseFormField label="Default">
                   <BaseInput v-model="input.default" full-width />
                 </BaseFormField>
@@ -167,9 +141,6 @@
           <section class="mapping-section">
             <div class="section-header">
               <BaseTitle variant="section">OUTPUTS</BaseTitle>
-              <BaseButton size="sm" variant="secondary" @click="addBlankOutput">
-                Add Output
-              </BaseButton>
             </div>
 
             <div v-if="!activeContract.outputs.length" class="empty-message">
@@ -179,7 +150,7 @@
             <div
               v-for="(output, index) in activeContract.outputs"
               :key="`output-${index}`"
-              :class="['item-card', { selected: selectionMode === 'outputs' && selectedOutputIndex === index }]"
+              :class="['item-card', { selected: selectedOutputIndex === index }]"
               @click="selectedOutputIndex = index"
             >
               <div class="item-card-header">
@@ -209,12 +180,6 @@
                     @update:model-value="output.type = $event"
                   />
                 </BaseFormField>
-                <BaseFormField label="Node ID">
-                  <BaseInput v-model="output.node_id" full-width />
-                </BaseFormField>
-                <BaseFormField label="Selector">
-                  <BaseInput v-model="output.selector" full-width />
-                </BaseFormField>
               </div>
             </div>
           </section>
@@ -222,7 +187,7 @@
       </div>
 
       <div class="io-mapping-footer">
-        <BaseButton variant="secondary" @click="closeOverlay({ reopenContract: true })">
+        <BaseButton variant="secondary" @click="closeOverlay({ reopenPanel: true })">
           Cancel
         </BaseButton>
         <BaseButton variant="primary" :loading="saving" @click="handleSave">
@@ -257,7 +222,6 @@ const saving = ref(false)
 const error = ref<string | null>(null)
 const response = ref<WorkflowContractResponse | null>(null)
 const form = ref<WorkflowExecutionContract | null>(null)
-const selectionMode = ref<'inputs' | 'outputs'>('inputs')
 const selectedInputIndex = ref<number | null>(null)
 const selectedOutputIndex = ref<number | null>(null)
 const overlayTick = ref(0)
@@ -343,29 +307,6 @@ function normalizeType(value: unknown): string {
   if (normalized.includes('combo') || normalized.includes('enum')) return 'enum'
   if (normalized.includes('string') || normalized.includes('text')) return 'string'
   return 'file'
-}
-
-function addBlankInput() {
-  activeContract.value.inputs.push({
-    name: '',
-    type: 'string',
-    node_id: '',
-    required: true,
-    default: '',
-  })
-  selectedInputIndex.value = activeContract.value.inputs.length - 1
-  selectionMode.value = 'inputs'
-}
-
-function addBlankOutput() {
-  activeContract.value.outputs.push({
-    name: '',
-    type: 'image',
-    node_id: '',
-    selector: 'primary',
-  })
-  selectedOutputIndex.value = activeContract.value.outputs.length - 1
-  selectionMode.value = 'outputs'
 }
 
 function removeInput(index: number) {
@@ -469,7 +410,7 @@ const inputOverlays = computed(() => {
       return {
         key: `input-${index}-${input.node_id}-${input.widget_idx ?? 'na'}`,
         style,
-        active: selectionMode.value === 'inputs' && selectedInputIndex.value === index,
+        active: selectedInputIndex.value === index,
       }
     })
     .filter((value): value is { key: string; style: Record<string, string>; active: boolean } => Boolean(value))
@@ -484,11 +425,49 @@ const outputOverlays = computed(() => {
       return {
         key: `output-${index}-${output.node_id}-${output.selector ?? 'primary'}`,
         style,
-        active: selectionMode.value === 'outputs' && selectedOutputIndex.value === index,
+        active: selectedOutputIndex.value === index,
       }
     })
     .filter((value): value is { key: string; style: Record<string, string>; active: boolean } => Boolean(value))
 })
+
+type ResolvedHoverTarget =
+  | { kind: 'input'; node: any; widget: any; canvasX: number; canvasY: number }
+  | { kind: 'output'; node: any; output: any; canvasX: number; canvasY: number }
+
+function resolveGraphTarget(event: PointerEvent): ResolvedHoverTarget | null {
+  if (eventTargetsOverlayChrome(event.target)) return null
+
+  const canvas = props.comfyApp?.canvas
+  if (!canvas) return null
+
+  const graphPos = canvas.convertEventToCanvasOffset?.(event)
+  if (!graphPos || graphPos.length < 2) return null
+  const [canvasX, canvasY] = graphPos
+
+  const graph = canvas.graph || props.comfyApp?.graph || props.comfyApp?.rootGraph
+  const node =
+    graph?.getNodeOnPos?.(canvasX, canvasY, canvas.visible_nodes) ||
+    canvas.getNodeOnPos?.(canvasX, canvasY) ||
+    getNodeFromEventTarget(event.target)
+  if (!node) return null
+
+  const widget = node.getWidgetOnPos?.(canvasX, canvasY, true)
+  if (widget) {
+    return { kind: 'input', node, widget, canvasX, canvasY }
+  }
+
+  const output =
+    node.getOutputOnPos?.([canvasX, canvasY]) ||
+    (node.constructor?.nodeData?.output_node
+      ? { name: node.title || node.type || 'output', type: 'image' }
+      : null)
+  if (output) {
+    return { kind: 'output', node, output, canvasX, canvasY }
+  }
+
+  return null
+}
 
 function addOrSelectInput(node: any, widget: any) {
   const widgetIndex = Array.isArray(node.widgets) ? node.widgets.indexOf(widget) : -1
@@ -518,6 +497,7 @@ function addOrSelectInput(node: any, widget: any) {
 
   activeContract.value.inputs.push(nextInput)
   selectedInputIndex.value = activeContract.value.inputs.length - 1
+  selectedOutputIndex.value = null
 }
 
 function addOrSelectOutput(node: any, output: any) {
@@ -543,53 +523,29 @@ function addOrSelectOutput(node: any, output: any) {
 
   activeContract.value.outputs.push(nextOutput)
   selectedOutputIndex.value = activeContract.value.outputs.length - 1
+  selectedInputIndex.value = null
 }
 
 function updateHoverState(event: PointerEvent) {
-  if (!visible.value || eventTargetsOverlayChrome(event.target)) {
+  if (!visible.value) {
     hoverSummary.value = null
     hoverOverlay.value = null
     return
   }
 
-  const canvas = props.comfyApp?.canvas
-  if (!canvas) {
+  const target = resolveGraphTarget(event)
+  if (!target) {
     hoverSummary.value = null
     hoverOverlay.value = null
     return
   }
 
-  const graphPos = canvas.convertEventToCanvasOffset?.(event)
-  if (!graphPos || graphPos.length < 2) {
-    hoverSummary.value = null
-    hoverOverlay.value = null
-    return
-  }
-  const [canvasX, canvasY] = graphPos
-
-  const graph = canvas.graph || props.comfyApp?.graph || props.comfyApp?.rootGraph
-  const node =
-    graph?.getNodeOnPos?.(canvasX, canvasY, canvas.visible_nodes) ||
-    canvas.getNodeOnPos?.(canvasX, canvasY) ||
-    getNodeFromEventTarget(event.target)
-  if (!node) {
-    hoverSummary.value = null
-    hoverOverlay.value = null
-    return
-  }
-
-  if (selectionMode.value === 'inputs') {
-    const widget = node.getWidgetOnPos?.(canvasX, canvasY, true)
-    if (!widget) {
-      hoverSummary.value = null
-      hoverOverlay.value = null
-      return
-    }
-    const widgetIndex = Array.isArray(node.widgets) ? node.widgets.indexOf(widget) : -1
-    const rect = rectToStyle(getWidgetElement(node.id, widgetIndex)?.getBoundingClientRect() ?? getInputClientRect({
+  if (target.kind === 'input') {
+    const widgetIndex = Array.isArray(target.node.widgets) ? target.node.widgets.indexOf(target.widget) : -1
+    const rect = rectToStyle(getWidgetElement(target.node.id, widgetIndex)?.getBoundingClientRect() ?? getInputClientRect({
       name: '',
       type: 'string',
-      node_id: String(node.id),
+      node_id: String(target.node.id),
       widget_idx: widgetIndex >= 0 ? widgetIndex : undefined,
       required: true,
     }))
@@ -600,24 +556,13 @@ function updateHoverState(event: PointerEvent) {
     }
     hoverSummary.value = {
       kind: 'input',
-      label: `${widget?.name || 'widget'} · Node ${node.id}`,
+      label: `${target.widget?.name || 'widget'} · Node ${target.node.id}`,
     }
     hoverOverlay.value = { kind: 'input', style: rect }
     return
   }
 
-  const output =
-    node.getOutputOnPos?.([canvasX, canvasY]) ||
-    (node.constructor?.nodeData?.output_node
-      ? { name: node.title || node.type || 'output' }
-      : null)
-  if (!output) {
-    hoverSummary.value = null
-    hoverOverlay.value = null
-    return
-  }
-
-  const rect = rectToStyle(getNodeClientRect(node))
+  const rect = rectToStyle(getNodeClientRect(target.node))
   if (!rect) {
     hoverSummary.value = null
     hoverOverlay.value = null
@@ -625,7 +570,7 @@ function updateHoverState(event: PointerEvent) {
   }
   hoverSummary.value = {
     kind: 'output',
-    label: `${output?.name || node.title || node.type || 'output'} · Node ${node.id}`,
+    label: `${target.output?.name || target.node.title || target.node.type || 'output'} · Node ${target.node.id}`,
   }
   hoverOverlay.value = { kind: 'output', style: rect }
 }
@@ -633,59 +578,37 @@ function updateHoverState(event: PointerEvent) {
 function handleCanvasPointerDown(event: PointerEvent) {
   if (!visible.value || !form.value) return
   if (event.button !== 0) return
-  if (eventTargetsOverlayChrome(event.target)) return
+  const target = resolveGraphTarget(event)
+  if (!target) return
 
   const canvas = props.comfyApp?.canvas
   if (!canvas) return
 
-  const graphPos = canvas.convertEventToCanvasOffset?.(event)
-  if (!graphPos || graphPos.length < 2) return
-  const [canvasX, canvasY] = graphPos
-
-  const graph = canvas.graph || props.comfyApp?.graph || props.comfyApp?.rootGraph
-  let node =
-    graph?.getNodeOnPos?.(canvasX, canvasY, canvas.visible_nodes) ||
-    canvas.getNodeOnPos?.(canvasX, canvasY) ||
-    getNodeFromEventTarget(event.target)
-  if (!node) return
-
-  if (selectionMode.value === 'inputs') {
-    const widget = node.getWidgetOnPos?.(canvasX, canvasY, true)
-    if (!widget) return
+  if (target.kind === 'input') {
 
     event.preventDefault()
     event.stopImmediatePropagation()
     event.stopPropagation()
 
     if (Array.isArray(canvas.graph_mouse)) {
-      canvas.graph_mouse[0] = canvasX
-      canvas.graph_mouse[1] = canvasY
+      canvas.graph_mouse[0] = target.canvasX
+      canvas.graph_mouse[1] = target.canvasY
     }
-    canvas.selectNode?.(node, false)
-    addOrSelectInput(node, widget)
+    canvas.selectNode?.(target.node, false)
+    addOrSelectInput(target.node, target.widget)
     return
   }
-
-  const output =
-    node.getOutputOnPos?.([canvasX, canvasY]) ||
-    (node.constructor?.nodeData?.output_node
-      ? {
-          name: node.title || node.type || 'output',
-          type: 'image',
-        }
-      : null)
-  if (!output) return
 
   event.preventDefault()
   event.stopImmediatePropagation()
   event.stopPropagation()
 
   if (Array.isArray(canvas.graph_mouse)) {
-    canvas.graph_mouse[0] = canvasX
-    canvas.graph_mouse[1] = canvasY
+    canvas.graph_mouse[0] = target.canvasX
+    canvas.graph_mouse[1] = target.canvasY
   }
-  canvas.selectNode?.(node, false)
-  addOrSelectOutput(node, output)
+  canvas.selectNode?.(target.node, false)
+  addOrSelectOutput(target.node, target.output)
 }
 
 function attachCanvasListener() {
@@ -730,24 +653,18 @@ async function handleSave() {
   }
 }
 
-function reopenContractModal() {
-  if (!workflowName.value) return
+function reopenWorkflowsPanel() {
   window.dispatchEvent(new CustomEvent('comfygit:open-panel', {
     detail: { initialView: 'workflows' }
   }))
-  window.setTimeout(() => {
-    window.dispatchEvent(new CustomEvent('comfygit:open-workflow-contract', {
-      detail: { workflowName: workflowName.value }
-    }))
-  }, 120)
 }
 
-function closeOverlay(options?: { reopenContract?: boolean }) {
+function closeOverlay(options?: { reopenPanel?: boolean }) {
   visible.value = false
   hoverSummary.value = null
   hoverOverlay.value = null
-  if (options?.reopenContract) {
-    reopenContractModal()
+  if (options?.reopenPanel) {
+    reopenWorkflowsPanel()
   }
 }
 
@@ -759,7 +676,6 @@ async function openOverlay(event: Event) {
   }
 
   workflowName.value = nextWorkflow
-  selectionMode.value = 'inputs'
   selectedInputIndex.value = null
   selectedOutputIndex.value = null
   visible.value = true
@@ -768,7 +684,7 @@ async function openOverlay(event: Event) {
 
 function handleEscape(event: KeyboardEvent) {
   if (event.key === 'Escape' && visible.value) {
-    closeOverlay({ reopenContract: true })
+    closeOverlay({ reopenPanel: true })
   }
 }
 

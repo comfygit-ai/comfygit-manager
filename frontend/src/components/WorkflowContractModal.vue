@@ -45,9 +45,6 @@
           <div class="contract-column">
             <div class="section-header">
               <BaseTitle variant="section">INPUTS</BaseTitle>
-              <BaseButton size="sm" variant="secondary" @click="addInput()">
-                Add Input
-              </BaseButton>
             </div>
 
             <div v-if="!activeContract.inputs.length" class="empty-message">
@@ -60,7 +57,12 @@
               class="item-card"
             >
               <div class="item-card-header">
-                <div class="item-card-title">Input {{ index + 1 }}</div>
+                <div>
+                  <div class="item-card-title">{{ input.name || `Input ${index + 1}` }}</div>
+                  <div class="item-card-meta">
+                    Node {{ input.node_id || '?' }}<template v-if="input.widget_idx !== undefined"> · Widget {{ input.widget_idx }}</template>
+                  </div>
+                </div>
                 <BaseButton size="sm" variant="ghost" @click="removeInput(index)">
                   Remove
                 </BaseButton>
@@ -89,15 +91,6 @@
                     @update:model-value="input.required = $event === 'true'"
                   />
                 </BaseFormField>
-                <BaseFormField label="Node ID">
-                  <BaseInput v-model="input.node_id" full-width />
-                </BaseFormField>
-                <BaseFormField label="Widget Index">
-                  <BaseInput v-model="input.widget_idx" full-width />
-                </BaseFormField>
-                <BaseFormField label="Field Key">
-                  <BaseInput v-model="input.field_key" full-width />
-                </BaseFormField>
                 <BaseFormField label="Default">
                   <BaseInput v-model="input.default" full-width />
                 </BaseFormField>
@@ -108,9 +101,6 @@
           <div class="contract-column">
             <div class="section-header">
               <BaseTitle variant="section">OUTPUTS</BaseTitle>
-              <BaseButton size="sm" variant="secondary" @click="addOutput()">
-                Add Output
-              </BaseButton>
             </div>
 
             <div v-if="!activeContract.outputs.length" class="empty-message">
@@ -123,7 +113,12 @@
               class="item-card"
             >
               <div class="item-card-header">
-                <div class="item-card-title">Output {{ index + 1 }}</div>
+                <div>
+                  <div class="item-card-title">{{ output.name || `Output ${index + 1}` }}</div>
+                  <div class="item-card-meta">
+                    Node {{ output.node_id || '?' }}<template v-if="output.selector"> · {{ output.selector }}</template>
+                  </div>
+                </div>
                 <BaseButton size="sm" variant="ghost" @click="removeOutput(index)">
                   Remove
                 </BaseButton>
@@ -143,12 +138,6 @@
                     full-width
                     @update:model-value="output.type = $event"
                   />
-                </BaseFormField>
-                <BaseFormField label="Node ID">
-                  <BaseInput v-model="output.node_id" full-width />
-                </BaseFormField>
-                <BaseFormField label="Selector">
-                  <BaseInput v-model="output.selector" full-width />
                 </BaseFormField>
               </div>
             </div>
@@ -277,25 +266,6 @@ function handleDefaultContractChange(value: string) {
   if (!form.value.contracts[next]) {
     form.value.contracts[next] = { inputs: [], outputs: [] }
   }
-}
-
-function addInput() {
-  activeContract.value.inputs.push({
-    name: '',
-    type: 'string',
-    node_id: '',
-    required: true,
-    default: '',
-  })
-}
-
-function addOutput() {
-  activeContract.value.outputs.push({
-    name: '',
-    type: 'image',
-    node_id: '',
-    selector: 'primary',
-  })
 }
 
 function removeInput(index: number) {
@@ -429,10 +399,15 @@ onMounted(loadContract)
 }
 
 .item-card-title {
-  color: var(--cg-color-accent);
+  color: var(--cg-color-text-primary);
+  font-size: var(--cg-font-size-sm);
+  font-weight: 600;
+}
+
+.item-card-meta {
+  color: var(--cg-color-text-muted);
   font-size: var(--cg-font-size-xs);
-  text-transform: uppercase;
-  letter-spacing: var(--cg-letter-spacing-wide);
+  margin-top: 2px;
 }
 
 .item-grid {
