@@ -94,6 +94,13 @@ def serialize_workflow_execution_contract(contract) -> dict | None:
                 input_payload["field_key"] = item.field_key
             if getattr(item, "default", None) is not None:
                 input_payload["default"] = item.default
+            if getattr(item, "min", None) is not None:
+                input_payload["min"] = item.min
+            if getattr(item, "max", None) is not None:
+                input_payload["max"] = item.max
+            enum_values = _safe_sequence(getattr(item, "enum_values", None))
+            if enum_values:
+                input_payload["enum_values"] = enum_values
             if getattr(item, "description", None) is not None:
                 input_payload["description"] = item.description
             inputs.append(input_payload)

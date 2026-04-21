@@ -314,6 +314,9 @@ export interface WorkflowContractInput {
   widget_idx?: number
   field_key?: string
   default?: unknown
+  min?: number
+  max?: number
+  enum_values?: string[]
   description?: string
 }
 

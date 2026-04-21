@@ -54,21 +54,26 @@
             <div
               v-for="(input, index) in activeContract.inputs"
               :key="`input-${index}`"
-              class="item-card"
+              :class="['item-card', { expanded: expandedInputIndex === index }]"
             >
-              <div class="item-card-header">
+              <div class="item-card-header item-card-header-toggle" @click="toggleExpandedInput(index)">
                 <div>
                   <div class="item-card-title">{{ input.name || `Input ${index + 1}` }}</div>
                   <div class="item-card-meta">
                     Node {{ input.node_id || '?' }}<template v-if="input.widget_idx !== undefined"> · Widget {{ input.widget_idx }}</template>
                   </div>
+                  <div class="item-card-summary">
+                    <span>{{ input.type || 'string' }}</span>
+                    <span>{{ input.required ? 'required' : 'optional' }}</span>
+                    <span v-if="input.default !== undefined && input.default !== ''">default {{ formatValuePreview(input.default) }}</span>
+                  </div>
                 </div>
-                <BaseButton size="sm" variant="ghost" @click="removeInput(index)">
+                <BaseButton size="sm" variant="ghost" @click.stop="removeInput(index)">
                   Remove
                 </BaseButton>
               </div>
 
-              <div class="item-grid">
+              <div v-if="expandedInputIndex === index" class="item-grid" @click.stop>
                 <BaseFormField label="Name">
                   <BaseInput v-model="input.name" full-width />
                 </BaseFormField>
@@ -91,8 +96,37 @@
                     @update:model-value="input.required = $event === 'true'"
                   />
                 </BaseFormField>
-                <BaseFormField label="Default">
-                  <BaseInput v-model="input.default" full-width />
+                <BaseFormField :class="{ 'item-grid-full': input.type === 'string' || input.type === 'enum' }" label="Default">
+                  <BaseTextarea
+                    v-if="input.type === 'string'"
+                    :model-value="formatTextareaValue(input.default)"
+                    :rows="3"
+                    placeholder="Default string value"
+                    @update:model-value="input.default = $event"
+                  />
+                  <BaseInput v-else v-model="input.default" full-width />
+                </BaseFormField>
+                <BaseFormField v-if="isNumericType(input.type)" label="Min">
+                  <BaseInput
+                    :model-value="formatOptionalNumber(input.min)"
+                    full-width
+                    @update:model-value="input.min = parseOptionalNumber($event)"
+                  />
+                </BaseFormField>
+                <BaseFormField v-if="isNumericType(input.type)" label="Max">
+                  <BaseInput
+                    :model-value="formatOptionalNumber(input.max)"
+                    full-width
+                    @update:model-value="input.max = parseOptionalNumber($event)"
+                  />
+                </BaseFormField>
+                <BaseFormField v-if="isEnumType(input.type)" class="item-grid-full" label="Enum Values">
+                  <BaseTextarea
+                    :model-value="formatEnumValues(input.enum_values)"
+                    :rows="4"
+                    placeholder="One or more values, separated by commas or new lines"
+                    @update:model-value="input.enum_values = parseEnumValues($event)"
+                  />
                 </BaseFormField>
               </div>
             </div>
@@ -110,21 +144,24 @@
             <div
               v-for="(output, index) in activeContract.outputs"
               :key="`output-${index}`"
-              class="item-card"
+              :class="['item-card', { expanded: expandedOutputIndex === index }]"
             >
-              <div class="item-card-header">
+              <div class="item-card-header item-card-header-toggle" @click="toggleExpandedOutput(index)">
                 <div>
                   <div class="item-card-title">{{ output.name || `Output ${index + 1}` }}</div>
                   <div class="item-card-meta">
                     Node {{ output.node_id || '?' }}<template v-if="output.selector"> · {{ output.selector }}</template>
                   </div>
+                  <div class="item-card-summary">
+                    <span>{{ output.type || 'file' }}</span>
+                  </div>
                 </div>
-                <BaseButton size="sm" variant="ghost" @click="removeOutput(index)">
+                <BaseButton size="sm" variant="ghost" @click.stop="removeOutput(index)">
                   Remove
                 </BaseButton>
               </div>
 
-              <div class="item-grid">
+              <div v-if="expandedOutputIndex === index" class="item-grid" @click.stop>
                 <BaseFormField label="Name">
                   <BaseInput v-model="output.name" full-width />
                 </BaseFormField>
@@ -207,6 +244,8 @@ const deleting = ref(false)
 const error = ref<string | null>(null)
 const response = ref<WorkflowContractResponse | null>(null)
 const form = ref<WorkflowExecutionContract | null>(null)
+const expandedInputIndex = ref<number | null>(null)
+const expandedOutputIndex = ref<number | null>(null)
 
 const typeOptions = [
   'string',
@@ -259,6 +298,46 @@ function cloneContract(contract: WorkflowExecutionContract | null | undefined): 
   return JSON.parse(JSON.stringify(contract))
 }
 
+function isNumericType(type: string | undefined): boolean {
+  return type === 'integer' || type === 'number'
+}
+
+function isEnumType(type: string | undefined): boolean {
+  return type === 'enum'
+}
+
+function formatOptionalNumber(value: number | undefined): string {
+  return value == null ? '' : String(value)
+}
+
+function parseOptionalNumber(value: string): number | undefined {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function formatEnumValues(values: string[] | undefined): string {
+  return (values || []).join('\n')
+}
+
+function parseEnumValues(value: string): string[] {
+  return value
+    .split(/[\n,]/)
+    .map(part => part.trim())
+    .filter(Boolean)
+}
+
+function formatTextareaValue(value: unknown): string {
+  if (value == null) return ''
+  return String(value)
+}
+
+function formatValuePreview(value: unknown): string {
+  if (typeof value === 'string') return value.length > 24 ? `${value.slice(0, 24)}...` : value
+  return String(value)
+}
+
 function handleDefaultContractChange(value: string) {
   if (!form.value) return
   const next = value.trim() || 'default'
@@ -270,10 +349,22 @@ function handleDefaultContractChange(value: string) {
 
 function removeInput(index: number) {
   activeContract.value.inputs.splice(index, 1)
+  if (expandedInputIndex.value === index) expandedInputIndex.value = null
+  else if (expandedInputIndex.value != null && expandedInputIndex.value > index) expandedInputIndex.value -= 1
 }
 
 function removeOutput(index: number) {
   activeContract.value.outputs.splice(index, 1)
+  if (expandedOutputIndex.value === index) expandedOutputIndex.value = null
+  else if (expandedOutputIndex.value != null && expandedOutputIndex.value > index) expandedOutputIndex.value -= 1
+}
+
+function toggleExpandedInput(index: number) {
+  expandedInputIndex.value = expandedInputIndex.value === index ? null : index
+}
+
+function toggleExpandedOutput(index: number) {
+  expandedOutputIndex.value = expandedOutputIndex.value === index ? null : index
 }
 
 async function loadContract() {
@@ -398,10 +489,28 @@ onMounted(loadContract)
   gap: var(--cg-space-2);
 }
 
+.item-card-header-toggle {
+  cursor: pointer;
+}
+
 .item-card-title {
   color: var(--cg-color-text-primary);
   font-size: var(--cg-font-size-sm);
   font-weight: 600;
+}
+
+.item-card-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cg-space-2);
+  color: var(--cg-color-text-secondary);
+  font-size: var(--cg-font-size-xs);
+  margin-top: 6px;
+}
+
+.item-card.expanded {
+  border-color: var(--cg-color-accent);
+  box-shadow: inset 0 0 0 1px var(--cg-color-accent);
 }
 
 .item-card-meta {
@@ -414,6 +523,10 @@ onMounted(loadContract)
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--cg-space-3);
+}
+
+.item-grid-full {
+  grid-column: 1 / -1;
 }
 
 .empty-message {

@@ -49,36 +49,10 @@
         </div>
 
         <template v-else-if="form">
-          <section class="contract-meta">
-            <div class="contract-summary">
-              <span class="summary-pill">{{ summaryLabel }}</span>
-              <span class="summary-pill">{{ activeContract.inputs.length }} input{{ activeContract.inputs.length === 1 ? '' : 's' }}</span>
-              <span class="summary-pill">{{ activeContract.outputs.length }} output{{ activeContract.outputs.length === 1 ? '' : 's' }}</span>
-            </div>
-
-            <div class="contract-meta-grid">
-              <BaseFormField label="Default Contract">
-                <BaseInput
-                  :model-value="form.default_contract"
-                  full-width
-                  @update:model-value="handleDefaultContractChange"
-                />
-              </BaseFormField>
-              <BaseFormField label="Display Name">
-                <BaseInput
-                  v-model="activeContract.display_name"
-                  full-width
-                />
-              </BaseFormField>
-            </div>
-
-            <BaseFormField label="Description">
-              <BaseTextarea
-                v-model="activeContract.description"
-                :rows="2"
-                placeholder="Optional description for this contract"
-              />
-            </BaseFormField>
+          <section class="contract-summary">
+            <span class="summary-pill">{{ summaryLabel }}</span>
+            <span class="summary-pill">{{ activeContract.inputs.length }} input{{ activeContract.inputs.length === 1 ? '' : 's' }}</span>
+            <span class="summary-pill">{{ activeContract.outputs.length }} output{{ activeContract.outputs.length === 1 ? '' : 's' }}</span>
           </section>
 
           <section class="mapping-section">
@@ -94,13 +68,17 @@
               v-for="(input, index) in activeContract.inputs"
               :key="`input-${index}`"
               :class="['item-card', { selected: selectedInputIndex === index }]"
-              @click="selectedInputIndex = index"
             >
-              <div class="item-card-header">
+              <div class="item-card-header item-card-header-toggle" @click="toggleSelectedInput(index)">
                 <div>
                   <div class="item-card-title">{{ input.name || `Input ${index + 1}` }}</div>
                   <div class="item-card-meta">
                     Node {{ input.node_id || '?' }}<template v-if="input.widget_idx !== undefined"> · Widget {{ input.widget_idx }}</template>
+                  </div>
+                  <div class="item-card-summary">
+                    <span>{{ input.type || 'string' }}</span>
+                    <span>{{ input.required ? 'required' : 'optional' }}</span>
+                    <span v-if="input.default !== undefined && input.default !== ''">default {{ formatValuePreview(input.default) }}</span>
                   </div>
                 </div>
                 <BaseButton size="sm" variant="ghost" @click.stop="removeInput(index)">
@@ -108,7 +86,7 @@
                 </BaseButton>
               </div>
 
-              <div class="item-grid">
+              <div v-if="selectedInputIndex === index" class="item-grid" @click.stop>
                 <BaseFormField label="Name">
                   <BaseInput v-model="input.name" full-width />
                 </BaseFormField>
@@ -131,8 +109,37 @@
                     @update:model-value="input.required = $event === 'true'"
                   />
                 </BaseFormField>
-                <BaseFormField label="Default">
-                  <BaseInput v-model="input.default" full-width />
+                <BaseFormField :class="{ 'item-grid-full': input.type === 'string' || input.type === 'enum' }" label="Default">
+                  <BaseTextarea
+                    v-if="input.type === 'string'"
+                    :model-value="formatTextareaValue(input.default)"
+                    :rows="3"
+                    placeholder="Default string value"
+                    @update:model-value="input.default = $event"
+                  />
+                  <BaseInput v-else v-model="input.default" full-width />
+                </BaseFormField>
+                <BaseFormField v-if="isNumericType(input.type)" label="Min">
+                  <BaseInput
+                    :model-value="formatOptionalNumber(input.min)"
+                    full-width
+                    @update:model-value="input.min = parseOptionalNumber($event)"
+                  />
+                </BaseFormField>
+                <BaseFormField v-if="isNumericType(input.type)" label="Max">
+                  <BaseInput
+                    :model-value="formatOptionalNumber(input.max)"
+                    full-width
+                    @update:model-value="input.max = parseOptionalNumber($event)"
+                  />
+                </BaseFormField>
+                <BaseFormField v-if="isEnumType(input.type)" class="item-grid-full" label="Enum Values">
+                  <BaseTextarea
+                    :model-value="formatEnumValues(input.enum_values)"
+                    :rows="4"
+                    placeholder="One or more values, separated by commas or new lines"
+                    @update:model-value="input.enum_values = parseEnumValues($event)"
+                  />
                 </BaseFormField>
               </div>
             </div>
@@ -151,13 +158,15 @@
               v-for="(output, index) in activeContract.outputs"
               :key="`output-${index}`"
               :class="['item-card', { selected: selectedOutputIndex === index }]"
-              @click="selectedOutputIndex = index"
             >
-              <div class="item-card-header">
+              <div class="item-card-header item-card-header-toggle" @click="toggleSelectedOutput(index)">
                 <div>
                   <div class="item-card-title">{{ output.name || `Output ${index + 1}` }}</div>
                   <div class="item-card-meta">
                     Node {{ output.node_id || '?' }}<template v-if="output.selector"> · {{ output.selector }}</template>
+                  </div>
+                  <div class="item-card-summary">
+                    <span>{{ output.type || 'file' }}</span>
                   </div>
                 </div>
                 <BaseButton size="sm" variant="ghost" @click.stop="removeOutput(index)">
@@ -165,7 +174,7 @@
                 </BaseButton>
               </div>
 
-              <div class="item-grid">
+              <div v-if="selectedOutputIndex === index" class="item-grid" @click.stop>
                 <BaseFormField label="Name">
                   <BaseInput v-model="output.name" full-width />
                 </BaseFormField>
@@ -278,13 +287,57 @@ function cloneContract(contract: WorkflowExecutionContract | null | undefined): 
   return JSON.parse(JSON.stringify(contract))
 }
 
-function handleDefaultContractChange(value: string) {
-  if (!form.value) return
-  const next = value.trim() || 'default'
-  form.value.default_contract = next
-  if (!form.value.contracts[next]) {
-    form.value.contracts[next] = { inputs: [], outputs: [] }
-  }
+function isNumericType(type: string | undefined): boolean {
+  return type === 'integer' || type === 'number'
+}
+
+function isEnumType(type: string | undefined): boolean {
+  return type === 'enum'
+}
+
+function formatOptionalNumber(value: number | undefined): string {
+  return value == null ? '' : String(value)
+}
+
+function parseOptionalNumber(value: string): number | undefined {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function formatEnumValues(values: string[] | undefined): string {
+  return (values || []).join('\n')
+}
+
+function parseEnumValues(value: string): string[] {
+  return value
+    .split(/[\n,]/)
+    .map(part => part.trim())
+    .filter(Boolean)
+}
+
+function formatValuePreview(value: unknown): string {
+  if (typeof value === 'string') return value.length > 24 ? `${value.slice(0, 24)}...` : value
+  return String(value)
+}
+
+function formatTextareaValue(value: unknown): string {
+  if (value == null) return ''
+  return String(value)
+}
+
+function inferWidgetEnumValues(widget: any): string[] {
+  const rawValues = widget?.options?.values
+  if (!Array.isArray(rawValues)) return []
+  return rawValues.map((value: unknown) => String(value)).filter(Boolean)
+}
+
+function inferWidgetNumericBound(widget: any, key: 'min' | 'max'): number | undefined {
+  const value = widget?.options?.[key]
+  if (value == null || value === '') return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
 }
 
 function slugifyName(value: string, fallback: string): string {
@@ -320,6 +373,20 @@ function removeOutput(index: number) {
   activeContract.value.outputs.splice(index, 1)
   if (selectedOutputIndex.value === index) {
     selectedOutputIndex.value = null
+  }
+}
+
+function toggleSelectedInput(index: number) {
+  selectedInputIndex.value = selectedInputIndex.value === index ? null : index
+  if (selectedInputIndex.value != null) {
+    selectedOutputIndex.value = null
+  }
+}
+
+function toggleSelectedOutput(index: number) {
+  selectedOutputIndex.value = selectedOutputIndex.value === index ? null : index
+  if (selectedOutputIndex.value != null) {
+    selectedInputIndex.value = null
   }
 }
 
@@ -495,6 +562,15 @@ function addOrSelectInput(node: any, widget: any) {
     default: widget?.value ?? '',
   }
 
+  if (isNumericType(nextInput.type)) {
+    nextInput.min = inferWidgetNumericBound(widget, 'min')
+    nextInput.max = inferWidgetNumericBound(widget, 'max')
+  }
+
+  if (isEnumType(nextInput.type)) {
+    nextInput.enum_values = inferWidgetEnumValues(widget)
+  }
+
   activeContract.value.inputs.push(nextInput)
   selectedInputIndex.value = activeContract.value.inputs.length - 1
   selectedOutputIndex.value = null
@@ -645,7 +721,7 @@ async function handleSave() {
     window.dispatchEvent(new CustomEvent('comfygit:workflow-contract-saved', {
       detail: { workflowName: workflowName.value }
     }))
-    closeOverlay({ reopenContract: true })
+    closeOverlay({ reopenPanel: true })
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to save workflow contract'
   } finally {
@@ -862,7 +938,6 @@ onBeforeUnmount(() => {
   border-top: 1px solid var(--cg-color-border);
 }
 
-.contract-meta,
 .mapping-section {
   display: flex;
   flex-direction: column;
@@ -885,12 +960,6 @@ onBeforeUnmount(() => {
   letter-spacing: var(--cg-letter-spacing-wide);
 }
 
-.contract-meta-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--cg-space-3);
-}
-
 .section-header {
   display: flex;
   align-items: center;
@@ -905,7 +974,6 @@ onBeforeUnmount(() => {
   padding: var(--cg-space-3);
   border: 1px solid var(--cg-color-border);
   background: var(--cg-color-bg-secondary);
-  cursor: pointer;
 }
 
 .item-card.selected {
@@ -920,6 +988,10 @@ onBeforeUnmount(() => {
   gap: var(--cg-space-2);
 }
 
+.item-card-header-toggle {
+  cursor: pointer;
+}
+
 .item-card-title {
   color: var(--cg-color-text-primary);
   font-size: var(--cg-font-size-sm);
@@ -932,10 +1004,23 @@ onBeforeUnmount(() => {
   margin-top: 2px;
 }
 
+.item-card-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cg-space-2);
+  color: var(--cg-color-text-secondary);
+  font-size: var(--cg-font-size-xs);
+  margin-top: 6px;
+}
+
 .item-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--cg-space-3);
+}
+
+.item-grid-full {
+  grid-column: 1 / -1;
 }
 
 .empty-message,
@@ -980,7 +1065,6 @@ onBeforeUnmount(() => {
     max-width: 100vw;
   }
 
-  .contract-meta-grid,
   .item-grid {
     grid-template-columns: 1fr;
   }

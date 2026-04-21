@@ -48,6 +48,24 @@ type = "image"
 display_name = "Image"
 node_id = 27
 selector = "primary"
+
+[[tool.comfygit.workflows.z-image.execution_contract.contracts.default.inputs]]
+name = "steps"
+type = "integer"
+node_id = 12
+widget_idx = 2
+required = false
+default = 30
+min = 1
+max = 150
+
+[[tool.comfygit.workflows.z-image.execution_contract.contracts.default.inputs]]
+name = "scheduler"
+type = "enum"
+node_id = 19
+widget_idx = 0
+required = true
+enum_values = ["normal", "karras", "exponential"]
 ```
 
 Contract health such as `valid`, `stale`, or `incomplete` should be derived by
@@ -134,10 +152,35 @@ Optional fields may include:
 - `widget_idx`
 - `field_key`
 - `default`
+- `min`
+- `max`
+- `enum_values`
 - `description`
 
 The durable input item should represent portable mapping state, not transient
 frontend selection state.
+
+### CGM-WCDM-06A [PLANNED]: Numeric input constraints may be stored as optional durable bounds
+Validation: TEST
+
+Inputs with normalized type `integer` or `number` may store:
+
+- `min`
+- `max`
+
+These fields should remain optional and should only be used when the contract
+author intends to bound valid numeric values.
+
+### CGM-WCDM-06B [PLANNED]: Enum input values may be stored as an explicit allowed set
+Validation: TEST
+
+Inputs with normalized type `enum` may store:
+
+- `enum_values`
+
+`enum_values` should be a bounded ordered list of allowed string values. This
+field should be treated as the durable source of truth for enum options when
+present.
 
 ### CGM-WCDM-07 [PLANNED]: The first implementation may target widget-backed inputs before broader graph source kinds
 Validation: HUMAN_REVIEW
@@ -191,6 +234,17 @@ values are:
 
 If manager inference cannot confidently assign a type, the authoring UI may
 require explicit user choice rather than persisting unstable ad hoc type labels.
+
+### CGM-WCDM-10A [PLANNED]: Type-specific constraint fields should be gated by normalized type
+Validation: HUMAN_REVIEW
+
+The authoring and projection layers should treat the following fields as
+type-scoped rather than universally meaningful:
+
+- `min` and `max` for `integer` and `number`
+- `enum_values` for `enum`
+
+These fields may be omitted entirely when they do not apply.
 
 ## Save Semantics
 

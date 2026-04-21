@@ -284,6 +284,23 @@ def _safe_int(value) -> int:
         return 0
 
 
+def _safe_number(value):
+    """Safely convert value to int/float when numeric, otherwise return None."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return value
+    try:
+        text = str(value).strip()
+        if text == "":
+            return None
+        if "." in text:
+            return float(text)
+        return int(text)
+    except (TypeError, ValueError):
+        return None
+
+
 def _safe_sequence(value) -> list:
     """Safely convert sequence-like values to a list."""
     if value is None:
@@ -388,6 +405,9 @@ def _parse_execution_contract_payload(data: dict) -> WorkflowExecutionContract:
                 widget_idx=item_dict.get("widget_idx"),
                 field_key=_safe_str(item_dict.get("field_key")),
                 default=item_dict.get("default"),
+                min=_safe_number(item_dict.get("min")),
+                max=_safe_number(item_dict.get("max")),
+                enum_values=[str(value) for value in _safe_sequence(item_dict.get("enum_values"))],
                 description=_safe_str(item_dict.get("description")),
             ))
 
