@@ -8492,34 +8492,38 @@ async function Xp(e) {
       workflow: e.workflow
     }), l = new EventSource(`/v2/comfygit/models/download-stream?${a}`);
     ks = l;
-    let r = Date.now(), c = 0, u = !1;
-    l.onmessage = (m) => {
+    let r = Date.now(), c = 0, u = Date.now(), m = !1;
+    const f = 2e3, v = window.setInterval(() => {
+      m || Date.now() - u > f && (e.speed = 0, e.eta = 0);
+    }, 250), p = () => {
+      window.clearInterval(v);
+    };
+    l.onmessage = (_) => {
       try {
-        const f = JSON.parse(m.data);
-        switch (f.type) {
+        const g = JSON.parse(_.data);
+        switch (g.type) {
           case "progress":
-            e.downloaded = f.downloaded || 0, e.size = f.total || e.size;
-            const v = Date.now(), p = (v - r) / 1e3;
-            if (p > 0.5) {
-              const _ = e.downloaded - c;
-              if (e.speed = _ / p, r = v, c = e.downloaded, e.speed > 0 && e.size > 0) {
-                const g = e.size - e.downloaded;
-                e.eta = g / e.speed;
-              }
-            }
+            e.downloaded = g.downloaded || 0, e.size = g.total || e.size, u = Date.now();
+            const w = u, C = (w - r) / 1e3, $ = e.downloaded - c;
+            if ($ > 0 && C > 0)
+              if (e.speed = $ / C, r = w, c = e.downloaded, e.speed > 0 && e.size > 0) {
+                const x = e.size - e.downloaded;
+                e.eta = x / e.speed;
+              } else
+                e.eta = 0;
             e.size > 0 && (e.progress = Math.round(e.downloaded / e.size * 100));
             break;
           case "complete":
-            u = !0, l.close(), ks = null, s();
+            m = !0, p(), l.close(), ks = null, s();
             break;
           case "error":
-            u = !0, l.close(), ks = null, o(new Error(f.message || "Download failed"));
+            m = !0, p(), l.close(), ks = null, o(new Error(g.message || "Download failed"));
             break;
         }
       } catch {
       }
     }, l.onerror = () => {
-      l.close(), ks = null, u || o(new Error("Connection lost"));
+      p(), l.close(), ks = null, m || o(new Error("Connection lost"));
     };
   });
 }
@@ -24195,7 +24199,7 @@ const AP = { class: "comfygit-panel" }, OP = { class: "panel-header" }, zP = { c
       f(P);
     }
     function T(P) {
-      return P === 0 ? "" : `${(P / (1024 * 1024)).toFixed(1)} MB/s`;
+      return P === 0 ? "..." : `${(P / (1024 * 1024)).toFixed(1)} MB/s`;
     }
     return (P, R) => (n(), D(Dt, { to: "body" }, [
       Je(u) ? (n(), i("div", {
@@ -24298,7 +24302,7 @@ const AP = { class: "comfygit-panel" }, OP = { class: "panel-header" }, zP = { c
       ], 2)) : y("", !0)
     ]));
   }
-}), dR = /* @__PURE__ */ we(uR, [["__scopeId", "data-v-60751cfa"]]), mR = { class: "detail-header" }, fR = { class: "item-count" }, vR = { class: "resource-list" }, pR = { class: "item-info" }, gR = { class: "item-name" }, hR = {
+}), dR = /* @__PURE__ */ we(uR, [["__scopeId", "data-v-3a3c9607"]]), mR = { class: "detail-header" }, fR = { class: "item-count" }, vR = { class: "resource-list" }, pR = { class: "item-info" }, gR = { class: "item-name" }, hR = {
   key: 0,
   class: "item-subtitle"
 }, yR = {

@@ -233,7 +233,7 @@ async def queue_task(request):
         return web.json_response({"error": str(e)}, status=500)
 
 
-@routes.get("/v2/manager/queue/start")
+@routes.post("/v2/manager/queue/start")
 async def start_queue(request):
     """Start processing queued tasks.
 
