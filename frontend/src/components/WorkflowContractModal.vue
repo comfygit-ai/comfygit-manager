@@ -184,27 +184,33 @@
     </template>
 
     <template #footer>
-      <BaseButton variant="secondary" @click="openMappingMode">
-        Open I/O Mapping Mode
-      </BaseButton>
-      <BaseButton variant="secondary" @click="emit('close')">
-        Close
-      </BaseButton>
-      <BaseButton
-        variant="danger"
-        :disabled="!hasSavedContract"
-        :loading="deleting"
-        @click="handleDelete"
-      >
-        Delete Contract
-      </BaseButton>
-      <BaseButton
-        variant="primary"
-        :loading="saving"
-        @click="handleSave"
-      >
-        Save Contract
-      </BaseButton>
+      <div class="contract-footer">
+        <div class="contract-footer-left">
+          <BaseButton variant="secondary" @click="openMappingMode">
+            Open I/O Mapping Mode
+          </BaseButton>
+        </div>
+        <div class="contract-footer-right">
+          <BaseButton variant="secondary" @click="emit('close')">
+            Close
+          </BaseButton>
+          <BaseButton
+            variant="danger"
+            :disabled="!hasSavedContract"
+            :loading="deleting"
+            @click="handleDelete"
+          >
+            Delete Contract
+          </BaseButton>
+          <BaseButton
+            variant="primary"
+            :loading="saving"
+            @click="handleSave"
+          >
+            Save Contract
+          </BaseButton>
+        </div>
+      </div>
     </template>
   </BaseModal>
 </template>
@@ -536,11 +542,39 @@ onMounted(loadContract)
   text-align: center;
 }
 
+.contract-footer {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cg-space-3);
+}
+
+.contract-footer-left,
+.contract-footer-right {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+}
+
 @media (max-width: 1100px) {
   .contract-layout,
   .contract-meta-grid,
   .item-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .contract-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .contract-footer-left,
+  .contract-footer-right {
+    width: 100%;
+    flex-wrap: wrap;
   }
 }
 </style>

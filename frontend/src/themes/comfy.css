@@ -330,7 +330,7 @@
 }
 
 [data-comfygit-theme="comfy"] .setting-row:hover {
-  background: var(--cg-color-bg-hover);
+  background: transparent;
 }
 
 /* Toggle component styling */

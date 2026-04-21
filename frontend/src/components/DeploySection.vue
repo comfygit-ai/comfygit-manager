@@ -5,17 +5,7 @@
         title="DEPLOY TO CLOUD"
         :show-info="true"
         @info-click="showInfo = true"
-      >
-        <template #actions>
-          <ActionButton
-            variant="ghost"
-            size="xs"
-            @click="showSettings = true"
-          >
-            Settings
-          </ActionButton>
-        </template>
-      </PanelHeader>
+      />
     </template>
 
     <!-- Tabs above scroll area -->
@@ -96,13 +86,6 @@
       </div>
     </template>
   </InfoPopover>
-
-  <!-- Deploy Settings Modal -->
-  <DeploySettingsModal
-    v-if="showSettings"
-    @close="showSettings = false"
-    @saved="emit('toast', 'GitHub token saved', 'success')"
-  />
 </template>
 
 <script setup lang="ts">
@@ -117,8 +100,6 @@ import InstancesTab from '@/components/deploy/InstancesTab.vue'
 import RunPodTab from '@/components/deploy/RunPodTab.vue'
 import CustomTab from '@/components/deploy/CustomTab.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
-import ActionButton from '@/components/base/atoms/ActionButton.vue'
-import DeploySettingsModal from '@/components/deploy/DeploySettingsModal.vue'
 
 const emit = defineEmits<{
   toast: [message: string, type: 'info' | 'success' | 'warning' | 'error']
@@ -140,7 +121,6 @@ const {
 
 // UI State
 const showInfo = ref(false)
-const showSettings = ref(false)
 const activeTab = ref('instances')
 const actionLoadingId = ref<string | null>(null)
 const pendingTerminateInstance = ref<Instance | null>(null)

@@ -1,5 +1,5 @@
 <template>
-  <div :class="['setting-row', { disabled }]">
+  <div :class="['setting-row', { disabled, stacked }]">
     <div class="setting-info">
       <div class="setting-label">
         {{ label }}
@@ -21,9 +21,11 @@ withDefaults(defineProps<{
   description?: string
   required?: boolean
   disabled?: boolean
+  stacked?: boolean
 }>(), {
   required: false,
-  disabled: false
+  disabled: false,
+  stacked: false
 })
 </script>
 
@@ -44,6 +46,11 @@ withDefaults(defineProps<{
 .setting-row.disabled {
   opacity: 0.5;
   pointer-events: none;
+}
+
+.setting-row.stacked {
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .setting-info {
@@ -74,5 +81,10 @@ withDefaults(defineProps<{
   display: flex;
   align-items: center;
   gap: var(--cg-space-2);
+}
+
+.setting-row.stacked .setting-control {
+  width: 100%;
+  flex-shrink: 1;
 }
 </style>
