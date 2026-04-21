@@ -2,6 +2,9 @@
 
 This spec defines the intended local authoring flow for workflow execution contracts inside `comfygit-manager`.
 
+The durable contract object shape itself is defined separately in
+`workflow-contract-data-model.md`.
+
 ## Purpose
 
 The manager should let workflow authors define a minimal execution contract for a ComfyUI workflow:

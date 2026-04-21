@@ -20,6 +20,8 @@ import type {
   SyncEnvironmentResult,
   WorkflowInfo,
   WorkflowDetails,
+  WorkflowExecutionContract,
+  WorkflowContractResponse,
   WorkflowResolutionPlan,
   ModelInfo,
   ModelDetails,
@@ -668,6 +670,51 @@ export function useComfyGitService() {
     if (USE_MOCK) return mockApi.getWorkflowDetails(name)
 
     return fetchApi<WorkflowDetails>(`/v2/comfygit/workflow/${encodeURIComponent(name)}/details`)
+  }
+
+  async function getWorkflowContract(name: string): Promise<WorkflowContractResponse> {
+    if (USE_MOCK) {
+      return {
+        workflow: name,
+        contract_summary: { has_contract: false, input_count: 0, output_count: 0, status: 'none' },
+        execution_contract: null,
+        contract_context: null,
+      }
+    }
+
+    return fetchApi<WorkflowContractResponse>(`/v2/comfygit/workflow/${encodeURIComponent(name)}/contract`)
+  }
+
+  async function saveWorkflowContract(name: string, contract: WorkflowExecutionContract): Promise<WorkflowContractResponse> {
+    if (USE_MOCK) {
+      return {
+        workflow: name,
+        contract_summary: {
+          has_contract: true,
+          input_count: contract.contracts[contract.default_contract]?.inputs.length ?? 0,
+          output_count: contract.contracts[contract.default_contract]?.outputs.length ?? 0,
+          status: (contract.contracts[contract.default_contract]?.outputs.length ?? 0) > 0 ? 'valid' : 'incomplete',
+        },
+        execution_contract: contract,
+        contract_context: null,
+      }
+    }
+
+    return fetchApi<WorkflowContractResponse>(`/v2/comfygit/workflow/${encodeURIComponent(name)}/contract`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(contract),
+    })
+  }
+
+  async function deleteWorkflowContract(name: string): Promise<{ status: string; workflow: string }> {
+    if (USE_MOCK) {
+      return { status: 'success', workflow: name }
+    }
+
+    return fetchApi<{ status: string; workflow: string }>(`/v2/comfygit/workflow/${encodeURIComponent(name)}/contract`, {
+      method: 'DELETE',
+    })
   }
 
   async function resolveWorkflow(name: string): Promise<WorkflowResolutionPlan> {
@@ -1863,6 +1910,9 @@ export function useComfyGitService() {
     // Workflow Management
     getWorkflows,
     getWorkflowDetails,
+    getWorkflowContract,
+    saveWorkflowContract,
+    deleteWorkflowContract,
     resolveWorkflow,
     installWorkflowDeps,
     setModelImportance,

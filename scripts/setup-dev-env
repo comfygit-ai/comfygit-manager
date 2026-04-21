@@ -13,8 +13,15 @@
 #
 # This script:
 #   1. Replaces registry-installed comfygit-manager with a symlink to this repo
-#   2. Installs comfygit-core as an editable package into the environment venv
+#   2. Registers comfygit-core as an editable package via `cg py add --editable`
 #   3. Marks comfygit-manager as a development node (skips version checks)
+#
+# IMPORTANT:
+#   Do NOT use raw `uv pip install -e` here as the primary mechanism.
+#   That only mutates the venv, while `cg run` / `cg sync` reconcile from the
+#   managed environment manifest and can replace the editable install with the
+#   packaged wheel. Using `cg py add ... --editable` makes the local core path
+#   part of the environment's managed dependency state so sync preserves it.
 
 set -e
 
@@ -31,6 +38,7 @@ MANAGER_PATH="$(dirname "$SCRIPT_DIR")"
 
 # Auto-detect CORE_PATH (sibling repo)
 CORE_PATH="$(dirname "$MANAGER_PATH")/comfygit/packages/core"
+COMFYGIT_REPO_ROOT="$(cd "$CORE_PATH/../.." && pwd)"
 
 # Defaults
 WORKSPACE_PATH=""
@@ -120,6 +128,7 @@ fi
 echo "[setup-dev-env] Workspace: $WORKSPACE_PATH"
 echo "[setup-dev-env] Manager:   $MANAGER_PATH"
 echo "[setup-dev-env] Core:      $CORE_PATH"
+echo "[setup-dev-env] ComfyGit:  $COMFYGIT_REPO_ROOT"
 echo ""
 
 # Build list of environments to process
@@ -151,8 +160,6 @@ setup_environment() {
     local custom_nodes="$env_path/ComfyUI/custom_nodes"
     local manager_link="$custom_nodes/comfygit-manager"
     local pyproject="$env_path/.cec/pyproject.toml"
-    local env_uv="$env_path/.venv/bin/uv"
-    local env_python="$env_path/.venv/bin/python"
 
     echo "[setup-dev-env] Setting up environment: $env_name"
 
@@ -186,20 +193,20 @@ setup_environment() {
         ln -s "$MANAGER_PATH" "$manager_link"
     fi
 
-    # Install comfygit-core as editable into the environment venv
-    if [[ ! -x "$env_uv" || ! -x "$env_python" ]]; then
-        echo "  Warning: environment venv not found, skipping editable core install"
+    # Register comfygit-core as a managed editable dependency.
+    # This is intentionally done through `cg py add --editable` rather than
+    # direct venv mutation so later `cg sync` / `cg run` preserve the dev path.
+    if [[ ! -f "$pyproject" ]]; then
+        echo "  Warning: .cec/pyproject.toml not found, skipping managed core editable install"
+    elif grep -Fq "$CORE_PATH" "$pyproject"; then
+        echo "  Core editable dependency: Already configured"
     else
-        local editable_location=""
-        editable_location="$("$env_uv" pip show --python "$env_python" comfygit-core 2>/dev/null | awk -F': ' '/Editable project location/ {print $2}')"
-
-        if [[ "$editable_location" == "$CORE_PATH" ]]; then
-            echo "  Core editable install: Already configured"
-        else
-            echo "  Installing comfygit-core editable from $CORE_PATH..."
-            "$env_uv" pip install --python "$env_python" -e "$CORE_PATH" >/dev/null
-            echo "  Core editable install: Configured"
-        fi
+        echo "  Registering comfygit-core editable dependency from $CORE_PATH..."
+        (
+            cd "$COMFYGIT_REPO_ROOT"
+            COMFYGIT_HOME="$WORKSPACE_PATH" uv run cg -e "$env_name" py add "$CORE_PATH" --editable >/dev/null
+        )
+        echo "  Core editable dependency: Configured"
     fi
 
     # Mark comfygit-manager as development node + clean up old pyproject injection

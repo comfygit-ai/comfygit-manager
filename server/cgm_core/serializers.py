@@ -31,6 +31,105 @@ def _safe_sequence(value) -> list:
     return []
 
 
+def _derive_contract_status(contract) -> str:
+    """Derive compact contract health from durable contract state."""
+    if contract is None:
+        return "none"
+
+    contracts = getattr(contract, "contracts", None) or {}
+    if not contracts:
+        return "incomplete"
+
+    default_contract_name = _safe_str(getattr(contract, "default_contract", None))
+    if not default_contract_name:
+        return "incomplete"
+
+    default_contract = contracts.get(default_contract_name)
+    if default_contract is None:
+        return "incomplete"
+
+    outputs = _safe_sequence(getattr(default_contract, "outputs", None))
+    if not outputs:
+        return "incomplete"
+
+    return "valid"
+
+
+def serialize_workflow_contract_summary(contract) -> dict:
+    """Serialize compact derived contract health for workflow list/detail payloads."""
+    contracts = getattr(contract, "contracts", None) or {}
+    default_contract_name = _safe_str(getattr(contract, "default_contract", None))
+    default_contract = contracts.get(default_contract_name) if default_contract_name else None
+    inputs = _safe_sequence(getattr(default_contract, "inputs", None))
+    outputs = _safe_sequence(getattr(default_contract, "outputs", None))
+
+    return {
+        "has_contract": contract is not None,
+        "input_count": len(inputs),
+        "output_count": len(outputs),
+        "status": _derive_contract_status(contract),
+    }
+
+
+def serialize_workflow_execution_contract(contract) -> dict | None:
+    """Serialize the durable workflow execution contract for manager UI use."""
+    if contract is None:
+        return None
+
+    contracts_payload = {}
+    for name, named_contract in (getattr(contract, "contracts", None) or {}).items():
+        inputs = []
+        for item in _safe_sequence(getattr(named_contract, "inputs", None)):
+            input_payload = {
+                "name": getattr(item, "name", ""),
+                "type": getattr(item, "type", ""),
+                "node_id": getattr(item, "node_id", ""),
+                "required": bool(getattr(item, "required", False)),
+            }
+            if getattr(item, "display_name", None) is not None:
+                input_payload["display_name"] = item.display_name
+            if getattr(item, "widget_idx", None) is not None:
+                input_payload["widget_idx"] = item.widget_idx
+            if getattr(item, "field_key", None) is not None:
+                input_payload["field_key"] = item.field_key
+            if getattr(item, "default", None) is not None:
+                input_payload["default"] = item.default
+            if getattr(item, "description", None) is not None:
+                input_payload["description"] = item.description
+            inputs.append(input_payload)
+
+        outputs = []
+        for item in _safe_sequence(getattr(named_contract, "outputs", None)):
+            output_payload = {
+                "name": getattr(item, "name", ""),
+                "type": getattr(item, "type", ""),
+                "node_id": getattr(item, "node_id", ""),
+            }
+            if getattr(item, "display_name", None) is not None:
+                output_payload["display_name"] = item.display_name
+            if getattr(item, "selector", None) is not None:
+                output_payload["selector"] = item.selector
+            if getattr(item, "description", None) is not None:
+                output_payload["description"] = item.description
+            outputs.append(output_payload)
+
+        contract_payload = {
+            "inputs": inputs,
+            "outputs": outputs,
+        }
+        if getattr(named_contract, "display_name", None) is not None:
+            contract_payload["display_name"] = named_contract.display_name
+        if getattr(named_contract, "description", None) is not None:
+            contract_payload["description"] = named_contract.description
+        contracts_payload[name] = contract_payload
+
+    return {
+        "version": int(getattr(contract, "version", 1)),
+        "default_contract": getattr(contract, "default_contract", "default"),
+        "contracts": contracts_payload,
+    }
+
+
 def _extract_node_type(node) -> str | None:
     """Extract node type from different resolution object shapes."""
     reference = getattr(node, "reference", None)

@@ -46,6 +46,13 @@
               <ActionButton
                 variant="secondary"
                 size="sm"
+                @click="handleContract(wf.name)"
+              >
+                Contract
+              </ActionButton>
+              <ActionButton
+                variant="secondary"
+                size="sm"
                 @click="handleDetails(wf.name)"
               >
                 Details ▸
@@ -69,6 +76,13 @@
             <template #title>{{ wf.name }}</template>
             <template #subtitle>{{ formatWorkflowSubtitle(wf) }}</template>
             <template #actions>
+              <ActionButton
+                variant="secondary"
+                size="sm"
+                @click="handleContract(wf.name)"
+              >
+                Contract
+              </ActionButton>
               <ActionButton
                 variant="secondary"
                 size="sm"
@@ -98,6 +112,13 @@
               <ActionButton
                 variant="secondary"
                 size="sm"
+                @click="handleContract(wf.name)"
+              >
+                Contract
+              </ActionButton>
+              <ActionButton
+                variant="secondary"
+                size="sm"
                 @click="handleDetails(wf.name)"
               >
                 Details
@@ -124,6 +145,13 @@
             <template #title>{{ wf.name }}</template>
             <template #subtitle>{{ formatWorkflowSubtitle(wf) }}</template>
             <template #actions>
+              <ActionButton
+                variant="secondary"
+                size="sm"
+                @click="handleContract(wf.name)"
+              >
+                Contract
+              </ActionButton>
               <ActionButton
                 variant="secondary"
                 size="sm"
@@ -174,6 +202,13 @@
     @refresh="emit('refresh')"
     @restart="handleRestart"
   />
+
+  <WorkflowContractModal
+    v-if="showContractModal && selectedWorkflow"
+    :workflow-name="selectedWorkflow"
+    @close="showContractModal = false"
+    @refresh="handleContractRefresh"
+  />
 </template>
 
 <script setup lang="ts">
@@ -181,6 +216,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import { useOrchestratorService } from '@/composables/useOrchestratorService'
 import WorkflowDetailsModal from './WorkflowDetailsModal.vue'
+import WorkflowContractModal from './WorkflowContractModal.vue'
 import WorkflowResolveModal from './WorkflowResolveModal.vue'
 import type { WorkflowInfo } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
@@ -208,6 +244,7 @@ const syncedExpanded = ref(true)
 const showAllSynced = ref(false)
 const showDetailsModal = ref(false)
 const showResolveModal = ref(false)
+const showContractModal = ref(false)
 const selectedWorkflow = ref<string | null>(null)
 
 // Computed filters
@@ -288,6 +325,11 @@ function handleResolve(name: string) {
   showResolveModal.value = true
 }
 
+function handleContract(name: string) {
+  selectedWorkflow.value = name
+  showContractModal.value = true
+}
+
 function handleInstall() {
   emit('refresh')
 }
@@ -296,6 +338,11 @@ async function handleResolveModalClose() {
   showResolveModal.value = false
   // Refresh workflows to reflect any resolution changes (queued downloads, etc.)
   await loadWorkflows(true)
+}
+
+async function handleContractRefresh() {
+  await loadWorkflows(true)
+  emit('refresh')
 }
 
 async function handleRestart() {
@@ -350,11 +397,24 @@ function formatWorkflowSubtitle(wf: WorkflowInfo): string {
                     wf.sync_state === 'modified' ? 'Modified' :
                     wf.sync_state === 'synced' ? 'Synced' : wf.sync_state
 
+  const contractLabel = formatContractSummary(wf)
+
   if (wf.has_path_sync_issues && wf.models_needing_path_sync && wf.models_needing_path_sync > 0) {
-    return `${wf.models_needing_path_sync} model path${wf.models_needing_path_sync > 1 ? 's' : ''} need${wf.models_needing_path_sync === 1 ? 's' : ''} sync`
+    return `${wf.models_needing_path_sync} model path${wf.models_needing_path_sync > 1 ? 's' : ''} need${wf.models_needing_path_sync === 1 ? 's' : ''} sync · ${contractLabel}`
   }
 
-  return syncLabel || 'Unknown'
+  return `${syncLabel || 'Unknown'} · ${contractLabel}`
+}
+
+function formatContractSummary(wf: WorkflowInfo): string {
+  const summary = wf.contract_summary
+  if (!summary || !summary.has_contract) {
+    return 'No contract'
+  }
+  if (summary.status === 'incomplete') {
+    return `${summary.input_count} in / ${summary.output_count} out · incomplete`
+  }
+  return `${summary.input_count} in / ${summary.output_count} out`
 }
 
 onMounted(loadWorkflows)

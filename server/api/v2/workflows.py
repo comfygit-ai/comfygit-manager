@@ -7,6 +7,12 @@ from pathlib import Path
 import xxhash
 from aiohttp import web
 
+from comfygit_core.models.manifest import (
+    NamedWorkflowContract,
+    WorkflowContractInput,
+    WorkflowContractOutput,
+    WorkflowExecutionContract,
+)
 from comfygit_core.strategies.auto import AutoNodeStrategy, AutoModelStrategy
 from comfygit_core.models.workflow import (
     NodeResolutionContext, ModelResolutionContext,
@@ -16,7 +22,11 @@ from comfygit_core.models.workflow import (
 from comfygit_core.analyzers.workflow_dependency_parser import WorkflowDependencyParser
 
 from cgm_core.decorators import requires_environment, logged_operation
-from cgm_core.serializers import serialize_workflow_details
+from cgm_core.serializers import (
+    serialize_workflow_contract_summary,
+    serialize_workflow_details,
+    serialize_workflow_execution_contract,
+)
 from cgm_core.version_utils import get_latest_version
 from cgm_utils.async_helpers import run_sync
 
@@ -288,6 +298,123 @@ def _safe_dict(value) -> dict:
     if isinstance(value, dict):
         return value
     return {}
+
+
+def _get_workflow_contract_context(env, workflow_name: str) -> dict | None:
+    """Build lightweight contract-authoring context from the current workflow file."""
+    try:
+        workflow_path = env.workflow_manager.get_workflow_path(workflow_name)
+    except FileNotFoundError:
+        return None
+
+    try:
+        with open(workflow_path, encoding="utf-8") as f:
+            workflow_data = json.load(f)
+        workflow = Workflow.from_json(workflow_data)
+    except Exception as e:
+        logger.debug("Failed to load workflow contract context for '%s': %s", workflow_name, e)
+        return None
+
+    nodes = []
+    for node in workflow.nodes.values():
+        widget_candidates = []
+        widget_idx = 0
+        for input_def in node.inputs:
+            if not input_def.widget:
+                continue
+            widget_candidates.append({
+                "widget_idx": widget_idx,
+                "name": input_def.name,
+                "type": input_def.type,
+                "value": node.widgets_values[widget_idx] if widget_idx < len(node.widgets_values) else None,
+            })
+            widget_idx += 1
+
+        if not widget_candidates:
+            for idx, value in enumerate(node.widgets_values):
+                inferred_type = "number" if isinstance(value, int | float) else "string"
+                widget_candidates.append({
+                    "widget_idx": idx,
+                    "name": f"widget_{idx}",
+                    "type": inferred_type,
+                    "value": value,
+                })
+
+        output_candidates = []
+        for output_def in node.outputs:
+            output_candidates.append({
+                "slot_index": output_def.slot_index,
+                "name": output_def.name,
+                "type": output_def.type,
+            })
+
+        if not output_candidates and node.type in {"SaveImage", "PreviewImage"}:
+            output_candidates.append({
+                "slot_index": None,
+                "name": "image",
+                "type": "image",
+            })
+
+        nodes.append({
+            "node_id": node.id,
+            "node_type": node.type,
+            "widget_inputs": widget_candidates,
+            "outputs": output_candidates,
+        })
+
+    return {
+        "workflow_name": workflow_name,
+        "nodes": nodes,
+    }
+
+
+def _parse_execution_contract_payload(data: dict) -> WorkflowExecutionContract:
+    """Parse manager JSON payload into a core workflow execution contract."""
+    contracts_data = _safe_dict(data.get("contracts"))
+    parsed_contracts: dict[str, NamedWorkflowContract] = {}
+
+    for contract_name, contract_data in contracts_data.items():
+        contract_dict = _safe_dict(contract_data)
+
+        inputs = []
+        for item in _safe_sequence(contract_dict.get("inputs")):
+            item_dict = _safe_dict(item)
+            inputs.append(WorkflowContractInput(
+                name=item_dict["name"],
+                type=item_dict["type"],
+                node_id=item_dict["node_id"],
+                required=bool(item_dict["required"]),
+                display_name=_safe_str(item_dict.get("display_name")),
+                widget_idx=item_dict.get("widget_idx"),
+                field_key=_safe_str(item_dict.get("field_key")),
+                default=item_dict.get("default"),
+                description=_safe_str(item_dict.get("description")),
+            ))
+
+        outputs = []
+        for item in _safe_sequence(contract_dict.get("outputs")):
+            item_dict = _safe_dict(item)
+            outputs.append(WorkflowContractOutput(
+                name=item_dict["name"],
+                type=item_dict["type"],
+                node_id=item_dict["node_id"],
+                display_name=_safe_str(item_dict.get("display_name")),
+                selector=_safe_str(item_dict.get("selector")),
+                description=_safe_str(item_dict.get("description")),
+            ))
+
+        parsed_contracts[contract_name] = NamedWorkflowContract(
+            display_name=_safe_str(contract_dict.get("display_name")),
+            description=_safe_str(contract_dict.get("description")),
+            inputs=inputs,
+            outputs=outputs,
+        )
+
+    return WorkflowExecutionContract(
+        version=_safe_int(data.get("version")) or 1,
+        default_contract=_safe_str(data.get("default_contract")) or "default",
+        contracts=parsed_contracts,
+    )
 
 
 def _get_package_aliases(workflow_manager) -> dict[str, str]:
@@ -562,6 +689,8 @@ async def get_workflows(request: web.Request, env) -> web.Response:
 
     workflows = []
     for wf in status.workflow.analyzed_workflows:
+        contract = env.get_workflow_execution_contract(wf.name)
+        contract_summary = serialize_workflow_contract_summary(contract)
         version_gated_count = len(_safe_sequence(getattr(wf.resolution, "nodes_version_gated", None)))
         uninstallable_count = len(_safe_sequence(getattr(wf.resolution, "nodes_uninstallable", None)))
         unresolved_nodes_count = len(_safe_sequence(getattr(wf.resolution, "nodes_unresolved", None)))
@@ -581,6 +710,7 @@ async def get_workflows(request: web.Request, env) -> web.Response:
             # Category mismatch (blocking issue)
             "has_category_mismatch_issues": getattr(wf, 'has_category_mismatch_issues', False) is True,
             "models_with_category_mismatch": _safe_int(getattr(wf, 'models_with_category_mismatch_count', 0)),
+            "contract_summary": contract_summary,
         }
         if issue_summary:
             workflow_data["issue_summary"] = issue_summary
@@ -621,7 +751,69 @@ async def get_workflow_details(request: web.Request, env) -> web.Response:
     except Exception:
         pass  # Fallback if model index unavailable
 
-    return web.json_response(serialize_workflow_details(workflow, name, criticality_map, available_models))
+    contract = env.get_workflow_execution_contract(name)
+    payload = serialize_workflow_details(workflow, name, criticality_map, available_models)
+    payload["contract_summary"] = serialize_workflow_contract_summary(contract)
+    payload["execution_contract"] = serialize_workflow_execution_contract(contract)
+    payload["contract_context"] = _get_workflow_contract_context(env, name)
+
+    return web.json_response(payload)
+
+
+@routes.get("/v2/comfygit/workflow/{name}/contract")
+@requires_environment
+async def get_workflow_contract(request: web.Request, env) -> web.Response:
+    """Get the saved execution contract and authoring context for a workflow."""
+    name = request.match_info["name"]
+
+    contract = env.get_workflow_execution_contract(name)
+    return web.json_response({
+        "workflow": name,
+        "contract_summary": serialize_workflow_contract_summary(contract),
+        "execution_contract": serialize_workflow_execution_contract(contract),
+        "contract_context": _get_workflow_contract_context(env, name),
+    })
+
+
+@routes.put("/v2/comfygit/workflow/{name}/contract")
+@logged_operation("save workflow contract")
+async def put_workflow_contract(request: web.Request, env) -> web.Response:
+    """Create or replace the saved execution contract for a workflow."""
+    name = request.match_info["name"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    try:
+        contract = _parse_execution_contract_payload(body)
+    except KeyError as e:
+        return web.json_response({"error": f"Missing required field: {e.args[0]}"}, status=400)
+    except Exception as e:
+        return web.json_response({"error": f"Invalid execution contract payload: {e}"}, status=400)
+
+    await run_sync(env.set_workflow_execution_contract, name, contract)
+
+    return web.json_response({
+        "status": "success",
+        "workflow": name,
+        "contract_summary": serialize_workflow_contract_summary(contract),
+        "execution_contract": serialize_workflow_execution_contract(contract),
+    })
+
+
+@routes.delete("/v2/comfygit/workflow/{name}/contract")
+@logged_operation("delete workflow contract")
+async def delete_workflow_contract(request: web.Request, env) -> web.Response:
+    """Delete the saved execution contract for a workflow."""
+    name = request.match_info["name"]
+
+    removed = await run_sync(env.remove_workflow_execution_contract, name)
+    if not removed:
+        return web.json_response({"error": "Workflow contract not found"}, status=404)
+
+    return web.json_response({"status": "success", "workflow": name})
 
 
 @routes.post("/v2/comfygit/workflow/{name}/model-importance")

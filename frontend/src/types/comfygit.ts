@@ -295,6 +295,69 @@ export interface WorkflowInfo {
   // Category mismatch (blocking issue)
   has_category_mismatch_issues?: boolean
   models_with_category_mismatch?: number
+  contract_summary?: WorkflowContractSummary
+}
+
+export interface WorkflowContractSummary {
+  has_contract: boolean
+  input_count: number
+  output_count: number
+  status: 'none' | 'valid' | 'incomplete'
+}
+
+export interface WorkflowContractInput {
+  name: string
+  type: string
+  node_id: string | number
+  required: boolean
+  display_name?: string
+  widget_idx?: number
+  field_key?: string
+  default?: unknown
+  description?: string
+}
+
+export interface WorkflowContractOutput {
+  name: string
+  type: string
+  node_id: string | number
+  display_name?: string
+  selector?: string
+  description?: string
+}
+
+export interface NamedWorkflowContract {
+  display_name?: string
+  description?: string
+  inputs: WorkflowContractInput[]
+  outputs: WorkflowContractOutput[]
+}
+
+export interface WorkflowExecutionContract {
+  version: number
+  default_contract: string
+  contracts: Record<string, NamedWorkflowContract>
+}
+
+export interface WorkflowContractContextNode {
+  node_id: string
+  node_type: string
+  widget_inputs: Array<{
+    widget_idx: number
+    name: string
+    type: string
+    value: unknown
+  }>
+  outputs: Array<{
+    slot_index?: number
+    name: string
+    type: string
+  }>
+}
+
+export interface WorkflowContractContext {
+  workflow_name: string
+  nodes: WorkflowContractContextNode[]
 }
 
 export interface ModelUsageInfo {
@@ -331,6 +394,16 @@ export interface WorkflowDetails {
     repository?: string | null
     latest_version?: string | null
   }>
+  contract_summary?: WorkflowContractSummary
+  execution_contract?: WorkflowExecutionContract | null
+  contract_context?: WorkflowContractContext | null
+}
+
+export interface WorkflowContractResponse {
+  workflow: string
+  contract_summary: WorkflowContractSummary
+  execution_contract: WorkflowExecutionContract | null
+  contract_context: WorkflowContractContext | null
 }
 
 export interface WorkflowResolutionPlan {
