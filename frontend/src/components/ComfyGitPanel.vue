@@ -109,6 +109,12 @@
               NODES
             </button>
             <button
+              :class="['sidebar-item', { active: currentView === 'manifest' }]"
+              @click="selectView('manifest', 'this-env')"
+            >
+              MANIFEST
+            </button>
+            <button
               :class="['sidebar-item', { active: currentView === 'debug-env' }]"
               @click="selectView('debug-env', 'this-env')"
             >
@@ -255,6 +261,9 @@
             @repair-environment="handleRepairEnvironment"
             @toast="handleToast"
           />
+
+          <!-- Manifest View -->
+          <ManifestSection v-else-if="currentView === 'manifest'" />
 
           <!-- Debug (Environment) View -->
           <DebugEnvSection v-else-if="currentView === 'debug-env'" />
@@ -445,6 +454,7 @@ import WorkflowsSection from './WorkflowsSection.vue'
 import ModelsEnvSection from './ModelsEnvSection.vue'
 import ModelIndexSection from './ModelIndexSection.vue'
 import NodesSection from './NodesSection.vue'
+import ManifestSection from './ManifestSection.vue'
 import RemotesSection from './RemotesSection.vue'
 import WorkspaceSettingsSection from './WorkspaceSettingsSection.vue'
 import WorkspaceDebugSection from './WorkspaceDebugSection.vue'
@@ -502,7 +512,7 @@ const orchestratorService = useOrchestratorService()
 // Get live instance count for sidebar badge (autoStart fetches on panel load)
 const { liveInstanceCount } = useDeployInstances({ autoStart: true })
 
-type ViewName = 'status' | 'workflows' | 'models-env' | 'branches' | 'history' | 'nodes' | 'debug-env' |
+type ViewName = 'status' | 'workflows' | 'models-env' | 'branches' | 'history' | 'nodes' | 'manifest' | 'debug-env' |
                 'environments' | 'model-index' | 'settings' | 'debug-workspace' |
                 'export' | 'import' | 'remotes' | 'deploy'
 
@@ -548,6 +558,7 @@ let progressSimulationInterval: number | null = null
 
 // Map initial view prop to view/section
 const initialViewMap: Record<string, { view: ViewName; section: SectionName }> = {
+  'manifest': { view: 'manifest', section: 'this-env' },
   'debug-env': { view: 'debug-env', section: 'this-env' },
   'debug-workspace': { view: 'debug-workspace', section: 'all-envs' },
   'status': { view: 'status', section: 'this-env' }
@@ -559,7 +570,7 @@ const VIEW_STORAGE_KEY = 'ComfyGit.LastView'
 const SECTION_STORAGE_KEY = 'ComfyGit.LastSection'
 
 // Valid values for validation
-const validViews: ViewName[] = ['status', 'workflows', 'models-env', 'branches', 'history', 'nodes', 'debug-env',
+const validViews: ViewName[] = ['status', 'workflows', 'models-env', 'branches', 'history', 'nodes', 'manifest', 'debug-env',
                                 'environments', 'model-index', 'settings', 'debug-workspace',
                                 'export', 'import', 'remotes', 'deploy']
 const validSections: SectionName[] = ['this-env', 'all-envs', 'sharing']

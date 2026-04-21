@@ -29,6 +29,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import type { LogEntry } from '@/types/comfygit'
+import { copyToClipboard } from '@/utils/copyToClipboard'
 
 const props = defineProps<{
   logs: LogEntry[]
@@ -71,7 +72,7 @@ async function copyLogs() {
 
   const text = formattedLines.value.map(l => l.text).join('\n')
   try {
-    await navigator.clipboard.writeText(text)
+    await copyToClipboard(text)
     copyState.value = 'copied'
     setTimeout(() => { copyState.value = 'idle' }, 2000)
   } catch (err) {

@@ -28,6 +28,7 @@ import type {
   DownloadModelRequest,
   ConfigSettings,
   LogEntry,
+  ManifestFileResponse,
   NodeInfo,
   NodesResult,
   RemotesResult,
@@ -969,6 +970,18 @@ export function useComfyGitService() {
     }
 
     return fetchApi<{ path: string; exists: boolean }>('/v2/comfygit/debug/logs/path')
+  }
+
+  async function getEnvironmentManifest(): Promise<ManifestFileResponse> {
+    if (USE_MOCK) {
+      return {
+        path: '/mock/workspace/environments/demo/.cec/pyproject.toml',
+        exists: true,
+        content: `[project]\nname = "demo"\nversion = "0.1.0"\n`,
+      }
+    }
+
+    return fetchApi<ManifestFileResponse>('/v2/comfygit/debug/manifest')
   }
 
   async function getWorkspaceLogPath(): Promise<{ path: string; exists: boolean }> {
@@ -1936,6 +1949,7 @@ export function useComfyGitService() {
     updateConfig,
     // Debug/Logs
     getEnvironmentLogs,
+    getEnvironmentManifest,
     getWorkspaceLogs,
     getEnvironmentLogPath,
     getWorkspaceLogPath,

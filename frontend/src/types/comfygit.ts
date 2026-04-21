@@ -518,6 +518,12 @@ export interface LogEntry {
   message: string    // Log message
 }
 
+export interface ManifestFileResponse {
+  path: string
+  exists: boolean
+  content: string
+}
+
 // Git Remotes Types
 export interface RemoteInfo {
   name: string

@@ -10,6 +10,17 @@ from cgm_utils.async_helpers import run_sync
 routes = web.RouteTableDef()
 
 
+def read_text_file(path: Path) -> str | None:
+    """Read a UTF-8 text file for debug inspection."""
+    if not path.exists():
+        return None
+
+    try:
+        return path.read_text(encoding="utf-8")
+    except Exception:
+        return None
+
+
 def parse_raw_log_file(log_file: Path, lines: int = 500) -> list[dict]:
     """
     Parse a raw stdout/stderr log file (like orchestrator.log).
@@ -200,6 +211,20 @@ async def get_environment_log_path(request: web.Request, env) -> web.Response:
     return web.json_response({
         "path": str(log_file),
         "exists": log_file.exists()
+    })
+
+
+@routes.get("/v2/comfygit/debug/manifest")
+@requires_environment
+async def get_environment_manifest(request: web.Request, env) -> web.Response:
+    """Get the live environment manifest text for read-only inspection."""
+    manifest_path = env.pyproject.path
+    content = await run_sync(read_text_file, manifest_path)
+
+    return web.json_response({
+        "path": str(manifest_path),
+        "exists": manifest_path.exists(),
+        "content": content or "",
     })
 
 
