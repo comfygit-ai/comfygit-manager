@@ -15,16 +15,66 @@ app.registerExtension({
     name: "Comfy.ComfyGitManager",
 
     async setup() {
-        // Add Manager button to the top menu bar
-        const managerButton = document.createElement("button");
-        managerButton.className = "comfyui-button comfyui-menu-mobile-collapse primary comfygit-manager-btn";
-        managerButton.textContent = "Manager";
-        managerButton.title = "ComfyGit Manager";
+        let observer = null;
 
-        managerButton.onclick = () => {
-            // Execute the built-in command to open Manager dialog
-            app.extensionManager.command.execute('Comfy.OpenManagerDialog');
-        };
+        function hasBuiltInExtensionsButton() {
+            const buttons = document.querySelectorAll("button, [role='button']");
+            for (const btn of buttons) {
+                const text = btn.textContent?.trim();
+                const title = btn.getAttribute?.("title")?.trim();
+                const ariaLabel = btn.getAttribute?.("aria-label")?.trim();
+                if (text === "Extensions" || title === "Extensions" || ariaLabel === "Extensions") {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function createManagerButton() {
+            const managerButton = document.createElement("button");
+            managerButton.className = "comfyui-button comfyui-menu-mobile-collapse primary comfygit-manager-btn";
+            managerButton.textContent = "Manager";
+            managerButton.title = "ComfyGit Manager";
+            managerButton.onclick = () => {
+                app.extensionManager.command.execute('Comfy.OpenManagerDialog');
+            };
+            return managerButton;
+        }
+
+        function syncManagerButton() {
+            const existingButton = document.querySelector(".comfygit-manager-btn");
+            const hasExtensionsButton = hasBuiltInExtensionsButton();
+
+            // Newer ComfyUI builds already expose the built-in Extensions entrypoint.
+            // In that case our fallback Manager button is redundant, so remove it.
+            if (hasExtensionsButton) {
+                if (existingButton) {
+                    existingButton.remove();
+                    console.log("[ComfyGit] Removed fallback Manager button (built-in Extensions button present)");
+                }
+                return;
+            }
+
+            // Older installs may still need the explicit Manager shortcut.
+            if (!existingButton && app.menu?.settingsGroup?.element) {
+                const managerButton = createManagerButton();
+                app.menu.settingsGroup.element.before(managerButton);
+                console.log("[ComfyGit] Manager button added to toolbar");
+            }
+        }
+
+        function ensureObserver() {
+            if (observer || !document.body) return;
+            observer = new MutationObserver(() => {
+                syncManagerButton();
+            });
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ["title", "aria-label", "class"],
+            });
+        }
 
         // Inject button styles
         const styles = document.createElement('style');
@@ -40,10 +90,10 @@ app.registerExtension({
         `;
         document.head.appendChild(styles);
 
-        // Insert before settings button in the menu bar
-        if (app.menu?.settingsGroup?.element) {
-            app.menu.settingsGroup.element.before(managerButton);
-            console.log("[ComfyGit] Manager button added to toolbar");
-        }
+        syncManagerButton();
+        setTimeout(syncManagerButton, 100);
+        setTimeout(syncManagerButton, 500);
+        setTimeout(syncManagerButton, 1500);
+        ensureObserver();
     }
 });

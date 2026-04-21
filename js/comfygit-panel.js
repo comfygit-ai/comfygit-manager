@@ -24328,7 +24328,7 @@ const mR = { class: "comfygit-panel" }, fR = { class: "panel-header" }, vR = { c
               ]),
               ee[41] || (ee[41] = t("div", { class: "sidebar-divider" }, null, -1)),
               t("div", CR, [
-                ee[38] || (ee[38] = t("div", { class: "sidebar-section-title" }, "ALL ENVS", -1)),
+                ee[38] || (ee[38] = t("div", { class: "sidebar-section-title" }, "WORKSPACE", -1)),
                 t("button", {
                   class: Pe(["sidebar-item", { active: Ce.value === "environments" }]),
                   onClick: ee[9] || (ee[9] = (Je) => ke("environments", "all-envs"))
@@ -24575,7 +24575,7 @@ const mR = { class: "comfygit-panel" }, fR = { class: "panel-header" }, vR = { c
       ]);
     };
   }
-}), HR = /* @__PURE__ */ xe(jR, [["__scopeId", "data-v-9c2af32e"]]), KR = { class: "item-header" }, qR = { class: "item-info" }, YR = { class: "filename" }, JR = { class: "metadata" }, QR = { class: "size" }, XR = {
+}), HR = /* @__PURE__ */ xe(jR, [["__scopeId", "data-v-a7e110f0"]]), KR = { class: "item-header" }, qR = { class: "item-info" }, YR = { class: "filename" }, JR = { class: "metadata" }, QR = { class: "size" }, XR = {
   key: 0,
   class: "type"
 }, ZR = { class: "item-actions" }, eM = {

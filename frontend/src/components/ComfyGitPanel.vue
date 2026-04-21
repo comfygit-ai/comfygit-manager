@@ -118,9 +118,9 @@
 
           <div class="sidebar-divider"></div>
 
-          <!-- ALL ENVS Section -->
+          <!-- WORKSPACE Section -->
           <div class="sidebar-section">
-            <div class="sidebar-section-title">ALL ENVS</div>
+            <div class="sidebar-section-title">WORKSPACE</div>
             <button
               :class="['sidebar-item', { active: currentView === 'environments' }]"
               @click="selectView('environments', 'all-envs')"
