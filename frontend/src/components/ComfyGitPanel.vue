@@ -141,11 +141,16 @@
           <div class="sidebar-section">
             <div class="sidebar-section-title">CLOUD</div>
             <button
-              :class="['sidebar-item', { active: currentView === 'deploy' }]"
-              @click="selectView('deploy', 'cloud')"
+              :class="['sidebar-item', { active: currentView === 'publish' }]"
+              @click="selectView('publish', 'cloud')"
             >
               PUBLISH
-              <span v-if="liveInstanceCount > 0" class="sidebar-badge">{{ liveInstanceCount }}</span>
+            </button>
+            <button
+              :class="['sidebar-item', { active: currentView === 'account' }]"
+              @click="selectView('account', 'cloud')"
+            >
+              ACCOUNT
             </button>
           </div>
         </div>
@@ -246,10 +251,18 @@
           <!-- Settings View -->
           <WorkspaceSettingsSection v-else-if="currentView === 'settings'" />
 
-          <!-- Deploy View -->
-          <DeploySection
-            v-else-if="currentView === 'deploy'"
+          <!-- Cloud Account -->
+          <AccountSection
+            v-else-if="currentView === 'account'"
             @toast="handleToast"
+            @navigate="handleNavigate"
+          />
+
+          <!-- Publish View -->
+          <PublishSection
+            v-else-if="currentView === 'publish'"
+            :environment-name="currentEnvironment?.name || status?.environment || null"
+            :branch-name="status?.branch || null"
             @navigate="handleNavigate"
           />
 
@@ -435,7 +448,8 @@ import WorkspaceSettingsSection from './WorkspaceSettingsSection.vue'
 import EnvironmentsSection from './EnvironmentsSection.vue'
 import ExportSection from './ExportSection.vue'
 import ImportSection from './ImportSection.vue'
-import DeploySection from './DeploySection.vue'
+import AccountSection from './AccountSection.vue'
+import PublishSection from './PublishSection.vue'
 import VersionControlSection from './VersionControlSection.vue'
 import DiagnosticsSection from './DiagnosticsSection.vue'
 import CommitDetailModal from './CommitDetailModal.vue'
@@ -451,7 +465,6 @@ import FirstTimeSetupWizard from './FirstTimeSetupWizard.vue'
 import UpdateNoticeBanner from './UpdateNoticeBanner.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import { useOrchestratorService } from '@/composables/useOrchestratorService'
-import { useDeployInstances } from '@/composables/useDeployInstances'
 import type { ComfyGitStatus, CommitInfo, BranchInfo, EnvironmentInfo, SetupStatus, SetupState, UpdateCheckResponse } from '@/types/comfygit'
 import { dismissVersion, shouldShowUpdateNotice } from '@/utils/updateNotice'
 
@@ -485,12 +498,9 @@ const {
 
 const orchestratorService = useOrchestratorService()
 
-// Get live instance count for sidebar badge (autoStart fetches on panel load)
-const { liveInstanceCount } = useDeployInstances({ autoStart: true })
-
 type ViewName = 'status' | 'workflows' | 'models-env' | 'nodes' | 'version-control' |
                 'environments' | 'model-index' | 'settings' | 'diagnostics' |
-                'deploy'
+                'account' | 'publish'
 
 type SectionName = 'this-env' | 'version-control' | 'workspace' | 'cloud' | 'diagnostics'
 
@@ -545,7 +555,9 @@ const initialViewMap: Record<string, { view: ViewName; section: SectionName }> =
   'history': { view: 'version-control', section: 'version-control' },
   'branches': { view: 'version-control', section: 'version-control' },
   'remotes': { view: 'version-control', section: 'version-control' },
-  'status': { view: 'status', section: 'this-env' }
+  'status': { view: 'status', section: 'this-env' },
+  'account': { view: 'account', section: 'cloud' },
+  'publish': { view: 'publish', section: 'cloud' },
 }
 const initialConfig = props.initialView ? initialViewMap[props.initialView] : null
 
@@ -556,7 +568,7 @@ const SECTION_STORAGE_KEY = 'ComfyGit.LastSection'
 // Valid values for validation
 const validViews: ViewName[] = ['status', 'workflows', 'models-env', 'nodes', 'version-control',
                                 'environments', 'model-index', 'settings', 'diagnostics',
-                                'deploy']
+                                'account', 'publish']
 const validSections: SectionName[] = ['this-env', 'version-control', 'workspace', 'cloud', 'diagnostics']
 
 // Read saved view from sessionStorage (with validation)
@@ -567,6 +579,7 @@ function getSavedView(): { view: ViewName; section: SectionName } | null {
     const normalizedView =
       savedView === 'branches' || savedView === 'history' || savedView === 'remotes' ? 'version-control' :
       savedView === 'manifest' || savedView === 'debug-env' || savedView === 'debug-workspace' ? 'diagnostics' :
+      savedView === 'deploy' ? 'publish' :
       savedView
     const normalizedSection =
       savedSection === 'all-envs' ? 'workspace' :
@@ -600,10 +613,12 @@ function selectView(view: ViewName, section: SectionName) {
 }
 
 function handleNavigate(view: string) {
-  const viewMap: Record<string, { view: ViewName; section: SectionName }> = {
-    'model-index': { view: 'model-index', section: 'workspace' },
-    'remotes': { view: 'version-control', section: 'version-control' }
-  }
+    const viewMap: Record<string, { view: ViewName; section: SectionName }> = {
+      'model-index': { view: 'model-index', section: 'workspace' },
+      'remotes': { view: 'version-control', section: 'version-control' },
+      'account': { view: 'account', section: 'cloud' },
+      'publish': { view: 'publish', section: 'cloud' },
+    }
   const target = viewMap[view]
   if (target) {
     selectView(target.view, target.section)

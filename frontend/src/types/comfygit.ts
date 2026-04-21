@@ -97,6 +97,33 @@ export interface ExportResult {
   message?: string
 }
 
+export interface CloudUser {
+  id: string
+  email: string | null
+  auth_type?: string
+}
+
+export interface CloudSession {
+  access_token: string
+  refresh_token: string
+  expires_at?: number | null
+  token_type?: string | null
+}
+
+export interface CloudAuthConfig {
+  url: string
+  anon_key: string
+}
+
+export interface CloudAuthResponse {
+  session: CloudSession | null
+  user: CloudUser | null
+}
+
+export interface CloudMeResponse {
+  user: CloudUser
+}
+
 // Export Validation Types
 export interface ModelWithoutSource {
   filename: string

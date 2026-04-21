@@ -4,6 +4,9 @@ import type {
   CommitResult,
   LogResult,
   ExportResult,
+  CloudAuthConfig,
+  CloudAuthResponse,
+  CloudMeResponse,
   ExportValidationResult,
   BranchesResult,
   CommitDetail,
@@ -314,6 +317,40 @@ export function useComfyGitService() {
       return undefined as T
     }
     return JSON.parse(text)
+  }
+
+  async function getCloudAuthConfig(cloudUrl: string): Promise<CloudAuthConfig> {
+    return fetchApi<CloudAuthConfig>(`/v2/comfygit/cloud/auth/config?cloud_url=${encodeURIComponent(cloudUrl)}`)
+  }
+
+  async function loginToCloud(cloudUrl: string, email: string, password: string): Promise<CloudAuthResponse> {
+    return fetchApi<CloudAuthResponse>('/v2/comfygit/cloud/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cloud_url: cloudUrl, email, password })
+    })
+  }
+
+  async function signupToCloud(cloudUrl: string, email: string, password: string): Promise<CloudAuthResponse> {
+    return fetchApi<CloudAuthResponse>('/v2/comfygit/cloud/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cloud_url: cloudUrl, email, password })
+    })
+  }
+
+  async function getCloudMe(cloudUrl: string, accessToken: string): Promise<CloudMeResponse> {
+    return fetchApi<CloudMeResponse>(`/v2/comfygit/cloud/auth/me?cloud_url=${encodeURIComponent(cloudUrl)}`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    })
+  }
+
+  async function logoutFromCloud(cloudUrl: string, refreshToken?: string | null): Promise<{ success: boolean }> {
+    return fetchApi<{ success: boolean }>('/v2/comfygit/cloud/auth/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cloud_url: cloudUrl, refresh_token: refreshToken || null })
+    })
   }
 
   async function getStatus(forceRefresh = false): Promise<ComfyGitStatus> {
@@ -1969,6 +2006,12 @@ export function useComfyGitService() {
     // Settings
     getConfig,
     updateConfig,
+    // Cloud Auth
+    getCloudAuthConfig,
+    loginToCloud,
+    signupToCloud,
+    getCloudMe,
+    logoutFromCloud,
     // Debug/Logs
     getEnvironmentLogs,
     getEnvironmentManifest,
