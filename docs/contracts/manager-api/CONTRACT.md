@@ -47,7 +47,11 @@ Validation: HUMAN_REVIEW
 
 The API shape used by the manager UI for contract authoring should not depend on the exact current modal layout or graph-selection implementation. Backend payloads should represent contract state, not transient frontend interaction state.
 
-### CGM-API-07 [PLANNED]: Manager contract operations should target a workflow's stable identity, not only its display name
+### CGM-API-07 [PLANNED]: Manager contract operations may target a workflow's current environment-local name/path identity for the initial slice
 Validation: HUMAN_REVIEW
 
-The long-term API direction should support workflow-stable identity so contract state survives workflow renames more cleanly than a purely filename-based model.
+For the initial workflow-contract feature, manager API operations may remain
+workflow-scoped by the current environment-local workflow name or path, because
+ComfyGit already treats workflow rename as delete-plus-create rather than
+rename-preserving identity. A later enhancement may add workflow-stable
+identity if rename-preserving workflow metadata becomes a requirement.

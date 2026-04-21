@@ -21,6 +21,22 @@ That contract is portable environment state and should travel with revisions ins
 6. The manager saves the resulting contract through the manager API.
 7. The portable contract is written into ComfyGit-managed workflow manifest state.
 
+## Workflow Identity Assumption
+
+For the first contract-authoring slice, workflows may remain environment-local
+and name/path scoped.
+
+That means:
+
+- one environment cannot contain two workflows with the same filename
+- the manager may address workflow contracts using the current workflow name or
+  path
+- if a workflow is renamed, the old workflow-scoped contract state is treated
+  as removed and the renamed workflow is treated as a new workflow identity
+
+The manager should not imply rename-preserving workflow continuity unless core
+later introduces a stronger workflow identity model.
+
 ## Intended UX Shape
 
 ### CGM-WCA-01 [PLANNED]: Contract authoring should start from a workflow-scoped action in the manager
