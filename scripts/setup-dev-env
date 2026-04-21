@@ -13,7 +13,7 @@
 #
 # This script:
 #   1. Replaces registry-installed comfygit-manager with a symlink to this repo
-#   2. Adds comfygit-core as editable local source via .local-uv-config (not tracked in git)
+#   2. Installs comfygit-core as an editable package into the environment venv
 #   3. Marks comfygit-manager as a development node (skips version checks)
 
 set -e
@@ -151,6 +151,8 @@ setup_environment() {
     local custom_nodes="$env_path/ComfyUI/custom_nodes"
     local manager_link="$custom_nodes/comfygit-manager"
     local pyproject="$env_path/.cec/pyproject.toml"
+    local env_uv="$env_path/.venv/bin/uv"
+    local env_python="$env_path/.venv/bin/python"
 
     echo "[setup-dev-env] Setting up environment: $env_name"
 
@@ -184,12 +186,21 @@ setup_environment() {
         ln -s "$MANAGER_PATH" "$manager_link"
     fi
 
-    # Add comfygit-core as local source (writes to .local-uv-config, not tracked in git)
-    echo "  Configuring comfygit-core local source..."
-    COMFYGIT_HOME="$WORKSPACE_PATH" cg -e "$env_name" env-config local-sources add comfygit-core \
-        --path "$CORE_PATH" --editable 2>/dev/null \
-        && echo "  Core source: Configured in .local-uv-config" \
-        || echo "  Core source: Failed to configure (is cg installed?)"
+    # Install comfygit-core as editable into the environment venv
+    if [[ ! -x "$env_uv" || ! -x "$env_python" ]]; then
+        echo "  Warning: environment venv not found, skipping editable core install"
+    else
+        local editable_location=""
+        editable_location="$("$env_uv" pip show --python "$env_python" comfygit-core 2>/dev/null | awk -F': ' '/Editable project location/ {print $2}')"
+
+        if [[ "$editable_location" == "$CORE_PATH" ]]; then
+            echo "  Core editable install: Already configured"
+        else
+            echo "  Installing comfygit-core editable from $CORE_PATH..."
+            "$env_uv" pip install --python "$env_python" -e "$CORE_PATH" >/dev/null
+            echo "  Core editable install: Configured"
+        fi
+    fi
 
     # Mark comfygit-manager as development node + clean up old pyproject injection
     if [[ ! -f "$pyproject" ]]; then
@@ -205,7 +216,7 @@ with open(pyproject_path, "r") as f:
 
 modified = False
 
-# Clean up old direct pyproject injection of comfygit-core source (now in .local-uv-config)
+# Clean up old direct pyproject injection of comfygit-core source
 if '[tool.uv.sources.comfygit-core]' in content:
     content = re.sub(
         r'\n?\[tool\.uv\.sources\.comfygit-core\][^\[]*',
@@ -263,12 +274,12 @@ if [[ "$RUN_SYNC" == "true" ]]; then
     echo "[setup-dev-env] Running cg sync..."
     for env in "${ENVS[@]}"; do
         echo "  Syncing $env..."
-        COMFYGIT_HOME="$WORKSPACE_PATH" cg sync -e "$env"
+        COMFYGIT_HOME="$WORKSPACE_PATH" cg -e "$env" sync
     done
     echo ""
 fi
 
 echo "[setup-dev-env] Setup complete!"
 if [[ "$RUN_SYNC" == "false" ]]; then
-    echo "[setup-dev-env] Run 'cg run -e <env>' to start (sync happens automatically)"
+    echo "[setup-dev-env] Run 'cg -e <env> run' to start (sync happens automatically)"
 fi
