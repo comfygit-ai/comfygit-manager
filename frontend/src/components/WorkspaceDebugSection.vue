@@ -114,11 +114,12 @@ const {
   openFile
 } = useComfyGitService()
 
-defineProps<{
+const props = defineProps<{
   embedded?: boolean
+  initialTab?: 'workspace' | 'orchestrator'
 }>()
 
-const activeTab = ref<'workspace' | 'orchestrator'>('workspace')
+const activeTab = ref<'workspace' | 'orchestrator'>(props.initialTab ?? 'workspace')
 const logs = ref<LogEntry[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -176,6 +177,10 @@ async function openLogFile() {
 // Reload logs when tab changes
 watch(activeTab, () => {
   loadLogs()
+})
+
+watch(() => props.initialTab, (value) => {
+  if (value) activeTab.value = value
 })
 
 onMounted(() => {

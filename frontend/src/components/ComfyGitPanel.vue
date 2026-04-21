@@ -1743,6 +1743,7 @@ onMounted(async () => {
   background: var(--cg-color-bg-hover);
 }
 
+
 .sidebar-badge {
   margin-left: auto;
   padding: 1px 6px;
