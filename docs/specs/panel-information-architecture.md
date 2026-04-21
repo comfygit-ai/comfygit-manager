@@ -80,19 +80,29 @@ meaning:
 `Refresh` should not remain a primary always-visible action in that header. If
 manual refresh remains useful, it should be secondary or implicit.
 
-### CGM-IA-07 [PLANNED]: Cloud linkage and publication should become a first-class top-level domain
+### CGM-IA-07 [PLANNED]: The cloud domain should split into distinct `Account` and `Publish` destinations
 Validation: HUMAN_REVIEW
 
-The current `Deploy` / sharing-oriented area should evolve into a `Cloud`
-destination that can later hold:
-- sign-in or linked-account state
+The current `Deploy` / sharing-oriented area should evolve into a cloud domain
+with two distinct destinations:
+- `Account`
+- `Publish`
+
+`Account` should own:
+- cloud URL or endpoint selection
+- sign-in and sign-up flows
+- sign-out
+- authenticated account details
+- later workspace selection when cloud exposes that model
+
+`Publish` should own:
 - publish revision actions
 - recent cloud revisions
 - open-dashboard affordances
-- lightweight deployment status summaries
+- lightweight publication status summaries
 
-This section should be the local bridge into the cloud control plane rather than
-a duplicate of the full cloud dashboard.
+This split keeps identity/session management separate from revision publication
+while still making the local panel the bridge into the cloud control plane.
 
 ### CGM-IA-08 [PLANNED]: Diagnostics and inspection tools should be consolidated away from primary authoring navigation
 Validation: HUMAN_REVIEW
@@ -113,3 +123,27 @@ The local panel may provide a lightweight cloud bridge, but it should not grow
 into a second full deployment dashboard. Rich deployment orchestration,
 published-workflow binding, and control-plane administration should remain
 cloud-dashboard responsibilities.
+
+### CGM-IA-10 [PLANNED]: Provider-target and deployment controls should not remain first-class local panel destinations
+Validation: HUMAN_REVIEW
+
+RunPod, custom worker, and other provider-specific deployment controls are not
+the intended long-term primary job of the local panel.
+
+The local panel should prefer:
+- publish revision
+- show linked cloud account/workspace
+- show recent cloud revisions
+
+Cloud should own the actual deployment and runtime-management workflow.
+
+### CGM-IA-11 [PLANNED]: Blocked publish flows should route users to `Account` rather than embedding a second full auth surface inside `Publish`
+Validation: HUMAN_REVIEW
+
+If a user is not authenticated, the `Publish` destination may show:
+- unauthenticated status in the header
+- a blocked-state message in the main content
+- a `Sign in` or `Go to Account` action
+
+That action should navigate to the `Account` destination for the actual
+login/signup flow rather than duplicating the full auth UI inside `Publish`.

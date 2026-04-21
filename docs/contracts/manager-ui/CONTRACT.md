@@ -80,3 +80,43 @@ Primary navigation should cluster related actions into bounded domains such as:
 - diagnostics
 
 The sidebar should not expose unrelated git, environment transfer, cloud, and debug features as a single mixed section.
+
+### CGM-UI-11 [PLANNED]: The local panel should center environment management, version control, and cloud publication rather than local deployment orchestration
+Validation: HUMAN_REVIEW
+
+The local panel should primarily help users:
+- author environments
+- manage workflows, models, and nodes
+- inspect and use version control
+- publish immutable revisions to cloud
+
+It should not evolve into the primary surface for target provisioning,
+deployment orchestration, or runtime operations against RunPod, custom workers,
+or other cloud providers.
+
+### CGM-UI-12 [PLANNED]: The publish surface should expose lightweight cloud linkage and revision-publication state rather than full deployment administration
+Validation: HUMAN_REVIEW
+
+The manager may expose:
+- signed-in cloud account state
+- active cloud workspace selection when supported by cloud
+- publish revision actions
+- recent published revisions
+- open-dashboard affordances
+
+It should not try to replicate cloud-side target, deployment, binding, or
+runtime monitoring UX in the local panel.
+
+### CGM-UI-13 [PLANNED]: Cloud identity should live in a dedicated `Account` surface rather than being fully embedded in `Publish`
+Validation: HUMAN_REVIEW
+
+The local cloud domain should expose a dedicated `Account` destination for:
+- sign-in
+- sign-up
+- sign-out
+- account detail display
+- later workspace selection
+
+The `Publish` destination may summarize auth status and block publication when
+signed out, but it should route users to `Account` for the full identity flow
+rather than duplicating the canonical auth surface.

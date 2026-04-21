@@ -23,9 +23,13 @@ The manager owns:
 - graph-aware overlay behavior used for contract selection
 - local panel information architecture
 - lightweight cloud bridge UX owned by the local panel
+- local cloud auth/link state
+- revision publication initiation from the local environment
 - API endpoints consumed by the manager frontend
 
 The manager should not become the durable source of truth for portable workflow contracts. It should read/write that state through core persistence.
+The manager should also not become the deployment control plane for cloud
+targets or provider runtimes.
 
 ## ComfyGit Core
 
@@ -46,6 +50,7 @@ The cloud dashboard owns:
 - account and workspace identity
 - revision registry and publication destination
 - deployment lifecycle and runtime operations
+- targets, bindings, and provider-specific deployment configuration
 - published workflow identity and API exposure
 
 The local manager may link to and publish into the cloud, but it should not
@@ -76,3 +81,25 @@ The manager may expose a `Cloud` domain for:
 
 It should not attempt to fully replace cloud-side deployment and publication
 administration.
+
+### CGM-SB-06 [PLANNED]: Target and deployment administration should remain cloud-owned even when publication is initiated locally
+Validation: HUMAN_REVIEW
+
+The local panel may publish a revision to cloud, but cloud should remain the
+authority for:
+- target registration
+- deployment creation and rollout
+- runtime provider configuration
+- published-workflow binding
+- runtime health and live execution state
+
+### CGM-SB-07 [PLANNED]: Local cloud linkage should be account-and-workspace scoped rather than target scoped
+Validation: HUMAN_REVIEW
+
+The local panel should model cloud integration in terms of:
+- signed-in user or agent identity
+- selected cloud workspace or organization
+- revision publication destination
+
+It should not treat provider targets such as RunPod or custom workers as
+first-class local panel authorities.
