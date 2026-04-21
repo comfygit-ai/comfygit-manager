@@ -107,6 +107,36 @@ The manager may expose:
 It should not try to replicate cloud-side target, deployment, binding, or
 runtime monitoring UX in the local panel.
 
+### CGM-UI-12A [PLANNED]: The publish surface should not imply revision-delta claims that the system cannot actually prove
+Validation: HUMAN_REVIEW
+
+If the local panel shows a `Working Copy` concept, it may describe that object
+as:
+- current local publish candidate
+- not yet represented by a known published revision
+
+It should not present unproven cloud-revision delta claims such as:
+- workflows added or removed relative to a cloud revision
+- semantic environment drift from the latest published revision
+- strict ancestry from a specific cloud revision
+
+Those claims require an explicit revision comparison model rather than simple
+local-vs-published mismatch detection.
+
+### CGM-UI-12B [PLANNED]: Publish actions should use the same family of validation and warning UX as export for deployability-sensitive issues
+Validation: HUMAN_REVIEW
+
+Before local publication creates a cloud revision, the manager should surface
+blocking issues and warnings using a review flow aligned with export UX.
+
+This includes issues such as:
+- uncommitted changes
+- unresolved workflow or dependency issues
+- models missing source metadata or URLs
+
+The final action differs from export, but the readiness and warning posture
+should remain similar.
+
 ### CGM-UI-13 [PLANNED]: Cloud identity should live in a dedicated `Account` surface rather than being fully embedded in `Publish`
 Validation: HUMAN_REVIEW
 

@@ -98,6 +98,8 @@ with two distinct destinations:
 `Publish` should own:
 - publish revision actions
 - recent cloud revisions
+- optional local `Working Copy` when the current local state is not yet
+  represented by a known published revision
 - open-dashboard affordances
 - lightweight publication status summaries
 

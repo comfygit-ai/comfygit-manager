@@ -88,6 +88,38 @@ That action should:
 - receive a created cloud revision identity or version
 - leave deployment selection to the cloud dashboard
 
+### CGM-CLP-02A [PLANNED]: The publish surface may show a local `Working Copy`, but that row should represent only the current local publish candidate
+Validation: HUMAN_REVIEW
+
+If the current local environment snapshot does not match a known published cloud
+revision, the local panel may show a top-level `Working Copy` row.
+
+That row should mean only:
+- current local publish candidate
+- not yet represented by a known published cloud revision
+
+It should not imply:
+- semantic diff from the latest cloud revision
+- additive or subtractive change counts such as workflows added or removed
+- clean lineage from any particular prior cloud revision
+
+Those claims require a stronger revision comparison model than the first slice
+should assume.
+
+### CGM-CLP-02B [PLANNED]: Publish readiness should use export-style validation and warning UX before creating a cloud revision
+Validation: HUMAN_REVIEW
+
+Before creating a cloud revision, `Publish Revision` should run a preflight
+validation pass similar in spirit to local export validation.
+
+That validation should be able to surface:
+- blocking issues such as uncommitted changes or unresolved environment issues
+- non-blocking deployability warnings such as models missing source URLs or
+  other portability gaps
+
+The publish flow should reuse the same family of warning/review UX patterns
+rather than publishing blindly.
+
 ### CGM-CLP-03 [PLANNED]: The publish surface should remain lightweight after publication succeeds
 Validation: HUMAN_REVIEW
 
@@ -98,6 +130,19 @@ After publication, the local panel may show:
 - link to open the cloud dashboard
 
 It should not immediately turn into a full deployment operations console.
+
+### CGM-CLP-03B [PLANNED]: The publish surface should be revision-centric rather than deployment-centric
+Validation: HUMAN_REVIEW
+
+The primary mental model of the publish surface should be:
+- optional local `Working Copy`
+- immutable published revisions
+
+It should not primarily present:
+- provider targets
+- deployment instances
+- rollout controls
+- runtime operations
 
 ### CGM-CLP-03A [PLANNED]: The first local auth slice may use cloud user-session auth before converging on dedicated publication credentials
 Validation: HUMAN_REVIEW
