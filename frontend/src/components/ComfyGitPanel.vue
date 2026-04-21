@@ -264,6 +264,7 @@
             :environment-name="currentEnvironment?.name || status?.environment || null"
             :branch-name="status?.branch || null"
             @navigate="handleNavigate"
+            @toast="handleToast"
           />
 
         </template>

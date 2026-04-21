@@ -1,6 +1,6 @@
 <template>
   <BaseModal
-    title="Export Warnings"
+    :title="mode === 'publish' ? 'Publish Warnings' : 'Export Warnings'"
     size="md"
     @close="$emit('cancel')"
   >
@@ -14,10 +14,10 @@
             </svg>
           </span>
           <div class="success-summary">
-            <h3 class="success-title">All models have source URLs</h3>
-            <p class="success-description">
-              Your environment is ready to export. Recipients will be able to download all models automatically.
-            </p>
+              <h3 class="success-title">All models have source URLs</h3>
+              <p class="success-description">
+              Your environment is ready to {{ mode }}. Recipients will be able to download all models automatically.
+              </p>
           </div>
         </div>
 
@@ -37,7 +37,7 @@
               </h3>
               <p class="warning-description">
                 Recipients won't be able to download these models automatically.
-                Click "Add Source" to fix, or export anyway.
+                Click "Add Source" to fix, or {{ mode }} anyway.
               </p>
             </div>
           </div>
@@ -80,10 +80,10 @@
 
     <template #footer>
       <BaseButton variant="secondary" @click="$emit('cancel')">
-        Cancel Export
+        Cancel {{ mode === 'publish' ? 'Publish' : 'Export' }}
       </BaseButton>
       <BaseButton variant="primary" @click="$emit('confirm')">
-        {{ models.length === 0 ? 'Export' : 'Export Anyway' }}
+        {{ models.length === 0 ? actionLabel : `${actionLabel} Anyway` }}
       </BaseButton>
     </template>
   </BaseModal>
@@ -105,6 +105,7 @@ import type { ModelWithoutSource } from '@/types/comfygit'
 
 const props = defineProps<{
   models: ModelWithoutSource[]
+  mode?: 'export' | 'publish'
 }>()
 
 const emit = defineEmits<{
@@ -115,6 +116,8 @@ const emit = defineEmits<{
 
 const showAllModels = ref(false)
 const selectedModelHash = ref<string | null>(null)
+const mode = computed(() => props.mode || 'export')
+const actionLabel = computed(() => mode.value === 'publish' ? 'Publish' : 'Export')
 
 const visibleModels = computed(() => {
   if (showAllModels.value || props.models.length <= 3) {

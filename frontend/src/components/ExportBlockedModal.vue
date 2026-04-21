@@ -1,6 +1,6 @@
 <template>
   <BaseModal
-    :title="hasCommittableIssues ? 'Commit & Export' : 'Cannot Export'"
+    :title="hasCommittableIssues ? `Commit & ${actionLabel}` : `Cannot ${actionLabel}`"
     size="md"
     @close="$emit('close')"
   >
@@ -14,11 +14,11 @@
             </svg>
           </span>
           <div class="error-summary">
-            <h3 class="error-title">Export blocked</h3>
+            <h3 class="error-title">{{ actionLabel }} blocked</h3>
             <p class="error-description">
               {{ hasCommittableIssues
-                ? 'Commit your changes to proceed with export.'
-                : 'The following issues must be resolved before exporting.' }}
+                ? `Commit your changes to proceed with ${actionLabel.toLowerCase()}.`
+                : `The following issues must be resolved before ${actionLabel.toLowerCase()}.` }}
             </p>
           </div>
         </div>
@@ -49,13 +49,13 @@
             </div>
             <div class="issue-fix">
               <template v-if="issue.type === 'uncommitted_workflows'">
-                Commit your workflow changes before exporting.
+                Commit your workflow changes before {{ actionLabel.toLowerCase() }}ing.
               </template>
               <template v-else-if="issue.type === 'uncommitted_git_changes'">
-                Commit your changes before exporting.
+                Commit your changes before {{ actionLabel.toLowerCase() }}ing.
               </template>
               <template v-else-if="issue.type === 'unresolved_issues'">
-                Resolve all workflow issues before exporting.
+                Resolve all workflow issues before {{ actionLabel.toLowerCase() }}ing.
               </template>
             </div>
           </div>
@@ -102,7 +102,7 @@
           :loading="isCommitting"
           @click="handleCommitAndExport"
         >
-          {{ isCommitting ? 'Committing...' : allowIssues ? 'Force Commit & Export' : 'Commit & Export' }}
+          {{ isCommitting ? 'Committing...' : allowIssues ? `Force Commit & ${actionLabel}` : `Commit & ${actionLabel}` }}
         </BaseButton>
       </template>
       <template v-else>
@@ -125,6 +125,7 @@ import type { ExportBlockingIssue } from '@/types/comfygit'
 
 const props = defineProps<{
   issues: ExportBlockingIssue[]
+  mode?: 'export' | 'publish'
 }>()
 
 const emit = defineEmits<{
@@ -139,6 +140,7 @@ const isCommitting = ref(false)
 const allowIssues = ref(false)
 const commitError = ref('')
 const showAllDetails = reactive<Record<number, boolean>>({})
+const actionLabel = computed(() => props.mode === 'publish' ? 'Publish' : 'Export')
 
 const hasCommittableIssues = computed(() =>
   props.issues.some(i => i.type === 'uncommitted_workflows' || i.type === 'uncommitted_git_changes')

@@ -88,6 +88,20 @@ That action should:
 - receive a created cloud revision identity or version
 - leave deployment selection to the cloud dashboard
 
+### CGM-CLP-02C [PLANNED]: The publish surface should support an explicit local-to-cloud environment link rather than relying only on environment-name matching
+Validation: HUMAN_REVIEW
+
+The local panel should allow a user to explicitly choose which cloud
+environment a given local environment publishes into.
+
+This link should:
+- be scoped to the current local environment identity
+- prefer an explicit stored cloud environment id over name matching
+- fall back to name matching only when no explicit link exists
+
+The publish surface should make that linked environment visible so users can
+verify where revisions will be created.
+
 ### CGM-CLP-02A [PLANNED]: The publish surface may show a local `Working Copy`, but that row should represent only the current local publish candidate
 Validation: HUMAN_REVIEW
 

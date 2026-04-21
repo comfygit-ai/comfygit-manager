@@ -100,6 +100,7 @@ Validation: HUMAN_REVIEW
 The manager may expose:
 - signed-in cloud account state
 - active cloud workspace selection when supported by cloud
+- explicit linked cloud environment selection for the current local environment
 - publish revision actions
 - recent published revisions
 - open-dashboard affordances

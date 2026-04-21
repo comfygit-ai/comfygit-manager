@@ -5,6 +5,7 @@ const CLOUD_URL_KEY = 'ComfyGit.Cloud.Url'
 const DASHBOARD_URL_KEY = 'ComfyGit.Cloud.DashboardUrl'
 const CLOUD_SESSION_KEY = 'ComfyGit.Cloud.Session'
 const CLOUD_USER_KEY = 'ComfyGit.Cloud.User'
+const LINKED_ENVIRONMENTS_KEY = 'ComfyGit.Cloud.LinkedEnvironments'
 
 function readJson<T>(key: string): T | null {
   try {
@@ -28,6 +29,7 @@ const cloudUrl = ref<string>(readString(CLOUD_URL_KEY, 'http://127.0.0.1:8012'))
 const dashboardUrl = ref<string>(readString(DASHBOARD_URL_KEY, ''))
 const session = ref<CloudSession | null>(readJson<CloudSession>(CLOUD_SESSION_KEY))
 const user = ref<CloudUser | null>(readJson<CloudUser>(CLOUD_USER_KEY))
+const linkedEnvironments = ref<Record<string, { id: string; name: string }>>(readJson<Record<string, { id: string; name: string }>>(LINKED_ENVIRONMENTS_KEY) || {})
 
 export function useCloudAuth() {
   const isAuthenticated = computed(() => !!session.value?.access_token && !!user.value?.id)
@@ -73,6 +75,34 @@ export function useCloudAuth() {
     }
   }
 
+  function getLinkedEnvironment(localEnvironmentName: string | null | undefined): { id: string; name: string } | null {
+    const key = String(localEnvironmentName || '').trim()
+    if (!key) return null
+    return linkedEnvironments.value[key] || null
+  }
+
+  function setLinkedEnvironment(localEnvironmentName: string | null | undefined, cloudEnvironment: { id: string; name: string } | null): void {
+    const key = String(localEnvironmentName || '').trim()
+    if (!key) return
+
+    if (cloudEnvironment) {
+      linkedEnvironments.value = {
+        ...linkedEnvironments.value,
+        [key]: { id: cloudEnvironment.id, name: cloudEnvironment.name }
+      }
+    } else {
+      const next = { ...linkedEnvironments.value }
+      delete next[key]
+      linkedEnvironments.value = next
+    }
+
+    try {
+      localStorage.setItem(LINKED_ENVIRONMENTS_KEY, JSON.stringify(linkedEnvironments.value))
+    } catch (e) {
+      console.error('[useCloudAuth] Failed to save linked cloud environments:', e)
+    }
+  }
+
   return {
     cloudUrl,
     dashboardUrl,
@@ -84,5 +114,8 @@ export function useCloudAuth() {
     setDashboardUrl,
     setAuth,
     clearAuth,
+    linkedEnvironments,
+    getLinkedEnvironment,
+    setLinkedEnvironment,
   }
 }

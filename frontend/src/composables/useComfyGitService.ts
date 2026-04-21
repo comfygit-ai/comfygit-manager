@@ -7,6 +7,9 @@ import type {
   CloudAuthConfig,
   CloudAuthResponse,
   CloudMeResponse,
+  CloudEnvironmentsResponse,
+  CloudEnvironmentRevisionsResponse,
+  CloudPublishResult,
   ExportValidationResult,
   BranchesResult,
   CommitDetail,
@@ -350,6 +353,45 @@ export function useComfyGitService() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cloud_url: cloudUrl, refresh_token: refreshToken || null })
+    })
+  }
+
+  async function getCloudEnvironments(cloudUrl: string, accessToken: string): Promise<CloudEnvironmentsResponse> {
+    return fetchApi<CloudEnvironmentsResponse>(`/v2/comfygit/cloud/environments?cloud_url=${encodeURIComponent(cloudUrl)}`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    })
+  }
+
+  async function getCloudEnvironmentRevisions(
+    cloudUrl: string,
+    environmentId: string,
+    accessToken: string
+  ): Promise<CloudEnvironmentRevisionsResponse> {
+    return fetchApi<CloudEnvironmentRevisionsResponse>(
+      `/v2/comfygit/cloud/environments/${encodeURIComponent(environmentId)}/revisions?cloud_url=${encodeURIComponent(cloudUrl)}`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      }
+    )
+  }
+
+  async function publishCurrentEnvironmentToCloud(
+    cloudUrl: string,
+    accessToken: string,
+    sourceMessage?: string | null,
+    cloudEnvironmentId?: string | null,
+  ): Promise<CloudPublishResult> {
+    return fetchApi<CloudPublishResult>('/v2/comfygit/cloud/publish', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({
+        cloud_url: cloudUrl,
+        source_message: sourceMessage || null,
+        cloud_environment_id: cloudEnvironmentId || null,
+      })
     })
   }
 
@@ -2012,6 +2054,9 @@ export function useComfyGitService() {
     signupToCloud,
     getCloudMe,
     logoutFromCloud,
+    getCloudEnvironments,
+    getCloudEnvironmentRevisions,
+    publishCurrentEnvironmentToCloud,
     // Debug/Logs
     getEnvironmentLogs,
     getEnvironmentManifest,

@@ -124,6 +124,51 @@ export interface CloudMeResponse {
   user: CloudUser
 }
 
+export interface CloudEnvironmentSummary {
+  id: string
+  name: string
+  workflow_count: number
+  node_count: number
+  model_count: number
+  comfyui_version?: string | null
+  python_version?: string | null
+  updated_at: string
+}
+
+export interface CloudEnvironmentsResponse {
+  environments: CloudEnvironmentSummary[]
+}
+
+export interface CloudEnvironmentRevision {
+  id: string
+  environment_id: string
+  revision_number: number
+  environment_name: string
+  source_kind: string
+  source_message?: string | null
+  source_commit_sha?: string | null
+  source_branch?: string | null
+  source_repo_url?: string | null
+  working_copy_revision?: number | null
+  workflow_count: number
+  node_count: number
+  model_count: number
+  comfyui_version?: string | null
+  python_version?: string | null
+  created_at: string
+}
+
+export interface CloudEnvironmentRevisionsResponse {
+  revisions: CloudEnvironmentRevision[]
+}
+
+export interface CloudPublishResult {
+  status: 'success'
+  created_environment: boolean
+  environment: CloudEnvironmentSummary
+  environment_revision: CloudEnvironmentRevision | null
+}
+
 // Export Validation Types
 export interface ModelWithoutSource {
   filename: string
