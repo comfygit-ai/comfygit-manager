@@ -1,10 +1,33 @@
 <template>
   <div v-if="visible" class="io-mapping-root">
+    <div class="io-mapping-visual-layer">
+      <div
+        v-for="overlay in inputOverlays"
+        :key="overlay.key"
+        :class="['io-highlight', 'io-highlight-input', { active: overlay.active }]"
+        :style="overlay.style"
+      />
+      <div
+        v-for="overlay in outputOverlays"
+        :key="overlay.key"
+        :class="['io-highlight', 'io-highlight-output', { active: overlay.active }]"
+        :style="overlay.style"
+      />
+      <div
+        v-if="hoverOverlay"
+        :class="['io-highlight', hoverOverlay.kind === 'input' ? 'io-highlight-hover-input' : 'io-highlight-hover-output']"
+        :style="hoverOverlay.style"
+      />
+    </div>
+
     <div class="io-mapping-header">
       <div class="io-mapping-header-main">
         <div class="io-mapping-title">I/O MAPPING MODE</div>
         <div class="io-mapping-subtitle">
           {{ workflowName }} · Click {{ selectionMode === 'inputs' ? 'input widgets' : 'output slots' }} on the graph to add them to the contract.
+        </div>
+        <div v-if="hoverSummary" class="io-mapping-hover-summary">
+          Hovering {{ hoverSummary.kind }}: {{ hoverSummary.label }}
         </div>
       </div>
 
@@ -237,6 +260,10 @@ const form = ref<WorkflowExecutionContract | null>(null)
 const selectionMode = ref<'inputs' | 'outputs'>('inputs')
 const selectedInputIndex = ref<number | null>(null)
 const selectedOutputIndex = ref<number | null>(null)
+const overlayTick = ref(0)
+const hoverSummary = ref<{ kind: 'input' | 'output'; label: string } | null>(null)
+const hoverOverlay = ref<{ kind: 'input' | 'output'; style: Record<string, string> } | null>(null)
+let overlayFrame: number | null = null
 
 const typeOptions = [
   'string',
@@ -359,6 +386,13 @@ function getCanvasElement(): HTMLCanvasElement | null {
   return props.comfyApp?.canvasEl || props.comfyApp?.canvas?.canvas || null
 }
 
+function getNodeElement(nodeId: string | number): HTMLElement | null {
+  const escaped = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(String(nodeId))
+    : String(nodeId)
+  return document.querySelector(`[data-node-id="${escaped}"]`)
+}
+
 function eventTargetsOverlayChrome(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false
   return !!target.closest('.io-mapping-header, .io-mapping-sidebar')
@@ -371,6 +405,90 @@ function getNodeFromEventTarget(target: EventTarget | null): any | null {
   if (!nodeId) return null
   return props.comfyApp?.graph?.getNodeById?.(nodeId) ?? props.comfyApp?.rootGraph?.getNodeById?.(nodeId) ?? null
 }
+
+function getWidgetElement(nodeId: string | number, widgetIndex?: number): HTMLElement | null {
+  if (widgetIndex == null || widgetIndex < 0) return null
+  const nodeEl = getNodeElement(nodeId)
+  if (!nodeEl) return null
+  const widgets = nodeEl.querySelectorAll<HTMLElement>('[data-testid="node-widget"]')
+  return widgets[widgetIndex] ?? null
+}
+
+function rectToStyle(rect: DOMRect | null | undefined): Record<string, string> | null {
+  if (!rect || rect.width <= 0 || rect.height <= 0) return null
+  return {
+    left: `${rect.left}px`,
+    top: `${rect.top}px`,
+    width: `${rect.width}px`,
+    height: `${rect.height}px`,
+  }
+}
+
+function getNodeClientRect(node: any): DOMRect | null {
+  const nodeEl = getNodeElement(node?.id ?? '')
+  if (nodeEl) return nodeEl.getBoundingClientRect()
+
+  const app = props.comfyApp
+  if (!node || typeof app?.canvasPosToClientPos !== 'function') return null
+  const titleHeight = 32
+  const topLeft = app.canvasPosToClientPos([node.pos[0], node.pos[1] - titleHeight])
+  const bottomRight = app.canvasPosToClientPos([node.pos[0] + node.size[0], node.pos[1] + node.size[1]])
+  if (!topLeft || !bottomRight) return null
+  return new DOMRect(topLeft[0], topLeft[1], bottomRight[0] - topLeft[0], bottomRight[1] - topLeft[1])
+}
+
+function getInputClientRect(input: WorkflowContractInput): DOMRect | null {
+  const widgetEl = getWidgetElement(input.node_id, input.widget_idx)
+  if (widgetEl) return widgetEl.getBoundingClientRect()
+
+  const node = props.comfyApp?.graph?.getNodeById?.(String(input.node_id)) ??
+    props.comfyApp?.rootGraph?.getNodeById?.(String(input.node_id))
+  if (!node || typeof input.widget_idx !== 'number' || !Array.isArray(node.widgets)) return null
+  const widget = node.widgets[input.widget_idx]
+  if (!widget || typeof props.comfyApp?.canvasPosToClientPos !== 'function') return getNodeClientRect(node)
+
+  const marginX = 10
+  const topLeft = props.comfyApp.canvasPosToClientPos([node.pos[0] + marginX, node.pos[1] + (widget.y ?? 0)])
+  const bottomRight = props.comfyApp.canvasPosToClientPos([node.pos[0] + node.size[0] - marginX, node.pos[1] + (widget.y ?? 0) + (widget.computedHeight ?? 24)])
+  if (!topLeft || !bottomRight) return getNodeClientRect(node)
+  return new DOMRect(topLeft[0], topLeft[1], bottomRight[0] - topLeft[0], bottomRight[1] - topLeft[1])
+}
+
+function getOutputClientRect(output: WorkflowContractOutput): DOMRect | null {
+  const node = props.comfyApp?.graph?.getNodeById?.(String(output.node_id)) ??
+    props.comfyApp?.rootGraph?.getNodeById?.(String(output.node_id))
+  return getNodeClientRect(node)
+}
+
+const inputOverlays = computed(() => {
+  overlayTick.value
+  return activeContract.value.inputs
+    .map((input, index) => {
+      const style = rectToStyle(getInputClientRect(input))
+      if (!style) return null
+      return {
+        key: `input-${index}-${input.node_id}-${input.widget_idx ?? 'na'}`,
+        style,
+        active: selectionMode.value === 'inputs' && selectedInputIndex.value === index,
+      }
+    })
+    .filter((value): value is { key: string; style: Record<string, string>; active: boolean } => Boolean(value))
+})
+
+const outputOverlays = computed(() => {
+  overlayTick.value
+  return activeContract.value.outputs
+    .map((output, index) => {
+      const style = rectToStyle(getOutputClientRect(output))
+      if (!style) return null
+      return {
+        key: `output-${index}-${output.node_id}-${output.selector ?? 'primary'}`,
+        style,
+        active: selectionMode.value === 'outputs' && selectedOutputIndex.value === index,
+      }
+    })
+    .filter((value): value is { key: string; style: Record<string, string>; active: boolean } => Boolean(value))
+})
 
 function addOrSelectInput(node: any, widget: any) {
   const widgetIndex = Array.isArray(node.widgets) ? node.widgets.indexOf(widget) : -1
@@ -425,6 +543,91 @@ function addOrSelectOutput(node: any, output: any) {
 
   activeContract.value.outputs.push(nextOutput)
   selectedOutputIndex.value = activeContract.value.outputs.length - 1
+}
+
+function updateHoverState(event: PointerEvent) {
+  if (!visible.value || eventTargetsOverlayChrome(event.target)) {
+    hoverSummary.value = null
+    hoverOverlay.value = null
+    return
+  }
+
+  const canvas = props.comfyApp?.canvas
+  if (!canvas) {
+    hoverSummary.value = null
+    hoverOverlay.value = null
+    return
+  }
+
+  const graphPos = canvas.convertEventToCanvasOffset?.(event)
+  if (!graphPos || graphPos.length < 2) {
+    hoverSummary.value = null
+    hoverOverlay.value = null
+    return
+  }
+  const [canvasX, canvasY] = graphPos
+
+  const graph = canvas.graph || props.comfyApp?.graph || props.comfyApp?.rootGraph
+  const node =
+    graph?.getNodeOnPos?.(canvasX, canvasY, canvas.visible_nodes) ||
+    canvas.getNodeOnPos?.(canvasX, canvasY) ||
+    getNodeFromEventTarget(event.target)
+  if (!node) {
+    hoverSummary.value = null
+    hoverOverlay.value = null
+    return
+  }
+
+  if (selectionMode.value === 'inputs') {
+    const widget = node.getWidgetOnPos?.(canvasX, canvasY, true)
+    if (!widget) {
+      hoverSummary.value = null
+      hoverOverlay.value = null
+      return
+    }
+    const widgetIndex = Array.isArray(node.widgets) ? node.widgets.indexOf(widget) : -1
+    const rect = rectToStyle(getWidgetElement(node.id, widgetIndex)?.getBoundingClientRect() ?? getInputClientRect({
+      name: '',
+      type: 'string',
+      node_id: String(node.id),
+      widget_idx: widgetIndex >= 0 ? widgetIndex : undefined,
+      required: true,
+    }))
+    if (!rect) {
+      hoverSummary.value = null
+      hoverOverlay.value = null
+      return
+    }
+    hoverSummary.value = {
+      kind: 'input',
+      label: `${widget?.name || 'widget'} · Node ${node.id}`,
+    }
+    hoverOverlay.value = { kind: 'input', style: rect }
+    return
+  }
+
+  const output =
+    node.getOutputOnPos?.([canvasX, canvasY]) ||
+    (node.constructor?.nodeData?.output_node
+      ? { name: node.title || node.type || 'output' }
+      : null)
+  if (!output) {
+    hoverSummary.value = null
+    hoverOverlay.value = null
+    return
+  }
+
+  const rect = rectToStyle(getNodeClientRect(node))
+  if (!rect) {
+    hoverSummary.value = null
+    hoverOverlay.value = null
+    return
+  }
+  hoverSummary.value = {
+    kind: 'output',
+    label: `${output?.name || node.title || node.type || 'output'} · Node ${node.id}`,
+  }
+  hoverOverlay.value = { kind: 'output', style: rect }
 }
 
 function handleCanvasPointerDown(event: PointerEvent) {
@@ -487,10 +690,12 @@ function handleCanvasPointerDown(event: PointerEvent) {
 
 function attachCanvasListener() {
   document.addEventListener('pointerdown', handleCanvasPointerDown, true)
+  document.addEventListener('pointermove', updateHoverState, true)
 }
 
 function detachCanvasListener() {
   document.removeEventListener('pointerdown', handleCanvasPointerDown, true)
+  document.removeEventListener('pointermove', updateHoverState, true)
 }
 
 async function loadContract() {
@@ -539,6 +744,8 @@ function reopenContractModal() {
 
 function closeOverlay(options?: { reopenContract?: boolean }) {
   visible.value = false
+  hoverSummary.value = null
+  hoverOverlay.value = null
   if (options?.reopenContract) {
     reopenContractModal()
   }
@@ -565,11 +772,32 @@ function handleEscape(event: KeyboardEvent) {
   }
 }
 
+function startOverlayLoop() {
+  if (overlayFrame != null) return
+  const tick = () => {
+    overlayTick.value += 1
+    if (!visible.value) {
+      overlayFrame = null
+      return
+    }
+    overlayFrame = window.requestAnimationFrame(tick)
+  }
+  overlayFrame = window.requestAnimationFrame(tick)
+}
+
+function stopOverlayLoop() {
+  if (overlayFrame == null) return
+  window.cancelAnimationFrame(overlayFrame)
+  overlayFrame = null
+}
+
 watch(visible, (isVisible) => {
   if (isVisible) {
     attachCanvasListener()
+    startOverlayLoop()
   } else {
     detachCanvasListener()
+    stopOverlayLoop()
   }
 })
 
@@ -580,6 +808,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   detachCanvasListener()
+  stopOverlayLoop()
   window.removeEventListener('comfygit:open-io-mapping', openOverlay as EventListener)
   window.removeEventListener('keydown', handleEscape)
 })
@@ -591,6 +820,52 @@ onBeforeUnmount(() => {
   inset: 0;
   z-index: 10003;
   pointer-events: none;
+}
+
+.io-mapping-visual-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.io-highlight {
+  position: fixed;
+  border-radius: 10px;
+  transition: left 80ms linear, top 80ms linear, width 80ms linear, height 80ms linear, opacity 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.io-highlight-input {
+  border: 2px solid rgba(99, 102, 241, 0.5);
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.io-highlight-input.active {
+  border-color: rgba(129, 140, 248, 0.95);
+  box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.2);
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.io-highlight-output {
+  border: 2px solid rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.io-highlight-output.active {
+  border-color: rgba(251, 191, 36, 0.95);
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.18);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.io-highlight-hover-input {
+  border: 2px solid rgba(129, 140, 248, 1);
+  box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  background: rgba(99, 102, 241, 0.16);
+}
+
+.io-highlight-hover-output {
+  border: 2px solid rgba(251, 191, 36, 1);
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  background: rgba(245, 158, 11, 0.16);
 }
 
 .io-mapping-header {
@@ -624,6 +899,12 @@ onBeforeUnmount(() => {
   color: var(--cg-color-text-secondary);
   font-size: var(--cg-font-size-xs);
   margin-top: 4px;
+}
+
+.io-mapping-hover-summary {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  margin-top: 6px;
 }
 
 .io-mapping-header-actions {
