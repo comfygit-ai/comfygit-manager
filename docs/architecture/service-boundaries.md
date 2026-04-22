@@ -49,6 +49,9 @@ Core should not own:
 The cloud dashboard owns:
 - account and workspace identity
 - revision registry and publication destination
+- target-class compatibility resolution
+- runtime build and artifact lifecycle
+- verification and smoke-test state
 - deployment lifecycle and runtime operations
 - targets, bindings, and provider-specific deployment configuration
 - published workflow identity and API exposure
@@ -103,3 +106,16 @@ The local panel should model cloud integration in terms of:
 
 It should not treat provider targets such as RunPod or custom workers as
 first-class local panel authorities.
+
+### CGM-SB-08 [PLANNED]: The local panel may surface cloud build or verification summaries, but cloud should remain the authority for realization, artifacts, and deployability
+Validation: HUMAN_REVIEW
+
+The local panel may later show lightweight status such as:
+- revision published
+- build queued or failed
+- verified for a target class
+
+But it should not become the surface that:
+- orchestrates provider-specific builds
+- manages runtime artifacts directly
+- defines deployability independently of cloud verification

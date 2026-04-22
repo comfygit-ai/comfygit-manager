@@ -88,6 +88,16 @@ That action should:
 - receive a created cloud revision identity or version
 - leave deployment selection to the cloud dashboard
 
+The successful result of this action should be understood as:
+
+- immutable revision created in cloud
+
+and not automatically as:
+
+- provider-compatible build available
+- verified runtime artifact available
+- live deployment created
+
 ### CGM-CLP-02C [PLANNED]: The publish surface should support an explicit local-to-cloud environment link rather than relying only on environment-name matching
 Validation: HUMAN_REVIEW
 
@@ -145,6 +155,14 @@ After publication, the local panel may show:
 
 It should not immediately turn into a full deployment operations console.
 
+The local panel may later show lightweight cloud-derived summaries such as:
+- revision published
+- build in progress or failed
+- revision verified for a target class
+
+But those summaries should remain read-oriented indicators coming from cloud
+rather than local build orchestration.
+
 ### CGM-CLP-03B [PLANNED]: The publish surface should be revision-centric rather than deployment-centric
 Validation: HUMAN_REVIEW
 
@@ -157,6 +175,9 @@ It should not primarily present:
 - deployment instances
 - rollout controls
 - runtime operations
+
+It should also avoid implying that a published revision is already a built or
+verified runtime unless cloud has explicitly supplied that state.
 
 ### CGM-CLP-03A [PLANNED]: The first local auth slice may use cloud user-session auth before converging on dedicated publication credentials
 Validation: HUMAN_REVIEW
