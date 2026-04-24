@@ -42,8 +42,8 @@ Use reference docs for:
   selection behavior.
 - `panel-information-architecture.md` defines local panel navigation and
   grouping behavior.
-- `cloud-linking-and-publication.md` defines the local-panel bridge to
-  ComfyGit Cloud revision publication.
+- `cloud-linking-and-publication.md` defines the repo-backed local-panel
+  handoff to ComfyGit Cloud through git remotes and pushed commits.
 - `resource-resolution-lifecycle.md` defines missing-resource analysis and
   resolution flow.
 - `model-download-and-sources.md` defines model source and download behavior.
@@ -59,4 +59,3 @@ on directly.
 
 Otherwise, keep detailed behavior in specs and have contracts reference the
 relevant spec clause IDs.
-

@@ -87,22 +87,22 @@ meaning:
 `Refresh` should not remain a primary always-visible action in that header. If
 manual refresh remains useful, it should be secondary or implicit.
 
-### CGM-IA-07 [LIVE]: The cloud domain should split into distinct `Account` and `Publish` destinations
+### CGM-IA-07 [RETIRED]: The cloud domain should split into distinct `Account` and `Publish` destinations
 Validation: HUMAN_REVIEW
 
-The current `Deploy` / sharing-oriented area should evolve into a cloud domain
-with two distinct destinations:
+The local `Cloud` domain with distinct `Account` and `Publish` destinations is
+retired for the repo-backed MVP. The retired model split cloud UI into:
 - `Account`
 - `Publish`
 
-`Account` should own:
+The retired `Account` surface owned:
 - cloud URL or endpoint selection
 - sign-in and sign-up flows
 - sign-out
 - authenticated account details
 - later workspace selection when cloud exposes that model
 
-`Publish` should own:
+The retired `Publish` surface owned:
 - publish revision actions
 - recent cloud revisions
 - optional local `Working Copy` when the current local state is not yet
@@ -110,8 +110,18 @@ with two distinct destinations:
 - open-dashboard affordances
 - lightweight publication status summaries
 
-This split keeps identity/session management separate from revision publication
-while still making the local panel the bridge into the cloud control plane.
+Cloud account/session management and environment linkage now belong in the cloud
+dashboard. The local bridge to cloud should move through git remotes and pushes.
+
+### CGM-IA-07A [LIVE]: The MVP local panel should not expose a first-class Cloud domain
+Validation: HUMAN_REVIEW
+
+For the repo-backed MVP, the local manager panel should not expose `Cloud`,
+`Account`, or `Publish` as first-class sidebar destinations. Cloud-visible state
+is produced by committing and pushing the environment repository.
+
+Cloud-specific guidance, if needed locally, should be presented inside
+version-control and remote-management surfaces.
 
 ### CGM-IA-08 [PARTIAL]: Diagnostics and inspection tools should be consolidated away from primary authoring navigation
 Validation: HUMAN_REVIEW
@@ -132,13 +142,13 @@ placed in the `THIS ENV` sidebar group rather than its own diagnostics domain.
 ### CGM-IA-09 [LIVE]: The local panel should not try to replicate the full cloud control-plane UX
 Validation: HUMAN_REVIEW
 
-The local panel may provide a lightweight cloud bridge, but it should not grow
-into a second full deployment dashboard. Rich deployment orchestration,
-published-workflow binding, and control-plane administration should remain
-cloud-dashboard responsibilities.
+The local panel should not grow into a second full deployment dashboard. Rich
+deployment orchestration, published-workflow binding, cloud account management,
+GitHub App installation, repository linkage, and control-plane administration
+should remain cloud-dashboard responsibilities.
 
-The current top-level panel exposes cloud account and publish-revision surfaces,
-not target/provider/runtime administration.
+The current top-level panel no longer exposes cloud account or publish-revision
+surfaces.
 
 ### CGM-IA-10 [LIVE]: Provider-target and deployment controls should not remain first-class local panel destinations
 Validation: HUMAN_REVIEW
@@ -147,27 +157,27 @@ RunPod, custom worker, and other provider-specific deployment controls are not
 the intended long-term primary job of the local panel.
 
 The local panel should prefer:
-- publish revision
-- show linked cloud account/workspace
-- show recent cloud revisions
+- local commits
+- git remotes
+- push/fetch/pull state
+- optional helper copy that explains cloud ingests the linked GitHub repository
 
 Cloud should own the actual deployment and runtime-management workflow.
 
-The current panel maps old `Deploy` navigation state to `Publish` and does not
-mount provider-target controls as first-class sidebar destinations. Legacy
+The current panel maps old `Deploy`, `Publish`, and `Account` navigation state
+to Version Control rather than keeping the retired Cloud domain active. Legacy
 deploy components may still exist in the codebase as reference or unused code,
 but they are not part of the active panel information architecture.
 
-### CGM-IA-11 [LIVE]: Blocked publish flows should route users to `Account` rather than embedding a second full auth surface inside `Publish`
+### CGM-IA-11 [RETIRED]: Blocked publish flows should route users to `Account` rather than embedding a second full auth surface inside `Publish`
 Validation: HUMAN_REVIEW
 
-If a user is not authenticated, the `Publish` destination may show:
+Blocked local publish flows are retired with the local `Publish` destination.
+The retired model allowed `Publish` to show:
 - unauthenticated status in the header
 - a blocked-state message in the main content
 - a `Sign in` or `Go to Account` action
 
-That action should navigate to the `Account` destination for the actual
-login/signup flow rather than duplicating the full auth UI inside `Publish`.
-
-The current `Publish` view shows a blocked sign-in-required state and routes
-the sign-in action to `Account`.
+The active model does not require local cloud sign-in before cloud can observe
+environment state. It requires pushing commits to the GitHub repository linked
+in the cloud dashboard.

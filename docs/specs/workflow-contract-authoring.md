@@ -76,7 +76,9 @@ These should not be conflated with dependency metadata.
 ### CGM-WCA-05 [LIVE]: Contract save must replace the durable saved contract, not only transient UI state
 Validation: TEST
 
-Saving a contract should update the manager backend and the underlying ComfyGit-managed manifest state so the contract survives reloads, restarts, commits, and later revision publication.
+Saving a contract should update the manager backend and the underlying
+ComfyGit-managed manifest state so the contract survives reloads, restarts,
+commits, and later cloud ingestion from pushed repository commits.
 
 ### CGM-WCA-06 [LIVE]: A workflow without a valid contract should remain editable but not contract-ready
 Validation: HUMAN_REVIEW

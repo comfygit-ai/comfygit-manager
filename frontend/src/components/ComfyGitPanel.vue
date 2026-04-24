@@ -145,24 +145,6 @@
             </button>
           </div>
 
-          <div class="sidebar-divider"></div>
-
-          <!-- CLOUD Section -->
-          <div class="sidebar-section">
-            <div class="sidebar-section-title">CLOUD</div>
-            <button
-              :class="['sidebar-item', { active: currentView === 'publish' }]"
-              @click="selectView('publish', 'cloud')"
-            >
-              PUBLISH
-            </button>
-            <button
-              :class="['sidebar-item', { active: currentView === 'account' }]"
-              @click="selectView('account', 'cloud')"
-            >
-              ACCOUNT
-            </button>
-          </div>
         </div>
 
         <!-- Sidebar Footer -->
@@ -263,22 +245,6 @@
 
           <!-- Settings View -->
           <WorkspaceSettingsSection v-else-if="currentView === 'settings'" />
-
-          <!-- Cloud Account -->
-          <AccountSection
-            v-else-if="currentView === 'account'"
-            @toast="handleToast"
-            @navigate="handleNavigate"
-          />
-
-          <!-- Publish View -->
-          <PublishSection
-            v-else-if="currentView === 'publish'"
-            :environment-name="currentEnvironment?.name || status?.environment || null"
-            :branch-name="status?.branch || null"
-            @navigate="handleNavigate"
-            @toast="handleToast"
-          />
 
         </template>
       </div>
@@ -462,8 +428,6 @@ import WorkspaceSettingsSection from './WorkspaceSettingsSection.vue'
 import EnvironmentsSection from './EnvironmentsSection.vue'
 import ExportSection from './ExportSection.vue'
 import ImportSection from './ImportSection.vue'
-import AccountSection from './AccountSection.vue'
-import PublishSection from './PublishSection.vue'
 import VersionControlSection from './VersionControlSection.vue'
 import DiagnosticsSection from './DiagnosticsSection.vue'
 import CommitDetailModal from './CommitDetailModal.vue'
@@ -522,10 +486,9 @@ const {
 const orchestratorService = useOrchestratorService()
 
 type ViewName = 'status' | 'workflows' | 'models-env' | 'nodes' | 'version-control' |
-                'environments' | 'model-index' | 'settings' | 'diagnostics' |
-                'account' | 'publish'
+                'environments' | 'model-index' | 'settings' | 'diagnostics'
 
-type SectionName = 'this-env' | 'version-control' | 'workspace' | 'cloud' | 'diagnostics'
+type SectionName = 'this-env' | 'version-control' | 'workspace' | 'diagnostics'
 
 const status = ref<ComfyGitStatus | null>(null)
 const commits = ref<CommitInfo[]>([])
@@ -590,8 +553,6 @@ const initialViewMap: Record<string, { view: ViewName; section: SectionName }> =
   'branches': { view: 'version-control', section: 'version-control' },
   'remotes': { view: 'version-control', section: 'version-control' },
   'status': { view: 'status', section: 'this-env' },
-  'account': { view: 'account', section: 'cloud' },
-  'publish': { view: 'publish', section: 'cloud' },
 }
 const initialConfig = props.initialView ? initialViewMap[props.initialView] : null
 
@@ -601,9 +562,8 @@ const SECTION_STORAGE_KEY = 'ComfyGit.LastSection'
 
 // Valid values for validation
 const validViews: ViewName[] = ['status', 'workflows', 'models-env', 'nodes', 'version-control',
-                                'environments', 'model-index', 'settings', 'diagnostics',
-                                'account', 'publish']
-const validSections: SectionName[] = ['this-env', 'version-control', 'workspace', 'cloud', 'diagnostics']
+                                'environments', 'model-index', 'settings', 'diagnostics']
+const validSections: SectionName[] = ['this-env', 'version-control', 'workspace', 'diagnostics']
 
 // Read saved view from sessionStorage (with validation)
 function getSavedView(): { view: ViewName; section: SectionName } | null {
@@ -613,11 +573,10 @@ function getSavedView(): { view: ViewName; section: SectionName } | null {
     const normalizedView =
       savedView === 'branches' || savedView === 'history' || savedView === 'remotes' ? 'version-control' :
       savedView === 'manifest' || savedView === 'debug-env' || savedView === 'debug-workspace' ? 'diagnostics' :
-      savedView === 'deploy' ? 'publish' :
       savedView
     const normalizedSection =
       savedSection === 'all-envs' ? 'workspace' :
-      savedSection === 'sharing' ? 'cloud' :
+      savedSection === 'sharing' ? 'version-control' :
       savedSection
     if (savedView && savedSection &&
         validViews.includes(normalizedView as ViewName) &&
@@ -650,8 +609,6 @@ function handleNavigate(view: string) {
     const viewMap: Record<string, { view: ViewName; section: SectionName }> = {
       'model-index': { view: 'model-index', section: 'workspace' },
       'remotes': { view: 'version-control', section: 'version-control' },
-      'account': { view: 'account', section: 'cloud' },
-      'publish': { view: 'publish', section: 'cloud' },
     }
   const target = viewMap[view]
   if (target) {

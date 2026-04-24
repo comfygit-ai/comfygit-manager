@@ -24,9 +24,7 @@ The manager owns:
 - local panel information architecture
 - local bootstrap and local orchestrator lifecycle UX
 - runtime context normalization for the local panel
-- lightweight cloud bridge UX owned by the local panel
-- local cloud auth/link state
-- revision publication initiation from the local environment
+- git remote and push UX used for repo-backed cloud handoff
 - API endpoints consumed by the manager frontend
 
 The manager should not become the durable source of truth for portable workflow contracts. It should read/write that state through core persistence.
@@ -50,7 +48,9 @@ Core should not own:
 
 The cloud dashboard owns:
 - account and workspace identity
-- revision registry and publication destination
+- GitHub App installation and repository linkage
+- tracked branch and commit ingestion
+- build candidate and build artifact lifecycle
 - target-class compatibility resolution
 - runtime build and artifact lifecycle
 - verification and smoke-test state
@@ -59,8 +59,9 @@ The cloud dashboard owns:
 - published workflow identity and API exposure
 - cloud-bound authoring or execution session binding
 
-The local manager may link to and publish into the cloud, but it should not
-become a second full control-plane dashboard.
+The local manager may help users push commits to a configured remote, but it
+should not link cloud environments, publish directly to cloud, or become a
+second full control-plane dashboard.
 
 ## Contract Direction
 
@@ -76,39 +77,56 @@ Validation: HUMAN_REVIEW
 ### CGM-SB-04 [PLANNED]: Portable workflow contract state should remain valid without any cloud layer present
 Validation: HUMAN_REVIEW
 
-### CGM-SB-05 [PLANNED]: The local panel may provide cloud linkage and revision publication without duplicating full cloud control-plane behavior
+### CGM-SB-05 [RETIRED]: The local panel may provide cloud linkage and revision publication without duplicating full cloud control-plane behavior
 Validation: HUMAN_REVIEW
 
-The manager may expose a `Cloud` domain for:
+This local `Cloud` domain model is retired for the repo-backed MVP. The retired
+model allowed the manager to expose:
 - authentication or account-link state
 - revision publication
 - recent cloud-linked revision visibility
 - open-dashboard affordances
 
-It should not attempt to fully replace cloud-side deployment and publication
-administration.
+The active boundary is `CGM-SB-05A`: the local panel prepares commits and pushes
+to git remotes, while cloud owns GitHub linking, commit ingestion, builds, and
+deployments.
 
-### CGM-SB-06 [PLANNED]: Target and deployment administration should remain cloud-owned even when publication is initiated locally
+### CGM-SB-05A [PLANNED]: The local panel should hand off to cloud through git remotes
 Validation: HUMAN_REVIEW
 
-The local panel may publish a revision to cloud, but cloud should remain the
-authority for:
+For the repo-backed MVP, the local panel should not require cloud auth or direct
+publication APIs. Its cloud handoff responsibility is to help users create
+commits and push them to the GitHub repository linked by the cloud dashboard.
+
+Cloud should observe the repository/branch and decide which commits become
+build candidates or deployments.
+
+### CGM-SB-06 [PLANNED]: Target and deployment administration should remain cloud-owned
+Validation: HUMAN_REVIEW
+
+Cloud should remain the authority for:
+- cloud account auth
+- GitHub App installation
+- environment repository linkage
+- commit ingestion
+- build policy
 - target registration
 - deployment creation and rollout
 - runtime provider configuration
 - published-workflow binding
 - runtime health and live execution state
 
-### CGM-SB-07 [PLANNED]: Local cloud linkage should be account-and-workspace scoped rather than target scoped
+### CGM-SB-07 [RETIRED]: Local cloud linkage should be account-and-workspace scoped rather than target scoped
 Validation: HUMAN_REVIEW
 
-The local panel should model cloud integration in terms of:
+Local cloud account/workspace linkage is retired for the repo-backed MVP. The
+retired model would have represented:
 - signed-in user or agent identity
 - selected cloud workspace or organization
 - revision publication destination
 
-It should not treat provider targets such as RunPod or custom workers as
-first-class local panel authorities.
+The active model represents cloud linkage in the cloud dashboard. The local
+panel only needs git remote state.
 
 ### CGM-SB-08 [PLANNED]: The local panel may surface cloud build or verification summaries, but cloud should remain the authority for realization, artifacts, and deployability
 Validation: HUMAN_REVIEW

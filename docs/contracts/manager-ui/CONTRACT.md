@@ -109,56 +109,61 @@ This contract clause is partial for the same reason as `CGM-IA-01`: the active
 panel groups `THIS ENV`, `WORKSPACE`, and `CLOUD`, while diagnostics is still
 inside `THIS ENV` rather than its own top-level domain.
 
-### CGM-UI-11 [LIVE]: The local panel should center environment management, version control, and cloud publication rather than local deployment orchestration
+### CGM-UI-11 [LIVE]: The local panel should center environment management and version control rather than cloud publication or deployment orchestration
 Validation: HUMAN_REVIEW
 
-The UI contract requires the local panel to remain an authoring and publication
-bridge, not a cloud deployment dashboard.
+The UI contract requires the local panel to remain an authoring and
+version-control surface, not a cloud publication or deployment dashboard.
+Repo-backed cloud handoff should happen through git remotes and pushes.
 
 Detailed local/cloud responsibilities are specified in:
 
 - `CGM-IA-09` and `CGM-IA-10` in
   `docs/specs/panel-information-architecture.md`
-- `CGM-CLP-01` through `CGM-CLP-05` in
+- `CGM-CLP-06` through `CGM-CLP-08` in
   `docs/specs/cloud-linking-and-publication.md`
 
-### CGM-UI-12 [LIVE]: The publish surface should expose lightweight cloud linkage and revision-publication state rather than full deployment administration
+### CGM-UI-12 [RETIRED]: The publish surface should expose lightweight cloud linkage and revision-publication state rather than full deployment administration
 Validation: HUMAN_REVIEW
 
-The UI contract requires `Publish` to stay revision-centric and lightweight.
-It may summarize cloud link state and publication history, but it should not
-become the surface for target provisioning, deployment binding, or runtime
-administration.
+The local `Publish` surface is retired for the repo-backed MVP. The retired
+contract required `Publish` to stay revision-centric and lightweight rather than
+becoming a deployment control surface.
 
-Detailed publish behavior is specified by `CGM-CLP-02`, `CGM-CLP-03`,
-`CGM-CLP-03B`, and `CGM-IA-10`.
+Repo-backed cloud handoff should now be represented by version-control and git
+remote surfaces, as specified by `CGM-CLP-06` through `CGM-CLP-08`.
 
-### CGM-UI-12A [LIVE]: The publish surface should not imply revision-delta claims that the system cannot actually prove
+### CGM-UI-12A [RETIRED]: The publish surface should not imply revision-delta claims that the system cannot actually prove
 Validation: HUMAN_REVIEW
 
-The UI contract requires local publish state to avoid unproven semantic diff
-claims.
+This local publish-surface constraint is retired with the `Publish` surface.
+Version-control surfaces should still avoid unproven semantic diff claims, but
+there is no MVP local publish working-copy model.
 
-Detailed working-copy semantics are specified by `CGM-CLP-02A`.
-
-### CGM-UI-12B [LIVE]: Publish actions should use the same family of validation and warning UX as export for deployability-sensitive issues
+### CGM-UI-12B [RETIRED]: Publish actions should use the same family of validation and warning UX as export for deployability-sensitive issues
 Validation: HUMAN_REVIEW
 
-The UI contract requires publish actions to run a readiness review before
-creating a cloud revision and to reuse export-style blocking/warning UX where
-the underlying readiness issues are shared.
+Local `Publish` actions are retired for the repo-backed MVP. Validation remains
+important before export, commit, build, and deploy, but local `Publish Revision`
+is no longer the handoff mechanism.
 
-Detailed publish readiness behavior is specified by `CGM-CLP-02B`.
-
-### CGM-UI-13 [LIVE]: Cloud identity should live in a dedicated `Account` surface rather than being fully embedded in `Publish`
+### CGM-UI-13 [RETIRED]: Cloud identity should live in a dedicated `Account` surface rather than being fully embedded in `Publish`
 Validation: HUMAN_REVIEW
 
-The UI contract requires cloud identity and session management to live in a
-dedicated `Account` surface. `Publish` may summarize auth state and block
-publication, but it should route users to `Account` for the full identity flow.
+The local cloud `Account` surface is retired for the repo-backed MVP. Cloud
+identity, GitHub account connection, GitHub App installation, and cloud
+workspace selection should live in the cloud dashboard.
 
-Detailed account/publish split behavior is specified by `CGM-IA-07`,
-`CGM-IA-11`, `CGM-CLP-01A`, and `CGM-CLP-01B`.
+### CGM-UI-13A [PLANNED]: Version-control surfaces should explain repo-backed cloud handoff
+Validation: HUMAN_REVIEW
+
+The local UI may provide cloud helper copy or links inside version-control and
+remote-management surfaces. That copy should explain that ComfyGit Cloud reads
+from the GitHub repository linked in the dashboard, and that local users update
+cloud-visible state by pushing commits to that repository.
+
+This helper UX should not require local cloud sign-in and should not recreate
+the cloud dashboard's GitHub App installation or repository-linking flow.
 
 ### CGM-UI-14 [LIVE]: Missing-resource resolution should use manager-owned review surfaces
 Validation: LLM_REVIEW
