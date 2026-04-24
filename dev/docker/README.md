@@ -26,6 +26,8 @@ The container:
 - mounts the local `comfygit` repo and installs its core/CLI packages editable
 - mounts the host models directory into the container, defaulting to
   `~/dev/models -> /data/models`
+- passes the host Git author name/email into the container so environment
+  commits work without manually running `git config` inside Docker
 - creates the ComfyGit workspace/environment when missing
 - configures `comfygit-core` through `.cec/overlays/.local.toml`
 - starts ComfyUI with `--overlay .local` so run sync uses the mounted editable

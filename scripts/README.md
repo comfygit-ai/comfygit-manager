@@ -25,6 +25,8 @@ The dev stack:
 - mounts the sibling `comfygit` repo and installs its core/CLI packages editable
 - mounts the host models directory into the container, defaulting to
   `~/dev/models -> /data/models`
+- passes the host Git author name/email into the container so environment
+  commits work without manually running `git config` inside Docker
 - symlinks this manager repo into `ComfyUI/custom_nodes`
 - tracks `comfygit-manager` as a development node
 - writes the local editable core path to `.cec/overlays/.local.toml`

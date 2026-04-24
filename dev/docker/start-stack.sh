@@ -12,6 +12,10 @@ COMFYUI_PORT="${COMFYUI_PORT:-8188}"
 TORCH_BACKEND="${COMFYGIT_TORCH_BACKEND:-cu126}"
 COMFYGIT_CREATE_ARGS="${COMFYGIT_CREATE_ARGS:-}"
 COMFYUI_EXTRA_ARGS="${COMFYUI_EXTRA_ARGS:---disable-auto-launch --disable-metadata}"
+GIT_AUTHOR_NAME="${GIT_AUTHOR_NAME:-}"
+GIT_AUTHOR_EMAIL="${GIT_AUTHOR_EMAIL:-}"
+GIT_COMMITTER_NAME="${GIT_COMMITTER_NAME:-$GIT_AUTHOR_NAME}"
+GIT_COMMITTER_EMAIL="${GIT_COMMITTER_EMAIL:-$GIT_AUTHOR_EMAIL}"
 COMFYUI_ARGS=()
 COMFYGIT_CREATE_ARGS_ARRAY=()
 EXTRA_DEV_NODE_PATHS_ARRAY=()
@@ -20,6 +24,15 @@ export COMFYGIT_HOME="$WORKSPACE"
 
 log() {
   printf '[manager-dev-stack] %s\n' "$*"
+}
+
+configure_git_identity() {
+  if [ -n "$GIT_COMMITTER_NAME" ]; then
+    git config --global user.name "$GIT_COMMITTER_NAME"
+  fi
+  if [ -n "$GIT_COMMITTER_EMAIL" ]; then
+    git config --global user.email "$GIT_COMMITTER_EMAIL"
+  fi
 }
 
 install_dev_comfygit() {
@@ -177,6 +190,7 @@ log "Environment: $ENV_NAME"
 
 mkdir -p "$WORKSPACE"
 
+configure_git_identity
 mark_safe_directory "$COMFYGIT_MANAGER_DEV_PATH"
 mark_safe_directory "$COMFYGIT_DEV_REPO_PATH"
 
