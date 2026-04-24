@@ -60,7 +60,7 @@ DOCKER_COMFYGIT_PATH="$COMFYGIT_REPO_ROOT"
 DOCKER_COMFYUI_PORT="${COMFYUI_PORT:-8188}"
 DOCKER_TORCH_BACKEND="${COMFYGIT_TORCH_BACKEND:-cu126}"
 DOCKER_PROJECT_NAME=""
-DOCKER_MODELS_DIR="${SHARED_MODELS_HOST_DIR:-/home/akatzfey/dev/models}"
+DOCKER_MODELS_DIR="${SHARED_MODELS_HOST_DIR:-$HOME/dev/models}"
 DOCKER_EXTRA_NODE_ARGS=()
 DOCKER_BUILD=true
 
@@ -195,6 +195,9 @@ echo "[setup-dev-env] Workspace: $WORKSPACE_PATH"
 echo "[setup-dev-env] Manager:   $MANAGER_PATH"
 echo "[setup-dev-env] Core:      $CORE_PATH"
 echo "[setup-dev-env] ComfyGit:  $COMFYGIT_REPO_ROOT"
+if [[ "$START_DOCKER" == "true" ]]; then
+    echo "[setup-dev-env] Models:    $DOCKER_MODELS_DIR -> /data/models"
+fi
 echo ""
 
 # Build list of environments to process

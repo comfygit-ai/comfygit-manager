@@ -9,16 +9,16 @@ services:
       BLENDER_CYCLES_USE_CPU: ${BLENDER_CYCLES_USE_CPU:-0}
       BLENDER_RENDER_TIMEOUT_SECONDS: ${BLENDER_RENDER_TIMEOUT_SECONDS:-600}
       COMFYGIT_CREATE_ARGS: ${COMFYGIT_CREATE_ARGS:-}
-      COMFYGIT_DEV_REPO_PATH: ${COMFYGIT_DEV_REPO_PATH}
-      COMFYGIT_ENV_NAME: ${COMFYGIT_ENV_NAME}
-      COMFYGIT_HOME: ${COMFYGIT_HOME}
-      COMFYGIT_MANAGER_DEV_PATH: ${COMFYGIT_MANAGER_DEV_PATH}
+      COMFYGIT_DEV_REPO_PATH: ${COMFYGIT_DEV_REPO_PATH:-${PWD}/../comfygit}
+      COMFYGIT_ENV_NAME: ${COMFYGIT_ENV_NAME:-manager-dev}
+      COMFYGIT_HOME: ${COMFYGIT_HOME:-${PWD}/.comfygit-workspace}
+      COMFYGIT_MANAGER_DEV_PATH: ${COMFYGIT_MANAGER_DEV_PATH:-${PWD}}
       COMFYGIT_TORCH_BACKEND: ${COMFYGIT_TORCH_BACKEND:-cu126}
       COMFYUI_EXTRA_ARGS: ${COMFYUI_EXTRA_ARGS:---disable-auto-launch --disable-metadata}
       COMFYUI_HOST: 127.0.0.1
       COMFYUI_PORT: ${COMFYUI_PORT:-8188}
       EXTRA_DEV_NODE_PATHS: ${EXTRA_DEV_NODE_PATHS:-}
-      PROJECT_ROOT: ${COMFYGIT_MANAGER_DEV_PATH}
+      PROJECT_ROOT: ${COMFYGIT_MANAGER_DEV_PATH:-${PWD}}
       SHARED_MODELS_DIR: ${SHARED_MODELS_DIR:-/data/models}
     gpus: all
     healthcheck:
@@ -33,8 +33,8 @@ services:
     restart: unless-stopped
     shm_size: 8g
     volumes:
-      - ${COMFYGIT_HOME}:${COMFYGIT_HOME}
-      - ${COMFYGIT_DEV_REPO_PATH}:${COMFYGIT_DEV_REPO_PATH}
-      - ${COMFYGIT_MANAGER_DEV_PATH}:${COMFYGIT_MANAGER_DEV_PATH}
-      - ${SHARED_MODELS_HOST_DIR:-/home/akatzfey/dev/models}:${SHARED_MODELS_DIR:-/data/models}
-      - ${EXTRA_DEV_NODES_ROOT:-/home/akatzfey/dev/comfyui/custom-nodes-dev}:${EXTRA_DEV_NODES_ROOT:-/home/akatzfey/dev/comfyui/custom-nodes-dev}:ro
+      - ${COMFYGIT_HOME:-${PWD}/.comfygit-workspace}:${COMFYGIT_HOME:-${PWD}/.comfygit-workspace}
+      - ${COMFYGIT_DEV_REPO_PATH:-${PWD}/../comfygit}:${COMFYGIT_DEV_REPO_PATH:-${PWD}/../comfygit}
+      - ${COMFYGIT_MANAGER_DEV_PATH:-${PWD}}:${COMFYGIT_MANAGER_DEV_PATH:-${PWD}}
+      - ${SHARED_MODELS_HOST_DIR:-${HOME}/dev/models}:${SHARED_MODELS_DIR:-/data/models}
+      - ${EXTRA_DEV_NODES_ROOT:-${HOME}/dev/comfyui/custom-nodes-dev}:${EXTRA_DEV_NODES_ROOT:-${HOME}/dev/comfyui/custom-nodes-dev}:ro

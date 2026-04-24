@@ -234,8 +234,9 @@ fi
 
 log "Starting ComfyUI on port $COMFYUI_PORT"
 log "ComfyGit run will perform a preserve-workflows sync before launch"
+log "Applying local development overlay during run sync"
 if [ -n "$COMFYUI_EXTRA_ARGS" ]; then
   read -r -a COMFYUI_ARGS <<<"$COMFYUI_EXTRA_ARGS"
 fi
 
-exec cg -e "$ENV_NAME" run --listen 0.0.0.0 --port "$COMFYUI_PORT" --torch-backend "$TORCH_BACKEND" "${COMFYUI_ARGS[@]}"
+exec cg -e "$ENV_NAME" run --listen 0.0.0.0 --port "$COMFYUI_PORT" --torch-backend "$TORCH_BACKEND" --overlay .local "${COMFYUI_ARGS[@]}"

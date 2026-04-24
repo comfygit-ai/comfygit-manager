@@ -11,6 +11,7 @@ From the repo root:
 ./scripts/setup-dev-env comfygit-cloud-test1 \
   --workspace /home/akatzfey/dev/projects/comfyui-agent-api/.comfygit-workspace \
   --docker \
+  --models-dir ~/dev/models \
   --comfyui-port 8189 \
   --torch-backend cu126
 ```
@@ -22,9 +23,13 @@ The dev stack:
 
 - mounts this `comfygit-manager` repo into the container
 - mounts the sibling `comfygit` repo and installs its core/CLI packages editable
+- mounts the host models directory into the container, defaulting to
+  `~/dev/models -> /data/models`
 - symlinks this manager repo into `ComfyUI/custom_nodes`
 - tracks `comfygit-manager` as a development node
 - writes the local editable core path to `.cec/overlays/.local.toml`
+- starts ComfyUI with `--overlay .local` so the environment venv uses the
+  mounted editable `comfygit-core` package during run sync
 - runs `cg -e <env> run` with GPU passthrough from Docker Compose
 
 Local editable package paths should live in `.cec/overlays/.local.toml`, not in
@@ -53,6 +58,7 @@ Useful options:
 
 - `--workspace PATH`: ComfyGit workspace to use.
 - `--comfygit PATH`: local `comfygit` repo to mount/use.
+- `--models-dir PATH`: host models directory to mount at `/data/models`.
 - `--torch-backend B`: backend for `cg create` and `cg run`, for example `cu126`.
 - `--extra-node PATH`: mount and track another local custom node repo.
 - `--no-build`: recreate the container without rebuilding the image.

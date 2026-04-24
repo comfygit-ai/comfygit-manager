@@ -27,7 +27,7 @@ Options:
   --comfyui-port PORT    Host/container ComfyUI port (default: $COMFYUI_PORT)
   --project-name NAME    Docker Compose project name (default: comfygit-<environment-name>)
   --comfygit PATH        ComfyGit repo path (default: sibling ../comfygit)
-  --models-dir PATH      Host models directory (default: /home/akatzfey/dev/models)
+  --models-dir PATH      Host models directory mounted into the container (default: ~/dev/models)
   --extra-node PATH      Extra dev node path to mount/track; may be repeated
   --no-build             Do not rebuild the image before starting
   -h, --help             Show this help
@@ -39,7 +39,7 @@ EOF
 }
 
 COMFYGIT_PATH="${COMFYGIT_DEV_REPO_PATH:-$(dirname "$MANAGER_ROOT")/comfygit}"
-MODELS_HOST_DIR="${SHARED_MODELS_HOST_DIR:-/home/akatzfey/dev/models}"
+MODELS_HOST_DIR="${SHARED_MODELS_HOST_DIR:-$HOME/dev/models}"
 EXTRA_DEV_NODE_PATHS_VALUE="${EXTRA_DEV_NODE_PATHS:-}"
 
 while [[ $# -gt 0 ]]; do
@@ -139,6 +139,7 @@ echo "[start-dev-container] Environment: $COMFYGIT_ENV_NAME"
 echo "[start-dev-container] Workspace:   $COMFYGIT_HOME"
 echo "[start-dev-container] ComfyGit:    $COMFYGIT_DEV_REPO_PATH"
 echo "[start-dev-container] Manager:     $COMFYGIT_MANAGER_DEV_PATH"
+echo "[start-dev-container] Models:      $SHARED_MODELS_HOST_DIR -> $SHARED_MODELS_DIR"
 echo "[start-dev-container] Backend:     $COMFYGIT_TORCH_BACKEND"
 echo "[start-dev-container] ComfyUI:     http://127.0.0.1:$COMFYUI_PORT"
 
