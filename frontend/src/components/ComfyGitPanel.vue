@@ -566,6 +566,7 @@ const initialViewMap: Record<string, { view: ViewName; section: SectionName }> =
   'branches': { view: 'version-control', section: 'version-control' },
   'remotes': { view: 'version-control', section: 'version-control' },
   'status': { view: 'status', section: 'this-env' },
+  'workflows': { view: 'workflows', section: 'this-env' },
 }
 const initialConfig = props.initialView ? initialViewMap[props.initialView] : null
 
@@ -804,7 +805,7 @@ const statusTooltip = computed(() => {
   return ''
 })
 
-async function refresh() {
+async function refresh(options: { refreshWorkflows?: boolean } = {}) {
   isLoading.value = true
   error.value = null
 
@@ -822,8 +823,10 @@ async function refresh() {
     environments.value = envsRes
     emit('statusUpdate', statusRes)
 
-    // Also refresh workflows section if it's mounted
-    if (workflowsSectionRef.value) {
+    const refreshWorkflows = options.refreshWorkflows ?? true
+    // The workflows section performs its own initial load. Refresh it here only
+    // for explicit parent-level refreshes to avoid a mount-time double fetch.
+    if (refreshWorkflows && workflowsSectionRef.value) {
       await workflowsSectionRef.value.loadWorkflows(true)
     }
   } catch (err) {
@@ -1525,7 +1528,7 @@ onMounted(async () => {
   }
 
   await Promise.all([
-    refresh(),
+    refresh({ refreshWorkflows: false }),
     loadUpdateNotice()
   ])
 })
