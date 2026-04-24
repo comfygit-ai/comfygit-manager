@@ -134,6 +134,12 @@ Browser-facing local URLs may need the dev machine Tailscale address rather
 than `localhost` when the user is on another machine. Check the global Codex
 machine context for current Tailscale details.
 
+## Python Environment Management
+
+- ALWAYS use uv and the commands below for python environment management! 
+- NEVER try to run the system python!
+- uv commands should be run in the root repo directory in order to use the repo's .venv
+
 ## Common Commands
 
 Frontend:
@@ -186,8 +192,56 @@ Frontend version check:
   as context only; truth-layer clauses and code/tests are the authoritative
   alignment mechanism.
 
+## Frontend Development
+
+- Frontend source is in `frontend/src/` (Vue 3 + TypeScript)
+- Built assets go to `js/` directory (committed to repo)
+- `cd frontend && npm run build` - Rebuild frontend after changes
+- `cd frontend && npm run dev` - Start dev server with hot reload
+- **IMPORTANT**: Always rebuild frontend before committing if you changed:
+  - Any file in `frontend/src/`
+  - The `version` in `pyproject.toml`
+- Version displayed in UI is injected from `pyproject.toml` at build time
+- Pre-commit hook will block commits if frontend version doesn't match pyproject.toml
+- Install hooks: `./scripts/install-hooks.sh`
+
+## Dependencies
+
+- **Pin comfygit-core to exact versions** - Always use `==X.Y.Z` (not `>=`) for the core dependency in pyproject.toml. This ensures reproducible builds and prevents unexpected breakage from core updates.
+
+## Version Bump Protocol
+
+When asked to "bump core and version" or similar, follow this sequence:
+
+1. Bump `comfygit-core==X.Y.Z` in `pyproject.toml` dependencies
+2. Bump `version` in `pyproject.toml`
+3. `uv lock` - Update the lockfile
+4. `cd frontend && npm run build` - Rebuild frontend (version is injected at build time)
+5. Stage `pyproject.toml`, `uv.lock`, `js/`, `requirements.txt` and commit
+6. Push to remote
+
+### Additional Documentation
+- **frontend/THEMES.md** - Theme system documentation
+
 ## Commit Guidance
 
 Use concise commit messages describing behavior. Include clause IDs when a
 change is directly tied to a truth-layer clause. Do not include obsolete bead
 IDs unless the user specifically asks for bead bookkeeping.
+
+## General
+Don't make any implementation overly complex. This is a one-person dev MVP project.
+We are still pre-customer - any unnecessary fallbacks, unnecessary versioning, testing overkill should be avoided.
+Simple, elegant, maintainable code is the goal.
+We DONT want any legacy or backwards compatible code.
+
+## Cross-Platform Compatibility
+This codebase must run on **Windows, Linux, and macOS**. All engineering choices should consider cross-platform compatibility:
+- Use `pathlib.Path` instead of string concatenation for file paths
+- Use `os.path.join()` or `Path` objects, never hardcode `/` or `\\` separators
+- Use `shutil` for file operations instead of shell commands when possible
+- Avoid platform-specific shell commands; when unavoidable, handle all platforms explicitly
+- Use `subprocess` with lists (not shell strings) to avoid shell escaping issues
+- Be mindful of case sensitivity differences (Linux/macOS case-sensitive, Windows case-insensitive)
+- Test path handling with spaces and special characters
+- Use `sys.executable` for Python interpreter path, not hardcoded paths
