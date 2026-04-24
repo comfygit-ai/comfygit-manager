@@ -69,6 +69,8 @@ Customize these in ComfyUI's **Settings → Keyboard Shortcuts**.
 
 For installation and setup instructions, visit the **[ComfyGit Documentation](https://docs.comfygit.org/)**.
 
+For local manager development, see **[scripts/README.md](scripts/README.md)**.
+
 ---
 
 ## Part of ComfyGit

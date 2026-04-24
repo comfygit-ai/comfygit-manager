@@ -1,0 +1,94 @@
+# Scripts
+
+This repo owns the local development flow for running `comfygit-manager` inside
+a Dockerized ComfyGit/ComfyUI environment.
+
+## Recommended dev container flow
+
+From the repo root:
+
+```bash
+./scripts/setup-dev-env comfygit-cloud-test1 \
+  --workspace /home/akatzfey/dev/projects/comfyui-agent-api/.comfygit-workspace \
+  --docker \
+  --comfyui-port 8189 \
+  --torch-backend cu126
+```
+
+For a fresh environment name, the Docker entrypoint creates the environment. If
+the environment already exists in the workspace, it reuses it.
+
+The dev stack:
+
+- mounts this `comfygit-manager` repo into the container
+- mounts the sibling `comfygit` repo and installs its core/CLI packages editable
+- symlinks this manager repo into `ComfyUI/custom_nodes`
+- tracks `comfygit-manager` as a development node
+- writes the local editable core path to `.cec/overlays/.local.toml`
+- runs `cg -e <env> run` with GPU passthrough from Docker Compose
+
+Local editable package paths should live in `.cec/overlays/.local.toml`, not in
+tracked `pyproject.toml` and not as direct `uv pip install -e` mutations inside
+the environment venv. `cg sync` and `cg run` own the venv.
+
+## Main scripts
+
+### `setup-dev-env`
+
+Configures an existing managed ComfyGit environment for manager development.
+
+Without `--docker`, it only mutates the selected local workspace environment:
+
+```bash
+./scripts/setup-dev-env --workspace ~/comfygit my-env
+```
+
+With `--docker`, it also starts or recreates the manager-owned Docker dev stack:
+
+```bash
+./scripts/setup-dev-env my-env --docker --comfyui-port 8189
+```
+
+Useful options:
+
+- `--workspace PATH`: ComfyGit workspace to use.
+- `--comfygit PATH`: local `comfygit` repo to mount/use.
+- `--torch-backend B`: backend for `cg create` and `cg run`, for example `cu126`.
+- `--extra-node PATH`: mount and track another local custom node repo.
+- `--no-build`: recreate the container without rebuilding the image.
+
+### `start-dev-container`
+
+Lower-level Docker wrapper used by `setup-dev-env --docker`.
+
+Use this directly when the environment already has the local overlay/symlink
+state you want and you only need to manage the container:
+
+```bash
+./scripts/start-dev-container my-env --comfyui-port 8189 --no-build
+```
+
+### `install-hooks.sh`
+
+Installs repo git hooks and the local clean filter for stripping local uv source
+sections from committed `pyproject.toml` files.
+
+### `strip-dev-sources.py`
+
+Helper used by hooks/filtering to avoid committing machine-local uv source
+overrides.
+
+## Legacy and specialized helpers
+
+These scripts predate the manager-owned Docker dev stack and are still useful
+for narrower workflows:
+
+- `comfygit-dev`: older local/simulator-oriented manager dev launcher.
+- `comfygit-worktree.sh`: creates a manager git worktree paired with a ComfyGit
+  environment.
+- `pull-runpod-image.sh` and `start-simulator.sh`: older RunPod/local simulator
+  helpers.
+- `sync-requirements.py`: syncs dependency metadata from project files.
+- `check-frontend-version.sh`: checks bundled frontend/version state.
+
+Prefer `setup-dev-env --docker` for normal manager development.
