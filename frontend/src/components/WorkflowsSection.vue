@@ -203,12 +203,6 @@
     @restart="handleRestart"
   />
 
-  <WorkflowContractModal
-    v-if="showContractModal && selectedWorkflow"
-    :workflow-name="selectedWorkflow"
-    @close="showContractModal = false"
-    @refresh="handleContractRefresh"
-  />
 </template>
 
 <script setup lang="ts">
@@ -216,7 +210,6 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import { useOrchestratorService } from '@/composables/useOrchestratorService'
 import WorkflowDetailsModal from './WorkflowDetailsModal.vue'
-import WorkflowContractModal from './WorkflowContractModal.vue'
 import WorkflowResolveModal from './WorkflowResolveModal.vue'
 import type { WorkflowInfo } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
@@ -244,7 +237,6 @@ const syncedExpanded = ref(true)
 const showAllSynced = ref(false)
 const showDetailsModal = ref(false)
 const showResolveModal = ref(false)
-const showContractModal = ref(false)
 const selectedWorkflow = ref<string | null>(null)
 
 // Computed filters
@@ -327,7 +319,10 @@ function handleResolve(name: string) {
 
 function handleContract(name: string) {
   selectedWorkflow.value = name
-  showContractModal.value = true
+  window.dispatchEvent(new CustomEvent('comfygit:open-io-mapping', {
+    detail: { workflowName: name }
+  }))
+  window.dispatchEvent(new CustomEvent('comfygit:close-panel'))
 }
 
 function handleOpenWorkflowContract(event: Event) {
@@ -345,11 +340,6 @@ async function handleResolveModalClose() {
   showResolveModal.value = false
   // Refresh workflows to reflect any resolution changes (queued downloads, etc.)
   await loadWorkflows(true)
-}
-
-async function handleContractRefresh() {
-  await loadWorkflows(true)
-  emit('refresh')
 }
 
 async function handleRestart() {

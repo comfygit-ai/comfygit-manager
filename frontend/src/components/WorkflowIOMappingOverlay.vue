@@ -49,6 +49,42 @@
         </div>
 
         <template v-else-if="form">
+          <section class="contract-meta-section">
+            <button
+              class="contract-meta-toggle"
+              type="button"
+              @click="metadataExpanded = !metadataExpanded"
+            >
+              <span>Contract Details</span>
+              <span class="contract-meta-toggle-icon">{{ metadataExpanded ? '▾' : '▸' }}</span>
+            </button>
+
+            <div v-if="metadataExpanded" class="contract-meta-body">
+              <BaseFormField label="Default Contract">
+                <BaseInput
+                  :model-value="form.default_contract"
+                  full-width
+                  @update:model-value="handleDefaultContractChange"
+                />
+              </BaseFormField>
+
+              <BaseFormField label="Display Name">
+                <BaseInput
+                  v-model="activeContract.display_name"
+                  full-width
+                />
+              </BaseFormField>
+
+              <BaseFormField label="Description">
+                <BaseTextarea
+                  v-model="activeContract.description"
+                  :rows="2"
+                  placeholder="Optional description for this contract"
+                />
+              </BaseFormField>
+            </div>
+          </section>
+
           <section class="contract-summary">
             <span class="summary-pill">{{ summaryLabel }}</span>
             <span class="summary-pill">{{ activeContract.inputs.length }} input{{ activeContract.inputs.length === 1 ? '' : 's' }}</span>
@@ -196,14 +232,38 @@
       </div>
 
       <div class="io-mapping-footer">
-        <BaseButton variant="secondary" @click="closeOverlay({ reopenPanel: true })">
-          Cancel
-        </BaseButton>
-        <BaseButton variant="primary" :loading="saving" @click="handleSave">
-          Save Contract
-        </BaseButton>
+        <div class="io-mapping-footer-left">
+          <BaseButton variant="secondary" @click="closeOverlay({ reopenPanel: true })">
+            Cancel
+          </BaseButton>
+        </div>
+        <div class="io-mapping-footer-right">
+          <BaseButton
+            variant="danger"
+            :disabled="!hasSavedContract"
+            :loading="deleting"
+            @click="handleDelete"
+          >
+            Delete
+          </BaseButton>
+          <BaseButton variant="primary" :loading="saving" @click="handleSave">
+            Save
+          </BaseButton>
+        </div>
       </div>
     </aside>
+
+    <ConfirmDialog
+      v-if="showDeleteConfirm"
+      title="Delete Workflow Contract"
+      :message="`Delete the contract for ${workflowName}?`"
+      warning="This removes the saved input/output contract for this workflow. The workflow itself will not be deleted."
+      confirm-label="Delete"
+      cancel-label="Cancel"
+      :destructive="true"
+      @confirm="confirmDelete"
+      @cancel="showDeleteConfirm = false"
+    />
   </div>
 </template>
 
@@ -215,6 +275,7 @@ import BaseInput from './base/BaseInput.vue'
 import BaseSelect from './base/BaseSelect.vue'
 import BaseTextarea from './base/BaseTextarea.vue'
 import BaseTitle from './base/BaseTitle.vue'
+import ConfirmDialog from './ConfirmDialog.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import type { NamedWorkflowContract, WorkflowContractInput, WorkflowContractOutput, WorkflowContractResponse, WorkflowExecutionContract } from '@/types/comfygit'
 
@@ -222,15 +283,18 @@ const props = defineProps<{
   comfyApp: any
 }>()
 
-const { getWorkflowContract, saveWorkflowContract } = useComfyGitService()
+const { getWorkflowContract, saveWorkflowContract, deleteWorkflowContract } = useComfyGitService()
 
 const visible = ref(false)
 const workflowName = ref('')
 const loading = ref(false)
 const saving = ref(false)
+const deleting = ref(false)
 const error = ref<string | null>(null)
 const response = ref<WorkflowContractResponse | null>(null)
 const form = ref<WorkflowExecutionContract | null>(null)
+const metadataExpanded = ref(false)
+const showDeleteConfirm = ref(false)
 const selectedInputIndex = ref<number | null>(null)
 const selectedOutputIndex = ref<number | null>(null)
 const overlayTick = ref(0)
@@ -254,6 +318,8 @@ const requiredOptions = [
   { label: 'Required', value: 'true' },
   { label: 'Optional', value: 'false' },
 ]
+
+const hasSavedContract = computed(() => response.value?.contract_summary.has_contract === true)
 
 const activeContract = computed<NamedWorkflowContract>(() => {
   if (!form.value) {
@@ -347,6 +413,15 @@ function slugifyName(value: string, fallback: string): string {
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
   return normalized || fallback
+}
+
+function handleDefaultContractChange(value: string) {
+  if (!form.value) return
+  const next = value.trim() || 'default'
+  form.value.default_contract = next
+  if (!form.value.contracts[next]) {
+    form.value.contracts[next] = { inputs: [], outputs: [] }
+  }
 }
 
 function normalizeType(value: unknown): string {
@@ -729,6 +804,28 @@ async function handleSave() {
   }
 }
 
+async function handleDelete() {
+  showDeleteConfirm.value = true
+}
+
+async function confirmDelete() {
+  if (!workflowName.value) return
+  showDeleteConfirm.value = false
+  deleting.value = true
+  error.value = null
+  try {
+    await deleteWorkflowContract(workflowName.value)
+    window.dispatchEvent(new CustomEvent('comfygit:workflow-contract-saved', {
+      detail: { workflowName: workflowName.value }
+    }))
+    closeOverlay({ reopenPanel: true })
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to delete workflow contract'
+  } finally {
+    deleting.value = false
+  }
+}
+
 function reopenWorkflowsPanel() {
   window.dispatchEvent(new CustomEvent('comfygit:open-panel', {
     detail: { initialView: 'workflows' }
@@ -739,6 +836,7 @@ function closeOverlay(options?: { reopenPanel?: boolean }) {
   visible.value = false
   hoverSummary.value = null
   hoverOverlay.value = null
+  showDeleteConfirm.value = false
   if (options?.reopenPanel) {
     reopenWorkflowsPanel()
   }
@@ -754,12 +852,17 @@ async function openOverlay(event: Event) {
   workflowName.value = nextWorkflow
   selectedInputIndex.value = null
   selectedOutputIndex.value = null
+  metadataExpanded.value = false
   visible.value = true
   await loadContract()
 }
 
 function handleEscape(event: KeyboardEvent) {
   if (event.key === 'Escape' && visible.value) {
+    if (showDeleteConfirm.value) {
+      showDeleteConfirm.value = false
+      return
+    }
     closeOverlay({ reopenPanel: true })
   }
 }
@@ -932,16 +1035,62 @@ onBeforeUnmount(() => {
 
 .io-mapping-footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   gap: var(--cg-space-2);
   padding: var(--cg-space-4);
   border-top: 1px solid var(--cg-color-border);
+}
+
+.io-mapping-footer-left,
+.io-mapping-footer-right {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
 }
 
 .mapping-section {
   display: flex;
   flex-direction: column;
   gap: var(--cg-space-3);
+}
+
+.contract-meta-section {
+  border: 1px solid var(--cg-color-border);
+  background: var(--cg-color-bg-secondary);
+}
+
+.contract-meta-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cg-space-2);
+  padding: var(--cg-space-3);
+  background: transparent;
+  border: 0;
+  color: var(--cg-color-text-primary);
+  cursor: pointer;
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  letter-spacing: var(--cg-letter-spacing-wide);
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.contract-meta-toggle:hover {
+  color: var(--cg-color-accent);
+}
+
+.contract-meta-toggle-icon {
+  color: var(--cg-color-text-muted);
+}
+
+.contract-meta-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-3);
+  padding: 0 var(--cg-space-3) var(--cg-space-3);
 }
 
 .contract-summary {
