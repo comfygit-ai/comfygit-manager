@@ -22,6 +22,8 @@ The manager owns:
 - workflow contract authoring UX
 - graph-aware overlay behavior used for contract selection
 - local panel information architecture
+- local bootstrap and local orchestrator lifecycle UX
+- runtime context normalization for the local panel
 - lightweight cloud bridge UX owned by the local panel
 - local cloud auth/link state
 - revision publication initiation from the local environment
@@ -29,7 +31,7 @@ The manager owns:
 
 The manager should not become the durable source of truth for portable workflow contracts. It should read/write that state through core persistence.
 The manager should also not become the deployment control plane for cloud
-targets or provider runtimes.
+targets, provider runtimes, or cloud-bound session lifecycle.
 
 ## ComfyGit Core
 
@@ -55,6 +57,7 @@ The cloud dashboard owns:
 - deployment lifecycle and runtime operations
 - targets, bindings, and provider-specific deployment configuration
 - published workflow identity and API exposure
+- cloud-bound authoring or execution session binding
 
 The local manager may link to and publish into the cloud, but it should not
 become a second full control-plane dashboard.
@@ -119,3 +122,22 @@ But it should not become the surface that:
 - orchestrates provider-specific builds
 - manages runtime artifacts directly
 - defines deployability independently of cloud verification
+
+### CGM-SB-09 [PARTIAL]: Cloud-bound manager sessions should keep lifecycle authority with cloud
+Validation: HUMAN_REVIEW
+
+The manager may run inside a cloud-provided authoring or execution session, but
+that does not make the embedded manager panel the owner of cloud session
+lifecycle.
+
+For cloud-bound sessions:
+
+- cloud should choose the workspace, environment, ref, commit, build, or
+  session identity
+- the manager should expose that binding as runtime context for the local panel
+- manager lifecycle controls should respect the capability map supplied by that
+  context
+- environment switching and session rebinding should go through cloud
+
+This preserves the local orchestrator as a local adoption tool while preventing
+cloud sessions from becoming detached from the outer cloud control plane.

@@ -8,6 +8,7 @@
       >
         <template #actions>
           <ActionButton
+            v-if="canCreate"
             variant="primary"
             size="sm"
             @click="openCreateModal"
@@ -52,7 +53,7 @@
           >
             <template #actions>
               <ActionButton
-                v-if="!env.is_current"
+                v-if="!env.is_current && canSwitch"
                 variant="primary"
                 size="sm"
                 @click="$emit('switch', env.name)"
@@ -85,6 +86,7 @@
         >
           <template v-if="!searchQuery" #actions>
             <ActionButton
+              v-if="canCreate"
               variant="primary"
               @click="openCreateModal"
             >
@@ -129,7 +131,7 @@
     v-if="selectedEnvironment"
     :environment="selectedEnvironment"
     :detail="environmentDetail"
-    :can-delete="environments.length > 1"
+    :can-delete="canDelete && environments.length > 1"
     @close="selectedEnvironment = null; environmentDetail = null"
     @delete="handleDetailsDelete"
     @export="handleDetailsExport"
@@ -159,6 +161,16 @@ import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import SectionGroup from '@/components/base/molecules/SectionGroup.vue'
 import EnvironmentDetailsModal from '@/components/EnvironmentDetailsModal.vue'
 import CreateEnvironmentModal from '@/components/CreateEnvironmentModal.vue'
+
+withDefaults(defineProps<{
+  canCreate?: boolean
+  canSwitch?: boolean
+  canDelete?: boolean
+}>(), {
+  canCreate: true,
+  canSwitch: true,
+  canDelete: true
+})
 
 const emit = defineEmits<{
   switch: [environmentName: string]

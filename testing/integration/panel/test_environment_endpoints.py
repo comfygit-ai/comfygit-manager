@@ -68,6 +68,57 @@ class TestListEnvironmentsEndpoint:
         assert data["environments"][1]["is_current"] is False
         assert data["orchestrator_active"] is False
         assert data["is_supervised"] is True
+        assert data["runtime_context"]["mode"] == "local_orchestrated"
+
+    async def test_cloud_bound_lists_only_current_environment(self, client, monkeypatch):
+        """Cloud-bound runtime should only expose the bound/current environment."""
+        mock_workspace = Mock()
+        mock_current_env = Mock()
+        mock_current_env.name = "env1"
+        mock_workspace.path = Path("/workspace")
+
+        mock_env1 = Mock()
+        mock_env1.name = "env1"
+        mock_env1.path = Path("/workspace/env1")
+
+        mock_env2 = Mock()
+        mock_env2.name = "env2"
+        mock_env2.path = Path("/workspace/env2")
+
+        mock_workspace.list_environments.return_value = [mock_env1, mock_env2]
+
+        def mock_detect():
+            return (True, mock_workspace, mock_current_env)
+
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.read_orchestrator_pid", lambda _: None)
+        monkeypatch.setenv("COMFYGIT_RUNTIME_MODE", "cloud_bound")
+
+        def mock_get_info(env, current_env):
+            return {
+                "name": env.name,
+                "is_current": env.name == current_env.name,
+                "path": str(env.path),
+                "created_at": "2025-01-01T00:00:00Z",
+                "workflow_count": 5,
+                "node_count": 10,
+                "model_count": 3,
+                "current_branch": "main"
+            }
+
+        monkeypatch.setattr("api.v2.environments._get_environment_info", mock_get_info)
+
+        resp = await client.get("/v2/comfygit/environments")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["is_managed"] is True
+        assert data["current"] == "env1"
+        assert [env["name"] for env in data["environments"]] == ["env1"]
+        assert data["runtime_context"]["mode"] == "cloud_bound"
+        assert data["runtime_context"]["bound_environment"] == "env1"
+        assert data["runtime_context"]["capabilities"]["can_restart_current"] is False
+        assert data["runtime_context"]["capabilities"]["can_stop_current"] is False
 
     async def test_success_not_managed(self, client, monkeypatch):
         """Should return empty list when not in managed workspace."""
@@ -323,6 +374,36 @@ class TestSwitchEnvironmentEndpoint:
         assert data["error"] == "orchestrator_active"
         release_mock.assert_called_once()
         should_spawn_mock.assert_not_called()
+
+    async def test_error_cloud_bound_switch_denied(self, client, monkeypatch, tmp_path):
+        """Should deny environment switching when runtime context is cloud-bound."""
+        mock_workspace = Mock()
+        mock_workspace.path = tmp_path
+        mock_current_env = Mock()
+        mock_current_env.name = "env1"
+
+        def mock_detect():
+            return (True, mock_workspace, mock_current_env)
+
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setenv("COMFYGIT_RUNTIME_MODE", "cloud_bound")
+
+        get_env_mock = Mock()
+        mock_workspace.get_environment = get_env_mock
+        acquire_mock = Mock()
+        monkeypatch.setattr("orchestrator.acquire_switch_lock", acquire_mock)
+
+        resp = await client.post("/v2/comfygit/switch_environment", json={
+            "target_env": "env2"
+        })
+
+        assert resp.status == 403
+        data = await resp.json()
+        assert data["error"] == "runtime_capability_denied"
+        assert data["reason"] == "can_switch_environment"
+        assert data["runtime"]["mode"] == "cloud_bound"
+        get_env_mock.assert_not_called()
+        acquire_mock.assert_not_called()
 
     async def test_switch_allows_supervised_with_orchestrator(self, client, monkeypatch, tmp_path):
         """Supervised process should proceed even if orchestrator is active."""
@@ -590,6 +671,23 @@ class TestCreateEnvironmentEndpoint:
         assert data["status"] == "started"
         assert "my-new-env" in data["message"]
 
+    async def test_error_cloud_bound_create_denied(self, client, monkeypatch, tmp_path):
+        """Should deny environment creation when runtime context is cloud-bound."""
+        mock_workspace = Mock()
+        mock_workspace.path = tmp_path
+        monkeypatch.setattr(env_module.WorkspaceFactory, "find", Mock(return_value=mock_workspace))
+        monkeypatch.setenv("COMFYGIT_RUNTIME_MODE", "cloud_bound")
+
+        resp = await client.post("/v2/workspace/environments", json={
+            "name": "my-new-env",
+            "workspace_path": str(tmp_path)
+        })
+
+        assert resp.status == 403
+        data = await resp.json()
+        assert data["error"] == "runtime_capability_denied"
+        assert data["reason"] == "can_create_environment"
+
     async def test_success_falls_back_to_detection_when_no_workspace_path(
         self, client, monkeypatch, tmp_path
     ):
@@ -696,6 +794,70 @@ class TestCreateEnvironmentEndpoint:
         data = await resp.json()
         assert data["status"] == "error"
         assert "reserved" in data["message"].lower()
+
+
+@pytest.mark.integration
+class TestLifecycleCapabilityEndpoints:
+    """Lifecycle endpoints should enforce runtime capabilities."""
+
+    async def test_cloud_bound_delete_denied(self, client, monkeypatch, tmp_path):
+        mock_workspace = Mock()
+        mock_workspace.path = tmp_path
+        mock_current_env = Mock()
+        mock_current_env.name = "env1"
+
+        monkeypatch.setattr(
+            "orchestrator.detect_environment_type",
+            lambda: (True, mock_workspace, mock_current_env)
+        )
+        monkeypatch.setenv("COMFYGIT_RUNTIME_MODE", "cloud_bound")
+        mock_workspace.list_environments = Mock()
+
+        resp = await client.delete("/v2/workspace/environments/env2")
+
+        assert resp.status == 403
+        data = await resp.json()
+        assert data["error"] == "runtime_capability_denied"
+        assert data["reason"] == "can_delete_environment"
+        mock_workspace.list_environments.assert_not_called()
+
+    async def test_cloud_bound_reboot_denied(self, client, monkeypatch, tmp_path):
+        mock_workspace = Mock()
+        mock_workspace.path = tmp_path
+        mock_current_env = Mock()
+        mock_current_env.name = "env1"
+
+        monkeypatch.setattr(
+            "orchestrator.detect_environment_type",
+            lambda: (True, mock_workspace, mock_current_env)
+        )
+        monkeypatch.setenv("COMFYGIT_RUNTIME_MODE", "cloud_bound")
+
+        resp = await client.get("/v2/manager/reboot")
+
+        assert resp.status == 403
+        data = await resp.json()
+        assert data["error"] == "runtime_capability_denied"
+        assert data["reason"] == "can_restart_current"
+
+    async def test_cloud_bound_stop_denied(self, client, monkeypatch, tmp_path):
+        mock_workspace = Mock()
+        mock_workspace.path = tmp_path
+        mock_current_env = Mock()
+        mock_current_env.name = "env1"
+
+        monkeypatch.setattr(
+            "orchestrator.detect_environment_type",
+            lambda: (True, mock_workspace, mock_current_env)
+        )
+        monkeypatch.setenv("COMFYGIT_RUNTIME_MODE", "cloud_bound")
+
+        resp = await client.post("/v2/comfygit/stop")
+
+        assert resp.status == 403
+        data = await resp.json()
+        assert data["error"] == "runtime_capability_denied"
+        assert data["reason"] == "can_stop_current"
 
 @pytest.mark.integration
 class TestGetEnvironmentDetailEndpoint:

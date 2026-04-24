@@ -1726,7 +1726,26 @@ export function useComfyGitService() {
         current_environment: mockState.isManaged ? 'mock-env-1' : null,
         detected_models_dir: '/mock/ComfyUI/models',
         cli_installed: false,
-        cli_path: null
+        cli_path: null,
+        runtime_context: {
+          mode: mockState.isManaged ? 'local_managed' : 'local_unmanaged',
+          lifecycle_authority: 'manager',
+          capabilities: {
+            can_initialize_workspace: setupState.value === 'no_workspace',
+            can_create_environment: setupState.value !== 'no_workspace',
+            can_switch_environment: setupState.value === 'managed' || setupState.value === 'unmanaged',
+            can_restart_current: true,
+            can_stop_current: true,
+            can_delete_environment: setupState.value === 'managed' || setupState.value === 'unmanaged'
+          },
+          bound_workspace: mockState.hasWorkspace ? '~/comfygit' : null,
+          bound_environment: mockState.isManaged ? 'mock-env-1' : null,
+          bound_ref: null,
+          bound_commit: null,
+          cloud_session_id: null,
+          source: 'mock',
+          denial_reasons: {}
+        }
       }
     }
     return fetchApi<SetupStatus>('/v2/setup/status')

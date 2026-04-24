@@ -1222,6 +1222,31 @@ export interface DeploymentStatus {
 // First-Time Setup Types
 export type SetupState = 'no_workspace' | 'empty_workspace' | 'unmanaged' | 'managed'
 
+export type RuntimeMode = 'local_unmanaged' | 'local_managed' | 'local_orchestrated' | 'cloud_bound'
+export type LifecycleAuthority = 'manager' | 'orchestrator' | 'cloud'
+
+export interface RuntimeCapabilities {
+  can_initialize_workspace: boolean
+  can_create_environment: boolean
+  can_switch_environment: boolean
+  can_restart_current: boolean
+  can_stop_current: boolean
+  can_delete_environment: boolean
+}
+
+export interface RuntimeContext {
+  mode: RuntimeMode
+  lifecycle_authority: LifecycleAuthority
+  capabilities: RuntimeCapabilities
+  bound_workspace: string | null
+  bound_environment: string | null
+  bound_ref: string | null
+  bound_commit: string | null
+  cloud_session_id: string | null
+  source: string
+  denial_reasons: Record<string, string>
+}
+
 export interface SetupStatus {
   state: SetupState
   workspace_path: string | null
@@ -1231,6 +1256,7 @@ export interface SetupStatus {
   detected_models_dir: string | null
   cli_installed: boolean
   cli_path: string | null
+  runtime_context?: RuntimeContext
 }
 
 // Manager Update Notice Types

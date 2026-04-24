@@ -8,6 +8,7 @@ import uuid
 from aiohttp import web
 from pathlib import Path
 
+from cgm_core.runtime_context import build_runtime_context, ensure_capability
 from cgm_utils.async_helpers import run_sync
 from cgm_utils.environment_name_validation import validate_environment_name
 from comfygit_core.factories.workspace_factory import WorkspaceFactory
@@ -155,6 +156,11 @@ def _get_orchestrator_info(workspace) -> dict:
 async def list_environments(request: web.Request) -> web.Response:
     """List all environments in workspace."""
     is_managed, workspace, current_env = orchestrator.detect_environment_type()
+    runtime_context = build_runtime_context(
+        "managed" if is_managed else "no_workspace",
+        workspace_path=str(workspace.path) if workspace else None,
+        current_environment=current_env.name if current_env else None,
+    )
 
     if not is_managed or not workspace:
         return web.json_response({
@@ -164,12 +170,16 @@ async def list_environments(request: web.Request) -> web.Response:
             "orchestrator_active": False,
             "orchestrator_environment": None,
             "is_supervised": os.environ.get("COMFYGIT_SUPERVISED") == "1",
+            "runtime_context": runtime_context.to_dict(),
         })
 
     try:
         orch_info = _get_orchestrator_info(workspace)
         # Get all environment objects
         all_envs = await run_sync(workspace.list_environments)
+        if runtime_context.mode == "cloud_bound":
+            bound_env_name = runtime_context.bound_environment or (current_env.name if current_env else None)
+            all_envs = [env for env in all_envs if env.name == bound_env_name]
 
         environments = []
         for env in all_envs:
@@ -196,6 +206,7 @@ async def list_environments(request: web.Request) -> web.Response:
             "orchestrator_active": orch_info["active"],
             "orchestrator_environment": orch_info["environment"],
             "is_supervised": os.environ.get("COMFYGIT_SUPERVISED") == "1",
+            "runtime_context": runtime_context.to_dict(),
         })
 
     except Exception as e:
@@ -350,6 +361,14 @@ async def switch_environment(request: web.Request) -> web.Response:
 
     # Get workspace - use explicit path if provided (first-time setup), otherwise detect
     if workspace_path:
+        runtime_context = build_runtime_context(
+            "unmanaged",
+            workspace_path=workspace_path,
+            current_environment=None,
+        )
+        denial = ensure_capability(runtime_context, "can_switch_environment")
+        if denial:
+            return denial
         try:
             workspace = WorkspaceFactory.find(Path(workspace_path))
             environment = None  # No source environment when switching from unmanaged
@@ -359,10 +378,20 @@ async def switch_environment(request: web.Request) -> web.Response:
             }, status=404)
     else:
         is_managed, workspace, environment = orchestrator.detect_environment_type()
+        runtime_context = build_runtime_context(
+            "managed" if is_managed else "no_workspace",
+            workspace_path=str(workspace.path) if workspace else None,
+            current_environment=environment.name if environment else None,
+        )
+        denial = ensure_capability(runtime_context, "can_switch_environment")
+        if denial and runtime_context.mode == "cloud_bound":
+            return denial
         if not is_managed or not environment:
             return web.json_response({
                 "error": "Not in managed environment"
             }, status=500)
+        if denial:
+            return denial
 
     # Validate target environment exists
     try:
@@ -591,6 +620,14 @@ async def create_environment(request: web.Request) -> web.Response:
 
     # Get workspace - use explicit path if provided (first-time setup), otherwise detect
     if workspace_path:
+        runtime_context = build_runtime_context(
+            "empty_workspace",
+            workspace_path=workspace_path,
+            current_environment=None,
+        )
+        denial = ensure_capability(runtime_context, "can_create_environment")
+        if denial:
+            return denial
         try:
             workspace = WorkspaceFactory.find(Path(workspace_path))
         except CDWorkspaceNotFoundError:
@@ -600,11 +637,21 @@ async def create_environment(request: web.Request) -> web.Response:
             }, status=404)
     else:
         is_managed, workspace, _ = orchestrator.detect_environment_type()
+        runtime_context = build_runtime_context(
+            "managed" if is_managed else "no_workspace",
+            workspace_path=str(workspace.path) if workspace else None,
+            current_environment=None,
+        )
+        denial = ensure_capability(runtime_context, "can_create_environment")
+        if denial and runtime_context.mode == "cloud_bound":
+            return denial
         if not is_managed or not workspace:
             return web.json_response({
                 "status": "error",
                 "message": "Not in managed workspace"
             }, status=500)
+        if denial:
+            return denial
 
     # Check if creation already in progress
     with _create_task_lock:
@@ -689,11 +736,21 @@ async def delete_environment(request: web.Request) -> web.Response:
         }
     """
     is_managed, workspace, current_env = orchestrator.detect_environment_type()
+    runtime_context = build_runtime_context(
+        "managed" if is_managed else "no_workspace",
+        workspace_path=str(workspace.path) if workspace else None,
+        current_environment=current_env.name if current_env else None,
+    )
+    denial = ensure_capability(runtime_context, "can_delete_environment")
+    if denial and runtime_context.mode == "cloud_bound":
+        return denial
     if not is_managed or not workspace:
         return web.json_response({
             "status": "error",
             "message": "Not in managed workspace"
         }, status=500)
+    if denial:
+        return denial
 
     name = request.match_info.get("name", "").strip()
     if not name:

@@ -11,6 +11,7 @@ This surface covers:
 - manager-owned modal and overlay UX
 - graph-adjacent interaction owned by the manager
 - missing-resource, model-download, and dependency-resolution UX
+- lifecycle and setup controls rendered inside the local manager panel
 
 This surface does not define:
 - portable manifest persistence details in core
@@ -166,3 +167,21 @@ Validation: HUMAN_REVIEW
 Local editable package overrides belong to development scripts and local
 overlays. The manager UI should not present tracked environment metadata as the
 place to configure a developer's personal source checkout paths.
+
+### CGM-UI-18 [PARTIAL]: Lifecycle controls should render from runtime capabilities
+Validation: MIXED
+
+The manager UI should render workspace setup, environment creation,
+environment switching, restart, stop, and delete affordances from the backend
+runtime context capability map rather than hardcoded assumptions about the
+current process.
+
+In local bootstrap and local orchestrator contexts, this should preserve the
+friendly custom-node install path for non-technical users.
+
+In cloud-bound contexts, the UI should present the bound environment/session as
+managed by ComfyGit Cloud and hide or disable lifecycle controls whose
+authority belongs to the cloud dashboard.
+
+The corresponding API and lifecycle semantics are specified by `CGM-API-13`
+and `CGM-ENV-07` through `CGM-ENV-11`.

@@ -13,6 +13,7 @@ from datetime import datetime
 from aiohttp import web
 from server import PromptServer
 import orchestrator
+from cgm_core.runtime_context import build_runtime_context, ensure_capability
 
 # Import panel logging infrastructure for operation logging
 try:
@@ -305,6 +306,16 @@ STOP_EXIT_CODE = 0      # Signals orchestrator to stop cleanly (or just exits if
 async def reboot(request):
     """Reboot ComfyUI server with exit code 42 to trigger restart loop."""
     import os
+    is_managed, workspace, current_env = orchestrator.detect_environment_type()
+    runtime_context = build_runtime_context(
+        "managed" if is_managed else "unmanaged",
+        workspace_path=str(workspace.path) if workspace else None,
+        current_environment=current_env.name if current_env else None,
+    )
+    denial = ensure_capability(runtime_context, "can_restart_current")
+    if denial:
+        return denial
+
     print(f"[ComfyGit] Reboot requested - exiting with code {RESTART_EXIT_CODE}")
 
     async def delayed_exit():
@@ -326,6 +337,16 @@ async def stop_environment(request):
         Exit with code 0, which just terminates the process.
     """
     import os
+    is_managed, workspace, current_env = orchestrator.detect_environment_type()
+    runtime_context = build_runtime_context(
+        "managed" if is_managed else "unmanaged",
+        workspace_path=str(workspace.path) if workspace else None,
+        current_environment=current_env.name if current_env else None,
+    )
+    denial = ensure_capability(runtime_context, "can_stop_current")
+    if denial:
+        return denial
+
     is_supervised = os.environ.get("COMFYGIT_SUPERVISED") == "1"
 
     if is_supervised:

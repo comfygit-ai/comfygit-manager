@@ -12,6 +12,7 @@ This surface covers:
 - workflow summary/detail payloads exposed to the local manager UI
 - resource-resolution and model-download endpoints consumed by the panel
 - local environment switch and status endpoints consumed by the panel
+- runtime context and lifecycle capability payloads consumed by the panel
 
 This surface does not define:
 - cloud control-plane APIs
@@ -101,3 +102,21 @@ Validation: TEST
 The manager backend should provide enough switch-lock, process, or heartbeat
 state for clients and tests to distinguish an in-progress switch from a stale
 or crashed process state.
+
+### CGM-API-13 [PARTIAL]: Runtime context should be exposed through manager API payloads
+Validation: MIXED
+
+The manager API should expose the normalized runtime context and capability map
+needed by the frontend to decide which lifecycle and setup controls are
+available.
+
+At minimum, the API contract should support:
+
+- runtime mode
+- lifecycle authority
+- lifecycle/setup capability flags
+- optional bound workspace, environment, ref, commit, or cloud session identity
+- machine-readable denial reasons when unavailable operations are requested
+
+The detailed lifecycle semantics are specified by `CGM-ENV-07` through
+`CGM-ENV-11` in `docs/specs/environment-lifecycle-and-orchestrator.md`.

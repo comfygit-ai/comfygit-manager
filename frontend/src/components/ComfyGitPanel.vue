@@ -45,10 +45,20 @@
       <div class="env-switcher-header">
         <div class="env-switcher-label">CURRENT ENVIRONMENT</div>
         <div class="env-control-buttons">
-          <button class="env-control-btn" title="Restart environment" @click="handleRestart">
+          <button
+            v-if="runtimeCapabilities.can_restart_current"
+            class="env-control-btn"
+            title="Restart environment"
+            @click="handleRestart"
+          >
             Restart
           </button>
-          <button class="env-control-btn stop" title="Stop environment" @click="handleStop">
+          <button
+            v-if="runtimeCapabilities.can_stop_current"
+            class="env-control-btn stop"
+            title="Stop environment"
+            @click="handleStop"
+          >
             Stop
           </button>
         </div>
@@ -238,6 +248,9 @@
           <EnvironmentsSection
             v-else-if="currentView === 'environments'"
             ref="environmentsSectionRef"
+            :can-create="runtimeCapabilities.can_create_environment"
+            :can-switch="runtimeCapabilities.can_switch_environment"
+            :can-delete="runtimeCapabilities.can_delete_environment"
             @switch="handleEnvironmentSwitch"
             @created="handleEnvironmentCreated"
             @delete="handleEnvironmentDelete"
@@ -394,7 +407,7 @@
                 </div>
               </div>
               <button
-                v-if="!env.is_current"
+                v-if="!env.is_current && runtimeCapabilities.can_switch_environment"
                 class="switch-btn"
                 @click="handleEnvironmentSwitch(env.name)"
               >
@@ -466,7 +479,16 @@ import FirstTimeSetupWizard from './FirstTimeSetupWizard.vue'
 import UpdateNoticeBanner from './UpdateNoticeBanner.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import { useOrchestratorService } from '@/composables/useOrchestratorService'
-import type { ComfyGitStatus, CommitInfo, BranchInfo, EnvironmentInfo, SetupStatus, SetupState, UpdateCheckResponse } from '@/types/comfygit'
+import type {
+  ComfyGitStatus,
+  CommitInfo,
+  BranchInfo,
+  EnvironmentInfo,
+  RuntimeCapabilities,
+  SetupStatus,
+  SetupState,
+  UpdateCheckResponse
+} from '@/types/comfygit'
 import { dismissVersion, shouldShowUpdateNotice } from '@/utils/updateNotice'
 
 const props = defineProps<{
@@ -522,6 +544,17 @@ const showSetupWizard = ref(false)
 const wizardInitialStep = ref<1 | 2>(1)
 const setupState = computed<SetupState>(() => {
   return setupStatus.value?.state || 'managed'
+})
+const defaultRuntimeCapabilities: RuntimeCapabilities = {
+  can_initialize_workspace: false,
+  can_create_environment: true,
+  can_switch_environment: true,
+  can_restart_current: true,
+  can_stop_current: true,
+  can_delete_environment: true
+}
+const runtimeCapabilities = computed<RuntimeCapabilities>(() => {
+  return setupStatus.value?.runtime_context?.capabilities || defaultRuntimeCapabilities
 })
 const isLoading = ref(false)
 const error = ref<string | null>(null)
@@ -1018,6 +1051,10 @@ function setRefreshFlag() {
 
 // Restart current environment
 async function handleRestart() {
+  if (!runtimeCapabilities.value.can_restart_current) {
+    showToast('Restart is not available in this runtime context.', 'warning')
+    return
+  }
   confirmDialog.value = {
     title: 'Restart Environment',
     message: 'Restart the current environment?',
@@ -1042,6 +1079,10 @@ async function handleRestart() {
 
 // Stop current environment
 async function handleStop() {
+  if (!runtimeCapabilities.value.can_stop_current) {
+    showToast('Stop is not available in this runtime context.', 'warning')
+    return
+  }
   confirmDialog.value = {
     title: 'Stop Environment',
     message: 'Stop the current environment?',
@@ -1065,6 +1106,10 @@ async function handleStop() {
 
 // Environment switching flow
 async function handleEnvironmentSwitch(envName: string, workspacePath?: string | null) {
+  if (!runtimeCapabilities.value.can_switch_environment) {
+    showToast('Environment switching is not available in this runtime context.', 'warning')
+    return
+  }
   showEnvironmentSelector.value = false
   targetEnvironment.value = envName
   switchWorkspacePath.value = workspacePath || null
@@ -1352,12 +1397,16 @@ async function handleEnvironmentCreated(environmentName: string, switchAfter: bo
   }
 
   // Switch if requested
-  if (switchAfter) {
+  if (switchAfter && runtimeCapabilities.value.can_switch_environment) {
     await handleEnvironmentSwitch(environmentName)
   }
 }
 
 async function handleEnvironmentDelete(envName: string) {
+  if (!runtimeCapabilities.value.can_delete_environment) {
+    showToast('Environment deletion is not available in this runtime context.', 'warning')
+    return
+  }
   // Check if trying to delete current environment
   if (currentEnvironment.value?.name === envName) {
     showToast('Cannot delete the currently active environment. Switch to another environment first.', 'error')
@@ -1404,7 +1453,9 @@ async function handleSetupComplete(environmentName: string, workspacePath: strin
   }
 
   // Trigger environment switch with workspace path for first-time setup
-  await handleEnvironmentSwitch(environmentName, workspacePath)
+  if (runtimeCapabilities.value.can_switch_environment) {
+    await handleEnvironmentSwitch(environmentName, workspacePath)
+  }
 }
 
 function handleSetupWizardClose() {
@@ -1452,6 +1503,10 @@ async function handleEnvironmentCreatedNoSwitch(envName: string) {
 }
 
 function handleCreateEnvironmentFromStatus() {
+  if (!runtimeCapabilities.value.can_create_environment) {
+    showToast('Environment creation is not available in this runtime context.', 'warning')
+    return
+  }
   // Navigate to environments section and trigger create modal
   selectView('environments', 'workspace')
   // Give time for section to mount, then open create modal
@@ -1476,19 +1531,19 @@ onMounted(async () => {
     setupStatus.value = await getSetupStatus()
 
     // Block panel for all non-managed states
-    if (setupStatus.value.state === 'no_workspace') {
+    if (setupStatus.value.state === 'no_workspace' && runtimeCapabilities.value.can_initialize_workspace) {
       showSetupWizard.value = true
       wizardInitialStep.value = 1
       return
     }
 
-    if (setupStatus.value.state === 'empty_workspace') {
+    if (setupStatus.value.state === 'empty_workspace' && runtimeCapabilities.value.can_create_environment) {
       showSetupWizard.value = true
       wizardInitialStep.value = 2  // Skip workspace creation
       return
     }
 
-    if (setupStatus.value.state === 'unmanaged') {
+    if (setupStatus.value.state === 'unmanaged' && runtimeCapabilities.value.can_switch_environment) {
       showSetupWizard.value = true
       wizardInitialStep.value = 2  // Skip workspace creation
       return
