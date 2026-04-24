@@ -94,4 +94,4 @@ For local manager development, see **[scripts/README.md](scripts/README.md)**.
 
 ## License
 
-[GPL-3.0](LICENSE)
+[GPL-3.0](LICENSE.txt)
