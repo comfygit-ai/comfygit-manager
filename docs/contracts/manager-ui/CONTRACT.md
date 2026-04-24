@@ -63,14 +63,38 @@ Validation: LLM_REVIEW
 
 Contract-authoring UI should subscribe to the active workflow load lifecycle used by the manager extension so that graph-aware features operate on the currently loaded workflow rather than stale or inferred state.
 
-### CGM-UI-09 [LIVE]: Workflow contract authoring should use paired review and mapping surfaces over one contract object
+### CGM-UI-09 [RETIRED]: Workflow contract authoring should use paired review and mapping surfaces over one contract object
 Validation: HUMAN_REVIEW
 
-The manager should expose:
+The manager previously exposed:
 - a contract modal for review and small edits
 - a graph-aware I/O mapping overlay for direct selection
 
-These surfaces should edit the same underlying contract object rather than creating separate authoring systems.
+This two-surface model was retired because it made the contract flow feel
+duplicative. The active direction is `CGM-UI-09A`: one graph-aware mapping
+surface owns contract metadata, input/output mapping, save, delete, and cancel.
+
+### CGM-UI-09A [LIVE]: Workflow contract authoring should use one graph-aware mapping surface
+Validation: HUMAN_REVIEW
+
+The workflow `Contract` action should open the manager-owned I/O mapping overlay
+directly rather than first opening a separate review modal. That overlay should
+own:
+
+- contract metadata such as default contract, display name, and description
+- input and output item editing
+- graph click-mapping
+- cancel, save, and delete actions
+
+Less-frequent metadata editing may be collapsed by default, but it should still
+be available inside the same authoring surface.
+
+### CGM-UI-09B [LIVE]: Destructive workflow contract deletion should require confirmation
+Validation: HUMAN_REVIEW
+
+Deleting a saved workflow execution contract should require an explicit
+destructive confirmation. The confirmation should make clear that the saved
+contract is removed, not the workflow itself.
 
 ### CGM-UI-10 [PARTIAL]: Panel navigation should group destinations by operational domain rather than feature accretion order
 Validation: HUMAN_REVIEW

@@ -42,27 +42,29 @@ later introduces a stronger workflow identity model.
 
 ## Intended UX Shape
 
-### CGM-WCA-01 [PLANNED]: Contract authoring should start from a workflow-scoped action in the manager
+### CGM-WCA-01 [LIVE]: Contract authoring should start from a workflow-scoped action in the manager
 Validation: HUMAN_REVIEW
 
 Users should start contract work from the workflow itself, not from workspace settings or unrelated global screens.
 
-### CGM-WCA-02 [PLANNED]: Contract authoring should use a dedicated manager-owned editor surface
+### CGM-WCA-02 [LIVE]: Contract authoring should use a dedicated manager-owned editor surface
 Validation: HUMAN_REVIEW
 
 The manager should provide a distinct contract authoring surface rather than overloading the dependency resolution wizard or dependency details modal.
 
-### CGM-WCA-03 [PLANNED]: The first contract authoring slice should support inspect-and-save before graph click-mapping
+### CGM-WCA-03 [RETIRED]: The first contract authoring slice should support inspect-and-save before graph click-mapping
 Validation: HUMAN_REVIEW
 
-The first implementation should support:
+This initial sequencing constraint has been retired. The active implementation
+now enters graph-aware I/O mapping directly from a workflow-scoped `Contract`
+action, with inspect/edit/save controls in the same surface.
+
+The retired first implementation would have supported:
 - reading existing contract state
 - showing inferred candidates
 - saving a structured contract
 
-Full click-to-map canvas interaction can follow afterward.
-
-### CGM-WCA-04 [PLANNED]: Contract authoring should treat inputs and outputs as separate editable sets
+### CGM-WCA-04 [LIVE]: Contract authoring should treat inputs and outputs as separate editable sets
 Validation: HUMAN_REVIEW
 
 The editor should clearly distinguish:
@@ -71,17 +73,39 @@ The editor should clearly distinguish:
 
 These should not be conflated with dependency metadata.
 
-### CGM-WCA-05 [PLANNED]: Contract save must replace the durable saved contract, not only transient UI state
+### CGM-WCA-05 [LIVE]: Contract save must replace the durable saved contract, not only transient UI state
 Validation: TEST
 
 Saving a contract should update the manager backend and the underlying ComfyGit-managed manifest state so the contract survives reloads, restarts, commits, and later revision publication.
 
-### CGM-WCA-06 [PLANNED]: A workflow without a valid contract should remain editable but not contract-ready
+### CGM-WCA-06 [LIVE]: A workflow without a valid contract should remain editable but not contract-ready
 Validation: HUMAN_REVIEW
 
 The manager should permit workflows to exist without a saved execution contract, while clearly communicating that contract-dependent downstream usage is not yet configured.
 
-### CGM-WCA-07 [PLANNED]: Existing saved contract state should prefill the authoring UI
+### CGM-WCA-07 [LIVE]: Existing saved contract state should prefill the authoring UI
 Validation: TEST
 
 If a workflow already has a saved execution contract, reopening the editor should load and display that state rather than starting from an empty contract.
+
+### CGM-WCA-08 [LIVE]: The workflow contract action should enter graph-aware mapping directly
+Validation: HUMAN_REVIEW
+
+Clicking `Contract` for a workflow should open the I/O mapping surface directly
+and close the main control panel while mapping is active. Users should not have
+to pass through a separate contract review modal before selecting graph
+inputs/outputs.
+
+### CGM-WCA-09 [LIVE]: Contract metadata should live inside the mapping surface
+Validation: HUMAN_REVIEW
+
+The mapping surface should include contract-level metadata controls for the
+default contract name, display name, and description. These controls may be
+collapsed by default because graph input/output mapping is the primary task.
+
+### CGM-WCA-10 [LIVE]: Deleting a workflow contract should be confirmed before mutation
+Validation: HUMAN_REVIEW
+
+The mapping surface should expose contract deletion as a destructive operation
+and require confirmation before calling the delete endpoint. The confirmation
+should distinguish deleting the contract from deleting the workflow.
