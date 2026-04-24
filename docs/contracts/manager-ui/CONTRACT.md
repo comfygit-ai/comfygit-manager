@@ -10,6 +10,7 @@ This surface covers:
 - workflow-facing actions
 - manager-owned modal and overlay UX
 - graph-adjacent interaction owned by the manager
+- missing-resource, model-download, and dependency-resolution UX
 
 This surface does not define:
 - portable manifest persistence details in core
@@ -70,84 +71,98 @@ The manager should expose:
 
 These surfaces should edit the same underlying contract object rather than creating separate authoring systems.
 
-### CGM-UI-10 [PLANNED]: Panel navigation should group destinations by operational domain rather than feature accretion order
+### CGM-UI-10 [PARTIAL]: Panel navigation should group destinations by operational domain rather than feature accretion order
 Validation: HUMAN_REVIEW
 
-Primary navigation should cluster related actions into bounded domains such as:
-- current-environment authoring
-- workspace-wide management
-- cloud linkage and publication
-- diagnostics
+The UI contract requires the panel to keep navigation grouped by user-facing
+operational domains rather than feature accretion order.
 
-The sidebar should not expose unrelated git, environment transfer, cloud, and debug features as a single mixed section.
+Detailed navigation structure is specified in `CGM-IA-01` through `CGM-IA-11`
+in `docs/specs/panel-information-architecture.md`.
 
-### CGM-UI-11 [PLANNED]: The local panel should center environment management, version control, and cloud publication rather than local deployment orchestration
+This contract clause is partial for the same reason as `CGM-IA-01`: the active
+panel groups `THIS ENV`, `WORKSPACE`, and `CLOUD`, while diagnostics is still
+inside `THIS ENV` rather than its own top-level domain.
+
+### CGM-UI-11 [LIVE]: The local panel should center environment management, version control, and cloud publication rather than local deployment orchestration
 Validation: HUMAN_REVIEW
 
-The local panel should primarily help users:
-- author environments
-- manage workflows, models, and nodes
-- inspect and use version control
-- publish immutable revisions to cloud
+The UI contract requires the local panel to remain an authoring and publication
+bridge, not a cloud deployment dashboard.
 
-It should not evolve into the primary surface for target provisioning,
-deployment orchestration, or runtime operations against RunPod, custom workers,
-or other cloud providers.
+Detailed local/cloud responsibilities are specified in:
 
-### CGM-UI-12 [PLANNED]: The publish surface should expose lightweight cloud linkage and revision-publication state rather than full deployment administration
+- `CGM-IA-09` and `CGM-IA-10` in
+  `docs/specs/panel-information-architecture.md`
+- `CGM-CLP-01` through `CGM-CLP-05` in
+  `docs/specs/cloud-linking-and-publication.md`
+
+### CGM-UI-12 [LIVE]: The publish surface should expose lightweight cloud linkage and revision-publication state rather than full deployment administration
 Validation: HUMAN_REVIEW
 
-The manager may expose:
-- signed-in cloud account state
-- active cloud workspace selection when supported by cloud
-- explicit linked cloud environment selection for the current local environment
-- publish revision actions
-- recent published revisions
-- open-dashboard affordances
+The UI contract requires `Publish` to stay revision-centric and lightweight.
+It may summarize cloud link state and publication history, but it should not
+become the surface for target provisioning, deployment binding, or runtime
+administration.
 
-It should not try to replicate cloud-side target, deployment, binding, or
-runtime monitoring UX in the local panel.
+Detailed publish behavior is specified by `CGM-CLP-02`, `CGM-CLP-03`,
+`CGM-CLP-03B`, and `CGM-IA-10`.
 
-### CGM-UI-12A [PLANNED]: The publish surface should not imply revision-delta claims that the system cannot actually prove
+### CGM-UI-12A [LIVE]: The publish surface should not imply revision-delta claims that the system cannot actually prove
 Validation: HUMAN_REVIEW
 
-If the local panel shows a `Working Copy` concept, it may describe that object
-as:
-- current local publish candidate
-- not yet represented by a known published revision
+The UI contract requires local publish state to avoid unproven semantic diff
+claims.
 
-It should not present unproven cloud-revision delta claims such as:
-- workflows added or removed relative to a cloud revision
-- semantic environment drift from the latest published revision
-- strict ancestry from a specific cloud revision
+Detailed working-copy semantics are specified by `CGM-CLP-02A`.
 
-Those claims require an explicit revision comparison model rather than simple
-local-vs-published mismatch detection.
-
-### CGM-UI-12B [PLANNED]: Publish actions should use the same family of validation and warning UX as export for deployability-sensitive issues
+### CGM-UI-12B [LIVE]: Publish actions should use the same family of validation and warning UX as export for deployability-sensitive issues
 Validation: HUMAN_REVIEW
 
-Before local publication creates a cloud revision, the manager should surface
-blocking issues and warnings using a review flow aligned with export UX.
+The UI contract requires publish actions to run a readiness review before
+creating a cloud revision and to reuse export-style blocking/warning UX where
+the underlying readiness issues are shared.
 
-This includes issues such as:
-- uncommitted changes
-- unresolved workflow or dependency issues
-- models missing source metadata or URLs
+Detailed publish readiness behavior is specified by `CGM-CLP-02B`.
 
-The final action differs from export, but the readiness and warning posture
-should remain similar.
-
-### CGM-UI-13 [PLANNED]: Cloud identity should live in a dedicated `Account` surface rather than being fully embedded in `Publish`
+### CGM-UI-13 [LIVE]: Cloud identity should live in a dedicated `Account` surface rather than being fully embedded in `Publish`
 Validation: HUMAN_REVIEW
 
-The local cloud domain should expose a dedicated `Account` destination for:
-- sign-in
-- sign-up
-- sign-out
-- account detail display
-- later workspace selection
+The UI contract requires cloud identity and session management to live in a
+dedicated `Account` surface. `Publish` may summarize auth state and block
+publication, but it should route users to `Account` for the full identity flow.
 
-The `Publish` destination may summarize auth status and block publication when
-signed out, but it should route users to `Account` for the full identity flow
-rather than duplicating the canonical auth surface.
+Detailed account/publish split behavior is specified by `CGM-IA-07`,
+`CGM-IA-11`, `CGM-CLP-01A`, and `CGM-CLP-01B`.
+
+### CGM-UI-14 [LIVE]: Missing-resource resolution should use manager-owned review surfaces
+Validation: LLM_REVIEW
+
+When the manager detects missing workflow resources, the user-facing review and
+resolution flow should live in manager-owned UI rather than leaving users to
+interpret raw ComfyUI errors.
+
+### CGM-UI-15 [LIVE]: Model download UX should show source and destination before queueing
+Validation: LLM_REVIEW
+
+The model download flow should make the selected source and destination visible
+before the user starts or queues a download.
+
+This includes guided Hugging Face selections and direct URL entries.
+
+### CGM-UI-16 [PARTIAL]: Blocked custom nodes should be visible as blocked, not hidden
+Validation: LLM_REVIEW
+
+When custom node packages are version-gated, unknown, or missing a trusted
+install source, the UI should present that state clearly instead of silently
+dropping the node from resolution choices.
+
+Some blocked-node presentation exists, but this remains partial until all
+workflow/resource surfaces use the same status language.
+
+### CGM-UI-17 [LIVE]: Local development source overrides are not portable environment UI
+Validation: HUMAN_REVIEW
+
+Local editable package overrides belong to development scripts and local
+overlays. The manager UI should not present tracked environment metadata as the
+place to configure a developer's personal source checkout paths.

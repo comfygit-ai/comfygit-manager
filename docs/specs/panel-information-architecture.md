@@ -13,7 +13,7 @@ mental models rather than the order features were added.
 
 ## Navigation Direction
 
-### CGM-IA-01 [PLANNED]: Top-level panel navigation should group destinations by operational domain
+### CGM-IA-01 [PARTIAL]: Top-level panel navigation should group destinations by operational domain
 Validation: HUMAN_REVIEW
 
 The panel should organize top-level navigation into a small number of stable
@@ -26,7 +26,11 @@ domains such as:
 These groups should reflect how users reason about the product, not the order in
 which features were implemented.
 
-### CGM-IA-02 [PLANNED]: Git history, branches, and remotes should be presented as one version-control domain
+The current panel has grouped sidebar sections for `THIS ENV`, `WORKSPACE`, and
+`CLOUD`, but diagnostics is currently a destination inside `THIS ENV` rather
+than a separate `DIAGNOSTICS` domain.
+
+### CGM-IA-02 [LIVE]: Git history, branches, and remotes should be presented as one version-control domain
 Validation: HUMAN_REVIEW
 
 `History`, `Branches`, and `Remotes` should not remain scattered across
@@ -36,7 +40,10 @@ destination for the current environment with internal sub-navigation or tabs for
 - branch operations
 - remote configuration and pull/push workflows
 
-### CGM-IA-03 [PLANNED]: The environments view should remain the primary workspace entry point for environment management
+The current panel exposes one `Version Control` destination with internal
+`History`, `Branches`, and `Remotes` tabs.
+
+### CGM-IA-03 [LIVE]: The environments view should remain the primary workspace entry point for environment management
 Validation: HUMAN_REVIEW
 
 The `Environments` destination should remain the main place where users:
@@ -48,7 +55,7 @@ The `Environments` destination should remain the main place where users:
 Environment import and export should be attached to this surface rather than
 remaining independent top-level sidebar destinations.
 
-### CGM-IA-04 [PLANNED]: Environment import should be initiated from the environments view instead of the global sidebar
+### CGM-IA-04 [LIVE]: Environment import should be initiated from the environments view instead of the global sidebar
 Validation: HUMAN_REVIEW
 
 The `Environments` surface should expose an explicit `Import` action in the
@@ -58,7 +65,7 @@ without leaving the environment-management context.
 Import should remain a workspace-level action because it creates a new
 environment rather than mutating the current one.
 
-### CGM-IA-05 [PLANNED]: Environment export should be initiated from environment cards or details rather than a top-level sidebar destination
+### CGM-IA-05 [LIVE]: Environment export should be initiated from environment cards or details rather than a top-level sidebar destination
 Validation: HUMAN_REVIEW
 
 Export is an operation on a specific environment. The intended UX is:
@@ -69,7 +76,7 @@ Export is an operation on a specific environment. The intended UX is:
 This keeps export coupled to the environment it acts on and avoids a floating
 top-level `Export` destination with weak object context.
 
-### CGM-IA-06 [PLANNED]: The environments header should prioritize create and import over refresh
+### CGM-IA-06 [LIVE]: The environments header should prioritize create and import over refresh
 Validation: HUMAN_REVIEW
 
 The `Environments` header should emphasize user actions with durable product
@@ -80,7 +87,7 @@ meaning:
 `Refresh` should not remain a primary always-visible action in that header. If
 manual refresh remains useful, it should be secondary or implicit.
 
-### CGM-IA-07 [PLANNED]: The cloud domain should split into distinct `Account` and `Publish` destinations
+### CGM-IA-07 [LIVE]: The cloud domain should split into distinct `Account` and `Publish` destinations
 Validation: HUMAN_REVIEW
 
 The current `Deploy` / sharing-oriented area should evolve into a cloud domain
@@ -106,7 +113,7 @@ with two distinct destinations:
 This split keeps identity/session management separate from revision publication
 while still making the local panel the bridge into the cloud control plane.
 
-### CGM-IA-08 [PLANNED]: Diagnostics and inspection tools should be consolidated away from primary authoring navigation
+### CGM-IA-08 [PARTIAL]: Diagnostics and inspection tools should be consolidated away from primary authoring navigation
 Validation: HUMAN_REVIEW
 
 Manifest inspection and debug-oriented views should live under a diagnostics
@@ -118,7 +125,11 @@ This includes surfaces such as:
 - environment debug
 - workspace debug
 
-### CGM-IA-09 [DEFERRED]: The local panel should not try to replicate the full cloud control-plane UX
+The current panel has one `Diagnostics` destination with internal tabs for
+manifest, environment logs, workspace logs, and orchestrator logs. It is still
+placed in the `THIS ENV` sidebar group rather than its own diagnostics domain.
+
+### CGM-IA-09 [LIVE]: The local panel should not try to replicate the full cloud control-plane UX
 Validation: HUMAN_REVIEW
 
 The local panel may provide a lightweight cloud bridge, but it should not grow
@@ -126,7 +137,10 @@ into a second full deployment dashboard. Rich deployment orchestration,
 published-workflow binding, and control-plane administration should remain
 cloud-dashboard responsibilities.
 
-### CGM-IA-10 [PLANNED]: Provider-target and deployment controls should not remain first-class local panel destinations
+The current top-level panel exposes cloud account and publish-revision surfaces,
+not target/provider/runtime administration.
+
+### CGM-IA-10 [LIVE]: Provider-target and deployment controls should not remain first-class local panel destinations
 Validation: HUMAN_REVIEW
 
 RunPod, custom worker, and other provider-specific deployment controls are not
@@ -139,7 +153,12 @@ The local panel should prefer:
 
 Cloud should own the actual deployment and runtime-management workflow.
 
-### CGM-IA-11 [PLANNED]: Blocked publish flows should route users to `Account` rather than embedding a second full auth surface inside `Publish`
+The current panel maps old `Deploy` navigation state to `Publish` and does not
+mount provider-target controls as first-class sidebar destinations. Legacy
+deploy components may still exist in the codebase as reference or unused code,
+but they are not part of the active panel information architecture.
+
+### CGM-IA-11 [LIVE]: Blocked publish flows should route users to `Account` rather than embedding a second full auth surface inside `Publish`
 Validation: HUMAN_REVIEW
 
 If a user is not authenticated, the `Publish` destination may show:
@@ -149,3 +168,6 @@ If a user is not authenticated, the `Publish` destination may show:
 
 That action should navigate to the `Account` destination for the actual
 login/signup flow rather than duplicating the full auth UI inside `Publish`.
+
+The current `Publish` view shows a blocked sign-in-required state and routes
+the sign-in action to `Account`.
