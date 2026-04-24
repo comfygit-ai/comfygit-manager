@@ -123,7 +123,7 @@ is produced by committing and pushing the environment repository.
 Cloud-specific guidance, if needed locally, should be presented inside
 version-control and remote-management surfaces.
 
-### CGM-IA-08 [PARTIAL]: Diagnostics and inspection tools should be consolidated away from primary authoring navigation
+### CGM-IA-08 [LIVE]: Diagnostics and inspection tools should be consolidated away from primary authoring navigation
 Validation: HUMAN_REVIEW
 
 Manifest inspection and debug-oriented views should live under a diagnostics
@@ -135,9 +135,14 @@ This includes surfaces such as:
 - environment debug
 - workspace debug
 
-The current panel has one `Diagnostics` destination with internal tabs for
-manifest, environment logs, workspace logs, and orchestrator logs. It is still
-placed in the `THIS ENV` sidebar group rather than its own diagnostics domain.
+The current panel has a dedicated `DIAGNOSTICS` sidebar domain with direct
+entries for:
+
+- `Manifest`
+- `Logging`
+
+The `Logging` destination groups environment, workspace, and orchestrator logs
+behind local tabs so logging depth does not over-expand the primary sidebar.
 
 ### CGM-IA-09 [LIVE]: The local panel should not try to replicate the full cloud control-plane UX
 Validation: HUMAN_REVIEW

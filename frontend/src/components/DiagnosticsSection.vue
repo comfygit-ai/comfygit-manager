@@ -2,14 +2,14 @@
   <PanelLayout>
     <template #header>
       <PanelHeader
-        title="DIAGNOSTICS"
+        :title="headerTitle"
         :show-info="true"
         @info-click="showPopover = true"
       />
     </template>
 
-    <template #search>
-      <BaseTabs v-model="activeTab" :tabs="tabs" />
+    <template v-if="activeTab !== 'manifest'" #search>
+      <BaseTabs v-model="activeLogTab" :tabs="logTabs" />
     </template>
 
     <template #content>
@@ -19,12 +19,12 @@
       />
 
       <DebugEnvSection
-        v-else-if="activeTab === 'env'"
+        v-else-if="activeLogTab === 'env'"
         embedded
       />
 
       <WorkspaceDebugSection
-        v-else-if="activeTab === 'workspace'"
+        v-else-if="activeLogTab === 'workspace'"
         embedded
         initial-tab="workspace"
       />
@@ -39,33 +39,37 @@
 
   <InfoPopover
     :show="showPopover"
-    title="About Diagnostics"
+    :title="infoTitle"
     max-width="520px"
     @close="showPopover = false"
   >
     <template #content>
-      <p>
-        <strong>Diagnostics</strong> groups read-only inspection and log surfaces for the current environment and workspace.
-      </p>
-      <p>
-        Use this area when you need to inspect what ComfyGit is tracking or debug environment and supervisor behavior without leaving the panel.
-      </p>
-      <p>
-        <strong>Manifest</strong><br>
-        Shows the live <strong>pyproject.toml</strong> from the current environment's <strong>.cec</strong> directory. This is useful for inspecting tracked workflow, model, node, and contract state.
-      </p>
-      <p>
-        <strong>Env Logs</strong><br>
-        Shows logs for the currently active environment. Use these when debugging workflow execution, model resolution, node installation, or other environment-local issues.
-      </p>
-      <p>
-        <strong>Workspace Logs</strong><br>
-        Shows workspace-wide events that affect more than one environment.
-      </p>
-      <p>
-        <strong>Orchestrator Logs</strong><br>
-        Shows supervisor and handoff logs for environment creation, switching, restarts, and other process-management behavior.
-      </p>
+      <template v-if="activeTab === 'manifest'">
+        <p>
+          <strong>Manifest</strong> shows the live <strong>pyproject.toml</strong> from the current environment's <strong>.cec</strong> directory.
+        </p>
+        <p>
+          Use it to inspect the environment state ComfyGit is tracking, including workflows, models, nodes, and workflow execution contracts.
+        </p>
+        <p>
+          The manifest is read-only here. Change environment state through the manager actions or CLI, then commit the resulting manifest changes.
+        </p>
+      </template>
+
+      <template v-else>
+        <p>
+          <strong>Logging</strong> groups read-only logs for the current environment, workspace, and orchestrator.
+        </p>
+        <p>
+          <strong>Environment</strong> logs help debug workflow execution, model resolution, node installation, and other environment-local behavior.
+        </p>
+        <p>
+          <strong>Workspace</strong> logs show workspace-wide events that affect more than one environment.
+        </p>
+        <p>
+          <strong>Orchestrator</strong> logs show supervisor and handoff behavior for environment creation, switching, restarts, and process management.
+        </p>
+      </template>
     </template>
     <template #actions>
       <ActionButton variant="primary" size="sm" @click="showPopover = false">
@@ -76,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
@@ -87,20 +91,34 @@ import DebugEnvSection from './DebugEnvSection.vue'
 import WorkspaceDebugSection from './WorkspaceDebugSection.vue'
 
 const props = defineProps<{
-  initialTab?: 'manifest' | 'env' | 'workspace'
+  initialTab?: 'manifest' | 'env' | 'workspace' | 'orchestrator'
 }>()
 
-const tabs = [
-  { id: 'manifest', label: 'Manifest' },
-  { id: 'env', label: 'Env Logs' },
-  { id: 'workspace', label: 'Workspace Logs' },
-  { id: 'orchestrator', label: 'Orchestrator Logs' }
+const logTabs = [
+  { id: 'env', label: 'Environment' },
+  { id: 'workspace', label: 'Workspace' },
+  { id: 'orchestrator', label: 'Orchestrator' }
 ]
 
 const activeTab = ref<'manifest' | 'env' | 'workspace' | 'orchestrator'>(props.initialTab ?? 'manifest')
+const activeLogTab = ref<'env' | 'workspace' | 'orchestrator'>(
+  props.initialTab && props.initialTab !== 'manifest' ? props.initialTab : 'env'
+)
 const showPopover = ref(false)
+const headerTitle = computed(() => activeTab.value === 'manifest' ? 'MANIFEST' : 'LOGGING')
+const infoTitle = computed(() => activeTab.value === 'manifest' ? 'About Manifest' : 'About Logging')
 
 watch(() => props.initialTab, (value) => {
-  if (value) activeTab.value = value
+  if (!value) return
+  activeTab.value = value
+  if (value !== 'manifest') {
+    activeLogTab.value = value
+  }
+})
+
+watch(activeLogTab, (value) => {
+  if (activeTab.value !== 'manifest') {
+    activeTab.value = value
+  }
 })
 </script>

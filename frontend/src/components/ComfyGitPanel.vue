@@ -112,12 +112,6 @@
             >
               VERSION CONTROL
             </button>
-            <button
-              :class="['sidebar-item', { active: currentView === 'diagnostics' }]"
-              @click="openDiagnostics('manifest')"
-            >
-              DIAGNOSTICS
-            </button>
           </div>
 
           <div class="sidebar-divider"></div>
@@ -145,6 +139,24 @@
             </button>
           </div>
 
+          <div class="sidebar-divider"></div>
+
+          <!-- DIAGNOSTICS Section -->
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">DIAGNOSTICS</div>
+            <button
+              :class="['sidebar-item', { active: currentView === 'diagnostics' && diagnosticsTab === 'manifest' }]"
+              @click="openDiagnostics('manifest')"
+            >
+              MANIFEST
+            </button>
+            <button
+              :class="['sidebar-item', { active: currentView === 'diagnostics' && diagnosticsTab !== 'manifest' }]"
+              @click="openDiagnostics('env')"
+            >
+              LOGGING
+            </button>
+          </div>
         </div>
 
         <!-- Sidebar Footer -->
@@ -499,7 +511,7 @@ const selectedExportEnvironment = ref<string | null>(null)
 const showImportModal = ref(false)
 const showExportModal = ref(false)
 const versionControlTab = ref<'history' | 'branches' | 'remotes'>('history')
-const diagnosticsTab = ref<'manifest' | 'env' | 'workspace'>('manifest')
+const diagnosticsTab = ref<'manifest' | 'env' | 'workspace' | 'orchestrator'>('manifest')
 
 // First-time setup state
 const setupStatus = ref<SetupStatus | null>(null)
@@ -549,6 +561,7 @@ const initialViewMap: Record<string, { view: ViewName; section: SectionName }> =
   'manifest': { view: 'diagnostics', section: 'diagnostics' },
   'debug-env': { view: 'diagnostics', section: 'diagnostics' },
   'debug-workspace': { view: 'diagnostics', section: 'diagnostics' },
+  'debug-orchestrator': { view: 'diagnostics', section: 'diagnostics' },
   'history': { view: 'version-control', section: 'version-control' },
   'branches': { view: 'version-control', section: 'version-control' },
   'remotes': { view: 'version-control', section: 'version-control' },
@@ -621,7 +634,7 @@ function openVersionControl(tab: 'history' | 'branches' | 'remotes') {
   selectView('version-control', 'version-control')
 }
 
-function openDiagnostics(tab: 'manifest' | 'env' | 'workspace') {
+function openDiagnostics(tab: 'manifest' | 'env' | 'workspace' | 'orchestrator') {
   diagnosticsTab.value = tab
   selectView('diagnostics', 'diagnostics')
 }
