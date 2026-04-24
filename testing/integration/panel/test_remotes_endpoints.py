@@ -397,6 +397,22 @@ class TestFetchRemoteEndpoint:
         data = await resp.json()
         assert "error" in data
 
+    async def test_error_fetch_authentication_required(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 401 when Git needs credentials for fetch."""
+        mock_environment.git_manager.fetch = Mock(
+            side_effect=OSError("fatal: could not read Username for 'https://github.com'")
+        )
+
+        resp = await client.post("/v2/comfygit/remotes/origin/fetch")
+
+        assert resp.status == 401
+        data = await resp.json()
+        assert data["reason"] == "authentication_required"
+
     async def test_error_no_environment(self, client, monkeypatch):
         """Should return 500 when no environment detected."""
         monkeypatch.setattr(
@@ -954,6 +970,55 @@ class TestPushEndpoint:
         assert resp.status == 409
         data = await resp.json()
         assert "error" in data
+        assert data["needs_force"] is True
+
+    async def test_blocks_known_remote_ahead_without_push_attempt(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should offer force before push when known remote-tracking ref is ahead."""
+        mock_environment.push_commits = Mock(return_value="Should not push")
+        mock_environment.git_manager.get_sync_status = Mock(return_value={
+            "ahead": 1,
+            "behind": 2,
+            "remote_branch_exists": True,
+        })
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
+        mock_environment.get_current_branch.return_value = "main"
+
+        resp = await client.post(
+            "/v2/comfygit/remotes/origin/push",
+            json={}
+        )
+
+        assert resp.status == 409
+        data = await resp.json()
+        assert data["reason"] == "remote_has_new_commits"
+        assert data["needs_force"] is True
+        mock_environment.push_commits.assert_not_called()
+
+    async def test_error_push_authentication_required(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 401 when Git needs credentials for push."""
+        mock_environment.push_commits = Mock(
+            side_effect=OSError("fatal: could not read Username for 'https://github.com'")
+        )
+        mock_environment.git_manager.get_sync_status = Mock(return_value={"ahead": 1, "behind": 0})
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
+        mock_environment.get_current_branch.return_value = "main"
+
+        resp = await client.post(
+            "/v2/comfygit/remotes/origin/push",
+            json={}
+        )
+
+        assert resp.status == 401
+        data = await resp.json()
+        assert data["reason"] == "authentication_required"
 
     async def test_error_remote_not_found(
         self,

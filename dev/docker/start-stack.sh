@@ -16,6 +16,7 @@ GIT_AUTHOR_NAME="${GIT_AUTHOR_NAME:-}"
 GIT_AUTHOR_EMAIL="${GIT_AUTHOR_EMAIL:-}"
 GIT_COMMITTER_NAME="${GIT_COMMITTER_NAME:-$GIT_AUTHOR_NAME}"
 GIT_COMMITTER_EMAIL="${GIT_COMMITTER_EMAIL:-$GIT_AUTHOR_EMAIL}"
+HOST_GIT_CREDENTIALS_PATH="${HOST_GIT_CREDENTIALS_PATH:-}"
 COMFYUI_ARGS=()
 COMFYGIT_CREATE_ARGS_ARRAY=()
 EXTRA_DEV_NODE_PATHS_ARRAY=()
@@ -32,6 +33,32 @@ configure_git_identity() {
   fi
   if [ -n "$GIT_COMMITTER_EMAIL" ]; then
     git config --global user.email "$GIT_COMMITTER_EMAIL"
+  fi
+}
+
+configure_git_credentials() {
+  if [ -n "$HOST_GIT_CREDENTIALS_PATH" ] && [ -s "$HOST_GIT_CREDENTIALS_PATH" ]; then
+    log "Configuring read-only host git credential store"
+    git config --global credential.helper "store --file=$HOST_GIT_CREDENTIALS_PATH"
+  else
+    log "No host git credential store mounted"
+  fi
+}
+
+configure_ssh_client() {
+  mkdir -p /root/.ssh
+  chmod 700 /root/.ssh
+
+  if ! grep -q '^github.com ' /root/.ssh/known_hosts 2>/dev/null; then
+    log "Adding github.com to SSH known_hosts"
+    ssh-keyscan github.com >> /root/.ssh/known_hosts 2>/dev/null || true
+    chmod 600 /root/.ssh/known_hosts
+  fi
+
+  if [ -n "${SSH_AUTH_SOCK:-}" ] && [ -S "$SSH_AUTH_SOCK" ]; then
+    log "SSH agent forwarding enabled: $SSH_AUTH_SOCK"
+  else
+    log "SSH agent forwarding disabled"
   fi
 }
 
@@ -191,6 +218,8 @@ log "Environment: $ENV_NAME"
 mkdir -p "$WORKSPACE"
 
 configure_git_identity
+configure_git_credentials
+configure_ssh_client
 mark_safe_directory "$COMFYGIT_MANAGER_DEV_PATH"
 mark_safe_directory "$COMFYGIT_DEV_REPO_PATH"
 

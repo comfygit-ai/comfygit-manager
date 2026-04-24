@@ -27,6 +27,10 @@ The dev stack:
   `~/dev/models -> /data/models`
 - passes the host Git author name/email into the container so environment
   commits work without manually running `git config` inside Docker
+- mounts the host `~/.git-credentials` file read-only when present, so HTTPS
+  GitHub remotes can reuse the host credential-store token
+- forwards the host SSH agent when `SSH_AUTH_SOCK` is available, so private
+  GitHub remotes work with SSH URLs without copying private keys into Docker
 - symlinks this manager repo into `ComfyUI/custom_nodes`
 - tracks `comfygit-manager` as a development node
 - writes the local editable core path to `.cec/overlays/.local.toml`
@@ -63,7 +67,43 @@ Useful options:
 - `--models-dir PATH`: host models directory to mount at `/data/models`.
 - `--torch-backend B`: backend for `cg create` and `cg run`, for example `cu126`.
 - `--extra-node PATH`: mount and track another local custom node repo.
+- `--ssh-agent PATH`: host SSH agent socket to forward. Defaults to
+  `$SSH_AUTH_SOCK`.
+- `--no-ssh-agent`: disable SSH agent forwarding.
+- `--git-credentials PATH`: host git credential-store file to mount read-only.
+  Defaults to `~/.git-credentials`.
+- `--no-git-credentials`: disable host HTTPS git credential mounting.
 - `--no-build`: recreate the container without rebuilding the image.
+
+## GitHub remotes from the dev container
+
+The dev container supports two host-backed GitHub auth paths.
+
+HTTPS remotes work when the host has a credential-store token in
+`~/.git-credentials`, which is the default for `gh auth setup-git` or
+`git config --global credential.helper store` setups:
+
+```bash
+git remote set-url origin https://github.com/OWNER/REPO.git
+```
+
+SSH remotes work when the forwarded host SSH agent has a GitHub-authorized key:
+
+```bash
+git remote set-url origin git@github.com:OWNER/REPO.git
+```
+
+The wrapper forwards the host SSH agent only when the shell that starts the
+container has `SSH_AUTH_SOCK` set and the agent has a key loaded. Check the host
+with:
+
+```bash
+ssh-add -l
+```
+
+If the script prints `SSH agent: disabled`, start or attach an agent in that
+shell first, then recreate the container. The container bootstraps
+`github.com` into `known_hosts` automatically.
 
 ### `start-dev-container`
 

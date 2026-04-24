@@ -22,8 +22,10 @@ services:
       GIT_AUTHOR_NAME: ${GIT_AUTHOR_NAME:-}
       GIT_COMMITTER_EMAIL: ${GIT_COMMITTER_EMAIL:-}
       GIT_COMMITTER_NAME: ${GIT_COMMITTER_NAME:-}
+      HOST_GIT_CREDENTIALS_PATH: ${COMFYGIT_CONTAINER_GIT_CREDENTIALS_PATH:-}
       PROJECT_ROOT: ${COMFYGIT_MANAGER_DEV_PATH:-${PWD}}
       SHARED_MODELS_DIR: ${SHARED_MODELS_DIR:-/data/models}
+      SSH_AUTH_SOCK: ${COMFYGIT_CONTAINER_SSH_AUTH_SOCK:-}
     gpus: all
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:${COMFYUI_PORT:-8188}/system_stats"]
@@ -42,3 +44,5 @@ services:
       - ${COMFYGIT_MANAGER_DEV_PATH:-${PWD}}:${COMFYGIT_MANAGER_DEV_PATH:-${PWD}}
       - ${SHARED_MODELS_HOST_DIR:-${HOME}/dev/models}:${SHARED_MODELS_DIR:-/data/models}
       - ${EXTRA_DEV_NODES_ROOT:-${HOME}/dev/comfyui/custom-nodes-dev}:${EXTRA_DEV_NODES_ROOT:-${HOME}/dev/comfyui/custom-nodes-dev}:ro
+      - ${COMFYGIT_SSH_AUTH_SOCK:-${PWD}/.cache/no-ssh-agent.sock}:/ssh-agent
+      - ${COMFYGIT_GIT_CREDENTIALS_PATH:-${PWD}/.cache/no-git-credentials}:/host-git-credentials:ro

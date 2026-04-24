@@ -11,6 +11,7 @@ WORKSPACE="${COMFYGIT_HOME:-$MANAGER_ROOT/.comfygit-workspace}"
 TORCH_BACKEND="${COMFYGIT_TORCH_BACKEND:-cu126}"
 COMFYUI_PORT="${COMFYUI_PORT:-8188}"
 BUILD=true
+CONTAINER_SSH_AUTH_SOCK="/ssh-agent"
 
 usage() {
   cat <<EOF
@@ -29,6 +30,10 @@ Options:
   --comfygit PATH        ComfyGit repo path (default: sibling ../comfygit)
   --models-dir PATH      Host models directory mounted into the container (default: ~/dev/models)
   --extra-node PATH      Extra dev node path to mount/track; may be repeated
+  --ssh-agent PATH       Host SSH agent socket to forward (default: \$SSH_AUTH_SOCK)
+  --no-ssh-agent         Disable SSH agent forwarding even if an agent exists
+  --git-credentials PATH Host git credential-store file to mount read-only (default: ~/.git-credentials)
+  --no-git-credentials   Disable mounting host git HTTPS credentials
   --no-build             Do not rebuild the image before starting
   -h, --help             Show this help
 
@@ -41,6 +46,10 @@ EOF
 COMFYGIT_PATH="${COMFYGIT_DEV_REPO_PATH:-$(dirname "$MANAGER_ROOT")/comfygit}"
 MODELS_HOST_DIR="${SHARED_MODELS_HOST_DIR:-$HOME/dev/models}"
 EXTRA_DEV_NODE_PATHS_VALUE="${EXTRA_DEV_NODE_PATHS:-}"
+HOST_SSH_AUTH_SOCK="${COMFYGIT_SSH_AUTH_SOCK:-${SSH_AUTH_SOCK:-}}"
+SSH_AGENT_FORWARDING=true
+HOST_GIT_CREDENTIALS_PATH="${COMFYGIT_GIT_CREDENTIALS_PATH:-$HOME/.git-credentials}"
+GIT_CREDENTIALS_FORWARDING=true
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -80,6 +89,24 @@ while [[ $# -gt 0 ]]; do
       fi
       shift 2
       ;;
+    --ssh-agent)
+      HOST_SSH_AUTH_SOCK="$2"
+      SSH_AGENT_FORWARDING=true
+      shift 2
+      ;;
+    --no-ssh-agent)
+      SSH_AGENT_FORWARDING=false
+      shift
+      ;;
+    --git-credentials)
+      HOST_GIT_CREDENTIALS_PATH="$2"
+      GIT_CREDENTIALS_FORWARDING=true
+      shift 2
+      ;;
+    --no-git-credentials)
+      GIT_CREDENTIALS_FORWARDING=false
+      shift
+      ;;
     --no-build)
       BUILD=false
       shift
@@ -116,9 +143,45 @@ if [[ -z "$PROJECT_NAME" ]]; then
 fi
 
 mkdir -p "$WORKSPACE" "$MODELS_HOST_DIR"
+mkdir -p "$MANAGER_ROOT/.cache"
 
 HOST_GIT_USER_NAME="${GIT_AUTHOR_NAME:-$(git config --global --get user.name 2>/dev/null || git config --get user.name 2>/dev/null || true)}"
 HOST_GIT_USER_EMAIL="${GIT_AUTHOR_EMAIL:-$(git config --global --get user.email 2>/dev/null || git config --get user.email 2>/dev/null || true)}"
+
+if [[ "$SSH_AGENT_FORWARDING" == "true" && -n "$HOST_SSH_AUTH_SOCK" && -S "$HOST_SSH_AUTH_SOCK" ]]; then
+  export COMFYGIT_SSH_AUTH_SOCK="$HOST_SSH_AUTH_SOCK"
+  export COMFYGIT_CONTAINER_SSH_AUTH_SOCK="$CONTAINER_SSH_AUTH_SOCK"
+  SSH_AGENT_STATUS="$HOST_SSH_AUTH_SOCK -> $CONTAINER_SSH_AUTH_SOCK"
+else
+  # Compose requires the bind source to exist even when forwarding is disabled.
+  export COMFYGIT_SSH_AUTH_SOCK="$MANAGER_ROOT/.cache/no-ssh-agent.sock"
+  : > "$COMFYGIT_SSH_AUTH_SOCK"
+  export COMFYGIT_CONTAINER_SSH_AUTH_SOCK=""
+  if [[ "$SSH_AGENT_FORWARDING" == "false" ]]; then
+    SSH_AGENT_STATUS="disabled"
+  elif [[ -z "$HOST_SSH_AUTH_SOCK" ]]; then
+    SSH_AGENT_STATUS='disabled (SSH_AUTH_SOCK is not set)'
+  else
+    SSH_AGENT_STATUS="disabled ($HOST_SSH_AUTH_SOCK is not a socket)"
+  fi
+fi
+
+if [[ "$GIT_CREDENTIALS_FORWARDING" == "true" && -n "$HOST_GIT_CREDENTIALS_PATH" && -f "$HOST_GIT_CREDENTIALS_PATH" ]]; then
+  export COMFYGIT_GIT_CREDENTIALS_PATH="$HOST_GIT_CREDENTIALS_PATH"
+  export COMFYGIT_CONTAINER_GIT_CREDENTIALS_PATH="/host-git-credentials"
+  GIT_CREDENTIALS_STATUS="$HOST_GIT_CREDENTIALS_PATH -> /host-git-credentials"
+else
+  export COMFYGIT_GIT_CREDENTIALS_PATH="$MANAGER_ROOT/.cache/no-git-credentials"
+  : > "$COMFYGIT_GIT_CREDENTIALS_PATH"
+  export COMFYGIT_CONTAINER_GIT_CREDENTIALS_PATH=""
+  if [[ "$GIT_CREDENTIALS_FORWARDING" == "false" ]]; then
+    GIT_CREDENTIALS_STATUS="disabled"
+  elif [[ -z "$HOST_GIT_CREDENTIALS_PATH" ]]; then
+    GIT_CREDENTIALS_STATUS="disabled (no credential-store path configured)"
+  else
+    GIT_CREDENTIALS_STATUS="disabled ($HOST_GIT_CREDENTIALS_PATH not found)"
+  fi
+fi
 
 export COMFYGIT_ENV_NAME="$ENV_NAME"
 export COMFYGIT_HOME="$WORKSPACE"
@@ -147,6 +210,8 @@ echo "[start-dev-container] Workspace:   $COMFYGIT_HOME"
 echo "[start-dev-container] ComfyGit:    $COMFYGIT_DEV_REPO_PATH"
 echo "[start-dev-container] Manager:     $COMFYGIT_MANAGER_DEV_PATH"
 echo "[start-dev-container] Models:      $SHARED_MODELS_HOST_DIR -> $SHARED_MODELS_DIR"
+echo "[start-dev-container] SSH agent:   $SSH_AGENT_STATUS"
+echo "[start-dev-container] Git creds:   $GIT_CREDENTIALS_STATUS"
 if [[ -n "$GIT_COMMITTER_NAME" && -n "$GIT_COMMITTER_EMAIL" ]]; then
   echo "[start-dev-container] Git author:  $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL>"
 else

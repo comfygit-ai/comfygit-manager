@@ -1986,6 +1986,8 @@ onMounted(async () => {
 
 .toast-message {
   flex: 1;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
 }
 
 /* Toast transitions */

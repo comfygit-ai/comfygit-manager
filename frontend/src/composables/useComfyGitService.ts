@@ -94,6 +94,20 @@ declare global {
 // Toggle between mock and real API (set VITE_USE_MOCK_API=false in .env to disable)
 const USE_MOCK = isMockApi()
 
+export class ComfyGitApiError extends Error {
+  status: number
+  data: Record<string, any>
+  endpoint: string
+
+  constructor(message: string, status: number, data: Record<string, any>, endpoint: string) {
+    super(message)
+    this.name = 'ComfyGitApiError'
+    this.status = status
+    this.data = data
+    this.endpoint = endpoint
+  }
+}
+
 // UUID generator that works in non-secure contexts (HTTP)
 // generateUUID() only works in secure contexts (HTTPS/localhost)
 function generateUUID(): string {
@@ -308,14 +322,32 @@ export function useComfyGitService() {
     }
 
     const response = await window.app.api.fetchApi(endpoint, options)
+    const text = await response.text()
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.error || errorData.message || `Request failed: ${response.status}`)
+      let errorData: Record<string, any> = {}
+      if (text) {
+        try {
+          const parsed = JSON.parse(text)
+          if (parsed && typeof parsed === 'object') {
+            errorData = parsed
+          }
+        } catch {
+          errorData = { error: text }
+        }
+      }
+
+      const message =
+        errorData.error ||
+        errorData.message ||
+        errorData.detail ||
+        response.statusText ||
+        `Request failed: ${response.status}`
+
+      throw new ComfyGitApiError(String(message), response.status, errorData, endpoint)
     }
 
     // Handle empty responses (some endpoints return 200 with no body)
-    const text = await response.text()
     if (!text) {
       return undefined as T
     }

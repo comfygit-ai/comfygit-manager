@@ -31,7 +31,7 @@
       <RemotesSection
         v-else
         embedded
-        @toast="emit('toast', $event[0], $event[1])"
+        @toast="(message, type) => emit('toast', message, type)"
       />
     </template>
   </PanelLayout>

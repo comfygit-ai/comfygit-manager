@@ -21,6 +21,7 @@ RUN apt-get update -o Acquire::Retries=10 && apt-get install -y \
     libsm6 \
     libxext6 \
     libxrender1 \
+    openssh-client \
     python3-numpy \
     python3.12 \
     python3.12-dev \

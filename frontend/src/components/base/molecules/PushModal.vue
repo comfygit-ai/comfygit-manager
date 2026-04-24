@@ -8,6 +8,14 @@
         </div>
 
         <div class="modal-body">
+          <div v-if="error" class="error-box">
+            <span class="error-icon">!</span>
+            <div>
+              <strong>Push failed</strong>
+              <p>{{ error }}</p>
+            </div>
+          </div>
+
           <!-- Loading State -->
           <template v-if="loading">
             <div class="loading-state">
@@ -142,6 +150,7 @@ defineProps<{
   preview: PushPreview | null
   loading: boolean
   pushing: boolean
+  error?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -349,6 +358,35 @@ function handlePush(force: boolean) {
   padding: var(--cg-space-3);
   background: var(--cg-color-bg-secondary);
   border-radius: var(--cg-radius-sm);
+}
+
+.error-box {
+  display: flex;
+  gap: var(--cg-space-3);
+  padding: var(--cg-space-3);
+  margin-bottom: var(--cg-space-3);
+  background: var(--cg-color-error-muted);
+  border: 1px solid var(--cg-color-error);
+  border-radius: var(--cg-radius-sm);
+  color: var(--cg-color-text-primary);
+}
+
+.error-icon {
+  color: var(--cg-color-error);
+  font-weight: var(--cg-font-weight-semibold);
+  flex-shrink: 0;
+}
+
+.error-box strong {
+  display: block;
+  margin-bottom: var(--cg-space-1);
+}
+
+.error-box p {
+  margin: 0;
+  color: var(--cg-color-text-secondary);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .checkbox-option {

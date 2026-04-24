@@ -144,6 +144,7 @@
     :preview="pushPreview"
     :loading="loadingPreview"
     :pushing="pushing"
+    :error="pushError"
     @close="closePushModal"
     @push="handlePush"
     @pull-first="handlePullFirst"
@@ -176,7 +177,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useComfyGitService } from '@/composables/useComfyGitService'
+import { ComfyGitApiError, useComfyGitService } from '@/composables/useComfyGitService'
 import type {
   RemoteInfo,
   RemoteSyncStatus,
@@ -369,6 +370,7 @@ const showValidationModal = computed(() =>
 const showPushModal = ref(false)
 const pushPreview = ref<PushPreview | null>(null)
 const pushing = ref(false)
+const pushError = ref<string | null>(null)
 
 // Shared state
 const activeRemote = ref<string | null>(null)
@@ -541,11 +543,12 @@ async function handlePushClick(remoteName: string) {
   showPushModal.value = true
   loadingPreview.value = true
   pushPreview.value = null
+  pushError.value = null
 
   try {
     pushPreview.value = await getPushPreview(remoteName)
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load push preview'
+    pushError.value = err instanceof Error ? err.message : 'Failed to load push preview'
   } finally {
     loadingPreview.value = false
   }
@@ -554,6 +557,7 @@ async function handlePushClick(remoteName: string) {
 function closePushModal() {
   showPushModal.value = false
   pushPreview.value = null
+  pushError.value = null
   activeRemote.value = null
 }
 
@@ -562,13 +566,27 @@ async function handlePush(options: { force: boolean }) {
 
   pushing.value = true
   const remote = activeRemote.value
+  pushError.value = null
   try {
     await pushToRemote(remote, options)
     closePushModal()
     emit('toast', `✓ Pushed to ${remote}`, 'success')
     await loadRemotes()
   } catch (err) {
-    emit('toast', err instanceof Error ? err.message : 'Push failed', 'error')
+    const message = err instanceof Error ? err.message : 'Push failed'
+    pushError.value = message
+
+    if (err instanceof ComfyGitApiError && err.status === 409 && err.data?.needs_force && pushPreview.value) {
+      pushPreview.value = {
+        ...pushPreview.value,
+        remote_has_new_commits: true,
+        needs_force: true,
+        can_push: true,
+        block_reason: null
+      }
+    } else {
+      emit('toast', message, 'error')
+    }
   } finally {
     pushing.value = false
   }
