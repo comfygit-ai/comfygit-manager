@@ -305,13 +305,14 @@
     <BaseModal
       v-if="showExportModal"
       :title="selectedExportEnvironment ? `EXPORT ENVIRONMENT: ${selectedExportEnvironment.toUpperCase()}` : 'EXPORT ENVIRONMENT'"
-      size="lg"
+      size="md"
       @close="closeExportModal"
     >
       <template #body>
         <ExportSection
           embedded
           :environment-name="selectedExportEnvironment"
+          @close="closeExportModal"
         />
       </template>
     </BaseModal>

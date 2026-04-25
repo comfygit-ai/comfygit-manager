@@ -32,25 +32,13 @@
                     <span>{{ model.criticality || 'required' }}</span>
                   </div>
                 </div>
-                <form
+                <button
                   v-if="model.hash"
-                  class="source-form"
-                  @submit.prevent="saveModelSource(model.hash)"
+                  class="issue-action"
+                  @click="selectedModelHash = model.hash"
                 >
-                  <input
-                    v-model="sourceInputs[model.hash]"
-                    class="source-input"
-                    type="text"
-                    placeholder="Download URL"
-                  />
-                  <button
-                    class="issue-action"
-                    :disabled="addingModel === model.hash || !sourceInputs[model.hash]?.trim()"
-                    type="submit"
-                  >
-                    {{ addingModel === model.hash ? 'Saving...' : 'Save Source' }}
-                  </button>
-                </form>
+                  Add URL
+                </button>
                 <span v-else class="issue-note">Missing hash</span>
               </article>
             </div>
@@ -107,11 +95,18 @@
     </div>
   </Teleport>
 
+  <ModelDetailModal
+    v-if="selectedModelHash"
+    :identifier="selectedModelHash"
+    :overlay-z-index="10008"
+    @close="handleModelDetailClose"
+  />
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
+import ModelDetailModal from '@/components/ModelDetailModal.vue'
 import type { EnvironmentReadinessWarnings } from '@/types/comfygit'
 
 const props = defineProps<{
@@ -123,10 +118,9 @@ const emit = defineEmits<{
   revalidate: []
 }>()
 
-const { addModelSource, updateNodeCriticality } = useComfyGitService()
+const { updateNodeCriticality } = useComfyGitService()
 
-const sourceInputs = ref<Record<string, string>>({})
-const addingModel = ref<string | null>(null)
+const selectedModelHash = ref<string | null>(null)
 const updatingNode = ref<string | null>(null)
 const error = ref<string | null>(null)
 
@@ -151,22 +145,9 @@ async function markNodeOptional(nodeName: string) {
   }
 }
 
-async function saveModelSource(modelHash: string) {
-  const sourceUrl = sourceInputs.value[modelHash]?.trim()
-  if (!sourceUrl) return
-
-  addingModel.value = modelHash
-  error.value = null
-
-  try {
-    await addModelSource(modelHash, sourceUrl)
-    sourceInputs.value[modelHash] = ''
-    emit('revalidate')
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to save model source'
-  } finally {
-    addingModel.value = null
-  }
+function handleModelDetailClose() {
+  selectedModelHash.value = null
+  emit('revalidate')
 }
 </script>
 
@@ -320,28 +301,6 @@ async function saveModelSource(modelHash: string) {
   text-transform: uppercase;
   letter-spacing: var(--cg-letter-spacing-wide);
   white-space: nowrap;
-}
-
-.source-form {
-  display: flex;
-  align-items: center;
-  gap: var(--cg-space-2);
-  flex: 0 0 min(360px, 45%);
-}
-
-.source-input {
-  min-width: 0;
-  flex: 1;
-  background: var(--cg-color-bg-primary);
-  border: 1px solid var(--cg-color-border);
-  color: var(--cg-color-text-primary);
-  padding: var(--cg-space-2);
-  font-size: var(--cg-font-size-xs);
-}
-
-.source-input:focus {
-  outline: none;
-  border-color: var(--cg-color-accent);
 }
 
 .issue-action:hover:not(:disabled),

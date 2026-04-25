@@ -27,7 +27,7 @@
           <!-- Blocked by uncommitted changes -->
           <template v-else-if="preview?.has_uncommitted_changes">
             <div class="warning-box">
-              <span class="warning-icon">⚠</span>
+              <span class="warning-icon">!</span>
               <div>
                 <strong>UNCOMMITTED CHANGES</strong>
                 <p>Commit your changes before pushing.</p>
@@ -38,32 +38,19 @@
           <!-- Remote has new commits warning -->
           <template v-else-if="preview?.remote_has_new_commits">
             <div class="warning-box">
-              <span class="warning-icon">⚠</span>
+              <span class="warning-icon">!</span>
               <div>
                 <strong>REMOTE HAS NEW COMMITS</strong>
                 <p>The remote has commits you don't have locally. You should pull first to avoid overwriting changes.</p>
               </div>
             </div>
 
-            <div v-if="hasReadinessWarnings" class="warning-box">
-              <span class="warning-icon">⚠</span>
-              <div>
-                <strong>REPRODUCIBILITY WARNINGS</strong>
-                <p>{{ readinessWarningCount }} dependency detail{{ readinessWarningCount !== 1 ? 's are' : ' is' }} missing. The remote commit can still be pushed, but cloud builds may need this provenance later.</p>
-                <ul class="warning-list">
-                  <li v-for="model in visibleModelWarnings" :key="model.hash || model.filename">
-                    Model: {{ model.filename }}
-                  </li>
-                  <li v-for="node in visibleNodeWarnings" :key="node.name">
-                    Node: {{ node.name }} ({{ node.criticality }})
-                  </li>
-                  <li v-if="hiddenWarningCount">+{{ hiddenWarningCount }} more</li>
-                </ul>
-                <button class="review-issues-btn" @click="showReadinessIssuesModal = true">
-                  Review Issues
-                </button>
-              </div>
-            </div>
+            <ReproducibilityWarningBanner
+              v-if="hasReadinessWarnings"
+              :warnings="warnings"
+              message="Missing provenance can prevent another machine, or ComfyGit Cloud, from rebuilding this environment exactly."
+              @review="showReadinessIssuesModal = true"
+            />
 
             <!-- Outgoing commits -->
             <div v-if="preview.commits_ahead > 0" class="commits-section">
@@ -107,25 +94,12 @@
               <span>This will create the remote branch for the first time.</span>
             </div>
 
-            <div v-if="hasReadinessWarnings" class="warning-box">
-              <span class="warning-icon">⚠</span>
-              <div>
-                <strong>REPRODUCIBILITY WARNINGS</strong>
-                <p>{{ readinessWarningCount }} dependency detail{{ readinessWarningCount !== 1 ? 's are' : ' is' }} missing. The remote commit can still be pushed, but cloud builds may need this provenance later.</p>
-                <ul class="warning-list">
-                  <li v-for="model in visibleModelWarnings" :key="model.hash || model.filename">
-                    Model: {{ model.filename }}
-                  </li>
-                  <li v-for="node in visibleNodeWarnings" :key="node.name">
-                    Node: {{ node.name }} ({{ node.criticality }})
-                  </li>
-                  <li v-if="hiddenWarningCount">+{{ hiddenWarningCount }} more</li>
-                </ul>
-                <button class="review-issues-btn" @click="showReadinessIssuesModal = true">
-                  Review Issues
-                </button>
-              </div>
-            </div>
+            <ReproducibilityWarningBanner
+              v-if="hasReadinessWarnings"
+              :warnings="warnings"
+              message="Missing provenance can prevent another machine, or ComfyGit Cloud, from rebuilding this environment exactly."
+              @review="showReadinessIssuesModal = true"
+            />
 
             <!-- Outgoing commits -->
             <div v-if="preview.commits_ahead > 0" class="commits-section">
@@ -191,6 +165,7 @@ import { computed, ref } from 'vue'
 import type { PushPreview } from '@/types/comfygit'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
 import ReadinessIssuesModal from '@/components/ReadinessIssuesModal.vue'
+import ReproducibilityWarningBanner from '@/components/base/molecules/ReproducibilityWarningBanner.vue'
 
 const props = defineProps<{
   show: boolean
@@ -229,19 +204,6 @@ const readinessWarningCount = computed(() =>
 )
 
 const hasReadinessWarnings = computed(() => readinessWarningCount.value > 0)
-
-const visibleModelWarnings = computed(() =>
-  warnings.value.models_without_sources.slice(0, 3)
-)
-
-const visibleNodeWarnings = computed(() => {
-  const remainingSlots = Math.max(0, 3 - visibleModelWarnings.value.length)
-  return warnings.value.nodes_without_provenance.slice(0, remainingSlots)
-})
-
-const hiddenWarningCount = computed(() =>
-  readinessWarningCount.value - visibleModelWarnings.value.length - visibleNodeWarnings.value.length
-)
 
 function handlePush(force: boolean) {
   emit('push', { force })
@@ -358,36 +320,20 @@ function handlePush(force: boolean) {
 }
 
 .warning-icon {
-  font-size: var(--cg-font-size-xl);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--cg-color-warning);
+  border-radius: 50%;
+  font-weight: var(--cg-font-weight-bold);
   flex-shrink: 0;
 }
 
 .warning-box p {
   margin: var(--cg-space-1) 0 0 0;
   font-size: var(--cg-font-size-sm);
-}
-
-.warning-list {
-  margin: var(--cg-space-2) 0 0 0;
-  padding-left: var(--cg-space-4);
-  color: var(--cg-color-text-secondary);
-  font-size: var(--cg-font-size-sm);
-}
-
-.review-issues-btn {
-  margin-top: var(--cg-space-3);
-  border: 1px solid var(--cg-color-warning);
-  background: transparent;
-  color: var(--cg-color-warning);
-  padding: var(--cg-space-2) var(--cg-space-3);
-  cursor: pointer;
-  font-size: var(--cg-font-size-xs);
-  text-transform: uppercase;
-  letter-spacing: var(--cg-letter-spacing-wide);
-}
-
-.review-issues-btn:hover {
-  background: var(--cg-color-warning-muted);
 }
 
 .info-box {

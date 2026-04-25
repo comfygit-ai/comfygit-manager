@@ -4,6 +4,7 @@
     size="lg"
     :loading="loading"
     :error="error"
+    :overlay-z-index="overlayZIndex"
     @close="$emit('close')"
   >
     <template #body>
@@ -117,6 +118,7 @@ import type { ModelDetails } from '@/types/comfygit'
 
 const props = defineProps<{
   identifier: string
+  overlayZIndex?: number
 }>()
 
 const emit = defineEmits<{

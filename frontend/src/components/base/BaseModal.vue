@@ -1,6 +1,10 @@
 <template>
   <Teleport to="body">
-    <div class="base-modal-overlay" @click="handleOverlayClick">
+    <div
+      class="base-modal-overlay"
+      :style="{ zIndex: overlayZIndex }"
+      @click="handleOverlayClick"
+    >
       <div :class="['base-modal-content', size, { 'fixed-height': fixedHeight }]" @click.stop>
         <div class="base-modal-header">
           <slot name="header">
@@ -42,12 +46,14 @@ const props = withDefaults(defineProps<{
   loading?: boolean
   error?: string
   fixedHeight?: boolean
+  overlayZIndex?: number
 }>(), {
   size: 'md',
   showCloseButton: true,
   closeOnOverlayClick: true,
   loading: false,
-  fixedHeight: false
+  fixedHeight: false,
+  overlayZIndex: 10003
 })
 
 const emit = defineEmits<{

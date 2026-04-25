@@ -23,7 +23,6 @@
 
         <!-- Warning State (dependencies still missing provenance) -->
         <template v-else>
-          <!-- Warning Header -->
           <div class="warning-header">
             <span class="warning-icon">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -37,79 +36,21 @@
               </h3>
               <p class="warning-description">
                 Missing provenance can prevent another machine, or ComfyGit Cloud, from rebuilding this environment exactly.
-                Add the missing details, or {{ mode }} anyway.
+                Review the missing details, or {{ mode }} anyway.
               </p>
+              <ul class="warning-list">
+                <li v-for="model in visibleModelWarnings" :key="model.hash || model.filename">
+                  Model: {{ model.filename }}
+                </li>
+                <li v-for="node in visibleNodeWarnings" :key="node.name">
+                  Node: {{ node.name }} ({{ node.criticality }})
+                </li>
+                <li v-if="hiddenWarningCount">+{{ hiddenWarningCount }} more</li>
+              </ul>
+              <button class="review-issues-btn" @click="showReadinessIssuesModal = true">
+                Review Issues
+              </button>
             </div>
-          </div>
-
-          <!-- Models List -->
-          <div v-if="models.length" class="models-section">
-            <div class="section-header">
-              Models without source URLs
-            </div>
-            <div class="models-list">
-              <div
-                v-for="model in visibleModels"
-                :key="model.hash || model.filename"
-                class="model-item"
-              >
-                <div class="model-info">
-                  <div class="model-filename">{{ model.filename }}</div>
-                  <div class="model-workflows">
-                    <span v-if="model.workflows.length">Used by: {{ model.workflows.join(', ') }}</span>
-                    <span v-else>Declared in manifest</span>
-                    <span class="criticality-label"> • {{ model.criticality || 'required' }}</span>
-                  </div>
-                </div>
-                <button
-                  v-if="model.hash"
-                  class="add-source-btn"
-                  @click="selectedModelHash = model.hash"
-                >
-                  Add Source
-                </button>
-              </div>
-            </div>
-
-            <!-- Show More Button -->
-            <button
-              v-if="models.length > 3 && !showAllModels"
-              class="show-more-btn"
-              @click="showAllModels = true"
-            >
-              Show {{ models.length - 3 }} more model{{ models.length - 3 !== 1 ? 's' : '' }}...
-            </button>
-          </div>
-
-          <!-- Nodes List -->
-          <div v-if="nodes.length" class="models-section">
-            <div class="section-header">
-              Custom nodes without portable provenance
-            </div>
-            <div class="models-list">
-              <div
-                v-for="node in visibleNodes"
-                :key="node.name"
-                class="model-item"
-              >
-                <div class="model-info">
-                  <div class="model-filename">{{ node.name }}</div>
-                  <div class="model-workflows">
-                    {{ node.reason }}
-                    <span class="criticality-label"> • {{ node.criticality }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Show More Button -->
-            <button
-              v-if="nodes.length > 3 && !showAllNodes"
-              class="show-more-btn"
-              @click="showAllNodes = true"
-            >
-              Show {{ nodes.length - 3 }} more node{{ nodes.length - 3 !== 1 ? 's' : '' }}...
-            </button>
           </div>
         </template>
       </div>
@@ -125,11 +66,11 @@
     </template>
   </BaseModal>
 
-  <!-- Model Detail Modal (for adding sources) -->
-  <ModelDetailModal
-    v-if="selectedModelHash"
-    :identifier="selectedModelHash"
-    @close="handleDetailModalClose"
+  <ReadinessIssuesModal
+    v-if="showReadinessIssuesModal"
+    :warnings="warnings"
+    @close="showReadinessIssuesModal = false"
+    @revalidate="$emit('revalidate')"
   />
 </template>
 
@@ -137,7 +78,7 @@
 import { ref, computed } from 'vue'
 import BaseModal from './base/BaseModal.vue'
 import BaseButton from './base/BaseButton.vue'
-import ModelDetailModal from './ModelDetailModal.vue'
+import ReadinessIssuesModal from '@/components/ReadinessIssuesModal.vue'
 import type { ModelWithoutSource, NodeWithoutProvenance } from '@/types/comfygit'
 
 const props = defineProps<{
@@ -146,38 +87,35 @@ const props = defineProps<{
   mode?: 'export' | 'publish'
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   confirm: []
   cancel: []
   revalidate: []
 }>()
 
-const showAllModels = ref(false)
-const showAllNodes = ref(false)
-const selectedModelHash = ref<string | null>(null)
+const showReadinessIssuesModal = ref(false)
 const mode = computed(() => props.mode || 'export')
 const actionLabel = computed(() => mode.value === 'publish' ? 'Publish' : 'Export')
 const nodes = computed(() => props.nodes || [])
 const warningCount = computed(() => props.models.length + nodes.value.length)
 
-const visibleModels = computed(() => {
-  if (showAllModels.value || props.models.length <= 3) {
-    return props.models
-  }
-  return props.models.slice(0, 3)
+const warnings = computed(() => ({
+  models_without_sources: props.models,
+  nodes_without_provenance: nodes.value,
+}))
+
+const visibleModelWarnings = computed(() =>
+  props.models.slice(0, 3)
+)
+
+const visibleNodeWarnings = computed(() => {
+  const remainingSlots = Math.max(0, 3 - visibleModelWarnings.value.length)
+  return nodes.value.slice(0, remainingSlots)
 })
 
-const visibleNodes = computed(() => {
-  if (showAllNodes.value || nodes.value.length <= 3) {
-    return nodes.value
-  }
-  return nodes.value.slice(0, 3)
-})
-
-function handleDetailModalClose() {
-  selectedModelHash.value = null
-  emit('revalidate')
-}
+const hiddenWarningCount = computed(() =>
+  warningCount.value - visibleModelWarnings.value.length - visibleNodeWarnings.value.length
+)
 </script>
 
 <style scoped>
@@ -225,95 +163,27 @@ function handleDetailModalClose() {
   color: var(--cg-color-text-secondary);
 }
 
-.models-section {
-  background: var(--cg-color-bg-tertiary);
-  border: 1px solid var(--cg-color-border);
-  border-radius: var(--cg-radius-md);
-  overflow: hidden;
+.warning-list {
+  margin: var(--cg-space-2) 0 0 0;
+  padding-left: var(--cg-space-4);
+  color: var(--cg-color-text-secondary);
+  font-size: var(--cg-font-size-sm);
 }
 
-.section-header {
+.review-issues-btn {
+  margin-top: var(--cg-space-3);
+  border: 1px solid var(--cg-color-warning);
+  background: transparent;
+  color: var(--cg-color-warning);
   padding: var(--cg-space-2) var(--cg-space-3);
-  border-bottom: 1px solid var(--cg-color-border-subtle);
-  color: var(--cg-color-text-primary);
+  cursor: pointer;
   font-size: var(--cg-font-size-xs);
-  font-weight: var(--cg-font-weight-semibold);
   text-transform: uppercase;
   letter-spacing: var(--cg-letter-spacing-wide);
 }
 
-.models-list {
-  max-height: 240px;
-  overflow-y: auto;
-}
-
-.model-item {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--cg-space-3);
-  padding: var(--cg-space-3);
-  border-bottom: 1px solid var(--cg-color-border-subtle);
-}
-
-.model-item:last-child {
-  border-bottom: none;
-}
-
-.model-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.model-filename {
-  font-size: var(--cg-font-size-sm);
-  font-weight: var(--cg-font-weight-medium);
-  color: var(--cg-color-text-primary);
-  font-family: var(--cg-font-mono);
-  word-break: break-all;
-}
-
-.model-workflows {
-  margin-top: var(--cg-space-1);
-  font-size: var(--cg-font-size-xs);
-  color: var(--cg-color-text-muted);
-}
-
-.criticality-label {
-  color: var(--cg-color-warning);
-}
-
-.add-source-btn {
-  flex-shrink: 0;
-  background: var(--cg-color-bg-secondary);
-  border: 1px solid var(--cg-color-border);
-  color: var(--cg-color-accent);
-  padding: 4px 10px;
-  font-size: var(--cg-font-size-xs);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.add-source-btn:hover {
-  background: var(--cg-color-accent);
-  color: var(--cg-color-bg-primary);
-  border-color: var(--cg-color-accent);
-}
-
-.show-more-btn {
-  width: 100%;
-  padding: var(--cg-space-2);
-  background: transparent;
-  border: none;
-  border-top: 1px solid var(--cg-color-border-subtle);
-  color: var(--cg-color-accent);
-  font-size: var(--cg-font-size-sm);
-  cursor: pointer;
-  transition: background var(--cg-transition-base);
-}
-
-.show-more-btn:hover {
-  background: var(--cg-color-bg-secondary);
+.review-issues-btn:hover {
+  background: var(--cg-color-warning-muted);
 }
 
 /* Success state styles */

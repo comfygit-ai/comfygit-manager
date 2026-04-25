@@ -9,6 +9,14 @@
     </template>
 
     <template #content>
+      <ReproducibilityWarningBanner
+        v-if="hasCurrentReadinessWarnings"
+        class="export-readiness-warning"
+        :warnings="currentWarnings"
+        message="Missing provenance can prevent another machine, or ComfyGit Cloud, from rebuilding this environment exactly."
+        @review="showReadinessIssuesModal = true"
+      />
+
       <!-- Export Options -->
       <SectionGroup title="EXPORT OPTIONS">
         <div class="export-card">
@@ -23,25 +31,9 @@
           <div class="export-path-row">
             <TextInput
               v-model="outputPath"
-              placeholder="Leave empty for default, or enter path like /mnt/c/Users/you/exports/"
+              placeholder="/mnt/c/Users/you/exports/"
               class="path-input"
             />
-          </div>
-
-          <div class="export-actions">
-            <ActionButton
-              variant="primary"
-              size="md"
-              :loading="isValidating || isExporting"
-              :disabled="isValidating || isExporting"
-              @click="handleExport"
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M8 4L3 9h3v6h4V9h3L8 4z"/>
-                <path d="M14 2H2v2h12V2z"/>
-              </svg>
-              {{ buttonLabel }}
-            </ActionButton>
           </div>
         </div>
       </SectionGroup>
@@ -95,6 +87,29 @@
         </ItemCard>
       </SectionGroup>
     </template>
+
+    <template #footer>
+      <div class="export-footer-actions">
+        <ActionButton
+          v-if="embedded"
+          variant="secondary"
+          size="md"
+          :disabled="isExporting"
+          @click="$emit('close')"
+        >
+          Cancel
+        </ActionButton>
+        <ActionButton
+          variant="primary"
+          size="md"
+          :loading="isValidating || isExporting"
+          :disabled="isValidating || isExporting"
+          @click="handleExport"
+        >
+          {{ buttonLabel }}
+        </ActionButton>
+      </div>
+    </template>
   </PanelLayout>
 
   <!-- Info Popover -->
@@ -137,19 +152,16 @@
     @committed="handleBlockedCommitted"
   />
 
-  <!-- Export Warnings Modal -->
-  <ExportWarningsModal
-    v-if="showWarningsModal && validationResult"
-    :models="validationResult.warnings.models_without_sources"
-    :nodes="validationResult.warnings.nodes_without_provenance"
-    @confirm="handleExportConfirmed"
-    @cancel="showWarningsModal = false"
+  <ReadinessIssuesModal
+    v-if="showReadinessIssuesModal && validationResult"
+    :warnings="validationResult.warnings"
+    @close="showReadinessIssuesModal = false"
     @revalidate="handleRevalidate"
   />
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import type { ExportResult, ExportValidationResult } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
@@ -162,11 +174,16 @@ import TextInput from '@/components/base/atoms/TextInput.vue'
 import FilePath from '@/components/base/atoms/FilePath.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import ExportBlockedModal from '@/components/ExportBlockedModal.vue'
-import ExportWarningsModal from '@/components/ExportWarningsModal.vue'
+import ReadinessIssuesModal from '@/components/ReadinessIssuesModal.vue'
+import ReproducibilityWarningBanner from '@/components/base/molecules/ReproducibilityWarningBanner.vue'
 
 const props = defineProps<{
   environmentName?: string | null
   embedded?: boolean
+}>()
+
+defineEmits<{
+  close: []
 }>()
 
 const { validateExport, exportEnvWithForce, validateEnvironmentExport, exportEnvironmentWithForce } = useComfyGitService()
@@ -181,7 +198,7 @@ const showInfo = ref(false)
 // Validation state
 const validationResult = ref<ExportValidationResult | null>(null)
 const showBlockedModal = ref(false)
-const showWarningsModal = ref(false)
+const showReadinessIssuesModal = ref(false)
 
 const targetEnvironmentName = computed(() => props.environmentName?.trim() || null)
 
@@ -200,41 +217,61 @@ const successMessage = computed(() => {
 const buttonLabel = computed(() => {
   if (isValidating.value) return 'Validating...'
   if (isExporting.value) return 'Exporting...'
-  return 'Export Environment'
+  return hasCurrentReadinessWarnings.value ? 'Export Anyway' : 'Export Environment'
 })
 
-async function handleExport() {
+const currentWarnings = computed(() => validationResult.value?.warnings || {
+  models_without_sources: [],
+  nodes_without_provenance: []
+})
+
+const modelWarningCount = computed(() =>
+  currentWarnings.value.models_without_sources.length
+)
+
+const nodeWarningCount = computed(() =>
+  currentWarnings.value.nodes_without_provenance?.length || 0
+)
+
+const readinessWarningCount = computed(() =>
+  modelWarningCount.value + nodeWarningCount.value
+)
+
+const hasCurrentReadinessWarnings = computed(() =>
+  Boolean(validationResult.value?.can_export) && readinessWarningCount.value > 0
+)
+
+async function validateReadiness(): Promise<ExportValidationResult | null> {
   isValidating.value = true
-  exportResult.value = null
 
   try {
     const result = targetEnvironmentName.value
       ? await validateEnvironmentExport(targetEnvironmentName.value)
       : await validateExport()
     validationResult.value = result
-
-    if (!result.can_export) {
-      // Show blocking issues modal
-      showBlockedModal.value = true
-    } else if (hasReadinessWarnings(result)) {
-      // Show warnings modal for confirmation
-      showWarningsModal.value = true
-    } else {
-      // No issues, proceed directly
-      await executeExport()
-    }
+    return result
   } catch (err) {
     exportResult.value = {
       status: 'error',
       message: err instanceof Error ? err.message : 'Validation failed'
     }
+    return null
   } finally {
     isValidating.value = false
   }
 }
 
-async function handleExportConfirmed() {
-  showWarningsModal.value = false
+async function handleExport() {
+  exportResult.value = null
+
+  const result = await validateReadiness()
+  if (!result) return
+
+  if (!result.can_export) {
+    showBlockedModal.value = true
+    return
+  }
+
   await executeExport()
 }
 
@@ -242,42 +279,19 @@ async function handleBlockedCommitted() {
   showBlockedModal.value = false
 
   // Re-validate after successful commit
-  isValidating.value = true
-  try {
-    const result = targetEnvironmentName.value
-      ? await validateEnvironmentExport(targetEnvironmentName.value)
-      : await validateExport()
-    validationResult.value = result
+  const result = await validateReadiness()
+  if (!result) return
 
-    if (!result.can_export) {
-      // Still blocked — re-show modal with updated issues
-      showBlockedModal.value = true
-    } else if (hasReadinessWarnings(result)) {
-      // Warnings only — show warnings modal
-      showWarningsModal.value = true
-    } else {
-      // Clean — auto-export
-      await executeExport()
-    }
-  } catch (err) {
-    exportResult.value = {
-      status: 'error',
-      message: err instanceof Error ? err.message : 'Re-validation failed'
-    }
-  } finally {
-    isValidating.value = false
+  if (!result.can_export) {
+    showBlockedModal.value = true
+    return
   }
+
+  await executeExport()
 }
 
 async function handleRevalidate() {
-  try {
-    const result = targetEnvironmentName.value
-      ? await validateEnvironmentExport(targetEnvironmentName.value)
-      : await validateExport()
-    validationResult.value = result
-  } catch (err) {
-    console.error('Re-validation failed:', err)
-  }
+  await validateReadiness()
 }
 
 async function executeExport() {
@@ -345,15 +359,16 @@ async function handleDownload() {
   }
 }
 
-function hasReadinessWarnings(result: ExportValidationResult): boolean {
-  return (
-    result.warnings.models_without_sources.length > 0 ||
-    (result.warnings.nodes_without_provenance?.length || 0) > 0
-  )
-}
+onMounted(() => {
+  void validateReadiness()
+})
 </script>
 
 <style scoped>
+.export-readiness-warning {
+  margin-bottom: var(--cg-space-4);
+}
+
 /* Export Card */
 .export-card {
   background: var(--cg-color-bg-tertiary);
@@ -400,11 +415,12 @@ function hasReadinessWarnings(result: ExportValidationResult): boolean {
   flex: 1;
 }
 
-.export-actions {
+.export-footer-actions {
   display: flex;
   gap: var(--cg-space-3);
   align-items: center;
-  padding-top: var(--cg-space-3);
+  justify-content: flex-end;
+  padding-top: var(--cg-space-4);
   border-top: 1px solid var(--cg-color-border-subtle);
 }
 
