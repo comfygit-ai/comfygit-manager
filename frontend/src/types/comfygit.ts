@@ -559,6 +559,10 @@ export interface ModelSourceCandidatesResponse {
   candidates: ModelSourceCandidate[]
 }
 
+export interface WorkflowSourceCandidatesResponse {
+  candidates: ModelSourceCandidate[]
+}
+
 export interface DownloadModelRequest {
   source: 'civitai' | 'huggingface' | 'custom'
   url: string

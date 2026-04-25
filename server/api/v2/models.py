@@ -172,6 +172,69 @@ def _scan_workflow_source_candidates(env, model_info: dict) -> list[dict]:
     )[:25]
 
 
+def _scan_workflow_download_candidates(env) -> list[dict]:
+    try:
+        status = env.status()
+        workflow_names = [wf.name for wf in status.workflow.analyzed_workflows]
+    except Exception:
+        workflow_names = []
+
+    candidates_by_key = {}
+    for workflow_name in workflow_names:
+        try:
+            workflow_path = env.workflow_manager.get_workflow_path(workflow_name)
+        except Exception:
+            continue
+
+        try:
+            text = Path(workflow_path).read_text(encoding="utf-8")
+        except Exception:
+            continue
+
+        for match in MODEL_SOURCE_URL_RE.finditer(text):
+            url = _strip_url_punctuation(match.group(0))
+            if not _url_looks_like_model_source(url, {}):
+                continue
+
+            context = _candidate_context(text, match.start(), match.end())
+            source_type = _classify_source_url(url)
+            reasons = []
+            score = 0
+
+            if source_type in {"huggingface", "civitai"}:
+                score += 55
+                reasons.append("known model host")
+            if url.lower().split("?", 1)[0].endswith(MODEL_SOURCE_EXTENSIONS):
+                score += 25
+                reasons.append("model file URL")
+            if re.search(r"\b(model|checkpoint|lora|vae|controlnet|download)\b", context, re.IGNORECASE):
+                score += 15
+                reasons.append("workflow link")
+
+            if score < 30:
+                continue
+
+            key = (url, workflow_name)
+            existing = candidates_by_key.get(key)
+            candidate = {
+                "source": "workflow",
+                "source_type": source_type,
+                "url": url,
+                "workflow": workflow_name,
+                "confidence": min(score, 100),
+                "reasons": reasons or ["workflow link"],
+                "context": context,
+                "validation_status": "not_checked",
+            }
+            if not existing or candidate["confidence"] > existing["confidence"]:
+                candidates_by_key[key] = candidate
+
+    return sorted(
+        candidates_by_key.values(),
+        key=lambda item: (-item["confidence"], item["workflow"], item["url"]),
+    )[:50]
+
+
 @routes.get("/v2/comfygit/models/environment")
 @requires_environment
 async def get_environment_models(request: web.Request, env) -> web.Response:
@@ -573,6 +636,25 @@ async def get_model_source_candidates(request: web.Request, env) -> web.Response
 
     return web.json_response({
         "model": model_info,
+        "candidates": workflow_candidates,
+    })
+
+
+@routes.get("/v2/workspace/models/workflow-source-candidates")
+@requires_environment
+async def get_workflow_model_source_candidates(request: web.Request, env) -> web.Response:
+    """Find likely model source URLs in saved workflow files.
+
+    This general scan is used by the model download modal before a model exists
+    in the local index. Per-model provenance repair should use the identifier
+    scoped source-candidates endpoint instead.
+    """
+    try:
+        workflow_candidates = await run_sync(_scan_workflow_download_candidates, env)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+    return web.json_response({
         "candidates": workflow_candidates,
     })
 

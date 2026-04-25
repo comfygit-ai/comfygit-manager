@@ -32,6 +32,7 @@ import type {
   ModelInfo,
   ModelDetails,
   ModelSourceCandidatesResponse,
+  WorkflowSourceCandidatesResponse,
   DownloadModelRequest,
   ConfigSettings,
   LogEntry,
@@ -935,6 +936,27 @@ export function useComfyGitService() {
     }
 
     return fetchApi<ModelSourceCandidatesResponse>(`/v2/workspace/models/${encodeURIComponent(identifier)}/source-candidates`)
+  }
+
+  async function getWorkflowSourceCandidates(): Promise<WorkflowSourceCandidatesResponse> {
+    if (USE_MOCK) {
+      return {
+        candidates: [
+          {
+            source: 'workflow',
+            source_type: 'huggingface',
+            url: 'https://huggingface.co/example/model/resolve/main/mock-model.safetensors',
+            workflow: 'example-workflow',
+            confidence: 80,
+            reasons: ['known model host', 'model file URL'],
+            context: 'Download mock-model.safetensors from https://huggingface.co/example/model/resolve/main/mock-model.safetensors',
+            validation_status: 'not_checked'
+          }
+        ]
+      }
+    }
+
+    return fetchApi<WorkflowSourceCandidatesResponse>('/v2/workspace/models/workflow-source-candidates')
   }
 
   async function openFileLocation(path: string): Promise<{ status: string }> {
@@ -2131,6 +2153,7 @@ export function useComfyGitService() {
     getWorkspaceModels,
     getModelDetails,
     getModelSourceCandidates,
+    getWorkflowSourceCandidates,
     openFileLocation,
     addModelSource,
     removeModelSource,
