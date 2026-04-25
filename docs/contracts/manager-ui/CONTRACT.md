@@ -180,6 +180,31 @@ before the user starts or queues a download.
 
 This includes guided Hugging Face selections and direct URL entries.
 
+### CGM-UI-15A [PLANNED]: Model source selection should be reusable across download and provenance repair
+Validation: LLM_REVIEW
+
+The UI should not duplicate separate provider-search and workflow-link search
+experiences for model download and model provenance repair.
+
+The shared source-selection experience may appear inside different wrappers,
+but the visible outcome should match the user's intent:
+
+- missing model: download or queue the selected source into a visible
+  destination
+- existing local model: attach the selected source as provenance for the
+  current model
+
+### CGM-UI-15B [PLANNED]: Model details should launch provenance repair without becoming the repair workspace
+Validation: HUMAN_REVIEW
+
+The model details modal should remain a compact factual view of local model
+state. When download sources are missing, it should provide a `Find Source`
+action near the download-sources section.
+
+The source search, workflow-link review, provider search, direct URL entry, and
+optional hash computation controls should live in a dedicated source-repair
+surface opened from that action.
+
 ### CGM-UI-16 [PARTIAL]: Blocked custom nodes should be visible as blocked, not hidden
 Validation: LLM_REVIEW
 
@@ -229,3 +254,27 @@ node optional.
 The UI should not imply that optional means proven unused. Optional means the
 user has chosen not to let that node block export, build-plan, or deployment
 readiness checks when the node lacks portable provenance.
+
+### CGM-UI-20 [PLANNED]: Status should expose the primary environment readiness summary
+Validation: HUMAN_REVIEW
+
+The manager UI should make readiness visible before users reach export, push,
+or future deploy/build warning gates.
+
+The Status surface should expose the compact readiness state and grouped issue
+summary. It should not force users to visit Models, Nodes, Workflows, and
+Version Control separately just to understand whether the environment needs
+attention.
+
+Detailed readiness behavior is specified by `CGM-READY-01` through
+`CGM-READY-07` in `docs/specs/environment-readiness.md`.
+
+### CGM-UI-21 [PLANNED]: Export, push, and future deploy gates should use the shared readiness review surface
+Validation: MIXED
+
+Export warnings, push warnings, and future cloud/build/deploy warnings should
+open the same manager-owned readiness review surface used by Status.
+
+Those contextual gates may adjust framing and primary action labels, but they
+should not fork the issue grouping, copy vocabulary, or repair workflows into
+separate incompatible modal stacks.

@@ -537,6 +537,28 @@ export interface ModelDetails {
   sources: Array<{ type: string; url: string }>
 }
 
+export interface ModelSourceCandidate {
+  source: 'workflow' | 'huggingface' | 'civitai' | 'direct'
+  source_type: 'huggingface' | 'civitai' | 'custom'
+  url: string
+  workflow?: string
+  confidence?: number
+  reasons?: string[]
+  context?: string
+  validation_status?: 'not_checked' | 'reachable' | 'unreachable' | 'unknown'
+}
+
+export interface ModelSourceCandidatesResponse {
+  model: {
+    filename: string
+    hash: string
+    blake3: string | null
+    sha256: string | null
+    category: string
+  }
+  candidates: ModelSourceCandidate[]
+}
+
 export interface DownloadModelRequest {
   source: 'civitai' | 'huggingface' | 'custom'
   url: string

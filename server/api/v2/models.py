@@ -20,6 +20,16 @@ from comfygit_core.services.huggingface_url import parse_huggingface_url
 
 routes = web.RouteTableDef()
 
+MODEL_SOURCE_URL_RE = re.compile(r"https?://[^\s<>'\")\]]+")
+MODEL_SOURCE_EXTENSIONS = (
+    ".safetensors",
+    ".ckpt",
+    ".pt",
+    ".pth",
+    ".bin",
+    ".gguf",
+)
+
 
 def _determine_model_status(resolved_model):
     """Determine model status from ResolvedModel."""
@@ -31,6 +41,135 @@ def _determine_model_status(resolved_model):
         return "downloadable"
     else:
         return "missing"
+
+
+def _strip_url_punctuation(url: str) -> str:
+    return url.rstrip(".,;:!?)]}\"'")
+
+
+def _classify_source_url(url: str) -> str:
+    lower = url.lower()
+    if "huggingface.co" in lower or "hf.co/" in lower:
+        return "huggingface"
+    if "civitai.com" in lower:
+        return "civitai"
+    return "custom"
+
+
+def _candidate_context(text: str, start: int, end: int, radius: int = 180) -> str:
+    context_start = max(0, start - radius)
+    context_end = min(len(text), end + radius)
+    context = text[context_start:context_end]
+    return re.sub(r"\s+", " ", context).strip()
+
+
+def _score_source_candidate(url: str, context: str, model_info: dict) -> tuple[int, list[str]]:
+    score = 0
+    reasons = []
+    haystacks = [context.lower(), url.lower()]
+    filename = (model_info.get("filename") or "").lower()
+    stem = Path(filename).stem.lower() if filename else ""
+    category = (model_info.get("category") or "").lower()
+    hashes = [
+        str(model_info.get("hash") or "").lower(),
+        str(model_info.get("blake3") or "").lower(),
+        str(model_info.get("sha256") or "").lower(),
+    ]
+
+    if filename and any(filename in haystack for haystack in haystacks):
+        score += 60
+        reasons.append("filename match")
+    elif stem and any(stem in haystack for haystack in haystacks):
+        score += 35
+        reasons.append("model name match")
+
+    for model_hash in hashes:
+        if model_hash and len(model_hash) >= 8 and any(model_hash in haystack for haystack in haystacks):
+            score += 50
+            reasons.append("hash match")
+            break
+
+    if category and category != "unknown" and category in context.lower():
+        score += 10
+        reasons.append("category nearby")
+
+    if url.lower().endswith(MODEL_SOURCE_EXTENSIONS):
+        score += 15
+        reasons.append("model file URL")
+
+    if _classify_source_url(url) in {"huggingface", "civitai"}:
+        score += 10
+        reasons.append("known model host")
+
+    if not reasons:
+        reasons.append("workflow link")
+
+    return score, reasons
+
+
+def _url_looks_like_model_source(url: str, model_info: dict) -> bool:
+    lower_url = url.lower()
+    filename = (model_info.get("filename") or "").lower()
+    stem = Path(filename).stem.lower() if filename else ""
+
+    if _classify_source_url(url) in {"huggingface", "civitai"}:
+        return True
+    if lower_url.endswith(MODEL_SOURCE_EXTENSIONS):
+        return True
+    if filename and filename in lower_url:
+        return True
+    if stem and stem in lower_url:
+        return True
+    return False
+
+
+def _scan_workflow_source_candidates(env, model_info: dict) -> list[dict]:
+    try:
+        status = env.status()
+        workflow_names = [wf.name for wf in status.workflow.analyzed_workflows]
+    except Exception:
+        workflow_names = []
+
+    candidates_by_key = {}
+    for workflow_name in workflow_names:
+        try:
+            workflow_path = env.workflow_manager.get_workflow_path(workflow_name)
+        except Exception:
+            continue
+
+        try:
+            text = Path(workflow_path).read_text(encoding="utf-8")
+        except Exception:
+            continue
+
+        for match in MODEL_SOURCE_URL_RE.finditer(text):
+            url = _strip_url_punctuation(match.group(0))
+            if not _url_looks_like_model_source(url, model_info):
+                continue
+            context = _candidate_context(text, match.start(), match.end())
+            score, reasons = _score_source_candidate(url, context, model_info)
+            if score < 20:
+                continue
+
+            key = (url, workflow_name)
+            existing = candidates_by_key.get(key)
+            candidate = {
+                "source": "workflow",
+                "source_type": _classify_source_url(url),
+                "url": url,
+                "workflow": workflow_name,
+                "confidence": min(score, 100),
+                "reasons": reasons,
+                "context": context,
+                "validation_status": "not_checked",
+            }
+            if not existing or candidate["confidence"] > existing["confidence"]:
+                candidates_by_key[key] = candidate
+
+    return sorted(
+        candidates_by_key.values(),
+        key=lambda item: (-item["confidence"], item["workflow"], item["url"]),
+    )[:25]
 
 
 @routes.get("/v2/comfygit/models/environment")
@@ -395,6 +534,46 @@ async def get_workspace_model_details(request: web.Request, env) -> web.Response
         "last_seen": last_seen_str,
         "locations": locations,
         "sources": sources,
+    })
+
+
+@routes.get("/v2/workspace/models/{identifier}/source-candidates")
+@requires_environment
+async def get_model_source_candidates(request: web.Request, env) -> web.Response:
+    """Find candidate source URLs for an existing local model.
+
+    The first implementation scans saved workflow files for likely model links.
+    Provider search can be added to this endpoint without changing the caller's
+    outcome: candidates can be used for download or provenance repair.
+    """
+    identifier = request.match_info["identifier"]
+
+    try:
+        details = await run_sync(env.workspace.get_model_details, identifier)
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=400)
+    except KeyError:
+        return web.json_response({"error": f"Model not found: {identifier}"}, status=404)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+    model = details.model
+    model_info = {
+        "filename": model.filename,
+        "hash": model.hash,
+        "blake3": model.blake3_hash,
+        "sha256": model.sha256_hash,
+        "category": model.category,
+    }
+
+    try:
+        workflow_candidates = await run_sync(_scan_workflow_source_candidates, env, model_info)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+    return web.json_response({
+        "model": model_info,
+        "candidates": workflow_candidates,
     })
 
 

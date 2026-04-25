@@ -67,3 +67,84 @@ same source, destination, and portability concepts as the guided download flow.
 Manual model management should not create a second incompatible model metadata
 shape.
 
+### CGM-MDL-07 [PLANNED]: Source discovery should be a shared picker primitive
+Validation: LLM_REVIEW
+
+The manager should treat "find a model source" as a reusable primitive rather
+than a behavior owned only by the download modal.
+
+The shared source picker should support provider/search surfaces such as:
+
+- workflow links discovered from saved or active workflow JSON
+- Hugging Face search and file selection
+- Civitai search or lookup when supported
+- direct URL entry
+
+The picker should return a candidate source selection. Callers decide what the
+candidate means:
+
+- missing-model acquisition queues or starts a model download
+- existing-model provenance repair attaches the source to a local model record
+- future cloud/build-plan checks use the same source facts as dependency
+  availability evidence
+
+### CGM-MDL-08 [PLANNED]: Download and provenance repair should be separate outcomes of the same source selection
+Validation: LLM_REVIEW
+
+The model download flow and the model provenance-repair flow may share source
+search, candidate presentation, token configuration, workflow-link scanning,
+and direct URL validation, but they should not share the same user-facing
+outcome.
+
+For a missing model, the primary action is `Download` or `Queue Download`, and
+the UI must show the selected source and destination before the action.
+
+For an already-present local model, the primary action is `Use as source`, and
+the UI must attach the selected URL/provenance metadata to the existing model
+index entry without downloading another copy.
+
+### CGM-MDL-09 [PLANNED]: Model details should remain factual while source repair uses a dedicated flow
+Validation: HUMAN_REVIEW
+
+The model details surface should show the current local facts for a model:
+filename, category, size, known hashes, locations, and configured download
+sources.
+
+When source metadata is missing, the details surface should expose a compact
+`Find Source` action near download sources. That action should open a dedicated
+source-repair flow rather than expanding the details modal into a full search
+and resolution workspace.
+
+### CGM-MDL-10 [PLANNED]: Workflow-link source candidates are assistive and user-confirmed
+Validation: MIXED
+
+Workflow-link scanning should search workflow JSON and text-bearing workflow
+content such as notes, markdown-like instructions, and metadata for likely
+model source URLs.
+
+The scanner may rank candidates by proximity to filename, model stem, category,
+or known hashes, but it must not silently attach or download a candidate. The
+user should review the candidate and explicitly choose `Download` or `Use as
+source`.
+
+Provider or URL validation may be shown as advisory evidence. Validation should
+not be treated as a perfect guarantee because some providers require auth,
+redirects, signed URLs, or provider-specific download flows.
+
+### CGM-MDL-11 [PLANNED]: Full model hashes should be lazy, explicit, and cached
+Validation: MIXED
+
+The manager should not compute full Blake3 or SHA256 hashes for every model in
+the background by default. Large model libraries make surprise disk scans an
+unfriendly default.
+
+Full hashes should be computed when the user enters a provenance-sensitive path
+or explicitly asks for stronger identity evidence, such as:
+
+- `Find Source` for a local model
+- export or push readiness review
+- an explicit `Compute hashes` action on model details or source repair
+- future cloud/build-plan readiness checks
+
+Once computed, full hashes should be cached in the model index and reused by
+source discovery, readiness checks, and future cloud dependency proofs.

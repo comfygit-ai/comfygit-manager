@@ -31,6 +31,7 @@ import type {
   WorkflowResolutionPlan,
   ModelInfo,
   ModelDetails,
+  ModelSourceCandidatesResponse,
   DownloadModelRequest,
   ConfigSettings,
   LogEntry,
@@ -906,6 +907,34 @@ export function useComfyGitService() {
     if (USE_MOCK) return mockApi.getModelDetails(identifier)
 
     return fetchApi<ModelDetails>(`/v2/workspace/models/details/${encodeURIComponent(identifier)}`)
+  }
+
+  async function getModelSourceCandidates(identifier: string): Promise<ModelSourceCandidatesResponse> {
+    if (USE_MOCK) {
+      return {
+        model: {
+          filename: 'mock-model.safetensors',
+          hash: identifier,
+          blake3: null,
+          sha256: null,
+          category: 'checkpoints'
+        },
+        candidates: [
+          {
+            source: 'workflow',
+            source_type: 'huggingface',
+            url: 'https://huggingface.co/example/model/resolve/main/mock-model.safetensors',
+            workflow: 'example-workflow',
+            confidence: 80,
+            reasons: ['filename match', 'known model host'],
+            context: 'Download mock-model.safetensors from https://huggingface.co/example/model/resolve/main/mock-model.safetensors',
+            validation_status: 'not_checked'
+          }
+        ]
+      }
+    }
+
+    return fetchApi<ModelSourceCandidatesResponse>(`/v2/workspace/models/${encodeURIComponent(identifier)}/source-candidates`)
   }
 
   async function openFileLocation(path: string): Promise<{ status: string }> {
@@ -2101,6 +2130,7 @@ export function useComfyGitService() {
     getEnvironmentModels,
     getWorkspaceModels,
     getModelDetails,
+    getModelSourceCandidates,
     openFileLocation,
     addModelSource,
     removeModelSource,

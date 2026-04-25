@@ -57,7 +57,12 @@
 
         <!-- Sources -->
         <section class="detail-section">
-          <h4 class="section-header">Download Sources ({{ details.sources?.length || 0 }})</h4>
+          <div class="section-header-row">
+            <h4 class="section-header">Download Sources ({{ details.sources?.length || 0 }})</h4>
+            <button class="find-source-btn" @click="showSourceModal = true">
+              Find Source
+            </button>
+          </div>
           <div v-if="details.sources?.length" class="sources-list">
             <div v-for="(src, idx) in details.sources" :key="idx" class="source-item">
               <span class="source-type">{{ src.type }}:</span>
@@ -73,23 +78,6 @@
           </div>
           <div v-else class="empty-state">
             No download sources configured
-          </div>
-
-          <!-- Add Source Form -->
-          <div class="add-source-form">
-            <input
-              v-model="newSourceUrl"
-              type="text"
-              placeholder="Enter download URL (CivitAI, HuggingFace, etc.)"
-              class="source-input"
-            />
-            <button
-              class="add-source-btn"
-              :disabled="!newSourceUrl.trim() || addingSource"
-              @click="handleAddSource"
-            >
-              {{ addingSource ? 'Adding...' : 'Add Source' }}
-            </button>
           </div>
           <p v-if="sourceError" class="source-error">{{ sourceError }}</p>
           <p v-if="sourceSuccess" class="source-success">{{ sourceSuccess }}</p>
@@ -108,11 +96,20 @@
       {{ toast.message }}
     </div>
   </Teleport>
+
+  <ModelSourceModal
+    v-if="details && showSourceModal"
+    :model="details"
+    :overlay-z-index="(overlayZIndex || 10003) + 2"
+    @close="showSourceModal = false"
+    @saved="handleSourceSaved"
+  />
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import BaseModal from '@/components/base/BaseModal.vue'
+import ModelSourceModal from '@/components/ModelSourceModal.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import type { ModelDetails } from '@/types/comfygit'
 
@@ -123,19 +120,19 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
+  sourceSaved: []
 }>()
 
-const { getModelDetails, addModelSource, removeModelSource, openFileLocation } = useComfyGitService()
+const { getModelDetails, removeModelSource, openFileLocation } = useComfyGitService()
 
 const details = ref<ModelDetails | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 
-const newSourceUrl = ref('')
-const addingSource = ref(false)
 const removingSourceUrl = ref<string | null>(null)
 const sourceError = ref<string | null>(null)
 const sourceSuccess = ref<string | null>(null)
+const showSourceModal = ref(false)
 
 // Toast notifications
 const toast = ref<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
@@ -172,26 +169,6 @@ async function openLocation(path: string) {
   }
 }
 
-async function handleAddSource() {
-  if (!newSourceUrl.value.trim() || !details.value) return
-
-  addingSource.value = true
-  sourceError.value = null
-  sourceSuccess.value = null
-
-  try {
-    await addModelSource(details.value.hash, newSourceUrl.value.trim())
-    sourceSuccess.value = 'Source added successfully!'
-    newSourceUrl.value = ''
-    // Reload details to show updated sources
-    await loadDetails()
-  } catch (err) {
-    sourceError.value = err instanceof Error ? err.message : 'Failed to add source'
-  } finally {
-    addingSource.value = false
-  }
-}
-
 async function removeSource(url: string) {
   if (!details.value) return
 
@@ -209,6 +186,13 @@ async function removeSource(url: string) {
   } finally {
     removingSourceUrl.value = null
   }
+}
+
+async function handleSourceSaved() {
+  sourceSuccess.value = 'Source added successfully!'
+  showSourceModal.value = false
+  await loadDetails()
+  emit('sourceSaved')
 }
 
 async function loadDetails() {
@@ -247,6 +231,37 @@ onMounted(loadDetails)
   margin: 0 0 var(--cg-space-2) 0;
   padding-bottom: var(--cg-space-2);
   border-bottom: 1px solid var(--cg-color-border);
+}
+
+.section-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--cg-space-3);
+  border-bottom: 1px solid var(--cg-color-border);
+  margin-bottom: var(--cg-space-2);
+  padding-bottom: var(--cg-space-2);
+}
+
+.section-header-row .section-header {
+  margin: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.find-source-btn {
+  background: transparent;
+  border: 1px solid var(--cg-color-accent);
+  color: var(--cg-color-accent);
+  padding: 4px 10px;
+  font-size: var(--cg-font-size-xs);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+}
+
+.find-source-btn:hover {
+  background: var(--cg-color-accent-muted);
 }
 
 .detail-row {
@@ -364,49 +379,6 @@ onMounted(loadDetails)
   color: var(--cg-color-text-muted);
   font-style: italic;
   padding: var(--cg-space-2);
-}
-
-.add-source-form {
-  display: flex;
-  gap: var(--cg-space-2);
-  margin-top: var(--cg-space-3);
-}
-
-.source-input {
-  flex: 1;
-  background: var(--cg-color-bg-tertiary);
-  border: 1px solid var(--cg-color-border);
-  color: var(--cg-color-text-primary);
-  padding: var(--cg-space-2);
-  font-size: var(--cg-font-size-sm);
-}
-
-.source-input::placeholder {
-  color: var(--cg-color-text-muted);
-}
-
-.source-input:focus {
-  outline: none;
-  border-color: var(--cg-color-accent);
-}
-
-.add-source-btn {
-  background: var(--cg-color-accent);
-  border: none;
-  color: var(--cg-color-bg-primary);
-  padding: var(--cg-space-2) var(--cg-space-3);
-  font-size: var(--cg-font-size-sm);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.add-source-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.add-source-btn:not(:disabled):hover {
-  filter: brightness(1.1);
 }
 
 .source-error {

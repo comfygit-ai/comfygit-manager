@@ -87,6 +87,31 @@ Hugging Face and direct URL endpoints may expose provider-specific fields, but
 the resulting model selections should still map to a generic manager model
 source shape that includes source, destination, and filename.
 
+### CGM-API-10A [PLANNED]: Source-candidate APIs should be outcome-neutral
+Validation: MIXED
+
+The manager API should expose model source candidates independently from the
+action that will consume them.
+
+Candidate payloads may include provider, URL, repository/file metadata,
+workflow origin, confidence/ranking hints, validation status, filename hints,
+and known hash matches when available.
+
+The API should not force every candidate lookup to become a download. Frontend
+callers should be able to use the same candidate response to queue a missing
+model download or attach provenance to an existing local model.
+
+### CGM-API-10B [PLANNED]: Full-hash computation should be explicit and cacheable
+Validation: TEST
+
+The manager API should support explicit full-hash computation for a known local
+model file or model index entry. The operation may be long-running or
+asynchronous, but it should make progress/failure visible to the frontend.
+
+Computed Blake3 and SHA256 values should be persisted in the model index so
+future source discovery, export/push readiness, and cloud dependency-proof
+flows can reuse them without repeatedly rescanning the same model file.
+
 ### CGM-API-11 [PARTIAL]: Environment switch status should expose terminal failure states
 Validation: TEST
 
@@ -131,3 +156,22 @@ before persisting the value through ComfyGit core.
 The frontend must not edit manifest files directly or treat browser-only state
 as durable node criticality. Missing criticality in older manifests should be
 reported as `required` so readiness behavior remains conservative.
+
+### CGM-API-15 [PLANNED]: Readiness APIs should return grouped actionable issues
+Validation: MIXED
+
+The manager API should expose readiness results in a grouped, action-oriented
+shape that can power Status, export warnings, push warnings, and future
+build/deploy gates from the same source of truth.
+
+At minimum, the readiness shape should be able to represent issue groups for:
+
+- source state
+- models
+- custom nodes
+- workflows
+- runtime
+
+Each issue should carry enough machine-readable detail for the frontend to show
+clear copy and route to the appropriate repair action, without requiring the
+frontend to re-derive readiness from raw manifest or git state.

@@ -44,6 +44,8 @@ Use reference docs for:
   grouping behavior.
 - `cloud-linking-and-publication.md` defines the repo-backed local-panel
   handoff to ComfyGit Cloud through git remotes and pushed commits.
+- `environment-readiness.md` defines the Status readiness summary and shared
+  review/repair surface used by export, push, and future build/deploy gates.
 - `resource-resolution-lifecycle.md` defines missing-resource analysis and
   resolution flow.
 - `model-download-and-sources.md` defines model source and download behavior.

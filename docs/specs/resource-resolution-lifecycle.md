@@ -78,3 +78,17 @@ still requires manual action.
 This is especially important for model download intents, because a queued
 download is not the same as a model already being available on disk.
 
+### CGM-RRL-07 [PLANNED]: Workflow model links should feed both missing-model and provenance repair flows
+Validation: MIXED
+
+When workflows contain likely model links in notes, markdown-like instructions,
+or metadata, the manager should expose those links as source candidates.
+
+Those candidates may help users in two different states:
+
+- a referenced model is missing locally and the user wants to download it
+- a referenced model exists locally but lacks portable source provenance
+
+The resolution system should preserve this distinction. A workflow link is a
+candidate source, not proof that a missing model is installed and not proof that
+an existing local model came from that exact URL until the user confirms it.

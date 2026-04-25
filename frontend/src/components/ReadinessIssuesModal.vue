@@ -100,6 +100,7 @@
     :identifier="selectedModelHash"
     :overlay-z-index="10008"
     @close="handleModelDetailClose"
+    @source-saved="emit('revalidate')"
   />
 </template>
 
