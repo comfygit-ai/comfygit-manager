@@ -33,15 +33,6 @@
         <ErrorState :message="error" :retry="true" @retry="loadNodes" />
       </template>
       <template v-else>
-        <!-- Summary at top -->
-        <SummaryBar v-if="nodesData.total_count" variant="compact">
-          {{ nodesData.installed_count }} installed
-          <template v-if="nodesData.missing_count"> • {{ nodesData.missing_count }} missing</template>
-          <template v-if="blockedVersionGatedCount"> • {{ blockedVersionGatedCount }} blocked</template>
-          <template v-if="actionableCommunityCount"> • {{ actionableCommunityCount }} community-mapped</template>
-          <template v-if="nodesData.untracked_count"> • {{ nodesData.untracked_count }} untracked</template>
-        </SummaryBar>
-
         <!-- Version Mismatches (highest priority - needs repair) -->
         <SectionGroup
           v-if="hasMismatches"
@@ -266,13 +257,6 @@
               >
                 View Details
               </ActionButton>
-              <ActionButton
-                variant="secondary"
-                size="xs"
-                @click="openNodeManager"
-              >
-                Manage
-              </ActionButton>
               <label class="criticality-control">
                 <span>Readiness</span>
                 <select
@@ -402,7 +386,6 @@ import SectionGroup from '@/components/base/molecules/SectionGroup.vue'
 import ItemCard from '@/components/base/molecules/ItemCard.vue'
 import DetailRow from '@/components/base/molecules/DetailRow.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
-import SummaryBar from '@/components/base/molecules/SummaryBar.vue'
 import EmptyState from '@/components/base/molecules/EmptyState.vue'
 import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
@@ -495,9 +478,6 @@ const filteredBlocked = computed(() =>
 const filteredCommunity = computed(() =>
   filteredNodes.value.filter(n => n.issue_type === 'uninstallable')
 )
-
-const blockedVersionGatedCount = computed(() => filteredBlocked.value.length)
-const actionableCommunityCount = computed(() => filteredCommunity.value.length)
 
 function getCommunityInstallKey(node: NodeInfo): string {
   return node.registry_id || node.name

@@ -648,18 +648,64 @@ function handleOpenNodeManager() {
   // Close the panel first
   emit('close')
 
-  // Find and click the Manager button in the toolbar
-  // ComfyUI-Manager adds a button with text "Manager" to the menu
-  setTimeout(() => {
-    const buttons = document.querySelectorAll('button.comfyui-button')
-    for (const btn of buttons) {
-      if (btn.textContent?.trim() === 'Manager') {
-        (btn as HTMLButtonElement).click()
-        return
-      }
+  setTimeout(async () => {
+    if (
+      await executeComfyUICommand('Comfy.OpenManagerDialog') ||
+      await executeComfyUICommand('Comfy.Manager.CustomNodesManager.ShowCustomNodesMenu') ||
+      clickComfyUIButton(['Extensions', 'Manage extensions']) ||
+      clickComfyUIButton(['Manager'])
+    ) {
+      return
     }
-    console.warn('[ComfyGit] Manager button not found in toolbar')
+
+    console.warn('[ComfyGit] Extensions manager entrypoint not found')
   }, 100) // Small delay to let panel close first
+}
+
+async function executeComfyUICommand(commandId: string): Promise<boolean> {
+  const app = (window as any).app
+  const commandManagers = [
+    app?.extensionManager?.command,
+    app?.extensionManager?.commands,
+    app?.command,
+    app?.commands
+  ]
+
+  for (const commandManager of commandManagers) {
+    if (typeof commandManager?.execute !== 'function') {
+      continue
+    }
+
+    try {
+      await commandManager.execute(commandId)
+      return true
+    } catch (error) {
+      console.debug(`[ComfyGit] Command ${commandId} did not open Extensions manager`, error)
+    }
+  }
+
+  return false
+}
+
+function clickComfyUIButton(labels: string[]): boolean {
+  const normalizedLabels = labels.map(label => label.toLowerCase())
+  const candidates = document.querySelectorAll('button, [role="button"]')
+
+  for (const candidate of candidates) {
+    const element = candidate as HTMLElement
+    const values = [
+      element.textContent?.trim(),
+      element.getAttribute('title')?.trim(),
+      element.getAttribute('aria-label')?.trim()
+    ].filter(Boolean).map(value => value!.toLowerCase())
+
+    if (values.some(value => normalizedLabels.includes(value))) {
+      element.click()
+      return true
+    }
+  }
+
+  return false
 }
 
 interface ConfirmDialogConfig {
