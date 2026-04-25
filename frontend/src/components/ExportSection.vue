@@ -141,6 +141,7 @@
   <ExportWarningsModal
     v-if="showWarningsModal && validationResult"
     :models="validationResult.warnings.models_without_sources"
+    :nodes="validationResult.warnings.nodes_without_provenance"
     @confirm="handleExportConfirmed"
     @cancel="showWarningsModal = false"
     @revalidate="handleRevalidate"
@@ -215,7 +216,7 @@ async function handleExport() {
     if (!result.can_export) {
       // Show blocking issues modal
       showBlockedModal.value = true
-    } else if (result.warnings.models_without_sources.length > 0) {
+    } else if (hasReadinessWarnings(result)) {
       // Show warnings modal for confirmation
       showWarningsModal.value = true
     } else {
@@ -251,7 +252,7 @@ async function handleBlockedCommitted() {
     if (!result.can_export) {
       // Still blocked — re-show modal with updated issues
       showBlockedModal.value = true
-    } else if (result.warnings.models_without_sources.length > 0) {
+    } else if (hasReadinessWarnings(result)) {
       // Warnings only — show warnings modal
       showWarningsModal.value = true
     } else {
@@ -342,6 +343,13 @@ async function handleDownload() {
   } finally {
     isDownloading.value = false
   }
+}
+
+function hasReadinessWarnings(result: ExportValidationResult): boolean {
+  return (
+    result.warnings.models_without_sources.length > 0 ||
+    (result.warnings.nodes_without_provenance?.length || 0) > 0
+  )
 }
 </script>
 

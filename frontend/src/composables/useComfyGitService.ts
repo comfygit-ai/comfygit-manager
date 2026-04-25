@@ -490,7 +490,7 @@ export function useComfyGitService() {
       return {
         can_export: true,
         blocking_issues: [],
-        warnings: { models_without_sources: [] }
+        warnings: { models_without_sources: [], nodes_without_provenance: [] }
       }
     }
 

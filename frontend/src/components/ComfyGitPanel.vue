@@ -306,7 +306,6 @@
       v-if="showExportModal"
       :title="selectedExportEnvironment ? `EXPORT ENVIRONMENT: ${selectedExportEnvironment.toUpperCase()}` : 'EXPORT ENVIRONMENT'"
       size="lg"
-      fixed-height
       @close="closeExportModal"
     >
       <template #body>

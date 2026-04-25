@@ -148,6 +148,7 @@
     @close="closePushModal"
     @push="handlePush"
     @pull-first="handlePullFirst"
+    @revalidate="refreshPushPreview"
   />
 
   <!-- Workflow Resolution Modal (V2) -->
@@ -549,6 +550,20 @@ async function handlePushClick(remoteName: string) {
     pushPreview.value = await getPushPreview(remoteName)
   } catch (err) {
     pushError.value = err instanceof Error ? err.message : 'Failed to load push preview'
+  } finally {
+    loadingPreview.value = false
+  }
+}
+
+async function refreshPushPreview() {
+  if (!activeRemote.value) return
+
+  loadingPreview.value = true
+  pushError.value = null
+  try {
+    pushPreview.value = await getPushPreview(activeRemote.value)
+  } catch (err) {
+    pushError.value = err instanceof Error ? err.message : 'Failed to refresh push preview'
   } finally {
     loadingPreview.value = false
   }

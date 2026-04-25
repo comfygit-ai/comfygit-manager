@@ -290,6 +290,7 @@ class TestExportValidateEndpoint:
         assert data["can_export"] is True
         assert len(data["blocking_issues"]) == 0
         assert len(data["warnings"]["models_without_sources"]) == 0
+        assert len(data["warnings"]["nodes_without_provenance"]) == 0
 
     async def test_blocked_uncommitted_workflows(
         self,
@@ -416,6 +417,102 @@ class TestExportValidateEndpoint:
         assert model_warning["filename"] == "sd_xl_base_1.0.safetensors"
         assert model_warning["hash"] == "abc123"
         assert "portrait.json" in model_warning["workflows"]
+
+    async def test_warning_nodes_without_portable_provenance(
+        self,
+        client,
+        mock_environment,
+        mock_env_status
+    ):
+        """Should warn when tracked custom nodes cannot be reconstructed elsewhere."""
+        mock_env_status.workflow.sync_status.has_changes = False
+        mock_env_status.workflow.sync_status.new = []
+        mock_env_status.workflow.sync_status.modified = []
+        mock_env_status.workflow.sync_status.deleted = []
+        mock_env_status.workflow.is_commit_safe = True
+        mock_environment.workflow_manager.get_workflow_status.return_value = mock_env_status.workflow
+        mock_environment.git_manager.has_uncommitted_changes.return_value = False
+
+        mock_model_manager = Mock()
+        mock_model_manager.get_all.return_value = []
+
+        dev_node = Mock()
+        dev_node.name = "local-dev-node"
+        dev_node.source = "development"
+        dev_node.version = "dev"
+        dev_node.registry_id = None
+        dev_node.repository = None
+        dev_node.pinned_commit = None
+        dev_node.criticality = "optional"
+
+        registry_node = Mock()
+        registry_node.name = "registry-node"
+        registry_node.source = "registry"
+        registry_node.version = "1.0.0"
+        registry_node.registry_id = "registry-node"
+        registry_node.repository = "https://github.com/example/registry-node"
+        registry_node.pinned_commit = None
+        registry_node.criticality = "required"
+
+        mock_pyproject = Mock()
+        mock_pyproject.models = mock_model_manager
+        mock_pyproject.workflows.get_all_with_resolutions.return_value = {}
+        mock_pyproject.nodes.get_existing.return_value = {
+            "local-dev-node": dev_node,
+            "registry-node": registry_node,
+        }
+        mock_environment.pyproject = mock_pyproject
+
+        resp = await client.post("/v2/comfygit/export/validate", json={})
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["can_export"] is True
+        assert len(data["warnings"]["nodes_without_provenance"]) == 1
+        node_warning = data["warnings"]["nodes_without_provenance"][0]
+        assert node_warning["name"] == "local-dev-node"
+        assert node_warning["criticality"] == "optional"
+        assert "Development node" in node_warning["reason"]
+
+    async def test_model_source_in_workspace_index_clears_warning(
+        self,
+        client,
+        mock_environment,
+        mock_env_status
+    ):
+        """Should accept model sources stored in the workspace model index."""
+        mock_env_status.workflow.sync_status.has_changes = False
+        mock_env_status.workflow.sync_status.new = []
+        mock_env_status.workflow.sync_status.modified = []
+        mock_env_status.workflow.sync_status.deleted = []
+        mock_env_status.workflow.is_commit_safe = True
+        mock_environment.workflow_manager.get_workflow_status.return_value = mock_env_status.workflow
+        mock_environment.git_manager.has_uncommitted_changes.return_value = False
+
+        mock_model = Mock()
+        mock_model.filename = "sd_xl_base_1.0.safetensors"
+        mock_model.hash = "abc123"
+        mock_model.sources = []
+
+        mock_pyproject = Mock()
+        mock_pyproject.models.get_all.return_value = [mock_model]
+        mock_pyproject.workflows.get_all_with_resolutions.return_value = {
+            "portrait.json": Mock()
+        }
+        mock_wf_model = Mock()
+        mock_wf_model.hash = "abc123"
+        mock_pyproject.workflows.get_workflow_models.return_value = [mock_wf_model]
+        mock_pyproject.nodes.get_existing.return_value = {}
+        mock_environment.pyproject = mock_pyproject
+        mock_environment.workspace.model_repository.get_sources.return_value = [
+            {"type": "huggingface", "url": "https://huggingface.co/example/model"}
+        ]
+
+        resp = await client.post("/v2/comfygit/export/validate", json={})
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["warnings"]["models_without_sources"] == []
 
     async def test_error_no_environment(self, client, monkeypatch):
         """Should return 500 when no environment detected."""

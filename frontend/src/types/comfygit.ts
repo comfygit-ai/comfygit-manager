@@ -172,8 +172,25 @@ export interface CloudPublishResult {
 // Export Validation Types
 export interface ModelWithoutSource {
   filename: string
-  hash: string
+  hash: string | null
+  criticality?: 'required' | 'flexible' | 'optional'
   workflows: string[]
+}
+
+export interface NodeWithoutProvenance {
+  name: string
+  source: string
+  criticality: NodeCriticality
+  registry_id?: string | null
+  repository?: string | null
+  version?: string | null
+  pinned_commit?: string | null
+  reason: string
+}
+
+export interface EnvironmentReadinessWarnings {
+  models_without_sources: ModelWithoutSource[]
+  nodes_without_provenance: NodeWithoutProvenance[]
 }
 
 export interface ExportBlockingIssue {
@@ -185,9 +202,7 @@ export interface ExportBlockingIssue {
 export interface ExportValidationResult {
   can_export: boolean
   blocking_issues: ExportBlockingIssue[]
-  warnings: {
-    models_without_sources: ModelWithoutSource[]
-  }
+  warnings: EnvironmentReadinessWarnings
 }
 
 export interface LogResult {
@@ -678,6 +693,7 @@ export interface PushPreview {
   needs_force: boolean
   block_reason: string | null
   is_first_push: boolean
+  warnings?: EnvironmentReadinessWarnings
 }
 
 export interface PushResult {

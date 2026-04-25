@@ -5,6 +5,7 @@ from pathlib import Path
 from aiohttp import web
 
 from cgm_core.decorators import requires_environment, logged_operation
+from cgm_core.readiness import build_environment_readiness
 from cgm_utils.async_helpers import run_sync
 
 routes = web.RouteTableDef()
@@ -12,75 +13,7 @@ routes = web.RouteTableDef()
 
 async def build_export_validation(env) -> dict:
     """Validate whether an environment can be exported."""
-    blocking_issues = []
-    warnings = {
-        "models_without_sources": [],
-    }
-
-    status = await run_sync(env.workflow_manager.get_workflow_status)
-    if status.sync_status.has_changes:
-        uncommitted = (
-            list(status.sync_status.new) +
-            list(status.sync_status.modified) +
-            list(status.sync_status.deleted)
-        )
-        blocking_issues.append({
-            "type": "uncommitted_workflows",
-            "message": "Cannot export with uncommitted workflow changes",
-            "details": uncommitted
-        })
-
-    has_git_changes = await run_sync(env.git_manager.has_uncommitted_changes)
-    if has_git_changes:
-        blocking_issues.append({
-            "type": "uncommitted_git_changes",
-            "message": "Cannot export with uncommitted git changes",
-            "details": []
-        })
-
-    if not status.is_commit_safe:
-        blocking_issues.append({
-            "type": "unresolved_issues",
-            "message": "Cannot export - workflows have unresolved issues",
-            "details": []
-        })
-
-    if not blocking_issues:
-        pyproject = env.pyproject
-        models_by_hash = {
-            m.hash: m
-            for m in pyproject.models.get_all()
-            if not m.sources
-        }
-
-        if models_by_hash:
-            models_without_sources = []
-            all_workflows = pyproject.workflows.get_all_with_resolutions()
-            for workflow_name in all_workflows.keys():
-                workflow_models = pyproject.workflows.get_workflow_models(workflow_name)
-                for wf_model in workflow_models:
-                    if wf_model.hash and wf_model.hash in models_by_hash:
-                        existing = next(
-                            (m for m in models_without_sources if m["hash"] == wf_model.hash),
-                            None
-                        )
-                        if existing:
-                            existing["workflows"].append(workflow_name)
-                        else:
-                            model_data = models_by_hash[wf_model.hash]
-                            models_without_sources.append({
-                                "filename": model_data.filename,
-                                "hash": wf_model.hash,
-                                "workflows": [workflow_name]
-                            })
-
-            warnings["models_without_sources"] = models_without_sources
-
-    return {
-        "can_export": len(blocking_issues) == 0,
-        "blocking_issues": blocking_issues,
-        "warnings": warnings
-    }
+    return await build_environment_readiness(env, include_blocking=True)
 
 
 async def execute_environment_export(env, output_path: str | None = None) -> dict:

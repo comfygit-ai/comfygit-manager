@@ -191,10 +191,19 @@ const showCreateModal = ref(false)
 const selectedEnvironment = ref<EnvironmentInfo | null>(null)
 const environmentDetail = ref<EnvironmentDetail | null>(null)
 
+const sortedEnvironments = computed(() => {
+  return [...environments.value].sort((a, b) => {
+    if (a.is_current !== b.is_current) {
+      return a.is_current ? -1 : 1
+    }
+    return a.name.localeCompare(b.name)
+  })
+})
+
 const filteredEnvironments = computed(() => {
-  if (!searchQuery.value.trim()) return environments.value
+  if (!searchQuery.value.trim()) return sortedEnvironments.value
   const query = searchQuery.value.toLowerCase()
-  return environments.value.filter(env =>
+  return sortedEnvironments.value.filter(env =>
     env.name.toLowerCase().includes(query) ||
     env.current_branch?.toLowerCase().includes(query)
   )

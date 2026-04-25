@@ -45,6 +45,26 @@
               </div>
             </div>
 
+            <div v-if="hasReadinessWarnings" class="warning-box">
+              <span class="warning-icon">⚠</span>
+              <div>
+                <strong>REPRODUCIBILITY WARNINGS</strong>
+                <p>{{ readinessWarningCount }} dependency detail{{ readinessWarningCount !== 1 ? 's are' : ' is' }} missing. The remote commit can still be pushed, but cloud builds may need this provenance later.</p>
+                <ul class="warning-list">
+                  <li v-for="model in visibleModelWarnings" :key="model.hash || model.filename">
+                    Model: {{ model.filename }}
+                  </li>
+                  <li v-for="node in visibleNodeWarnings" :key="node.name">
+                    Node: {{ node.name }} ({{ node.criticality }})
+                  </li>
+                  <li v-if="hiddenWarningCount">+{{ hiddenWarningCount }} more</li>
+                </ul>
+                <button class="review-issues-btn" @click="showReadinessIssuesModal = true">
+                  Review Issues
+                </button>
+              </div>
+            </div>
+
             <!-- Outgoing commits -->
             <div v-if="preview.commits_ahead > 0" class="commits-section">
               <h4 class="section-title">OUTGOING COMMITS</h4>
@@ -87,6 +107,26 @@
               <span>This will create the remote branch for the first time.</span>
             </div>
 
+            <div v-if="hasReadinessWarnings" class="warning-box">
+              <span class="warning-icon">⚠</span>
+              <div>
+                <strong>REPRODUCIBILITY WARNINGS</strong>
+                <p>{{ readinessWarningCount }} dependency detail{{ readinessWarningCount !== 1 ? 's are' : ' is' }} missing. The remote commit can still be pushed, but cloud builds may need this provenance later.</p>
+                <ul class="warning-list">
+                  <li v-for="model in visibleModelWarnings" :key="model.hash || model.filename">
+                    Model: {{ model.filename }}
+                  </li>
+                  <li v-for="node in visibleNodeWarnings" :key="node.name">
+                    Node: {{ node.name }} ({{ node.criticality }})
+                  </li>
+                  <li v-if="hiddenWarningCount">+{{ hiddenWarningCount }} more</li>
+                </ul>
+                <button class="review-issues-btn" @click="showReadinessIssuesModal = true">
+                  Review Issues
+                </button>
+              </div>
+            </div>
+
             <!-- Outgoing commits -->
             <div v-if="preview.commits_ahead > 0" class="commits-section">
               <h4 class="section-title">OUTGOING COMMITS</h4>
@@ -121,7 +161,7 @@
               :loading="pushing"
               @click="handlePush(true)"
             >
-              Force Push
+              {{ hasReadinessWarnings ? 'Force Push Anyway' : 'Force Push' }}
             </ActionButton>
           </template>
           <template v-else-if="preview && preview.commits_ahead > 0 && !preview.has_uncommitted_changes">
@@ -130,21 +170,29 @@
               :loading="pushing"
               @click="handlePush(false)"
             >
-              Push
+              {{ hasReadinessWarnings ? 'Push Anyway' : 'Push' }}
             </ActionButton>
           </template>
         </div>
       </div>
     </div>
   </teleport>
+
+  <ReadinessIssuesModal
+    v-if="showReadinessIssuesModal && preview?.warnings"
+    :warnings="preview.warnings"
+    @close="showReadinessIssuesModal = false"
+    @revalidate="$emit('revalidate')"
+  />
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { PushPreview } from '@/types/comfygit'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
+import ReadinessIssuesModal from '@/components/ReadinessIssuesModal.vue'
 
-defineProps<{
+const props = defineProps<{
   show: boolean
   remoteName: string
   preview: PushPreview | null
@@ -157,9 +205,43 @@ const emit = defineEmits<{
   close: []
   push: [options: { force: boolean }]
   'pull-first': []
+  revalidate: []
 }>()
 
 const forceChecked = ref(false)
+const showReadinessIssuesModal = ref(false)
+
+const warnings = computed(() => props.preview?.warnings || {
+  models_without_sources: [],
+  nodes_without_provenance: []
+})
+
+const modelWarningCount = computed(() =>
+  warnings.value.models_without_sources.length
+)
+
+const nodeWarningCount = computed(() =>
+  warnings.value.nodes_without_provenance.length
+)
+
+const readinessWarningCount = computed(() =>
+  modelWarningCount.value + nodeWarningCount.value
+)
+
+const hasReadinessWarnings = computed(() => readinessWarningCount.value > 0)
+
+const visibleModelWarnings = computed(() =>
+  warnings.value.models_without_sources.slice(0, 3)
+)
+
+const visibleNodeWarnings = computed(() => {
+  const remainingSlots = Math.max(0, 3 - visibleModelWarnings.value.length)
+  return warnings.value.nodes_without_provenance.slice(0, remainingSlots)
+})
+
+const hiddenWarningCount = computed(() =>
+  readinessWarningCount.value - visibleModelWarnings.value.length - visibleNodeWarnings.value.length
+)
 
 function handlePush(force: boolean) {
   emit('push', { force })
@@ -283,6 +365,29 @@ function handlePush(force: boolean) {
 .warning-box p {
   margin: var(--cg-space-1) 0 0 0;
   font-size: var(--cg-font-size-sm);
+}
+
+.warning-list {
+  margin: var(--cg-space-2) 0 0 0;
+  padding-left: var(--cg-space-4);
+  color: var(--cg-color-text-secondary);
+  font-size: var(--cg-font-size-sm);
+}
+
+.review-issues-btn {
+  margin-top: var(--cg-space-3);
+  border: 1px solid var(--cg-color-warning);
+  background: transparent;
+  color: var(--cg-color-warning);
+  padding: var(--cg-space-2) var(--cg-space-3);
+  cursor: pointer;
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+}
+
+.review-issues-btn:hover {
+  background: var(--cg-color-warning-muted);
 }
 
 .info-box {

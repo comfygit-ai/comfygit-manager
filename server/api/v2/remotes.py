@@ -2,6 +2,7 @@
 from aiohttp import web
 
 from cgm_core.decorators import requires_environment, logged_operation
+from cgm_core.readiness import build_environment_readiness
 from cgm_utils.async_helpers import run_sync
 from comfygit_core.utils.git import (
     git_config_get,
@@ -488,6 +489,8 @@ async def get_push_preview(request: web.Request, env) -> web.Response:
     else:
         outgoing = []
 
+    readiness = await build_environment_readiness(env, include_blocking=False)
+
     return web.json_response({
         "remote": name,
         "branch": branch,
@@ -498,7 +501,8 @@ async def get_push_preview(request: web.Request, env) -> web.Response:
         "can_push": can_push,
         "needs_force": needs_force,
         "block_reason": block_reason,
-        "is_first_push": is_first_push
+        "is_first_push": is_first_push,
+        "warnings": readiness["warnings"],
     })
 
 

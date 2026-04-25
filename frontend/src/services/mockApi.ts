@@ -2090,7 +2090,8 @@ export const mockApi = {
       can_export: true,
       blocking_issues: [],
       warnings: {
-        models_without_sources: modelsWithoutSources
+        models_without_sources: modelsWithoutSources,
+        nodes_without_provenance: []
       }
     }
   },
@@ -2113,7 +2114,8 @@ export const mockApi = {
         }
       ],
       warnings: {
-        models_without_sources: []
+        models_without_sources: [],
+        nodes_without_provenance: []
       }
     }
   },
