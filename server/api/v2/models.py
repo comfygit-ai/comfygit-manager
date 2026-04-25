@@ -235,6 +235,98 @@ def _scan_workflow_download_candidates(env) -> list[dict]:
     )[:50]
 
 
+def _model_details_payload(env, details) -> dict:
+    model = details.model
+
+    from datetime import datetime
+    last_seen_str = None
+    if model.last_seen:
+        try:
+            last_seen_str = datetime.fromtimestamp(model.last_seen).strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            pass
+
+    models_dir = env.workspace.workspace_config_manager.get_models_directory()
+    primary_path = str(models_dir / model.relative_path) if models_dir and model.relative_path else model.relative_path
+
+    locations = []
+    for loc in details.all_locations:
+        path = (
+            loc.get("path") or
+            loc.get("full_path") or
+            loc.get("relative_path") or
+            ""
+        )
+        if path and not path.startswith("/") and models_dir:
+            path = str(models_dir / path)
+        if not path:
+            path = primary_path
+
+        loc_info = {"path": path}
+        if "mtime" in loc:
+            try:
+                loc_info["modified"] = datetime.fromtimestamp(loc["mtime"]).strftime("%Y-%m-%d %H:%M:%S")
+            except Exception:
+                pass
+        locations.append(loc_info)
+
+    if not locations and primary_path:
+        loc_info = {"path": primary_path}
+        if model.mtime:
+            try:
+                loc_info["modified"] = datetime.fromtimestamp(model.mtime).strftime("%Y-%m-%d %H:%M:%S")
+            except Exception:
+                pass
+        locations.append(loc_info)
+
+    sources = []
+    for src in details.sources:
+        sources.append({
+            "type": src.get("type", "unknown"),
+            "url": src.get("url", ""),
+        })
+
+    return {
+        "filename": model.filename,
+        "hash": model.hash,
+        "blake3": model.blake3_hash,
+        "sha256": model.sha256_hash,
+        "size": model.file_size,
+        "category": model.category,
+        "relative_path": model.relative_path,
+        "last_seen": last_seen_str,
+        "locations": locations,
+        "sources": sources,
+    }
+
+
+def _primary_model_path(env, details) -> Path:
+    payload = _model_details_payload(env, details)
+    for location in payload["locations"]:
+        path = location.get("path")
+        if path and Path(path).is_file():
+            return Path(path)
+    raise FileNotFoundError(f"Model file not found on disk: {details.model.filename}")
+
+
+def _compute_missing_model_hashes(env, identifier: str) -> dict:
+    details = env.workspace.get_model_details(identifier)
+    model = details.model
+    model_path = _primary_model_path(env, details)
+    model_repo = env.workspace.model_repository
+
+    if not model.blake3_hash:
+        blake3_hash = model_repo.compute_blake3(model_path)
+        model_repo.update_blake3(model.hash, blake3_hash)
+
+    if not model.sha256_hash:
+        sha256_hash = model_repo.compute_sha256(model_path)
+        model_repo.update_sha256(model.hash, sha256_hash)
+
+    refreshed = env.workspace.get_model_details(model.hash)
+    return _model_details_payload(env, refreshed)
+
+
 @routes.get("/v2/comfygit/models/environment")
 @requires_environment
 async def get_environment_models(request: web.Request, env) -> web.Response:
@@ -526,78 +618,27 @@ async def get_workspace_model_details(request: web.Request, env) -> web.Response
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
-    model = details.model
+    return web.json_response(_model_details_payload(env, details))
 
-    # Format last_seen timestamp
-    from datetime import datetime
-    last_seen_str = None
-    if model.last_seen:
-        try:
-            last_seen_str = datetime.fromtimestamp(model.last_seen).strftime("%Y-%m-%d %H:%M:%S")
-        except Exception:
-            pass
 
-    # Get models directory for building full paths
-    models_dir = env.workspace.workspace_config_manager.get_models_directory()
+@routes.post("/v2/workspace/models/{identifier}/hashes")
+@requires_environment
+async def compute_workspace_model_hashes(request: web.Request, env) -> web.Response:
+    """Compute and store missing full hashes for a local workspace model."""
+    identifier = request.match_info["identifier"]
 
-    # Build primary model full path as fallback
-    primary_path = str(models_dir / model.relative_path) if models_dir and model.relative_path else model.relative_path
+    try:
+        payload = await run_sync(_compute_missing_model_hashes, env, identifier)
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=400)
+    except KeyError:
+        return web.json_response({"error": f"Model not found: {identifier}"}, status=404)
+    except FileNotFoundError as e:
+        return web.json_response({"error": str(e)}, status=400)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
 
-    # Format locations with modified times
-    locations = []
-    for loc in details.all_locations:
-        # Try various possible keys for the path
-        path = (
-            loc.get("path") or
-            loc.get("full_path") or
-            loc.get("relative_path") or
-            ""
-        )
-        # If path is relative, make it absolute using models_dir
-        if path and not path.startswith("/") and models_dir:
-            path = str(models_dir / path)
-        # If still no path, use the primary model path
-        if not path:
-            path = primary_path
-
-        loc_info = {"path": path}
-        if "mtime" in loc:
-            try:
-                loc_info["modified"] = datetime.fromtimestamp(loc["mtime"]).strftime("%Y-%m-%d %H:%M:%S")
-            except Exception:
-                pass
-        locations.append(loc_info)
-
-    # If no locations found at all, add the primary model location
-    if not locations and primary_path:
-        loc_info = {"path": primary_path}
-        if model.mtime:
-            try:
-                loc_info["modified"] = datetime.fromtimestamp(model.mtime).strftime("%Y-%m-%d %H:%M:%S")
-            except Exception:
-                pass
-        locations.append(loc_info)
-
-    # Format sources
-    sources = []
-    for src in details.sources:
-        sources.append({
-            "type": src.get("type", "unknown"),
-            "url": src.get("url", ""),
-        })
-
-    return web.json_response({
-        "filename": model.filename,
-        "hash": model.hash,
-        "blake3": model.blake3_hash,
-        "sha256": model.sha256_hash,
-        "size": model.file_size,
-        "category": model.category,
-        "relative_path": model.relative_path,
-        "last_seen": last_seen_str,
-        "locations": locations,
-        "sources": sources,
-    })
+    return web.json_response(payload)
 
 
 @routes.get("/v2/workspace/models/{identifier}/source-candidates")

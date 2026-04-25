@@ -1,14 +1,33 @@
 <template>
   <div class="source-picker">
     <div v-if="showModelSummary" class="model-summary">
-      <div>
+      <div class="model-heading">
         <div class="summary-label">Local model</div>
         <div class="summary-name">{{ model.filename }}</div>
       </div>
       <div class="summary-meta">
-        <span v-if="model.hash">quick hash {{ model.hash }}</span>
-        <span v-if="model.blake3">blake3 {{ model.blake3 }}</span>
-        <span v-if="model.sha256">sha256 {{ model.sha256 }}</span>
+        <div v-if="model.hash" class="hash-row">
+          <span class="hash-label">quick hash</span>
+          <span class="hash-value">{{ model.hash }}</span>
+        </div>
+        <div v-if="model.blake3" class="hash-row">
+          <span class="hash-label">blake3</span>
+          <span class="hash-value">{{ model.blake3 }}</span>
+        </div>
+        <div v-if="model.sha256" class="hash-row">
+          <span class="hash-label">sha256</span>
+          <span class="hash-value">{{ model.sha256 }}</span>
+        </div>
+        <BaseButton
+          v-if="missingFullHashes"
+          variant="secondary"
+          size="sm"
+          :loading="computingHashes"
+          @click="computeHashes"
+        >
+          Compute full hashes
+        </BaseButton>
+        <p v-if="hashError" class="hash-error">{{ hashError }}</p>
       </div>
     </div>
 
@@ -128,9 +147,10 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   selectSource: [url: string]
+  hashesComputed: [model: ModelDetails]
 }>()
 
-const { getModelSourceCandidates } = useComfyGitService()
+const { getModelSourceCandidates, computeModelHashes } = useComfyGitService()
 
 const tabs = [
   { id: 'workflow', label: 'Workflow Links' },
@@ -144,8 +164,11 @@ const loadingCandidates = ref(false)
 const candidateError = ref<string | null>(null)
 const directUrl = ref('')
 const showMatchInfo = ref(false)
+const computingHashes = ref(false)
+const hashError = ref<string | null>(null)
 
 const workflowCandidates = computed(() => candidates.value.filter(candidate => candidate.source === 'workflow'))
+const missingFullHashes = computed(() => Boolean(props.model.hash && (!props.model.blake3 || !props.model.sha256)))
 
 async function loadCandidates() {
   loadingCandidates.value = true
@@ -158,6 +181,22 @@ async function loadCandidates() {
     candidateError.value = err instanceof Error ? err.message : 'Failed to scan workflows'
   } finally {
     loadingCandidates.value = false
+  }
+}
+
+async function computeHashes() {
+  if (!props.model.hash) return
+
+  computingHashes.value = true
+  hashError.value = null
+
+  try {
+    const model = await computeModelHashes(props.model.hash)
+    emit('hashesComputed', model)
+  } catch (err) {
+    hashError.value = err instanceof Error ? err.message : 'Failed to compute hashes'
+  } finally {
+    computingHashes.value = false
   }
 }
 
@@ -174,11 +213,15 @@ onMounted(loadCandidates)
 
 .model-summary {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   gap: var(--cg-space-3);
   padding: var(--cg-space-3);
   background: var(--cg-color-bg-secondary);
   border: 1px solid var(--cg-color-border);
+}
+
+.model-heading {
+  min-width: 0;
 }
 
 .summary-label {
@@ -196,10 +239,36 @@ onMounted(loadCandidates)
 
 .summary-meta {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--cg-space-2);
   color: var(--cg-color-text-muted);
   font-size: var(--cg-font-size-xs);
+}
+
+.hash-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cg-space-2);
+  width: 100%;
+}
+
+.hash-label {
+  color: var(--cg-color-text-muted);
+  white-space: nowrap;
+  min-width: 70px;
+}
+
+.hash-value {
+  color: var(--cg-color-text-secondary);
+  font-family: var(--cg-font-mono);
+  overflow-wrap: anywhere;
+}
+
+.hash-error {
+  color: var(--cg-color-error);
+  font-size: var(--cg-font-size-xs);
+  margin: var(--cg-space-1) 0 0;
 }
 
 .tab-bar {

@@ -938,6 +938,21 @@ export function useComfyGitService() {
     return fetchApi<ModelSourceCandidatesResponse>(`/v2/workspace/models/${encodeURIComponent(identifier)}/source-candidates`)
   }
 
+  async function computeModelHashes(identifier: string): Promise<ModelDetails> {
+    if (USE_MOCK) {
+      const details = await mockApi.getModelDetails(identifier)
+      return {
+        ...details,
+        blake3: details.blake3 || 'b'.repeat(64),
+        sha256: details.sha256 || 'a'.repeat(64)
+      }
+    }
+
+    return fetchApi<ModelDetails>(`/v2/workspace/models/${encodeURIComponent(identifier)}/hashes`, {
+      method: 'POST'
+    })
+  }
+
   async function getWorkflowSourceCandidates(): Promise<WorkflowSourceCandidatesResponse> {
     if (USE_MOCK) {
       return {
@@ -2153,6 +2168,7 @@ export function useComfyGitService() {
     getWorkspaceModels,
     getModelDetails,
     getModelSourceCandidates,
+    computeModelHashes,
     getWorkflowSourceCandidates,
     openFileLocation,
     addModelSource,

@@ -8,11 +8,12 @@
   >
     <template #body>
       <ModelSourcePicker
-        :model="model"
+        :model="currentModel"
         :loading-url="savingUrl"
         :overlay-z-index="overlayZIndex"
         action-label="Use as Source"
         @select-source="useSource"
+        @hashes-computed="handleHashesComputed"
       />
 
       <p v-if="saveError" class="error-message">{{ saveError }}</p>
@@ -27,7 +28,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import BaseModal from '@/components/base/BaseModal.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import ModelSourcePicker from '@/components/model-source/ModelSourcePicker.vue'
@@ -44,12 +45,18 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   close: []
   saved: []
+  hashesComputed: []
 }>()
 
 const { addModelSource } = useComfyGitService()
 
+const currentModel = ref<ModelDetails>(props.model)
 const savingUrl = ref<string | null>(null)
 const saveError = ref<string | null>(null)
+
+watch(() => props.model, (model) => {
+  currentModel.value = model
+})
 
 async function useSource(url: string) {
   if (!url || !props.model.hash) return
@@ -66,6 +73,11 @@ async function useSource(url: string) {
   } finally {
     savingUrl.value = null
   }
+}
+
+function handleHashesComputed(model: ModelDetails) {
+  currentModel.value = model
+  emit('hashesComputed')
 }
 </script>
 

@@ -103,6 +103,7 @@
     :overlay-z-index="(overlayZIndex || 10003) + 2"
     @close="showSourceModal = false"
     @saved="handleSourceSaved"
+    @hashes-computed="handleHashesComputed"
   />
 </template>
 
@@ -193,6 +194,11 @@ async function handleSourceSaved() {
   showSourceModal.value = false
   await loadDetails()
   emit('sourceSaved')
+}
+
+async function handleHashesComputed() {
+  sourceSuccess.value = 'Hashes computed successfully!'
+  await loadDetails()
 }
 
 async function loadDetails() {
