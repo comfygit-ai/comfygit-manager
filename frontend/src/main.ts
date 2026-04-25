@@ -11,22 +11,34 @@ import { isMockApi } from '@/services/mockApi'
 import type { ComfyGitStatus } from '@/types/comfygit'
 import { getInitialTheme, applyTheme } from '@/themes'
 import { getCompletedTaskError } from '@/utils/managerTaskError'
+import {
+  isDevAutoReloadEnabled,
+  setDevPanelOpen,
+  shouldRestoreDevPanel,
+  startDevAutoReload
+} from '@/dev/autoReload'
 
 // Load component CSS
+const panelCssFile = './comfygit-panel.css'
+const panelJsFile = './comfygit-panel.js'
+const panelCssUrl = new URL(panelCssFile, import.meta.url).href
+const panelJsUrl = new URL(panelJsFile, import.meta.url).href
 const cssLink = document.createElement('link')
 cssLink.rel = 'stylesheet'
-cssLink.href = new URL('./comfygit-panel.css', import.meta.url).href
+cssLink.href = panelCssUrl
 document.head.appendChild(cssLink)
 
 // Apply initial theme
 const initialTheme = getInitialTheme()
 applyTheme(initialTheme)
 
-// Reset panel tab to default on page load (fresh navigation / refresh)
-// sessionStorage persists across close/reopen within a page, but we want
-// a fresh page load to always start on the status tab.
-sessionStorage.removeItem('ComfyGit.LastView')
-sessionStorage.removeItem('ComfyGit.LastSection')
+// Reset panel tab to default on page load (fresh navigation / refresh).
+// Dev auto-reload preserves this state so a rebuild can reopen the panel
+// near where the developer was working.
+if (!isDevAutoReloadEnabled()) {
+  sessionStorage.removeItem('ComfyGit.LastView')
+  sessionStorage.removeItem('ComfyGit.LastSection')
+}
 
 // Expose theme switcher to console for easy testing
 // Usage: window.ComfyGit.setTheme('comfy') or window.ComfyGit.setTheme('phosphor')
@@ -128,6 +140,7 @@ function hasUncommittedChanges(): boolean {
 
 function showPanel(initialView?: string) {
   closePanel()
+  setDevPanelOpen(true)
 
   panelOverlay = document.createElement('div')
   panelOverlay.className = 'comfygit-panel-overlay'
@@ -168,6 +181,8 @@ function showPanel(initialView?: string) {
 }
 
 function closePanel() {
+  setDevPanelOpen(false)
+
   if (panelVueApp) {
     panelVueApp.unmount()
     panelVueApp = null
@@ -602,7 +617,7 @@ app.registerExtension({
     panelButton.className = 'comfyui-button comfyui-menu-mobile-collapse comfygit-panel-btn'
     panelButton.textContent = 'ComfyGit'
     panelButton.title = 'ComfyGit Control Panel'
-    panelButton.onclick = showPanel
+    panelButton.onclick = () => showPanel()
 
     // Commit button (ash gray)
     commitButton = document.createElement('button')
@@ -660,6 +675,17 @@ app.registerExtension({
     updateCommitIndicator()
     updateCommitButtonState()
     hideBuiltinManagerButton()
+
+    if (shouldRestoreDevPanel()) {
+      setTimeout(() => {
+        if (!panelOverlay) showPanel()
+      }, 100)
+    }
+
+    startDevAutoReload([
+      { name: 'panel script', url: panelJsUrl },
+      { name: 'panel stylesheet', url: panelCssUrl }
+    ])
 
     // Re-check shortly after (built-in Manager button may render after us)
     setTimeout(hideBuiltinManagerButton, 100)
