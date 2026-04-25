@@ -47,8 +47,8 @@
             <div v-for="(loc, idx) in details.locations" :key="idx" class="location-item">
               <span class="location-path mono">{{ loc.path }}</span>
               <span v-if="loc.modified" class="location-modified">Modified: {{ loc.modified }}</span>
-              <button v-if="loc.path" class="open-location-btn" @click="openLocation(loc.path)">
-                Open File Location
+              <button v-if="loc.path" class="open-location-btn" @click="copyToClipboard(loc.path)">
+                Copy File Path
               </button>
             </div>
           </div>
@@ -112,6 +112,7 @@ import { ref, onMounted } from 'vue'
 import BaseModal from '@/components/base/BaseModal.vue'
 import ModelSourceModal from '@/components/ModelSourceModal.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
+import { copyToClipboard as copyTextToClipboard } from '@/utils/copyToClipboard'
 import type { ModelDetails } from '@/types/comfygit'
 
 const props = defineProps<{
@@ -124,7 +125,7 @@ const emit = defineEmits<{
   sourceSaved: []
 }>()
 
-const { getModelDetails, removeModelSource, openFileLocation } = useComfyGitService()
+const { getModelDetails, removeModelSource } = useComfyGitService()
 
 const details = ref<ModelDetails | null>(null)
 const loading = ref(true)
@@ -156,17 +157,13 @@ function formatSize(bytes: number | undefined): string {
   return `${(bytes / 1024).toFixed(0)} KB`
 }
 
-function copyToClipboard(text: string) {
-  navigator.clipboard.writeText(text)
-  showToast('Copied to clipboard!')
-}
-
-async function openLocation(path: string) {
+async function copyToClipboard(text: string) {
   try {
-    await openFileLocation(path)
-    showToast('Opening file location...')
+    await copyTextToClipboard(text)
+    showToast('Copied to clipboard!')
   } catch (err) {
-    showToast('Failed to open location', 'error')
+    console.error('Failed to copy:', err)
+    showToast('Failed to copy to clipboard', 'error')
   }
 }
 
