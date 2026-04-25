@@ -20,6 +20,7 @@
         </div>
         <BaseButton
           v-if="missingFullHashes"
+          class="compute-hashes-btn"
           variant="secondary"
           size="sm"
           :loading="computingHashes"
@@ -240,7 +241,7 @@ onMounted(loadCandidates)
 .summary-meta {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  align-items: flex-start;
   gap: var(--cg-space-2);
   color: var(--cg-color-text-muted);
   font-size: var(--cg-font-size-xs);
@@ -250,7 +251,6 @@ onMounted(loadCandidates)
   display: flex;
   align-items: flex-start;
   gap: var(--cg-space-2);
-  width: 100%;
 }
 
 .hash-label {
@@ -269,6 +269,11 @@ onMounted(loadCandidates)
   color: var(--cg-color-error);
   font-size: var(--cg-font-size-xs);
   margin: var(--cg-space-1) 0 0;
+}
+
+.compute-hashes-btn {
+  align-self: flex-start;
+  width: auto;
 }
 
 .tab-bar {

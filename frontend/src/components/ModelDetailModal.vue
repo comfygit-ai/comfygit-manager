@@ -26,6 +26,22 @@
             <span class="detail-value mono">{{ details.sha256 || 'Not computed' }}</span>
             <button v-if="details.sha256" class="copy-btn" @click="copyToClipboard(details.sha256)">Copy</button>
           </div>
+          <div v-if="missingFullHashes" class="detail-row">
+            <span class="detail-label"></span>
+            <span class="detail-value">
+              <button
+                class="compute-hashes-btn"
+                :disabled="computingHashes"
+                @click="computeHashes"
+              >
+                {{ computingHashes ? 'Computing hashes...' : 'Compute Full Hashes' }}
+              </button>
+            </span>
+          </div>
+          <div v-if="hashError" class="detail-row">
+            <span class="detail-label"></span>
+            <span class="detail-value hash-error">{{ hashError }}</span>
+          </div>
           <div class="detail-row">
             <span class="detail-label">Size:</span>
             <span class="detail-value">{{ formatSize(details.size) }}</span>
@@ -108,7 +124,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import BaseModal from '@/components/base/BaseModal.vue'
 import ModelSourceModal from '@/components/ModelSourceModal.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
@@ -125,7 +141,7 @@ const emit = defineEmits<{
   sourceSaved: []
 }>()
 
-const { getModelDetails, removeModelSource } = useComfyGitService()
+const { getModelDetails, removeModelSource, computeModelHashes } = useComfyGitService()
 
 const details = ref<ModelDetails | null>(null)
 const loading = ref(true)
@@ -135,6 +151,10 @@ const removingSourceUrl = ref<string | null>(null)
 const sourceError = ref<string | null>(null)
 const sourceSuccess = ref<string | null>(null)
 const showSourceModal = ref(false)
+const computingHashes = ref(false)
+const hashError = ref<string | null>(null)
+
+const missingFullHashes = computed(() => Boolean(details.value?.hash && (!details.value.blake3 || !details.value.sha256)))
 
 // Toast notifications
 const toast = ref<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
@@ -194,8 +214,23 @@ async function handleSourceSaved() {
 }
 
 async function handleHashesComputed() {
-  sourceSuccess.value = 'Hashes computed successfully!'
   await loadDetails()
+}
+
+async function computeHashes() {
+  if (!details.value?.hash) return
+
+  computingHashes.value = true
+  hashError.value = null
+
+  try {
+    details.value = await computeModelHashes(details.value.hash)
+    showToast('Hashes computed successfully!')
+  } catch (err) {
+    hashError.value = err instanceof Error ? err.message : 'Failed to compute hashes'
+  } finally {
+    computingHashes.value = false
+  }
 }
 
 async function loadDetails() {
@@ -304,6 +339,31 @@ onMounted(loadDetails)
   background: var(--cg-color-bg-hover);
   color: var(--cg-color-accent);
   border-color: var(--cg-color-accent);
+}
+
+.compute-hashes-btn {
+  background: transparent;
+  border: 1px solid var(--cg-color-accent);
+  color: var(--cg-color-accent);
+  padding: 4px 10px;
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+  cursor: pointer;
+}
+
+.compute-hashes-btn:hover:not(:disabled) {
+  background: var(--cg-color-accent-muted);
+}
+
+.compute-hashes-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.hash-error {
+  color: var(--cg-color-error);
+  font-size: var(--cg-font-size-sm);
 }
 
 .locations-list,

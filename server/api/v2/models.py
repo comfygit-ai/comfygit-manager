@@ -148,6 +148,12 @@ def _scan_workflow_source_candidates(env, model_info: dict) -> list[dict]:
                 continue
             context = _candidate_context(text, match.start(), match.end())
             score, reasons = _score_source_candidate(url, context, model_info)
+            has_identity_match = any(
+                reason in {"filename match", "model name match", "hash match"}
+                for reason in reasons
+            )
+            if not has_identity_match:
+                continue
             if score < 20:
                 continue
 
