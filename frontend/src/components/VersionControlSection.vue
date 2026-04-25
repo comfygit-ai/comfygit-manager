@@ -65,12 +65,12 @@ const emit = defineEmits<{
 }>()
 
 const tabs = [
+  { id: 'remotes', label: 'Remotes' },
   { id: 'history', label: 'History' },
-  { id: 'branches', label: 'Branches' },
-  { id: 'remotes', label: 'Remotes' }
+  { id: 'branches', label: 'Branches' }
 ]
 
-const activeTab = ref<'history' | 'branches' | 'remotes'>(props.initialTab ?? 'history')
+const activeTab = ref<'history' | 'branches' | 'remotes'>(props.initialTab ?? 'remotes')
 
 watch(() => props.initialTab, (value) => {
   if (value) activeTab.value = value

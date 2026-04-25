@@ -108,7 +108,7 @@
             </button>
             <button
               :class="['sidebar-item', { active: currentView === 'version-control' }]"
-              @click="openVersionControl('history')"
+              @click="openVersionControl('remotes')"
             >
               VERSION CONTROL
             </button>
@@ -510,7 +510,7 @@ const currentEnvironment = computed(() => environments.value.find(e => e.is_curr
 const selectedExportEnvironment = ref<string | null>(null)
 const showImportModal = ref(false)
 const showExportModal = ref(false)
-const versionControlTab = ref<'history' | 'branches' | 'remotes'>('history')
+const versionControlTab = ref<'history' | 'branches' | 'remotes'>('remotes')
 const diagnosticsTab = ref<'manifest' | 'env' | 'workspace' | 'orchestrator'>('manifest')
 
 // First-time setup state

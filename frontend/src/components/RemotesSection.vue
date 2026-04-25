@@ -62,12 +62,6 @@
           @cancel="cancelForm"
         />
 
-        <!-- Summary Bar -->
-        <SummaryBar v-if="remotes.length && !showForm" variant="compact">
-          Total: {{ remotes.length }} remote{{ remotes.length !== 1 ? 's' : '' }}
-          <span v-if="trackingInfo"> • Tracking: {{ trackingInfo.remote }}/{{ trackingInfo.branch }}</span>
-        </SummaryBar>
-
         <!-- Remotes List -->
         <SectionGroup v-if="filteredRemotes.length && !showForm" title="REMOTES" :count="filteredRemotes.length">
           <RemoteCard
@@ -201,7 +195,6 @@ import SectionGroup from '@/components/base/molecules/SectionGroup.vue'
 import RemoteCard from '@/components/base/molecules/RemoteCard.vue'
 import RemoteForm from '@/components/base/molecules/RemoteForm.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
-import SummaryBar from '@/components/base/molecules/SummaryBar.vue'
 import EmptyState from '@/components/base/molecules/EmptyState.vue'
 import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
@@ -230,7 +223,6 @@ const {
 } = useComfyGitService()
 
 const remotes = ref<RemoteInfo[]>([])
-const trackingInfo = ref<{ remote: string; branch: string } | null>(null)
 const syncStatuses = ref<Record<string, RemoteSyncStatus>>({})
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -263,7 +255,6 @@ async function loadRemotes() {
   try {
     const result = await getRemotes()
     remotes.value = result.remotes
-    trackingInfo.value = result.current_branch_tracking || null
 
     // Load sync statuses for all remotes
     await Promise.all(
