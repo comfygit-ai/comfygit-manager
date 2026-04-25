@@ -35,6 +35,7 @@ import type {
   ConfigSettings,
   LogEntry,
   ManifestFileResponse,
+  NodeCriticality,
   NodeInfo,
   NodesResult,
   RemotesResult,
@@ -1294,6 +1295,21 @@ export function useComfyGitService() {
     })
   }
 
+  async function updateNodeCriticality(
+    nodeName: string,
+    criticality: NodeCriticality
+  ): Promise<{ status: 'success' | 'error', message?: string, criticality?: NodeCriticality }> {
+    if (USE_MOCK) {
+      return { status: 'success', criticality }
+    }
+
+    return fetchApi(`/v2/comfygit/nodes/${encodeURIComponent(nodeName)}/criticality`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ criticality })
+    })
+  }
+
   async function uninstallNode(nodeName: string): Promise<{ status: 'success' | 'error', message?: string }> {
     if (USE_MOCK) {
       await mockApi.uninstallNode(nodeName)
@@ -2123,6 +2139,7 @@ export function useComfyGitService() {
     installNode,
     queueNodeInstall,
     updateNode,
+    updateNodeCriticality,
     uninstallNode,
     // Git Remotes
     getRemotes,

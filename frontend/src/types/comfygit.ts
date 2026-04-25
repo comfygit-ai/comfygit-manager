@@ -545,6 +545,8 @@ export interface ConfigSettings {
 }
 
 // Node Management Types
+export type NodeCriticality = 'required' | 'optional'
+
 export interface NodeInfo {
   name: string
   installed: boolean
@@ -558,6 +560,7 @@ export interface NodeInfo {
   used_in_workflows?: string[]
   issue_type?: 'version_gated' | 'uninstallable' | null
   issue_guidance?: string | null
+  criticality?: NodeCriticality | null
 }
 
 export interface NodesResult {

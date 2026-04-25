@@ -214,3 +214,18 @@ authority belongs to the cloud dashboard.
 
 The corresponding API and lifecycle semantics are specified by `CGM-API-13`
 and `CGM-ENV-07` through `CGM-ENV-11`.
+
+### CGM-UI-19 [LIVE]: Installed node criticality should be explicitly user-editable
+Validation: MIXED
+
+The nodes section should expose package-level criticality for tracked installed
+custom nodes as a small required/optional control near the node's row actions.
+
+Nodes should default to required. The manager must only change criticality from
+an explicit user action; workflow graph usage, package presence, and missing
+source analysis may inform warnings, but they must not automatically mark a
+node optional.
+
+The UI should not imply that optional means proven unused. Optional means the
+user has chosen not to let that node block export, build-plan, or deployment
+readiness checks when the node lacks portable provenance.

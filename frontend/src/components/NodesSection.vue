@@ -273,6 +273,18 @@
               >
                 Manage
               </ActionButton>
+              <label class="criticality-control">
+                <span>Readiness</span>
+                <select
+                  class="criticality-select"
+                  :value="getNodeCriticality(node)"
+                  :disabled="isCriticalityUpdating(node)"
+                  @change="handleCriticalityChange(node, $event)"
+                >
+                  <option value="required">Required</option>
+                  <option value="optional">Optional</option>
+                </select>
+              </label>
             </template>
           </ItemCard>
         </SectionGroup>
@@ -382,7 +394,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
-import type { NodeInfo, NodesResult, VersionMismatch } from '@/types/comfygit'
+import type { NodeCriticality, NodeInfo, NodesResult, VersionMismatch } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
 import SearchBar from '@/components/base/molecules/SearchBar.vue'
@@ -412,7 +424,14 @@ const emit = defineEmits<{
   toast: [message: string, type: 'info' | 'success' | 'warning' | 'error']
 }>()
 
-const { getNodes, trackNodeAsDev, installNode, uninstallNode, queueNodeInstall } = useComfyGitService()
+const {
+  getNodes,
+  trackNodeAsDev,
+  installNode,
+  uninstallNode,
+  queueNodeInstall,
+  updateNodeCriticality
+} = useComfyGitService()
 
 const nodesData = ref<NodesResult>({
   nodes: [],
@@ -429,6 +448,7 @@ const searchQuery = ref('')
 const showPopover = ref(false)
 const selectedNode = ref<NodeInfo | null>(null)
 const queuedCommunityInstalls = ref<Set<string>>(new Set())
+const criticalityUpdates = ref<Set<string>>(new Set())
 
 // Confirmation dialog state
 interface ConfirmDialogConfig {
@@ -550,6 +570,45 @@ function getUsageLabel(node: NodeInfo): string {
     return node.used_in_workflows[0]
   }
   return `${node.used_in_workflows.length} workflows`
+}
+
+function getNodeCriticality(node: NodeInfo): NodeCriticality {
+  return node.criticality === 'optional' ? 'optional' : 'required'
+}
+
+function isCriticalityUpdating(node: NodeInfo): boolean {
+  return criticalityUpdates.value.has(node.name)
+}
+
+async function handleCriticalityChange(node: NodeInfo, event: Event) {
+  const select = event.target as HTMLSelectElement
+  const previousCriticality = getNodeCriticality(node)
+  const nextCriticality = select.value as NodeCriticality
+
+  if (nextCriticality === previousCriticality) {
+    return
+  }
+
+  criticalityUpdates.value = new Set(criticalityUpdates.value).add(node.name)
+  node.criticality = nextCriticality
+
+  try {
+    const result = await updateNodeCriticality(node.name, nextCriticality)
+    if (result.status !== 'success') {
+      node.criticality = previousCriticality
+      emit('toast', result.message || `Failed to update "${node.name}" criticality`, 'error')
+      return
+    }
+    emit('toast', `Marked "${node.name}" as ${nextCriticality}`, 'success')
+  } catch (err) {
+    node.criticality = previousCriticality
+    select.value = previousCriticality
+    emit('toast', `Error updating criticality: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
+  } finally {
+    const nextUpdates = new Set(criticalityUpdates.value)
+    nextUpdates.delete(node.name)
+    criticalityUpdates.value = nextUpdates
+  }
 }
 
 function getBlockedSubtitle(node: NodeInfo): string {
@@ -771,5 +830,30 @@ onMounted(loadNodes)
   font-weight: var(--cg-font-weight-medium);
   color: var(--cg-color-warning);
   background: color-mix(in srgb, var(--cg-color-warning) 15%, transparent);
+}
+
+.criticality-control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  margin-left: auto;
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+}
+
+.criticality-select {
+  height: 26px;
+  min-width: 96px;
+  padding: 0 var(--cg-space-2);
+  color: var(--cg-color-text-primary);
+  background: var(--cg-color-bg-secondary);
+  border: 1px solid var(--cg-color-border);
+  border-radius: var(--cg-radius-sm);
+  font-size: var(--cg-font-size-xs);
+}
+
+.criticality-select:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 </style>

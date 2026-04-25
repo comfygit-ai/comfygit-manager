@@ -120,3 +120,14 @@ At minimum, the API contract should support:
 
 The detailed lifecycle semantics are specified by `CGM-ENV-07` through
 `CGM-ENV-11` in `docs/specs/environment-lifecycle-and-orchestrator.md`.
+
+### CGM-API-14 [LIVE]: Node criticality updates must flow through manager API and core
+Validation: TEST
+
+The manager API should expose package-level criticality for tracked custom
+nodes and provide a mutation endpoint that validates `required` or `optional`
+before persisting the value through ComfyGit core.
+
+The frontend must not edit manifest files directly or treat browser-only state
+as durable node criticality. Missing criticality in older manifests should be
+reported as `required` so readiness behavior remains conservative.

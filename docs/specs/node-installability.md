@@ -64,3 +64,16 @@ Special accelerator packages and local package overlays may need UI in a later
 developer-focused slice, but they are not part of the current resource
 resolution baseline.
 
+### CGM-NODE-07 [LIVE]: Installed node criticality is not inferred from workflow usage
+Validation: MIXED
+
+Tracked custom nodes are considered required unless the user explicitly marks
+them optional.
+
+Workflow usage analysis may show which workflows reference a package, but it
+must not decide whether an installed package is required or optional. A package
+can affect runtime behavior without appearing as a graph node, so automatic
+criticality inference would create a false reproducibility guarantee.
+
+Readiness checks should treat required nodes without portable provenance as
+blocking and optional nodes without portable provenance as warnings.

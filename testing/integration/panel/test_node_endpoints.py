@@ -16,7 +16,8 @@ def create_mock_node_info(
     registry_id=None,
     source="registry",
     version="1.0.0",
-    repository=None
+    repository=None,
+    criticality="required"
 ):
     """Create a mock NodeInfo object."""
     node = Mock()
@@ -25,6 +26,7 @@ def create_mock_node_info(
     node.source = source
     node.version = version
     node.repository = repository or f"https://github.com/example/{name}"
+    node.criticality = criticality
     return node
 
 
@@ -68,6 +70,7 @@ class TestGetNodesEndpoint:
         assert node["tracked"] is True
         assert node["source"] == "registry"
         assert node["version"] == "1.0.0"
+        assert node["criticality"] == "required"
 
     async def test_success_with_missing_nodes(
         self,
@@ -100,6 +103,32 @@ class TestGetNodesEndpoint:
         assert node["installed"] is False
         assert node["tracked"] is True  # In manifest but not installed
         assert node["source"] == "unknown"
+        assert node["criticality"] == "required"
+
+    async def test_success_with_optional_node_criticality(
+        self,
+        client,
+        mock_environment,
+        mock_env_status
+    ):
+        """Should expose user-declared optional criticality for tracked nodes."""
+        mock_node = create_mock_node_info("local-test-node", criticality="optional")
+        mock_environment.pyproject.nodes.get_existing.return_value = {
+            "local-test-node": mock_node
+        }
+        mock_environment.list_nodes.return_value = [mock_node]
+        mock_env_status.comparison.missing_nodes = set()
+        mock_env_status.comparison.extra_nodes = set()
+        mock_env_status.workflow.analyzed_workflows = []
+        mock_environment.status.return_value = mock_env_status
+
+        resp = await client.get("/v2/comfygit/nodes")
+
+        assert resp.status == 200
+        data = await resp.json()
+        node = next((n for n in data["nodes"] if n["name"] == "local-test-node"), None)
+        assert node is not None
+        assert node["criticality"] == "optional"
 
     async def test_success_with_untracked_nodes(
         self,
@@ -518,6 +547,68 @@ class TestUpdateNodeEndpoint:
         resp = await client.post("/v2/comfygit/nodes/any-node/update")
 
         assert resp.status == 500
+
+
+@pytest.mark.integration
+class TestUpdateNodeCriticalityEndpoint:
+    """POST /v2/comfygit/nodes/{name}/criticality - Update tracked-node criticality."""
+
+    async def test_success_update_node_criticality(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should update criticality through the core environment API."""
+        mock_node = create_mock_node_info("my-dev-node", criticality="required")
+        mock_environment.pyproject.nodes.get_existing.return_value = {
+            "my-dev-node": mock_node
+        }
+        mock_environment.update_node_criticality.return_value = True
+
+        resp = await client.post(
+            "/v2/comfygit/nodes/my-dev-node/criticality",
+            json={"criticality": "optional"}
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "success"
+        assert data["criticality"] == "optional"
+        mock_environment.update_node_criticality.assert_called_once_with("my-dev-node", "optional")
+
+    async def test_rejects_invalid_criticality(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should only allow required or optional."""
+        mock_environment.pyproject.nodes.get_existing.return_value = {
+            "my-dev-node": create_mock_node_info("my-dev-node")
+        }
+
+        resp = await client.post(
+            "/v2/comfygit/nodes/my-dev-node/criticality",
+            json={"criticality": "flexible"}
+        )
+
+        assert resp.status == 400
+        mock_environment.update_node_criticality.assert_not_called()
+
+    async def test_rejects_untracked_node(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should not create criticality metadata for untracked nodes."""
+        mock_environment.pyproject.nodes.get_existing.return_value = {}
+
+        resp = await client.post(
+            "/v2/comfygit/nodes/untracked-node/criticality",
+            json={"criticality": "optional"}
+        )
+
+        assert resp.status == 404
+        mock_environment.update_node_criticality.assert_not_called()
 
 
 @pytest.mark.integration

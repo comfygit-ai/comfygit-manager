@@ -28,6 +28,12 @@ def mock_environment():
     # Mock workflow manager
     mock_env.workflow_manager = Mock()
 
+    # Mock pyproject manifest helpers
+    mock_env.pyproject = Mock()
+    mock_env.pyproject.nodes = Mock()
+    mock_env.pyproject.nodes.get_existing = Mock(return_value={})
+    mock_env.pyproject.nodes.set_criticality = Mock(return_value=True)
+
     # Mock git manager
     mock_env.git_manager = Mock()
     mock_env.git_manager.get_version_history = Mock(return_value=[])
@@ -49,6 +55,7 @@ def mock_environment():
     mock_env.sync = Mock()
     mock_env.export_environment = Mock()
     mock_env.create_branch = Mock()
+    mock_env.update_node_criticality = Mock(return_value=True)
 
     # Mock status() for sync endpoint version mismatch workaround
     mock_status = Mock()

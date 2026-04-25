@@ -7,6 +7,8 @@ from cgm_utils.async_helpers import run_sync
 
 routes = web.RouteTableDef()
 
+NODE_CRITICALITIES = ("required", "optional")
+
 
 def _safe_sequence(value):
     """Safely convert sequence-like values to list."""
@@ -27,6 +29,25 @@ def _safe_str(value):
     if isinstance(value, str):
         return value
     return None
+
+
+def _normalize_node_criticality(value):
+    """Return durable node criticality, defaulting omitted values to required."""
+    return value if value in NODE_CRITICALITIES else "required"
+
+
+def _find_tracked_node(tracked_nodes, node_identifier):
+    """Find a tracked node by manifest key or display name."""
+    node_identifier_lower = node_identifier.lower()
+    for identifier, node in tracked_nodes.items():
+        node_name = _safe_str(getattr(node, "name", None))
+        if (
+            identifier == node_identifier
+            or identifier.lower() == node_identifier_lower
+            or (node_name and node_name.lower() == node_identifier_lower)
+        ):
+            return identifier, node
+    return None, None
 
 
 def _build_workflow_usage_map(analyzed_workflows):
@@ -103,6 +124,7 @@ def _serialize_node(
     used_in_workflows: list,
     issue_type: str | None = None,
     issue_guidance: str | None = None,
+    criticality: str | None = None,
 ):
     """Serialize a node to API response format."""
     return {
@@ -116,6 +138,9 @@ def _serialize_node(
         "used_in_workflows": used_in_workflows,
         "issue_type": issue_type,
         "issue_guidance": issue_guidance,
+        "criticality": _normalize_node_criticality(
+            criticality or getattr(node, "criticality", None)
+        ) if tracked else None,
     }
 
 
@@ -133,6 +158,7 @@ async def get_nodes(request: web.Request, env) -> web.Response:
     try:
         # Get installed nodes (from list_nodes) and environment status
         installed_nodes = await run_sync(env.list_nodes)
+        tracked_nodes = env.pyproject.nodes.get_existing()
         status = await run_sync(env.status)
 
         # Build workflow usage map
@@ -145,30 +171,36 @@ async def get_nodes(request: web.Request, env) -> web.Response:
         # 1. Add installed + tracked nodes
         for node in installed_nodes:
             identifier = node.registry_id or node.name
+            tracked_node = tracked_nodes.get(identifier) or tracked_nodes.get(node.name)
             seen_names.add(node.name)
             result_nodes.append(_serialize_node(
                 node,
-                    tracked=True,
-                    installed=True,
-                    used_in_workflows=usage_map.get(identifier, [])
-                ))
+                tracked=True,
+                installed=True,
+                used_in_workflows=usage_map.get(identifier, []),
+                criticality=getattr(tracked_node, "criticality", None) if tracked_node else None,
+            ))
 
         # 2. Add missing nodes (tracked in manifest but not installed)
         for missing_name in status.comparison.missing_nodes:
             if missing_name not in seen_names:
                 seen_names.add(missing_name)
+                missing_node = tracked_nodes.get(missing_name)
                 # Create a minimal node representation for missing nodes
                 result_nodes.append({
-                    "name": missing_name,
+                    "name": getattr(missing_node, "name", missing_name) if missing_node else missing_name,
                     "installed": False,
                     "tracked": True,
-                    "registry_id": missing_name,
-                    "repository": None,
-                    "version": None,
-                    "source": "unknown",
+                    "registry_id": getattr(missing_node, "registry_id", missing_name) if missing_node else missing_name,
+                    "repository": getattr(missing_node, "repository", None) if missing_node else None,
+                    "version": getattr(missing_node, "version", None) if missing_node else None,
+                    "source": getattr(missing_node, "source", "unknown") if missing_node else "unknown",
                     "used_in_workflows": usage_map.get(missing_name, []),
                     "issue_type": None,
                     "issue_guidance": None,
+                    "criticality": _normalize_node_criticality(
+                        getattr(missing_node, "criticality", None)
+                    ),
                 })
 
         # 2.5. Add blocked nodes from workflow resolution (version-gated/uninstallable)
@@ -186,6 +218,7 @@ async def get_nodes(request: web.Request, env) -> web.Response:
                     "used_in_workflows": sorted(issue_data.get("used_in_workflows", [])),
                     "issue_type": issue_data.get("issue_type"),
                     "issue_guidance": issue_data.get("issue_guidance"),
+                    "criticality": None,
                 })
 
         # 3. Add untracked nodes (on filesystem but not in manifest)
@@ -203,6 +236,7 @@ async def get_nodes(request: web.Request, env) -> web.Response:
                     "used_in_workflows": usage_map.get(extra_name, []),
                     "issue_type": None,
                     "issue_guidance": None,
+                    "criticality": None,
                 })
 
         # Calculate counts
@@ -223,6 +257,56 @@ async def get_nodes(request: web.Request, env) -> web.Response:
         return web.json_response({
             "error": str(e)
         }, status=500)
+
+
+@routes.post("/v2/comfygit/nodes/{name}/criticality")
+@logged_operation("update node criticality")
+async def update_node_criticality(request: web.Request, env) -> web.Response:
+    """Update user-declared package-level custom-node criticality."""
+    node_name = request.match_info['name']
+
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    criticality = body.get("criticality")
+    if criticality not in NODE_CRITICALITIES:
+        return web.json_response({
+            "error": "Invalid criticality. Must be 'required' or 'optional'."
+        }, status=400)
+
+    tracked_nodes = env.pyproject.nodes.get_existing()
+    identifier, _node = _find_tracked_node(tracked_nodes, node_name)
+    if not identifier:
+        return web.json_response({
+            "error": f"Node '{node_name}' is not tracked in the environment manifest"
+        }, status=404)
+
+    try:
+        if hasattr(env, "update_node_criticality"):
+            success = await run_sync(env.update_node_criticality, identifier, criticality)
+        elif hasattr(env.pyproject.nodes, "set_criticality"):
+            success = await run_sync(env.pyproject.nodes.set_criticality, identifier, criticality)
+        else:
+            return web.json_response({
+                "error": "Installed comfygit-core does not support node criticality updates"
+            }, status=501)
+
+        if not success:
+            return web.json_response({
+                "error": f"Node '{node_name}' is not tracked in the environment manifest"
+            }, status=404)
+
+        return web.json_response({
+            "status": "success",
+            "node": identifier,
+            "criticality": criticality,
+        })
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=400)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
 
 
 @routes.post("/v2/comfygit/nodes/{name}/track-dev")
