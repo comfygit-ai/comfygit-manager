@@ -1,45 +1,45 @@
 <template>
-  <teleport to="body">
-    <div v-if="show" class="modal-overlay" @click="$emit('close')">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3 class="modal-title">CONFIRM ENVIRONMENT SWITCH</h3>
-          <button class="modal-close" @click="$emit('close')">✕</button>
+  <BaseModal
+    v-if="show"
+    title="Confirm Environment Switch"
+    size="md"
+    :overlay-z-index="10005"
+    @close="$emit('close')"
+  >
+    <template #body>
+      <div class="switch-body">
+        <p class="switch-message">
+          Switch from <strong>{{ fromEnvironment }}</strong> to <strong>{{ toEnvironment }}</strong>?
+        </p>
+
+        <div class="warning-box">
+          <span class="warning-icon">⚠</span>
+          <span>This will restart ComfyUI</span>
         </div>
 
-        <div class="modal-body">
-          <p class="switch-message">
-            Switch from <strong>{{ fromEnvironment }}</strong> to <strong>{{ toEnvironment }}</strong>?
-          </p>
+        <p class="switch-details">
+          Your current work will be preserved. You can switch back to "{{ fromEnvironment }}" anytime.
+        </p>
 
-          <div class="warning-box">
-            <span class="warning-icon">⚠</span>
-            <span>This will restart ComfyUI</span>
-          </div>
-
-          <p class="switch-details">
-            Your current work will be preserved. You can switch back to "{{ fromEnvironment }}" anytime.
-          </p>
-
-          <p class="switch-eta">
-            Estimated downtime: ~30 seconds
-          </p>
-        </div>
-
-        <div class="modal-actions">
-          <ActionButton variant="secondary" @click="$emit('close')">
-            Cancel
-          </ActionButton>
-          <ActionButton variant="primary" @click="$emit('confirm')">
-            Switch
-          </ActionButton>
-        </div>
+        <p class="switch-eta">
+          Estimated downtime: ~30 seconds
+        </p>
       </div>
-    </div>
-  </teleport>
+    </template>
+
+    <template #footer>
+      <ActionButton variant="secondary" @click="$emit('close')">
+        Cancel
+      </ActionButton>
+      <ActionButton variant="primary" @click="$emit('confirm')">
+        Switch
+      </ActionButton>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
+import BaseModal from '@/components/base/BaseModal.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
 
 defineProps<{
@@ -55,69 +55,7 @@ defineEmits<{
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--cg-color-bg-overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10005;
-  backdrop-filter: blur(2px);
-}
-
-.modal-content {
-  background: var(--cg-color-bg-primary);
-  border: 1px solid var(--cg-color-border);
-  border-radius: var(--cg-radius-lg);
-  box-shadow: var(--cg-shadow-lg);
-  max-width: 500px;
-  width: 90%;
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--cg-space-4);
-  border-bottom: 1px solid var(--cg-color-border-subtle);
-}
-
-.modal-title {
-  margin: 0;
-  font-size: var(--cg-font-size-sm);
-  font-weight: var(--cg-font-weight-semibold);
-  color: var(--cg-color-accent);
-  text-transform: uppercase;
-  letter-spacing: var(--cg-letter-spacing-wide);
-}
-
-.modal-close {
-  background: transparent;
-  border: none;
-  color: var(--cg-color-text-muted);
-  font-size: var(--cg-font-size-xl);
-  cursor: pointer;
-  padding: 0;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color var(--cg-transition-fast);
-}
-
-.modal-close:hover {
-  color: var(--cg-color-text-primary);
-}
-
-.modal-body {
-  padding: var(--cg-space-4);
+.switch-body {
   display: flex;
   flex-direction: column;
   gap: var(--cg-space-3);
@@ -164,13 +102,5 @@ defineEmits<{
   font-size: var(--cg-font-size-sm);
   color: var(--cg-color-text-muted);
   font-style: italic;
-}
-
-.modal-actions {
-  padding: var(--cg-space-4);
-  border-top: 1px solid var(--cg-color-border-subtle);
-  display: flex;
-  gap: var(--cg-space-2);
-  justify-content: flex-end;
 }
 </style>

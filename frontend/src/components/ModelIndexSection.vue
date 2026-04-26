@@ -130,46 +130,47 @@
   />
 
   <!-- Change Directory Modal -->
-  <Teleport to="body">
-    <div v-if="showDirectoryModal" class="modal-overlay" @click.self="showDirectoryModal = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Change Models Directory</h3>
-          <button class="modal-close" @click="showDirectoryModal = false">✕</button>
+  <BaseModal
+    v-if="showDirectoryModal"
+    title="Change Models Directory"
+    size="md"
+    :overlay-z-index="10010"
+    @close="showDirectoryModal = false"
+  >
+    <template #body>
+      <div class="directory-modal-body">
+        <div class="input-group">
+          <label>Current Directory</label>
+          <code class="current-path">{{ currentDirectory || 'Not set' }}</code>
         </div>
-        <div class="modal-body">
-          <div class="input-group">
-            <label>Current Directory</label>
-            <code class="current-path">{{ currentDirectory || 'Not set' }}</code>
-          </div>
-          <div class="input-group">
-            <label>New Directory Path</label>
-            <BaseInput
-              v-model="newDirectoryPath"
-              placeholder="/path/to/models"
-            />
-          </div>
-          <p class="modal-note">
-            Note: Changing the directory will scan and index all models in the new location.
-            This may take a few minutes for large collections.
-          </p>
+        <div class="input-group">
+          <label>New Directory Path</label>
+          <BaseInput
+            v-model="newDirectoryPath"
+            placeholder="/path/to/models"
+          />
         </div>
-        <div class="modal-footer">
-          <BaseButton variant="secondary" @click="showDirectoryModal = false">
-            Cancel
-          </BaseButton>
-          <BaseButton
-            variant="primary"
-            :disabled="!newDirectoryPath.trim() || changingDirectory"
-            :loading="changingDirectory"
-            @click="handleChangeDirectory"
-          >
-            {{ changingDirectory ? 'Indexing...' : 'Change Directory' }}
-          </BaseButton>
-        </div>
+        <p class="modal-note">
+          Note: Changing the directory will scan and index all models in the new location.
+          This may take a few minutes for large collections.
+        </p>
       </div>
-    </div>
-  </Teleport>
+    </template>
+
+    <template #footer>
+      <BaseButton variant="secondary" @click="showDirectoryModal = false">
+        Cancel
+      </BaseButton>
+      <BaseButton
+        variant="primary"
+        :disabled="!newDirectoryPath.trim() || changingDirectory"
+        :loading="changingDirectory"
+        @click="handleChangeDirectory"
+      >
+        {{ changingDirectory ? 'Indexing...' : 'Change Directory' }}
+      </BaseButton>
+    </template>
+  </BaseModal>
 
   <!-- Unified Model Download Modal -->
   <ModelDownloadModal
@@ -196,6 +197,7 @@ import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import ModelDetailModal from '@/components/ModelDetailModal.vue'
 import ModelDownloadModal from '@/components/ModelDownloadModal.vue'
+import BaseModal from '@/components/base/BaseModal.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 
@@ -395,66 +397,8 @@ onMounted(() => {
   background: var(--cg-color-accent);
   transition: width 0.2s ease;
 }
-</style>
 
-<!-- Unscoped modal styles (for Teleport) -->
-<style>
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10010;
-}
-
-.modal-content {
-  width: 90%;
-  max-width: 500px;
-  background: var(--cg-color-bg-primary, #1a1a2e);
-  border: 1px solid var(--cg-color-border, #333);
-  border-radius: var(--cg-radius-lg, 8px);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--cg-color-border, #333);
-  background: var(--cg-color-bg-secondary, #252542);
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--cg-color-text-primary, #fff);
-}
-
-.modal-close {
-  background: none;
-  border: none;
-  font-size: 18px;
-  color: var(--cg-color-text-muted, #888);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  transition: all 0.15s ease;
-}
-
-.modal-close:hover {
-  color: var(--cg-color-text-primary, #fff);
-  background: var(--cg-color-bg-hover, #333);
-}
-
-.modal-body {
-  padding: 16px;
+.directory-modal-body {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -490,20 +434,5 @@ onMounted(() => {
   padding: 8px;
   background: var(--cg-color-bg-secondary, #252542);
   border-radius: 4px;
-}
-
-.modal-error {
-  font-size: 12px;
-  color: var(--cg-color-error, #ef4444);
-  margin-top: 4px;
-}
-
-.modal-footer {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  padding: 12px 16px;
-  border-top: 1px solid var(--cg-color-border, #333);
-  background: var(--cg-color-bg-secondary, #252542);
 }
 </style>

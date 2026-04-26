@@ -21,6 +21,8 @@ docs/
     environment-lifecycle-and-orchestrator.md
   architecture/
     service-boundaries.md
+  deltas/
+    modal-system-cleanup.md
   reference/
     legacy-beads-audit.md
 ```
@@ -31,6 +33,8 @@ docs/
 - specs define intended lifecycle, data-model, state-machine, and interaction
   behavior; specs may also contain normative clause IDs
 - architecture docs explain responsibility splits
+- deltas are bounded planning dossiers for near-term implementation work and
+  should not override contracts, specs, or architecture docs
 - reference docs preserve historical or supporting context and are not
   normative unless linked from a contract/spec clause
 

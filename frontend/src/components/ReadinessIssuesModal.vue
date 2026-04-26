@@ -1,18 +1,20 @@
 <template>
-  <Teleport to="body">
-    <div class="readiness-overlay" @click="emit('close')">
-      <div class="readiness-modal" @click.stop>
-        <div class="readiness-header">
-          <div>
-            <h3 class="readiness-title">Review Reproducibility Issues</h3>
-            <p class="readiness-subtitle">
-              Add missing source details where possible. Optional nodes are still listed as warnings, but they will not be treated as required build inputs.
-            </p>
-          </div>
-          <button class="readiness-close" @click="emit('close')">x</button>
-        </div>
+  <BaseModal
+    size="lg"
+    :overlay-z-index="10007"
+    @close="emit('close')"
+  >
+    <template #header>
+      <div class="readiness-heading">
+        <h3 class="readiness-title">Review Reproducibility Issues</h3>
+        <p class="readiness-subtitle">
+          Add missing source details where possible. Optional nodes are still listed as warnings, but they will not be treated as required build inputs.
+        </p>
+      </div>
+    </template>
 
-        <div class="readiness-body">
+    <template #body>
+      <div class="readiness-body">
           <section v-if="models.length" class="issue-section">
             <div class="section-heading">
               <h4>Models Missing Source URLs</h4>
@@ -82,16 +84,15 @@
           </div>
 
           <div v-if="error" class="error-message">{{ error }}</div>
-        </div>
-
-        <div class="readiness-footer">
-          <button class="primary-action" @click="emit('close')">
-            Done
-          </button>
-        </div>
       </div>
-    </div>
-  </Teleport>
+    </template>
+
+    <template #footer>
+      <button class="primary-action" @click="emit('close')">
+        Done
+      </button>
+    </template>
+  </BaseModal>
 
   <ModelSourceModal
     v-if="selectedModel"
@@ -106,6 +107,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
+import BaseModal from '@/components/base/BaseModal.vue'
 import ModelSourceModal from '@/components/ModelSourceModal.vue'
 import type { EnvironmentReadinessWarnings, ModelDetails } from '@/types/comfygit'
 
@@ -170,33 +172,8 @@ function handleModelHashesComputed() {
 </script>
 
 <style scoped>
-.readiness-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 10007;
-  background: var(--cg-color-bg-overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(2px);
-}
-
-.readiness-modal {
-  width: min(760px, 92vw);
-  max-height: 84vh;
-  background: var(--cg-color-bg-primary);
-  border: 1px solid var(--cg-color-border);
-  box-shadow: var(--cg-shadow-xl);
-  display: flex;
-  flex-direction: column;
-}
-
-.readiness-header {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--cg-space-4);
-  padding: var(--cg-space-4);
-  border-bottom: 1px solid var(--cg-color-border-subtle);
+.readiness-heading {
+  min-width: 0;
 }
 
 .readiness-title {
@@ -214,23 +191,7 @@ function handleModelHashesComputed() {
   line-height: 1.45;
 }
 
-.readiness-close {
-  background: transparent;
-  border: none;
-  color: var(--cg-color-text-muted);
-  cursor: pointer;
-  font-size: var(--cg-font-size-lg);
-  width: 28px;
-  height: 28px;
-}
-
-.readiness-close:hover {
-  color: var(--cg-color-text-primary);
-}
-
 .readiness-body {
-  overflow-y: auto;
-  padding: var(--cg-space-4);
   display: flex;
   flex-direction: column;
   gap: var(--cg-space-4);
@@ -354,13 +315,5 @@ function handleModelHashesComputed() {
   border: 1px solid var(--cg-color-error);
   padding: var(--cg-space-3);
   font-size: var(--cg-font-size-sm);
-}
-
-.readiness-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--cg-space-2);
-  padding: var(--cg-space-4);
-  border-top: 1px solid var(--cg-color-border-subtle);
 }
 </style>
