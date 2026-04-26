@@ -92,6 +92,7 @@
       v-if="showTokenModal"
       provider="huggingface"
       :current-token-mask="tokenMask"
+      :overlay-z-index="overlayZIndex + 2"
       @close="showTokenModal = false"
       @saved="handleTokenSaved"
       @cleared="handleTokenCleared"
@@ -113,9 +114,11 @@ import type { HuggingFaceSearchResult } from '@/types/comfygit'
 withDefaults(defineProps<{
   modeKind?: 'download' | 'source'
   actionLabel?: string
+  overlayZIndex?: number
 }>(), {
   modeKind: 'download',
-  actionLabel: 'Queue Download'
+  actionLabel: 'Queue Download',
+  overlayZIndex: 10003
 })
 
 defineEmits<{

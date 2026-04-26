@@ -76,6 +76,7 @@
       <HuggingFaceTab
         mode-kind="source"
         :action-label="actionLabel"
+        :overlay-z-index="overlayZIndex"
         @select-source="emit('selectSource', $event)"
       />
     </section>

@@ -35,9 +35,10 @@
                 <button
                   v-if="model.hash"
                   class="issue-action"
-                  @click="selectedModelHash = model.hash"
+                  :disabled="loadingModelHash === model.hash"
+                  @click="openModelSource(model.hash)"
                 >
-                  Add URL
+                  {{ loadingModelHash === model.hash ? 'Loading...' : 'Add Source' }}
                 </button>
                 <span v-else class="issue-note">Missing hash</span>
               </article>
@@ -84,9 +85,6 @@
         </div>
 
         <div class="readiness-footer">
-          <button class="secondary-action" @click="emit('revalidate')">
-            Refresh Check
-          </button>
           <button class="primary-action" @click="emit('close')">
             Done
           </button>
@@ -95,20 +93,21 @@
     </div>
   </Teleport>
 
-  <ModelDetailModal
-    v-if="selectedModelHash"
-    :identifier="selectedModelHash"
+  <ModelSourceModal
+    v-if="selectedModel"
+    :model="selectedModel"
     :overlay-z-index="10008"
-    @close="handleModelDetailClose"
-    @source-saved="emit('revalidate')"
+    @close="selectedModel = null"
+    @saved="handleModelSourceSaved"
+    @hashes-computed="handleModelHashesComputed"
   />
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
-import ModelDetailModal from '@/components/ModelDetailModal.vue'
-import type { EnvironmentReadinessWarnings } from '@/types/comfygit'
+import ModelSourceModal from '@/components/ModelSourceModal.vue'
+import type { EnvironmentReadinessWarnings, ModelDetails } from '@/types/comfygit'
 
 const props = defineProps<{
   warnings: EnvironmentReadinessWarnings
@@ -119,14 +118,28 @@ const emit = defineEmits<{
   revalidate: []
 }>()
 
-const { updateNodeCriticality } = useComfyGitService()
+const { getModelDetails, updateNodeCriticality } = useComfyGitService()
 
-const selectedModelHash = ref<string | null>(null)
+const selectedModel = ref<ModelDetails | null>(null)
+const loadingModelHash = ref<string | null>(null)
 const updatingNode = ref<string | null>(null)
 const error = ref<string | null>(null)
 
 const models = computed(() => props.warnings.models_without_sources)
 const nodes = computed(() => props.warnings.nodes_without_provenance)
+
+async function openModelSource(modelHash: string) {
+  loadingModelHash.value = modelHash
+  error.value = null
+
+  try {
+    selectedModel.value = await getModelDetails(modelHash)
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : `Failed to load ${modelHash}`
+  } finally {
+    loadingModelHash.value = null
+  }
+}
 
 async function markNodeOptional(nodeName: string) {
   updatingNode.value = nodeName
@@ -146,8 +159,12 @@ async function markNodeOptional(nodeName: string) {
   }
 }
 
-function handleModelDetailClose() {
-  selectedModelHash.value = null
+function handleModelSourceSaved() {
+  selectedModel.value = null
+  emit('revalidate')
+}
+
+function handleModelHashesComputed() {
   emit('revalidate')
 }
 </script>

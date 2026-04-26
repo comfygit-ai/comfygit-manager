@@ -9,6 +9,7 @@ import platform
 import re
 import subprocess
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 from aiohttp import web
 from huggingface_hub import HfApi
@@ -29,6 +30,16 @@ MODEL_SOURCE_EXTENSIONS = (
     ".bin",
     ".gguf",
 )
+
+
+def _source_url_filename(url: str) -> str | None:
+    try:
+        filename = Path(unquote(urlparse(url).path)).name
+    except Exception:
+        return None
+    if filename.lower().endswith(MODEL_SOURCE_EXTENSIONS):
+        return filename
+    return None
 
 
 def _determine_model_status(resolved_model):
@@ -185,6 +196,12 @@ def _scan_workflow_download_candidates(env) -> list[dict]:
     except Exception:
         workflow_names = []
 
+    model_repo = env.workspace.model_repository
+    known_filenames = {
+        model.filename.lower()
+        for model in env.workspace.list_models()
+        if getattr(model, "filename", None)
+    }
     candidates_by_key = {}
     for workflow_name in workflow_names:
         try:
@@ -200,6 +217,11 @@ def _scan_workflow_download_candidates(env) -> list[dict]:
         for match in MODEL_SOURCE_URL_RE.finditer(text):
             url = _strip_url_punctuation(match.group(0))
             if not _url_looks_like_model_source(url, {}):
+                continue
+            if model_repo.find_by_source_url(url):
+                continue
+            url_filename = _source_url_filename(url)
+            if url_filename and url_filename.lower() in known_filenames:
                 continue
 
             context = _candidate_context(text, match.start(), match.end())

@@ -1,5 +1,9 @@
 <template>
-  <BaseModal title="Configure API Token" @close="$emit('close')">
+  <BaseModal
+    title="Configure API Token"
+    :overlay-z-index="overlayZIndex"
+    @close="$emit('close')"
+  >
     <template #body>
       <div class="token-config-modal">
         <div class="provider-info">
@@ -62,6 +66,7 @@ type Provider = 'huggingface' | 'civitai'
 const props = defineProps<{
   provider: Provider
   currentTokenMask: string | null  // e.g., "***abcd" or null
+  overlayZIndex?: number
 }>()
 
 const emit = defineEmits<{
