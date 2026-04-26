@@ -180,7 +180,7 @@ before the user starts or queues a download.
 
 This includes guided Hugging Face selections and direct URL entries.
 
-### CGM-UI-15A [PLANNED]: Model source selection should be reusable across download and provenance repair
+### CGM-UI-15A [PARTIAL]: Model source selection should be reusable across download and provenance repair
 Validation: LLM_REVIEW
 
 The UI should not duplicate separate provider-search and workflow-link search
@@ -194,7 +194,12 @@ but the visible outcome should match the user's intent:
 - existing local model: attach the selected source as provenance for the
   current model
 
-### CGM-UI-15B [PLANNED]: Model details should launch provenance repair without becoming the repair workspace
+The current UI shares workflow-link, Hugging Face, and direct-URL source
+selection between the download and provenance-repair flows. This remains
+partial until all supported provider surfaces, including Civitai where
+available, use the same shared picker primitive.
+
+### CGM-UI-15B [LIVE]: Model details should launch provenance repair without becoming the repair workspace
 Validation: HUMAN_REVIEW
 
 The model details modal should remain a compact factual view of local model
@@ -204,6 +209,9 @@ action near the download-sources section.
 The source search, workflow-link review, provider search, direct URL entry, and
 optional hash computation controls should live in a dedicated source-repair
 surface opened from that action.
+
+Contextual readiness repair may open that same source-repair surface directly
+when the user is already acting on a missing-source issue.
 
 ### CGM-UI-16 [PARTIAL]: Blocked custom nodes should be visible as blocked, not hidden
 Validation: LLM_REVIEW
@@ -269,7 +277,7 @@ attention.
 Detailed readiness behavior is specified by `CGM-READY-01` through
 `CGM-READY-07` in `docs/specs/environment-readiness.md`.
 
-### CGM-UI-21 [PLANNED]: Export, push, and future deploy gates should use the shared readiness review surface
+### CGM-UI-21 [PARTIAL]: Export, push, and future deploy gates should use the shared readiness review surface
 Validation: MIXED
 
 Export warnings, push warnings, and future cloud/build/deploy warnings should
@@ -278,3 +286,7 @@ open the same manager-owned readiness review surface used by Status.
 Those contextual gates may adjust framing and primary action labels, but they
 should not fork the issue grouping, copy vocabulary, or repair workflows into
 separate incompatible modal stacks.
+
+The current export and push warning flows open the shared readiness review
+surface. This remains partial until Status owns the compact readiness summary
+and future cloud/build/deploy gates use the same review surface.

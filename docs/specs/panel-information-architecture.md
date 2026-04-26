@@ -43,6 +43,14 @@ destination for the current environment with internal sub-navigation or tabs for
 The current panel exposes one `Version Control` destination with internal
 `History`, `Branches`, and `Remotes` tabs.
 
+Remotes should be the default tab because pushing, pulling, and fetching are
+the most common handoff actions after local authoring. The intended tab order
+is:
+
+- `Remotes`
+- `History`
+- `Branches`
+
 ### CGM-IA-03 [LIVE]: The environments view should remain the primary workspace entry point for environment management
 Validation: HUMAN_REVIEW
 

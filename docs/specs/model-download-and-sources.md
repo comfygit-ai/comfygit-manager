@@ -67,11 +67,15 @@ same source, destination, and portability concepts as the guided download flow.
 Manual model management should not create a second incompatible model metadata
 shape.
 
-### CGM-MDL-07 [PLANNED]: Source discovery should be a shared picker primitive
+### CGM-MDL-07 [PARTIAL]: Source discovery should be a shared picker primitive
 Validation: LLM_REVIEW
 
 The manager should treat "find a model source" as a reusable primitive rather
 than a behavior owned only by the download modal.
+
+The shared source picker currently supports workflow-link discovery, Hugging
+Face search/file selection, and direct URL entry across model download and
+existing-model source repair flows.
 
 The shared source picker should support provider/search surfaces such as:
 
@@ -88,7 +92,10 @@ candidate means:
 - future cloud/build-plan checks use the same source facts as dependency
   availability evidence
 
-### CGM-MDL-08 [PLANNED]: Download and provenance repair should be separate outcomes of the same source selection
+This remains partial until Civitai and any future provider-specific source
+selection flows share the same primitive.
+
+### CGM-MDL-08 [LIVE]: Download and provenance repair should be separate outcomes of the same source selection
 Validation: LLM_REVIEW
 
 The model download flow and the model provenance-repair flow may share source
@@ -103,7 +110,7 @@ For an already-present local model, the primary action is `Use as source`, and
 the UI must attach the selected URL/provenance metadata to the existing model
 index entry without downloading another copy.
 
-### CGM-MDL-09 [PLANNED]: Model details should remain factual while source repair uses a dedicated flow
+### CGM-MDL-09 [LIVE]: Model details should remain factual while source repair uses a dedicated flow
 Validation: HUMAN_REVIEW
 
 The model details surface should show the current local facts for a model:
@@ -115,7 +122,10 @@ When source metadata is missing, the details surface should expose a compact
 source-repair flow rather than expanding the details modal into a full search
 and resolution workspace.
 
-### CGM-MDL-10 [PLANNED]: Workflow-link source candidates are assistive and user-confirmed
+Readiness may bypass Model Details and open the dedicated source-repair flow
+directly when the issue is already known to be a missing model source.
+
+### CGM-MDL-10 [PARTIAL]: Workflow-link source candidates are assistive and user-confirmed
 Validation: MIXED
 
 Workflow-link scanning should search workflow JSON and text-bearing workflow
@@ -131,7 +141,29 @@ Provider or URL validation may be shown as advisory evidence. Validation should
 not be treated as a perfect guarantee because some providers require auth,
 redirects, signed URLs, or provider-specific download flows.
 
-### CGM-MDL-11 [PLANNED]: Full model hashes should be lazy, explicit, and cached
+The scanner currently deduplicates repeated occurrences of the same URL in the
+same workflow for source-picking purposes. That prevents duplicate UI rows
+while still allowing the scanner to consider links embedded in node metadata
+and links written in workflow notes.
+
+### CGM-MDL-10A [LIVE]: Workflow-link downloads should omit models already available locally
+Validation: MIXED
+
+The `Download New Model` workflow-links tab should focus on model URLs that may
+represent missing downloads. It should not prompt users to download a model
+that is already represented in the workspace model index.
+
+The download candidate scanner should filter out workflow URLs when:
+
+- the URL exactly matches an existing model source URL, or
+- the URL points to a model filename already present in the workspace model
+  index
+
+This filtering applies to the missing/new model download flow. It must not
+remove the same URL from the dedicated source-repair flow for an existing model,
+because that flow uses workflow links to attach missing source metadata.
+
+### CGM-MDL-11 [LIVE]: Full model hashes should be lazy, explicit, and cached
 Validation: MIXED
 
 The manager should not compute full Blake3 or SHA256 hashes for every model in

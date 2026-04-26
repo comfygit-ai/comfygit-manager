@@ -59,8 +59,9 @@ That section should present a compact state such as:
 - `Blocked`
 - `Checking`
 
-It should also show a grouped summary of issue counts and provide actions such
-as `Review Issues` and `Refresh Check`.
+It should also show a grouped summary of issue counts and provide a `Review
+Issues` action. Manual refresh controls should not be required in the primary
+readiness review path when repair actions already revalidate the content.
 
 ### CGM-READY-02 [PLANNED]: Readiness review should be a shared contextual repair surface
 Validation: MIXED
@@ -97,21 +98,25 @@ Implementation-heavy terms such as `provenance`, `manifest`, `hash`, or
 `package metadata` may appear in details or diagnostics, but they should not be
 the first concepts users must understand.
 
-### CGM-READY-04 [PARTIAL]: Model and custom-node source issues are the first readiness repair slice
+### CGM-READY-04 [LIVE]: Model and custom-node source issues are the first readiness repair slice
 Validation: MIXED
 
-The current local readiness flow already detects model entries without download
+The current local readiness flow detects model entries without download
 sources and custom nodes without portable source metadata.
 
-The intended near-term repair path is:
+The current repair path is:
 
-- models: find or attach a download source, compute full hashes when needed
+- models: open the model source-finder directly from readiness, attach a
+  download source, and compute full hashes when needed
 - custom nodes: expose required/optional criticality and missing portable
   source state
 
-This remains partial because the model source-finding flow, full-hash repair
-path, and richer source-candidate UX are still planned by
-`CGM-MDL-07` through `CGM-MDL-11`.
+Optional nodes may remain listed as warnings, but they must not be treated as
+required build inputs by readiness consumers.
+
+The readiness review surface should not route users through Model Details just
+to repair a missing model source. Model Details remains available for factual
+inspection, while readiness is a guided repair flow.
 
 ### CGM-READY-05 [PLANNED]: Workflow contract readiness should feed the same review surface
 Validation: MIXED
