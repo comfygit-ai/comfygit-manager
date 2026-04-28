@@ -202,9 +202,10 @@ Environment readiness is a cross-cutting summary of the current environment,
 not a standalone operational domain. The panel should not add a top-level
 `Readiness` destination for the first implementation.
 
-The Status surface should own the compact `Environment Readiness` summary.
-Contextual gates such as export and push should link into the same review
-surface rather than creating their own separate readiness destinations.
+The Status surface should own the compact environment reproducibility warning
+inside its `Issues` area. Contextual gates such as export and push should link
+into the same review surface rather than creating their own separate readiness
+destinations.
 
 The detailed readiness behavior is specified by `CGM-READY-01` through
 `CGM-READY-07` in `docs/specs/environment-readiness.md`.

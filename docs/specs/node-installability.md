@@ -75,5 +75,12 @@ must not decide whether an installed package is required or optional. A package
 can affect runtime behavior without appearing as a graph node, so automatic
 criticality inference would create a false reproducibility guarantee.
 
-Readiness checks should treat required nodes without portable provenance as
-blocking and optional nodes without portable provenance as warnings.
+Readiness checks should report required nodes without portable provenance as
+issues. Optional nodes without portable provenance should stay tracked in the
+local environment manifest, but they should be excluded from export, push,
+cloud build-plan, and deployment readiness warnings.
+
+This preserves the local safety property of tracking development nodes so
+sync/rollback does not treat them as random filesystem drift, while allowing
+the user to declare that a local development node is not part of the portable
+dependency set.

@@ -8,7 +8,7 @@
       <div class="readiness-heading">
         <h3 class="readiness-title">Review Reproducibility Issues</h3>
         <p class="readiness-subtitle">
-          Add missing source details where possible. Optional nodes are still listed as warnings, but they will not be treated as required build inputs.
+          Add missing source details where possible. Required development nodes can also be marked optional when they should stay local but not be part of portable builds.
         </p>
       </div>
     </template>

@@ -46,22 +46,28 @@ evidence.
 
 ## Clauses
 
-### CGM-READY-01 [PLANNED]: Status should summarize environment readiness
+### CGM-READY-01 [PARTIAL]: Status should summarize environment readiness
 Validation: HUMAN_REVIEW
 
-The Status surface should include an `Environment Readiness` section near the
-primary environment summary.
+The Status surface should make environment reproducibility visible with the
+same issue language used for other local environment problems.
 
-That section should present a compact state such as:
+When readiness issues exist, Status should show a compact warning under
+`Issues` with a grouped summary and a `Review Issues` action. When no
+readiness issues exist, Status should not add a separate success card or make
+reproducibility compete with runtime health.
 
-- `Ready`
-- `Needs attention`
-- `Blocked`
-- `Checking`
+Manual refresh controls should not be required in the primary readiness review
+path when repair actions already revalidate the content.
 
-It should also show a grouped summary of issue counts and provide a `Review
-Issues` action. Manual refresh controls should not be required in the primary
-readiness review path when repair actions already revalidate the content.
+The current Status implementation reports environment reproducibility as a
+warning card under the Status `Issues` section. This keeps reproducibility
+visible without presenting it as more severe than local runtime failures. The
+card links model/custom-node repair items to the shared readiness review
+surface.
+
+This remains partial until Source State, Workflows, and Runtime issue groups
+are fully represented by the shared readiness object and review surface.
 
 ### CGM-READY-02 [PLANNED]: Readiness review should be a shared contextual repair surface
 Validation: MIXED
@@ -72,7 +78,7 @@ push, and future deploy/build paths.
 
 The shared surface should be reusable from:
 
-- the Status readiness section
+- the Status reproducibility issue card
 - export warnings
 - push warnings
 - future cloud/build/deploy warning gates
@@ -102,17 +108,19 @@ the first concepts users must understand.
 Validation: MIXED
 
 The current local readiness flow detects model entries without download
-sources and custom nodes without portable source metadata.
+sources and required custom nodes without portable source metadata.
 
 The current repair path is:
 
 - models: open the model source-finder directly from readiness, attach a
   download source, and compute full hashes when needed
 - custom nodes: expose required/optional criticality and missing portable
-  source state
+  source state; required nodes can be resolved by adding portable source
+  metadata or marking the node optional
 
-Optional nodes may remain listed as warnings, but they must not be treated as
-required build inputs by readiness consumers.
+Optional nodes must remain tracked locally but should not appear in
+reproducibility warnings, export/push gates, cloud build-plan required inputs,
+or deployment required inputs when they lack portable source metadata.
 
 The readiness review surface should not route users through Model Details just
 to repair a missing model source. Model Details remains available for factual

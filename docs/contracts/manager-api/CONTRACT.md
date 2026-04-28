@@ -157,6 +157,11 @@ The frontend must not edit manifest files directly or treat browser-only state
 as durable node criticality. Missing criticality in older manifests should be
 reported as `required` so readiness behavior remains conservative.
 
+The API must treat optional tracked nodes as excluded from required
+reproducibility inputs. Optional development nodes may remain tracked locally
+to protect their filesystem directories during sync/rollback, but they should
+not be returned as missing portable-provenance warnings.
+
 ### CGM-API-15 [PLANNED]: Readiness APIs should return grouped actionable issues
 Validation: MIXED
 

@@ -177,7 +177,7 @@
         </SectionTitle>
 
         <!-- Show issue cards when there are actual issues -->
-        <template v-if="hasActualIssues">
+        <template v-if="hasDisplayedIssues">
           <!-- ERROR: Broken Workflows (can't run - missing nodes/dependencies) -->
           <IssueCard
             v-if="allBrokenWorkflows.length > 0"
@@ -266,17 +266,47 @@
               </ActionButton>
             </template>
           </IssueCard>
+
+          <IssueCard
+            v-if="hasReadinessRepairItems"
+            severity="warning"
+            icon="!"
+            title="Environment reproducibility needs attention"
+            description="Some dependencies are missing source details needed to rebuild this environment elsewhere."
+            :items="readinessSummaryItems"
+          >
+            <template #actions>
+              <ActionButton variant="primary" size="sm" @click="showReadinessIssuesModal = true">
+                Review Issues
+              </ActionButton>
+            </template>
+          </IssueCard>
+
+          <IssueCard
+            v-else-if="readinessError"
+            severity="warning"
+            icon="!"
+            title="Environment reproducibility check failed"
+            :description="readinessError"
+          >
+            <template #actions>
+              <ActionButton
+                variant="secondary"
+                size="sm"
+                :loading="isCheckingReadiness"
+                @click="validateReadiness"
+              >
+                Retry
+              </ActionButton>
+            </template>
+          </IssueCard>
         </template>
 
         <!-- No issues but has uncommitted work - simple text -->
         <span v-else-if="hasUncommittedWork" class="no-issues-text">No issues</span>
 
         <!-- All Good State - no issues and no uncommitted work -->
-        <EmptyState
-          v-else
-          icon="✅"
-          message="Everything looks good! No issues detected."
-        />
+        <span v-else class="no-issues-text">No runtime issues detected</span>
       </div>
 
     </template>
@@ -292,20 +322,28 @@
     @navigate-nodes="handleNavigateNodes"
     @repair="handleRepairEnvironment"
   />
+
+  <ReadinessIssuesModal
+    v-if="showReadinessIssuesModal && readinessResult"
+    :warnings="readinessResult.warnings"
+    @close="showReadinessIssuesModal = false"
+    @revalidate="handleReadinessRevalidate"
+  />
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import type { AnalyzedWorkflow, ComfyGitStatus, SetupState } from '@/types/comfygit'
+import { ref, computed, watch } from 'vue'
+import { useComfyGitService } from '@/composables/useComfyGitService'
+import type { AnalyzedWorkflow, ComfyGitStatus, ExportValidationResult, SetupState } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
 import SectionTitle from '@/components/base/atoms/SectionTitle.vue'
 import StatusGrid from '@/components/base/molecules/StatusGrid.vue'
 import StatusItem from '@/components/base/atoms/StatusItem.vue'
 import IssueCard from '@/components/base/molecules/IssueCard.vue'
-import EmptyState from '@/components/base/molecules/EmptyState.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
 import StatusDetailModal from '@/components/base/molecules/StatusDetailModal.vue'
+import ReadinessIssuesModal from '@/components/ReadinessIssuesModal.vue'
 
 interface Props {
   status: ComfyGitStatus
@@ -318,6 +356,12 @@ const props = withDefaults(defineProps<Props>(), {
 
 const showDetailModal = ref(false)
 const showHealthActions = ref(false)
+const showReadinessIssuesModal = ref(false)
+const readinessResult = ref<ExportValidationResult | null>(null)
+const readinessError = ref<string | null>(null)
+const isCheckingReadiness = ref(false)
+
+const { validateExport } = useComfyGitService()
 
 function handleShowAll() {
   showDetailModal.value = true
@@ -416,6 +460,84 @@ const hasSpecificGitChanges = computed(() => {
 const hasUncommittedWork = computed(() => {
   return props.status.has_changes || hasWorkflowChanges.value
 })
+
+const readinessWarnings = computed(() => readinessResult.value?.warnings || {
+  models_without_sources: [],
+  nodes_without_provenance: []
+})
+
+const readinessModelWarningCount = computed(() =>
+  readinessWarnings.value.models_without_sources.length
+)
+
+const readinessNodeWarningCount = computed(() =>
+  readinessWarnings.value.nodes_without_provenance.length
+)
+
+const readinessWarningCount = computed(() =>
+  readinessModelWarningCount.value + readinessNodeWarningCount.value
+)
+
+const hasReadinessRepairItems = computed(() =>
+  readinessWarningCount.value > 0
+)
+
+const readinessSummaryItems = computed(() => {
+  const items: string[] = []
+
+  if (readinessModelWarningCount.value > 0) {
+    items.push(`${readinessModelWarningCount.value} model${readinessModelWarningCount.value === 1 ? '' : 's'} missing download source`)
+  }
+
+  if (readinessNodeWarningCount.value > 0) {
+    const optionalCount = readinessWarnings.value.nodes_without_provenance.filter(node => node.criticality === 'optional').length
+    const requiredCount = readinessNodeWarningCount.value - optionalCount
+    if (requiredCount > 0) {
+      items.push(`${requiredCount} required node${requiredCount === 1 ? '' : 's'} missing portable source`)
+    }
+    if (optionalCount > 0) {
+      items.push(`${optionalCount} optional node${optionalCount === 1 ? '' : 's'} missing portable source`)
+    }
+  }
+
+  return items
+})
+
+async function validateReadiness() {
+  isCheckingReadiness.value = true
+  readinessError.value = null
+
+  try {
+    readinessResult.value = await validateExport()
+  } catch (err) {
+    readinessError.value = err instanceof Error ? err.message : 'Failed to check readiness'
+  } finally {
+    isCheckingReadiness.value = false
+  }
+}
+
+async function handleReadinessRevalidate() {
+  await validateReadiness()
+}
+
+watch(
+  () => [
+    props.setupState,
+    props.status.has_changes,
+    props.status.workflows.new.length,
+    props.status.workflows.modified.length,
+    props.status.workflows.deleted.length,
+    props.status.missing_models_count,
+    props.status.comparison.is_synced,
+    props.status.has_legacy_manager,
+  ],
+  () => {
+    if (props.setupState === 'managed') {
+      void validateReadiness()
+    }
+  },
+  { immediate: true }
+)
 
 const workflowChangesCount = computed(() => {
   return Object.keys(props.status.git_changes.workflow_changes_detail).length
@@ -539,6 +661,12 @@ const hasActualIssues = computed(() => {
          props.status.missing_models_count > 0 ||
          !props.status.comparison.is_synced ||
          props.status.has_legacy_manager
+})
+
+const hasDisplayedIssues = computed(() => {
+  return hasActualIssues.value ||
+         hasReadinessRepairItems.value ||
+         Boolean(readinessError.value)
 })
 
 // Short summary for the suggestions box

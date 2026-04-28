@@ -39,6 +39,10 @@ def _node_criticality(node: Any) -> str:
     return "optional" if getattr(node, "criticality", None) == "optional" else "required"
 
 
+def _node_is_required(node: Any) -> bool:
+    return _node_criticality(node) == "required"
+
+
 def _node_has_portable_provenance(node: Any) -> bool:
     """Return whether a tracked custom node can be reconstructed elsewhere."""
     source = (getattr(node, "source", None) or "unknown").lower()
@@ -176,6 +180,8 @@ def _collect_node_provenance_warnings(env) -> list[dict]:
     nodes = _safe_list(nodes_manager.get_existing())
     warnings = []
     for node in nodes:
+        if not _node_is_required(node):
+            continue
         if _node_has_portable_provenance(node):
             continue
         warnings.append(
@@ -243,9 +249,8 @@ async def build_environment_readiness(env, *, include_blocking: bool = True) -> 
                 }
             )
 
-    if not blocking_issues:
-        warnings["models_without_sources"] = _collect_model_source_warnings(env)
-        warnings["nodes_without_provenance"] = _collect_node_provenance_warnings(env)
+    warnings["models_without_sources"] = _collect_model_source_warnings(env)
+    warnings["nodes_without_provenance"] = _collect_node_provenance_warnings(env)
 
     return {
         "can_export": len(blocking_issues) == 0,

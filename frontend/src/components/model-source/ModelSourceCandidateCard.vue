@@ -11,49 +11,58 @@
           <span class="chip-label">Workflow</span>
           <span>{{ candidate.workflow }}</span>
         </span>
-        <span v-if="candidate.confidence" class="meta-chip">
-          <span class="chip-label">Match</span>
-          <span>{{ formatConfidence(candidate.confidence) }}</span>
+        <span v-if="candidate.confidence" ref="matchPopoverRoot" class="match-chip-wrap">
+          <button
+            v-if="candidate.reasons?.length"
+            class="meta-chip meta-chip-button"
+            type="button"
+            :aria-expanded="showMatchReasons"
+            @click.stop="showMatchReasons = !showMatchReasons"
+          >
+            <span class="chip-label">Match</span>
+            <span>{{ formatConfidence(candidate.confidence) }}</span>
+          </button>
+          <span v-else class="meta-chip">
+            <span class="chip-label">Match</span>
+            <span>{{ formatConfidence(candidate.confidence) }}</span>
+          </span>
+          <div v-if="showMatchReasons && candidate.reasons?.length" class="match-popover" @click.stop>
+            <div class="match-popover-title">Matched by</div>
+            <div class="match-popover-reasons">
+              <span
+                v-for="reason in candidate.reasons"
+                :key="reason"
+                class="reason-chip"
+              >
+                {{ reason }}
+              </span>
+            </div>
+          </div>
         </span>
       </div>
-      <div v-if="candidate.reasons?.length" class="reason-list" aria-label="Why this link matched">
-        <div class="reason-heading">
-          <span class="reason-label">Matched by</span>
-          <InfoButton
-            :size="14"
-            title="About match reasons"
-            @click="emit('showMatchInfo')"
-          />
-        </div>
-        <span
-          v-for="reason in candidate.reasons"
-          :key="reason"
-          class="reason-chip"
+      <div class="candidate-footer">
+        <details v-if="candidate.context" class="candidate-context">
+          <summary>Workflow snippet</summary>
+          <p>{{ candidate.context }}</p>
+        </details>
+        <div v-else></div>
+
+        <BaseButton
+          variant="primary"
+          size="sm"
+          :loading="loading"
+          @click="emit('select', candidate.url)"
         >
-          {{ reason }}
-        </span>
+          {{ actionLabel }}
+        </BaseButton>
       </div>
-      <details v-if="candidate.context" class="candidate-context">
-        <summary>Workflow snippet</summary>
-        <p>{{ candidate.context }}</p>
-      </details>
-    </div>
-    <div class="candidate-actions">
-      <BaseButton
-        variant="primary"
-        size="sm"
-        :loading="loading"
-        @click="emit('select', candidate.url)"
-      >
-        {{ actionLabel }}
-      </BaseButton>
     </div>
   </article>
 </template>
 
 <script setup lang="ts">
+import { onBeforeUnmount, ref, watch } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import InfoButton from '@/components/base/atoms/InfoButton.vue'
 import type { ModelSourceCandidate } from '@/types/comfygit'
 
 withDefaults(defineProps<{
@@ -67,8 +76,42 @@ withDefaults(defineProps<{
 
 const emit = defineEmits<{
   select: [url: string]
-  showMatchInfo: []
 }>()
+
+const showMatchReasons = ref(false)
+const matchPopoverRoot = ref<HTMLElement | null>(null)
+
+function closeMatchPopover() {
+  showMatchReasons.value = false
+}
+
+function handleDocumentPointerDown(event: PointerEvent) {
+  const target = event.target
+  if (!(target instanceof Node)) return
+  if (matchPopoverRoot.value?.contains(target)) return
+  closeMatchPopover()
+}
+
+function handleDocumentKeyDown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    closeMatchPopover()
+  }
+}
+
+watch(showMatchReasons, (isOpen) => {
+  if (isOpen) {
+    document.addEventListener('pointerdown', handleDocumentPointerDown)
+    document.addEventListener('keydown', handleDocumentKeyDown)
+  } else {
+    document.removeEventListener('pointerdown', handleDocumentPointerDown)
+    document.removeEventListener('keydown', handleDocumentKeyDown)
+  }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  document.removeEventListener('keydown', handleDocumentKeyDown)
+})
 
 function formatProvider(provider: string): string {
   if (provider === 'huggingface') return 'Hugging Face'
@@ -85,10 +128,6 @@ function formatConfidence(confidence: number): string {
 
 <style scoped>
 .candidate-card {
-  display: flex;
-  gap: var(--cg-space-3);
-  justify-content: space-between;
-  align-items: flex-start;
   padding: var(--cg-space-3);
   background: var(--cg-color-bg-secondary);
   border: 1px solid var(--cg-color-border);
@@ -107,8 +146,7 @@ function formatConfidence(confidence: number): string {
   overflow-wrap: anywhere;
 }
 
-.candidate-meta,
-.reason-list {
+.candidate-meta {
   display: flex;
   flex-wrap: wrap;
   gap: var(--cg-space-2);
@@ -120,8 +158,7 @@ function formatConfidence(confidence: number): string {
   margin-bottom: var(--cg-space-2);
 }
 
-.meta-chip,
-.reason-chip {
+.meta-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -131,24 +168,63 @@ function formatConfidence(confidence: number): string {
   color: var(--cg-color-text-secondary);
 }
 
-.chip-label,
-.reason-label {
+.meta-chip-button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.meta-chip-button:hover {
+  border-color: var(--cg-color-accent);
+  color: var(--cg-color-text-primary);
+}
+
+.chip-label {
   color: var(--cg-color-text-muted);
   text-transform: uppercase;
   letter-spacing: var(--cg-letter-spacing-wide);
 }
 
-.reason-heading {
-  flex-basis: 100%;
+.match-chip-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.match-popover {
+  position: absolute;
+  top: calc(100% + var(--cg-space-1));
+  left: 0;
+  z-index: 2;
+  width: max-content;
+  max-width: 280px;
+  padding: var(--cg-space-2);
+  background: var(--cg-color-bg-primary);
+  border: 1px solid var(--cg-color-border);
+  box-shadow: var(--cg-shadow-md);
+}
+
+.match-popover-title {
+  margin-bottom: var(--cg-space-2);
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+}
+
+.match-popover-reasons {
   display: flex;
-  align-items: center;
-  gap: var(--cg-space-1);
-  margin-bottom: var(--cg-space-1);
+  flex-wrap: wrap;
+  gap: var(--cg-space-2);
 }
 
 .reason-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  background: var(--cg-color-bg-tertiary);
+  font-size: var(--cg-font-size-xs);
   color: var(--cg-color-accent);
   border-color: var(--cg-color-border-subtle);
+  border: 1px solid var(--cg-color-border-subtle);
 }
 
 .candidate-context {
@@ -156,6 +232,14 @@ function formatConfidence(confidence: number): string {
   color: var(--cg-color-text-muted);
   font-size: var(--cg-font-size-sm);
   line-height: 1.4;
+}
+
+.candidate-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cg-space-3);
+  margin-top: var(--cg-space-1);
 }
 
 .candidate-context summary {
@@ -178,9 +262,4 @@ function formatConfidence(confidence: number): string {
   overflow-wrap: anywhere;
 }
 
-.candidate-actions {
-  flex-shrink: 0;
-  display: flex;
-  align-items: flex-start;
-}
 </style>

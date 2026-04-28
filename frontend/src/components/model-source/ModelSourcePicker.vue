@@ -64,7 +64,6 @@
           :action-label="actionLabel"
           :loading="loadingUrl === candidate.url"
           @select="emit('selectSource', $event)"
-          @show-match-info="showMatchInfo = true"
         />
       </div>
       <div v-else class="state-message">
@@ -99,31 +98,12 @@
       />
     </section>
 
-    <InfoPopover
-      :show="showMatchInfo"
-      title="About Match Reasons"
-      max-width="460px"
-      :overlay-z-index="overlayZIndex + 2"
-      @close="showMatchInfo = false"
-    >
-      <template #content>
-        <ul class="match-info-list">
-          <li><strong>Filename match</strong> means the link or nearby workflow text includes the exact model filename.</li>
-          <li><strong>Model name match</strong> means the link or nearby workflow text includes the filename without its extension.</li>
-          <li><strong>Hash match</strong> means a known quick, Blake3, or SHA256 hash appears near the link.</li>
-          <li><strong>Category nearby</strong> means the workflow text near the link mentions the model folder/category.</li>
-          <li><strong>Model file URL</strong> means the URL itself ends like a model file.</li>
-          <li><strong>Known model host</strong> means the URL points at a recognized model host such as Hugging Face or Civitai.</li>
-        </ul>
-      </template>
-    </InfoPopover>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import HuggingFaceTab from '@/components/download/HuggingFaceTab.vue'
 import ModelSourceCandidateCard from '@/components/model-source/ModelSourceCandidateCard.vue'
 import SourceUrlActionForm from '@/components/model-source/SourceUrlActionForm.vue'
@@ -165,7 +145,6 @@ const candidates = ref<ModelSourceCandidate[]>([])
 const loadingCandidates = ref(false)
 const candidateError = ref<string | null>(null)
 const directUrl = ref('')
-const showMatchInfo = ref(false)
 const computingHashes = ref(false)
 const hashError = ref<string | null>(null)
 

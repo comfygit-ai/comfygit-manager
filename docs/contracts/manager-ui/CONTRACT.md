@@ -260,19 +260,29 @@ source analysis may inform warnings, but they must not automatically mark a
 node optional.
 
 The UI should not imply that optional means proven unused. Optional means the
-user has chosen not to let that node block export, build-plan, or deployment
-readiness checks when the node lacks portable provenance.
+user has chosen not to include that node in the portable dependency set for
+export, build-plan, or deployment readiness checks when the node lacks portable
+provenance.
 
-### CGM-UI-20 [PLANNED]: Status should expose the primary environment readiness summary
+Optional development nodes should remain tracked locally so sync and rollback
+do not treat their directories as unmanaged drift, but they should not appear
+as reproducibility issues once the user has marked them optional.
+
+### CGM-UI-20 [PARTIAL]: Status should expose the primary environment readiness summary
 Validation: HUMAN_REVIEW
 
 The manager UI should make readiness visible before users reach export, push,
 or future deploy/build warning gates.
 
-The Status surface should expose the compact readiness state and grouped issue
-summary. It should not force users to visit Models, Nodes, Workflows, and
-Version Control separately just to understand whether the environment needs
-attention.
+The Status surface should expose grouped reproducibility issues inside its
+existing `Issues` area. It should not force users to visit Models, Nodes,
+Workflows, and Version Control separately just to understand whether the
+environment needs attention.
+
+The current implementation exposes model/custom-node reproducibility warnings
+inside the Status `Issues` section. It remains partial until the shared
+readiness surface includes source-state, workflow contract, and
+runtime/build-plan issue groups.
 
 Detailed readiness behavior is specified by `CGM-READY-01` through
 `CGM-READY-07` in `docs/specs/environment-readiness.md`.
