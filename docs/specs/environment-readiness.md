@@ -69,7 +69,7 @@ surface.
 This remains partial until Source State, Workflows, and Runtime issue groups
 are fully represented by the shared readiness object and review surface.
 
-### CGM-READY-02 [PLANNED]: Readiness review should be a shared contextual repair surface
+### CGM-READY-02 [PARTIAL]: Readiness review should be a shared contextual repair surface
 Validation: MIXED
 
 The manager should use one shared readiness review surface for environment
@@ -86,7 +86,11 @@ The shared surface should be reusable from:
 Entry context may change copy and primary action labels, but the issue grouping
 and repair actions should remain consistent.
 
-### CGM-READY-03 [PLANNED]: Readiness should group issues before exposing implementation detail
+The current Status, export, and push flows link to the same readiness review
+surface for model and custom-node repair. This remains partial until future
+build/deploy gates and additional issue groups use that same surface.
+
+### CGM-READY-03 [PARTIAL]: Readiness should group issues before exposing implementation detail
 Validation: HUMAN_REVIEW
 
 Readiness review should group issues by Source State, Models, Custom Nodes,
@@ -103,6 +107,10 @@ The UI should prefer user-facing labels such as:
 Implementation-heavy terms such as `provenance`, `manifest`, `hash`, or
 `package metadata` may appear in details or diagnostics, but they should not be
 the first concepts users must understand.
+
+The current implementation groups model and custom-node reproducibility issues.
+Source State still appears as export/push blocking context rather than as a
+fully repairable readiness group, and Workflow/Runtime groups remain planned.
 
 ### CGM-READY-04 [LIVE]: Model and custom-node source issues are the first readiness repair slice
 Validation: MIXED

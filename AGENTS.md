@@ -158,6 +158,16 @@ uv run pytest
 uv run pytest integration/panel
 ```
 
+Backend tests that need unreleased local `comfygit-core` changes:
+
+```bash
+PYTHONPATH=<path-to-comfygit-repo>/packages/core/src .venv/bin/python -m pytest testing/unit/test_readiness.py
+```
+
+Run that command from the manager repo root. Use this only for cross-repo
+development where manager code intentionally depends on local core changes that
+have not been released to PyPI yet.
+
 Script checks:
 
 ```bash
@@ -185,6 +195,9 @@ Frontend version check:
 - Keep durable environment and workflow contract persistence in `comfygit-core`
   where possible. The manager should route persistence through backend APIs and
   core helpers rather than directly editing durable state in the browser.
+- When Manager consumes stable core-domain behavior, prefer typed core services
+  and convert to JSON only at the manager API boundary. Do not duplicate core
+  policy as ad hoc nested dictionaries in manager backend or frontend code.
 - For user-facing constants, URLs, provider labels, and social links, prefer
   `frontend/src/constants/` or a backend config surface over hardcoding strings
   deep inside components.

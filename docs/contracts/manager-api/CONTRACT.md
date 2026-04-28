@@ -162,7 +162,7 @@ reproducibility inputs. Optional development nodes may remain tracked locally
 to protect their filesystem directories during sync/rollback, but they should
 not be returned as missing portable-provenance warnings.
 
-### CGM-API-15 [PLANNED]: Readiness APIs should return grouped actionable issues
+### CGM-API-15 [PARTIAL]: Readiness APIs should return grouped actionable issues
 Validation: MIXED
 
 The manager API should expose readiness results in a grouped, action-oriented
@@ -180,3 +180,8 @@ At minimum, the readiness shape should be able to represent issue groups for:
 Each issue should carry enough machine-readable detail for the frontend to show
 clear copy and route to the appropriate repair action, without requiring the
 frontend to re-derive readiness from raw manifest or git state.
+
+The current Manager API adapts the core readiness result for export validation
+and push preview flows, with grouped model and custom-node warnings plus
+source-state blockers where requested. This remains partial until source-state,
+workflow, and runtime issue groups are fully represented as repairable items.

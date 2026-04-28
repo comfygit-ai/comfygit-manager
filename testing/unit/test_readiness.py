@@ -3,7 +3,8 @@
 from dataclasses import dataclass
 from types import SimpleNamespace
 
-from cgm_core.readiness import _collect_node_provenance_warnings
+from comfygit_core.models.readiness import NodeProvenanceWarning
+from comfygit_core.services.environment_readiness import collect_node_provenance_warnings
 
 
 @dataclass
@@ -45,7 +46,7 @@ def test_optional_dev_nodes_are_excluded_from_provenance_warnings():
         )
     ])
 
-    assert _collect_node_provenance_warnings(env) == []
+    assert collect_node_provenance_warnings(env) == []
 
 
 def test_required_dev_nodes_without_portable_source_are_reported():
@@ -59,10 +60,14 @@ def test_required_dev_nodes_without_portable_source_are_reported():
         )
     ])
 
-    warnings = _collect_node_provenance_warnings(env)
+    warnings = collect_node_provenance_warnings(env)
 
-    assert len(warnings) == 1
-    assert warnings[0]["name"] == "local-dev-node"
-    assert warnings[0]["criticality"] == "required"
-    assert warnings[0]["source"] == "development"
-
+    assert warnings == [
+        NodeProvenanceWarning(
+            name="local-dev-node",
+            source="development",
+            criticality="required",
+            reason="Development node is missing portable git repository and pinned commit metadata.",
+            version="dev",
+        )
+    ]
