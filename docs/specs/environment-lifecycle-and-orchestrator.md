@@ -131,3 +131,15 @@ local orchestrator.
 The cloud-bound restrictions in `CGM-ENV-10` should not remove local desktop
 bootstrap behavior. They should make lifecycle authority explicit so local and
 cloud contexts can diverge safely.
+
+### CGM-ENV-12 [LIVE]: Manager-created environments should use supported ComfyUI releases
+Validation: TEST
+
+The manager environment creation flow should only offer ComfyUI release choices
+that preserve the manager integration surfaces it depends on.
+
+The supported release floor is `v0.4.0`. Releases below that floor may still run
+ComfyUI itself, but they do not provide the native frontend manager integration
+needed for the expected custom-node browsing and install flow. The manager API
+should filter unsupported release tags from the creation selector and reject
+explicit create requests for unsupported release tags.

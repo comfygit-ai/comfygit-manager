@@ -1,17 +1,7 @@
 import { ref, computed, watch } from 'vue'
 import type { Instance, InstancesResponse } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
-
-// Access ComfyUI's API directly (same pattern as other composables)
-declare global {
-  interface Window {
-    app?: {
-      api: {
-        fetchApi: (endpoint: string, options?: RequestInit) => Promise<Response>
-      }
-    }
-  }
-}
+import { fetchComfyApi } from '@/utils/comfyApi'
 
 const USE_MOCK = isMockApi()
 const POLL_INTERVAL_MS = 5000
@@ -26,10 +16,7 @@ let pollIntervalId: number | null = null
  * Fetch from ComfyUI API. Throws if API not available.
  */
 async function fetchApi(endpoint: string, options?: RequestInit): Promise<Response> {
-  if (!window.app?.api) {
-    throw new Error('ComfyUI API not available')
-  }
-  return window.app.api.fetchApi(endpoint, options)
+  return fetchComfyApi(endpoint, options)
 }
 
 /**

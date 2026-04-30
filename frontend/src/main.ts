@@ -17,6 +17,7 @@ import {
   shouldRestoreDevPanel,
   startDevAutoReload
 } from '@/dev/autoReload'
+import { getComfyApi } from '@/utils/comfyApi'
 
 // Load component CSS
 const panelCssFile = './comfygit-panel.css'
@@ -55,6 +56,36 @@ import { switchTheme, getCurrentTheme, type ThemeName } from '@/themes'
   }
 }
 
+;(window as any).ComfyGitDev = {
+  ...((window as any).ComfyGitDev ?? {}),
+
+  async exportCurrentApiPrompt() {
+    const comfyApp = app as any
+    if (typeof comfyApp.graphToPrompt !== 'function') {
+      throw new Error('ComfyUI graphToPrompt is not available')
+    }
+    return comfyApp.graphToPrompt(comfyApp.rootGraph)
+  },
+
+  async exportApiPromptForWorkflow(workflowData: any) {
+    const comfyApp = app as any
+    if (typeof comfyApp.loadGraphData !== 'function') {
+      throw new Error('ComfyUI loadGraphData is not available')
+    }
+    if (typeof comfyApp.graphToPrompt !== 'function') {
+      throw new Error('ComfyUI graphToPrompt is not available')
+    }
+
+    await comfyApp.loadGraphData(workflowData, true, false, null, {
+      deferWarnings: true,
+      skipAssetScans: true,
+      silentAssetErrors: true
+    })
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+    return comfyApp.graphToPrompt(comfyApp.rootGraph)
+  }
+}
+
 // Panel state
 let panelOverlay: HTMLElement | null = null
 let panelVueApp: ReturnType<typeof createApp> | null = null
@@ -82,9 +113,10 @@ let buttonGroup: HTMLElement | null = null
 
 // Fetch status for commit indicator
 async function fetchStatus() {
-  if (!app?.api) return null
+  const api = getComfyApi()
+  if (!api) return null
   try {
-    const response = await app.api.fetchApi('/v2/comfygit/status')
+    const response = await api.fetchApi('/v2/comfygit/status')
     if (response.ok) {
       globalStatus.value = await response.json()
     }
@@ -102,9 +134,10 @@ async function fetchSetupStatus() {
     return
   }
 
-  if (!app?.api) return
+  const api = getComfyApi()
+  if (!api) return
   try {
-    const response = await app.api.fetchApi('/v2/setup/status')
+    const response = await api.fetchApi('/v2/setup/status')
     if (response.ok) {
       const data = await response.json()
       currentSetupState = data.state
@@ -699,7 +732,7 @@ app.registerExtension({
 
     // Register custom WebSocket event type with ComfyUI API
     // CRITICAL: Use the imported 'app' object, NOT window.app (which doesn't exist yet)
-    const api = (app as any).api
+    const api = getComfyApi()
 
     if (api) {
       api.addEventListener('comfygit:workflow-changed', async (event: CustomEvent) => {

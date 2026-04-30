@@ -48,7 +48,8 @@ if _is_managed:
             if 'manager' not in feature_flags.SERVER_FEATURE_FLAGS['extension']:
                 feature_flags.SERVER_FEATURE_FLAGS['extension']['manager'] = {}
             feature_flags.SERVER_FEATURE_FLAGS['extension']['manager']['supports_v4'] = True
-            print("[ComfyGit] Injected extension.manager.supports_v4 feature flag")
+            feature_flags.SERVER_FEATURE_FLAGS['extension']['manager']['supports_csrf_post'] = True
+            print("[ComfyGit] Injected ComfyUI Manager compatibility feature flags")
     except ImportError:
         print("[ComfyGit] Warning: Could not import comfy_api.feature_flags")
     except Exception as e:
@@ -212,6 +213,61 @@ def get_installed_packs() -> dict[str, dict]:
         return {}
 
 
+def get_node_mappings() -> dict[str, list]:
+    """Return the node-class-to-package mapping expected by the native manager UI.
+
+    ComfyUI's built-in manager UI uses this route mainly for workflow-package
+    association. ComfyGit can reliably report installed package directories and
+    known package identifiers, but it does not currently maintain a complete
+    class-name index for every custom node. The package-name mappings keep the
+    native manager UI usable without inventing node-class metadata.
+    """
+    env = get_environment_from_cwd()
+    if not env:
+        return {}
+
+    try:
+        mappings = {}
+        existing_nodes = env.pyproject.nodes.get_existing()
+
+        for identifier, node_info in existing_nodes.items():
+            pack_ids = []
+            if node_info.registry_id:
+                pack_ids.append(node_info.registry_id)
+            if node_info.repository:
+                parts = node_info.repository.rstrip("/").split("/")
+                if len(parts) >= 2:
+                    pack_ids.append(f"{parts[-2]}/{parts[-1]}")
+            pack_ids.append(identifier)
+
+            deduped_pack_ids = []
+            for pack_id in pack_ids:
+                if pack_id and pack_id not in deduped_pack_ids:
+                    deduped_pack_ids.append(pack_id)
+
+            package_label = node_info.registry_id or identifier
+            for node_key in {identifier, node_info.name, package_label}:
+                if node_key:
+                    mappings[node_key] = [
+                        deduped_pack_ids,
+                        {"title_aux": node_info.name},
+                    ]
+
+        return mappings
+    except Exception as e:
+        print(f"[ComfyGit] Failed to get node mappings: {e}")
+        return {}
+
+
+def _queue_compat_task(kind: str, params: dict | None = None, client_id: str | None = None, ui_id: str | None = None):
+    task_queue.append({
+        "kind": kind,
+        "params": params or {},
+        "client_id": client_id or "unknown",
+        "ui_id": ui_id or str(uuid.uuid4()),
+    })
+
+
 # ============================================================================
 # v2 API Endpoints
 # ============================================================================
@@ -221,6 +277,12 @@ async def list_installed(request):
     """Return installed custom nodes."""
     packs = get_installed_packs()
     return web.json_response(packs)
+
+
+@routes.get("/v2/customnode/getmappings")
+async def get_mappings(request):
+    """Return installed package mappings for the native manager UI."""
+    return web.json_response(get_node_mappings())
 
 
 @routes.post("/v2/manager/queue/task")
@@ -234,6 +296,7 @@ async def queue_task(request):
         return web.json_response({"error": str(e)}, status=500)
 
 
+@routes.get("/v2/manager/queue/start")
 @routes.post("/v2/manager/queue/start")
 async def start_queue(request):
     """Start processing queued tasks.
@@ -285,6 +348,55 @@ async def start_queue(request):
     return web.Response(status=200)
 
 
+@routes.post("/v2/manager/queue/reset")
+async def reset_queue(request):
+    """Clear pending queued tasks.
+
+    The native manager UI expects this route to exist. ComfyGit only clears
+    tasks that have not started yet; the active operation is allowed to finish.
+    """
+    task_queue.clear()
+    return web.Response(status=200)
+
+
+@routes.post("/v2/manager/queue/update_all")
+async def update_all(request):
+    """Queue updates for installed ComfyGit-tracked custom nodes."""
+    env = get_environment_from_cwd()
+    if not env:
+        return web.json_response({"message": "No ComfyGit environment detected"}, status=500)
+
+    existing_nodes = env.pyproject.nodes.get_existing()
+    ui_id = request.query.get("ui_id")
+    client_id = request.query.get("client_id")
+
+    for identifier, node_info in existing_nodes.items():
+        if node_info.source == "development":
+            continue
+        _queue_compat_task(
+            "update",
+            {"node_name": identifier},
+            client_id=client_id,
+            ui_id=ui_id if len(existing_nodes) == 1 else None,
+        )
+
+    return web.Response(status=200)
+
+
+@routes.post("/v2/manager/queue/update_comfyui")
+async def update_comfyui(request):
+    """Reject native ComfyUI updates from the manager UI.
+
+    ComfyGit environments pin ComfyUI through the environment manifest. Updating
+    the running ComfyUI checkout from the native manager UI would bypass that
+    source of truth.
+    """
+    return web.json_response(
+        {"message": "ComfyUI updates are managed by ComfyGit environment sync."},
+        status=403,
+    )
+
+
 @routes.get("/v2/manager/queue/status")
 async def queue_status(request):
     """Return current queue status."""
@@ -303,6 +415,7 @@ STOP_EXIT_CODE = 0      # Signals orchestrator to stop cleanly (or just exits if
 
 
 @routes.get("/v2/manager/reboot")
+@routes.post("/v2/manager/reboot")
 async def reboot(request):
     """Reboot ComfyUI server with exit code 42 to trigger restart loop."""
     import os

@@ -10,16 +10,7 @@ import type {
 } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
 import { useModelDownloadQueue } from './useModelDownloadQueue'
-
-declare global {
-  interface Window {
-    app?: {
-      api: {
-        fetchApi: (endpoint: string, options?: RequestInit) => Promise<Response>
-      }
-    }
-  }
-}
+import { fetchComfyApi } from '@/utils/comfyApi'
 
 export function useWorkflowResolution() {
   const result = ref<FullResolutionResult | null>(null)
@@ -30,11 +21,7 @@ export function useWorkflowResolution() {
   const error = ref<string | null>(null)
 
   async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    if (!window.app?.api) {
-      throw new Error('ComfyUI API not available')
-    }
-
-    const response = await window.app.api.fetchApi(endpoint, options)
+    const response = await fetchComfyApi(endpoint, options)
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))

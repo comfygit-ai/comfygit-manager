@@ -21,6 +21,7 @@ routes = web.RouteTableDef()
 # Exit codes for orchestrator
 RESTART_EXIT_CODE = 42
 SWITCH_ENV_EXIT_CODE = 43
+MIN_SUPPORTED_COMFYUI_VERSION = "v0.4.0"
 
 # Global state for environment creation task
 _create_task_lock = threading.Lock()
@@ -48,6 +49,42 @@ class ServerCreateProgress:
         if not success:
             with _create_task_lock:
                 _create_task_state["error"] = error
+
+
+def _parse_comfyui_release_version(version: str) -> tuple[int, int, int] | None:
+    """Parse ComfyUI release tags shaped like v0.4.0."""
+    normalized = version.strip()
+    if normalized.startswith("v"):
+        normalized = normalized[1:]
+    parts = normalized.split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        return tuple(int(part) for part in parts)
+    except ValueError:
+        return None
+
+
+def _is_supported_comfyui_release(version: str) -> bool:
+    """Return whether a requested ComfyUI release is supported by the manager."""
+    if version in ("latest", "main", "master") or not version:
+        return True
+    parsed = _parse_comfyui_release_version(version)
+    minimum = _parse_comfyui_release_version(MIN_SUPPORTED_COMFYUI_VERSION)
+    if parsed is None or minimum is None:
+        return True
+    return parsed >= minimum
+
+
+def _unsupported_comfyui_version_response(version: str) -> web.Response:
+    return web.json_response({
+        "status": "error",
+        "message": (
+            f"ComfyUI {version} is below the supported minimum "
+            f"{MIN_SUPPORTED_COMFYUI_VERSION}. Older releases do not provide "
+            "the frontend manager integration ComfyGit relies on."
+        )
+    }, status=400)
 
 
 def spawn_orchestrator(environment, target_env: str) -> None:
@@ -618,6 +655,9 @@ async def create_environment(request: web.Request) -> web.Response:
             "message": name_error
         }, status=400)
 
+    if not _is_supported_comfyui_release(comfyui_version):
+        return _unsupported_comfyui_version_response(comfyui_version)
+
     # Get workspace - use explicit path if provided (first-time setup), otherwise detect
     if workspace_path:
         runtime_context = build_runtime_context(
@@ -804,7 +844,7 @@ async def get_comfyui_releases(request: web.Request) -> web.Response:
 
     Returns:
         [
-            {"tag_name": "v0.3.69", "name": "v0.3.69", "published_at": "2025-01-15T..."},
+            {"tag_name": "v0.4.0", "name": "v0.4.0", "published_at": "2025-01-15T..."},
             ...
         ]
     """
@@ -828,6 +868,9 @@ async def get_comfyui_releases(request: web.Request) -> web.Response:
         releases = [{"tag_name": "latest", "name": "Latest", "published_at": None}]
 
         for release in releases_data:
+            tag_name = release.get("tag_name")
+            if not tag_name or not _is_supported_comfyui_release(tag_name):
+                continue
             releases.append({
                 "tag_name": release.get("tag_name"),
                 "name": release.get("name") or release.get("tag_name"),

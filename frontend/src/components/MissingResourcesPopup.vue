@@ -271,6 +271,7 @@ import BaseCheckbox from './base/BaseCheckbox.vue'
 import MissingResourcesDetailModal, { type ResourceItem, type ResourceAction } from './MissingResourcesDetailModal.vue'
 import { useModelDownloadQueue } from '@/composables/useModelDownloadQueue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
+import { getComfyApi as resolveComfyApi } from '@/utils/comfyApi'
 
 interface MissingPackage {
   package_id: string
@@ -1098,7 +1099,7 @@ function handleTaskCompleted(event: CustomEvent) {
 let cachedApi: any = null
 function getComfyApi() {
   if (!cachedApi) {
-    cachedApi = (window as any).app?.api
+    cachedApi = resolveComfyApi()
   }
   return cachedApi
 }

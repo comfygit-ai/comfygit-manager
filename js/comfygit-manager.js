@@ -1,65 +1,126 @@
 /**
- * ComfyGit Manager Button - Adds the "Manager" button to the ComfyUI toolbar
+ * ComfyGit Manager Button compatibility fallback
  *
- * IMPORTANT: This file is NOT obsolete and is separate from comfygit-panel.js!
- * - comfygit-panel.js = The ComfyGit panel UI (Vue app, ~700KB)
- * - comfygit-manager.js = This file - injects the Manager button into the toolbar
- *
- * This extension registers a toolbar button that opens the built-in ComfyUI
- * Manager dialog (Comfy.OpenManagerDialog command).
+ * Older ComfyUI installs may need an explicit toolbar shortcut to open
+ * ComfyUI-Manager. Newer ComfyUI builds expose their own extension entrypoints,
+ * and installs without ComfyUI-Manager show an upgrade-required modal when this
+ * command is invoked. Gate the fallback on live capabilities instead of adding
+ * one unconditionally.
  */
 
 import { app } from "../../scripts/app.js";
+
+const FALLBACK_CLASS = "comfygit-manager-btn";
+
+function getComfyApi() {
+    return app.api || window.app?.api || window.comfyAPI?.api?.api || null;
+}
 
 app.registerExtension({
     name: "Comfy.ComfyGitManager",
 
     async setup() {
         let observer = null;
+        let setupStatus = null;
 
-        function hasBuiltInExtensionsButton() {
+        async function refreshSetupStatus() {
+            try {
+                const response = await getComfyApi()?.fetchApi?.("/v2/setup/status");
+                if (response?.ok) {
+                    setupStatus = await response.json();
+                }
+            } catch {
+                setupStatus = null;
+            }
+        }
+
+        function existingFallbackButtons() {
+            return Array.from(document.querySelectorAll(`.${FALLBACK_CLASS}`));
+        }
+
+        function removeFallbackButtons() {
+            existingFallbackButtons().forEach((button) => button.remove());
+        }
+
+        function hasBuiltInManagerEntrypoint() {
             const buttons = document.querySelectorAll("button, [role='button']");
             for (const btn of buttons) {
+                if (btn.classList?.contains(FALLBACK_CLASS)) {
+                    continue;
+                }
+
                 const text = btn.textContent?.trim();
                 const title = btn.getAttribute?.("title")?.trim();
                 const ariaLabel = btn.getAttribute?.("aria-label")?.trim();
-                if (text === "Extensions" || title === "Extensions" || ariaLabel === "Extensions") {
+                if (
+                    text === "Extensions" ||
+                    title === "Extensions" ||
+                    ariaLabel === "Extensions" ||
+                    text === "Manager" ||
+                    title === "Manager" ||
+                    ariaLabel === "Manager" ||
+                    text === "Manage extensions" ||
+                    title === "Manage extensions" ||
+                    ariaLabel === "Manage extensions"
+                ) {
                     return true;
                 }
             }
             return false;
         }
 
+        function shouldShowFallback() {
+            const shouldProvideEntry =
+                setupStatus?.has_comfyui_manager === true ||
+                setupStatus?.state === "managed";
+            return shouldProvideEntry && !hasBuiltInManagerEntrypoint();
+        }
+
+        async function openManager() {
+            const commands = [
+                "Comfy.OpenManagerDialog",
+                "Comfy.Manager.CustomNodesManager.ShowCustomNodesMenu",
+            ];
+
+            for (const command of commands) {
+                try {
+                    await app.extensionManager?.command?.execute?.(command);
+                    return;
+                } catch {
+                    // Try the next known manager command.
+                }
+            }
+
+            window.dispatchEvent(new CustomEvent("comfygit:open-panel", {
+                detail: { initialView: "nodes" },
+            }));
+        }
+
         function createManagerButton() {
             const managerButton = document.createElement("button");
-            managerButton.className = "comfyui-button comfyui-menu-mobile-collapse primary comfygit-manager-btn";
+            managerButton.className = `comfyui-button comfyui-menu-mobile-collapse primary ${FALLBACK_CLASS}`;
             managerButton.textContent = "Manager";
-            managerButton.title = "ComfyGit Manager";
-            managerButton.onclick = () => {
-                app.extensionManager.command.execute('Comfy.OpenManagerDialog');
-            };
+            managerButton.title = "Manage custom nodes";
+            managerButton.onclick = openManager;
             return managerButton;
         }
 
         function syncManagerButton() {
-            const existingButton = document.querySelector(".comfygit-manager-btn");
-            const hasExtensionsButton = hasBuiltInExtensionsButton();
+            const buttons = existingFallbackButtons();
+            const [existingButton, ...duplicates] = buttons;
+            duplicates.forEach((button) => button.remove());
 
-            // Newer ComfyUI builds already expose the built-in Extensions entrypoint.
-            // In that case our fallback Manager button is redundant, so remove it.
-            if (hasExtensionsButton) {
+            if (!shouldShowFallback()) {
                 if (existingButton) {
                     existingButton.remove();
-                    console.log("[ComfyGit] Removed fallback Manager button (built-in Extensions button present)");
+                    console.log("[ComfyGit] Removed Manager fallback button");
                 }
                 return;
             }
 
-            // Older installs may still need the explicit Manager shortcut.
             if (!existingButton && app.menu?.settingsGroup?.element) {
-                const managerButton = createManagerButton();
-                app.menu.settingsGroup.element.before(managerButton);
-                console.log("[ComfyGit] Manager button added to toolbar");
+                app.menu.settingsGroup.element.before(createManagerButton());
+                console.log("[ComfyGit] Manager fallback button added to toolbar");
             }
         }
 
@@ -76,10 +137,9 @@ app.registerExtension({
             });
         }
 
-        // Inject button styles
-        const styles = document.createElement('style');
+        const styles = document.createElement("style");
         styles.textContent = `
-            .comfygit-manager-btn {
+            .${FALLBACK_CLASS} {
                 height: 32px;
                 padding: 0 12px;
                 display: inline-flex;
@@ -90,6 +150,8 @@ app.registerExtension({
         `;
         document.head.appendChild(styles);
 
+        removeFallbackButtons();
+        await refreshSetupStatus();
         syncManagerButton();
         setTimeout(syncManagerButton, 100);
         setTimeout(syncManagerButton, 500);

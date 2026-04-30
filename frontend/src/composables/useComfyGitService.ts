@@ -82,6 +82,7 @@ import type {
 } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
 import { useMockControls } from '@/composables/useMockControls'
+import { fetchComfyApi, getComfyClientId } from '@/utils/comfyApi'
 
 // Access ComfyUI's API
 declare global {
@@ -320,11 +321,7 @@ export function useComfyGitService() {
   const error = ref<string | null>(null)
 
   async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    if (!window.app?.api) {
-      throw new Error('ComfyUI API not available')
-    }
-
-    const response = await window.app.api.fetchApi(endpoint, options)
+    const response = await fetchComfyApi(endpoint, options)
     const text = await response.text()
 
     if (!response.ok) {
@@ -733,8 +730,8 @@ export function useComfyGitService() {
     if (USE_MOCK) {
       return [
         { tag_name: 'latest', name: 'Latest', published_at: new Date().toISOString() },
-        { tag_name: 'v0.3.69', name: 'v0.3.69', published_at: '2025-01-15T00:00:00Z' },
-        { tag_name: 'v0.3.68', name: 'v0.3.68', published_at: '2025-01-10T00:00:00Z' },
+        { tag_name: 'v0.5.0', name: 'v0.5.0', published_at: '2026-04-30T00:00:00Z' },
+        { tag_name: 'v0.4.0', name: 'v0.4.0', published_at: '2026-04-30T00:00:00Z' },
       ]
     }
 
@@ -1293,10 +1290,7 @@ export function useComfyGitService() {
 
     const ui_id = generateUUID()
 
-    // Get client_id from ComfyUI's API if available
-    const client_id = (window as any).app?.api?.clientId ??
-                      (window as any).app?.api?.initialClientId ??
-                      'comfygit-panel'
+    const client_id = getComfyClientId()
 
     const taskParams: {
       id: string
@@ -1613,11 +1607,7 @@ export function useComfyGitService() {
     const formData = new FormData()
     formData.append('file', file)
 
-    if (!window.app?.api) {
-      throw new Error('ComfyUI API not available')
-    }
-
-    const response = await window.app.api.fetchApi('/v2/workspace/import/preview', {
+    const response = await fetchComfyApi('/v2/workspace/import/preview', {
       method: 'POST',
       body: formData
       // Don't set Content-Type - browser will set multipart boundary automatically
@@ -1687,11 +1677,7 @@ export function useComfyGitService() {
     formData.append('model_strategy', modelStrategy)
     formData.append('torch_backend', torchBackend)
 
-    if (!window.app?.api) {
-      throw new Error('ComfyUI API not available')
-    }
-
-    const response = await window.app.api.fetchApi('/v2/workspace/import', {
+    const response = await fetchComfyApi('/v2/workspace/import', {
       method: 'POST',
       body: formData
     })

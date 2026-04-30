@@ -193,6 +193,10 @@ attach_dev_node() {
   fi
 
   existing_source="$(tracked_node_source "$node_name" || true)"
+  if [ "$existing_source" = "development" ]; then
+    log "Development node '$node_name' already tracked"
+    return
+  fi
   if [ -n "$existing_source" ] && [ "$existing_source" != "development" ]; then
     log "Replacing tracked node '$node_name' source '$existing_source' with development tracking"
     cg -e "$ENV_NAME" node remove "$node_name" --untrack || true

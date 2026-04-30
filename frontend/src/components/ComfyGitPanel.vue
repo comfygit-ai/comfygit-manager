@@ -466,6 +466,7 @@ import type {
   UpdateCheckResponse
 } from '@/types/comfygit'
 import { dismissVersion, shouldShowUpdateNotice } from '@/utils/updateNotice'
+import { fetchComfyApi } from '@/utils/comfyApi'
 
 const props = defineProps<{
   initialView?: string
@@ -567,6 +568,7 @@ const initialViewMap: Record<string, { view: ViewName; section: SectionName }> =
   'remotes': { view: 'version-control', section: 'version-control' },
   'status': { view: 'status', section: 'this-env' },
   'workflows': { view: 'workflows', section: 'this-env' },
+  'nodes': { view: 'nodes', section: 'this-env' },
 }
 const initialConfig = props.initialView ? initialViewMap[props.initialView] : null
 
@@ -820,7 +822,7 @@ async function handleUpdateManager() {
       setRefreshFlag()
       try {
         // This will drop the connection; expected.
-        await window.app?.api?.fetchApi('/v2/manager/reboot')
+        await fetchComfyApi('/v2/manager/reboot')
       } catch {
         // Expected on restart
       }
@@ -1086,9 +1088,7 @@ async function handleRestart() {
       showToast('Restarting environment...', 'info')
       try {
         // Call the reboot endpoint
-        if (window.app?.api) {
-          await window.app.api.fetchApi('/v2/manager/reboot')
-        }
+        await fetchComfyApi('/v2/manager/reboot')
       } catch {
         // Expected - server will restart and connection will drop
       }
@@ -1113,9 +1113,7 @@ async function handleStop() {
       showToast('Stopping environment...', 'info')
       try {
         // Call the stop endpoint - works for both supervised and unmanaged environments
-        if (window.app?.api) {
-          await window.app.api.fetchApi('/v2/comfygit/stop', { method: 'POST' })
-        }
+        await fetchComfyApi('/v2/comfygit/stop', { method: 'POST' })
       } catch {
         // Expected - server will shut down and connection will drop
       }
