@@ -726,7 +726,7 @@ export function useComfyGitService() {
     return fetchApi<CreateEnvironmentProgress>('/v2/workspace/environments/create_status')
   }
 
-  async function getComfyUIReleases(limit = 20): Promise<ComfyUIRelease[]> {
+  async function getComfyUIReleases(limit = 100): Promise<ComfyUIRelease[]> {
     if (USE_MOCK) {
       return [
         { tag_name: 'latest', name: 'Latest', published_at: new Date().toISOString() },

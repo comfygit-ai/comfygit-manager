@@ -142,4 +142,6 @@ The supported release floor is `v0.4.0`. Releases below that floor may still run
 ComfyUI itself, but they do not provide the native frontend manager integration
 needed for the expected custom-node browsing and install flow. The manager API
 should filter unsupported release tags from the creation selector and reject
-explicit create requests for unsupported release tags.
+explicit create requests for unsupported release tags. The selector should fetch
+enough release history to expose supported older releases down to this floor,
+not just the newest release page.

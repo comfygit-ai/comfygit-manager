@@ -5455,7 +5455,7 @@ function rt() {
   async function ke() {
     return o("/v2/workspace/environments/create_status");
   }
-  async function se(V = 20) {
+  async function se(V = 100) {
     return o(`/v2/workspace/comfyui_releases?limit=${V}`);
   }
   async function pe(V) {

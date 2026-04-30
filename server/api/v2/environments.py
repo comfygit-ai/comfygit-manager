@@ -22,6 +22,8 @@ routes = web.RouteTableDef()
 RESTART_EXIT_CODE = 42
 SWITCH_ENV_EXIT_CODE = 43
 MIN_SUPPORTED_COMFYUI_VERSION = "v0.4.0"
+DEFAULT_COMFYUI_RELEASE_LIMIT = 100
+MAX_COMFYUI_RELEASE_LIMIT = 100
 
 # Global state for environment creation task
 _create_task_lock = threading.Lock()
@@ -840,7 +842,7 @@ async def get_comfyui_releases(request: web.Request) -> web.Response:
     Get available ComfyUI releases from GitHub.
 
     Query params:
-        limit: int (default 20)
+        limit: int (default 100, max 100)
 
     Returns:
         [
@@ -851,7 +853,11 @@ async def get_comfyui_releases(request: web.Request) -> web.Response:
     import urllib.request
     import ssl
 
-    limit = int(request.query.get("limit", "20"))
+    try:
+        requested_limit = int(request.query.get("limit", str(DEFAULT_COMFYUI_RELEASE_LIMIT)))
+    except ValueError:
+        requested_limit = DEFAULT_COMFYUI_RELEASE_LIMIT
+    limit = max(1, min(requested_limit, MAX_COMFYUI_RELEASE_LIMIT))
 
     try:
         # Fetch releases from GitHub API
