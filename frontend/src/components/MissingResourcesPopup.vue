@@ -135,17 +135,18 @@
               <template v-if="pkg.package_id">
                 <div v-if="!installedPackages.has(pkg.package_id) && !queuedPackages.has(pkg.package_id) && !failedPackages.has(pkg.package_id)" class="community-actions">
                   <BaseButton
+                    v-if="hasCommunityRegistryInstall(pkg)"
                     size="sm"
                     variant="secondary"
                     :disabled="installingPackage === pkg.package_id"
                     @click="installCommunityPackage(pkg, 'registry')"
                   >
-                    {{ installingPackage === pkg.package_id ? 'Queueing...' : 'Install' }}
+                    {{ installingPackage === pkg.package_id ? 'Queueing...' : 'Install from Registry' }}
                   </BaseButton>
                   <BaseButton
                     v-if="pkg.repository"
                     size="sm"
-                    variant="ghost"
+                    :variant="hasCommunityRegistryInstall(pkg) ? 'ghost' : 'secondary'"
                     :disabled="installingPackage === pkg.package_id"
                     @click="installCommunityPackage(pkg, 'git')"
                   >
@@ -518,7 +519,7 @@ const communityMappedPackages = computed<UninstallableNodeItem[]>(() => {
 })
 
 const actionableCommunityPackages = computed(() => {
-  return communityMappedPackages.value.filter(pkg => !!pkg.package_id)
+  return communityMappedPackages.value.filter(pkg => !!communityInstallMode(pkg))
 })
 
 const displayedCommunityPackages = computed(() => {
@@ -539,13 +540,29 @@ const allCommunityPackagesDone = computed(() => {
 })
 
 function communityActionsFor(pkg: UninstallableNodeItem): ResourceAction[] {
-  const actions: ResourceAction[] = [
-    { key: 'install_registry', label: 'Install', variant: 'secondary' }
-  ]
+  const actions: ResourceAction[] = []
+  if (hasCommunityRegistryInstall(pkg)) {
+    actions.push({ key: 'install_registry', label: 'Install from Registry', variant: 'secondary' })
+  }
   if (pkg.repository) {
-    actions.push({ key: 'install_git', label: 'Install via Git', variant: 'ghost' })
+    actions.push({
+      key: 'install_git',
+      label: 'Install via Git',
+      variant: hasCommunityRegistryInstall(pkg) ? 'ghost' : 'secondary'
+    })
   }
   return actions
+}
+
+function hasCommunityRegistryInstall(pkg: UninstallableNodeItem): boolean {
+  return Boolean(pkg.latest_version)
+}
+
+function communityInstallMode(pkg: UninstallableNodeItem): 'registry' | 'git' | null {
+  if (!pkg.package_id) return null
+  if (hasCommunityRegistryInstall(pkg)) return 'registry'
+  if (pkg.repository) return 'git'
+  return null
 }
 
 // Missing models with download info
@@ -687,9 +704,9 @@ const detailModalItems = computed<ResourceItem[]>(() => {
       id: p.package_id || p.item_id,
       name: p.title,
       subtitle: `(${p.node_count} ${p.node_count === 1 ? 'node' : 'nodes'})`,
-      canAction: !!p.package_id,
-      actionDisabledReason: p.package_id ? undefined : 'Manual setup required',
-      actions: p.package_id ? communityActionsFor(p) : []
+      canAction: !!communityInstallMode(p),
+      actionDisabledReason: communityInstallMode(p) ? undefined : 'Manual setup required',
+      actions: communityActionsFor(p)
     }))
   }
   return []
@@ -711,6 +728,10 @@ function handleDetailAction(item: ResourceItem, actionKey?: string) {
       return
     }
     const installMode = actionKey === 'install_git' ? 'git' : 'registry'
+    if (installMode === 'registry' && !hasCommunityRegistryInstall(pkg)) {
+      markCommunityPackageIdError({ item_id: pkg.item_id, title: pkg.title })
+      return
+    }
     installCommunityPackage(pkg, installMode)
   }
 }
@@ -729,6 +750,14 @@ async function installPackage(pkg: MissingPackage): Promise<boolean> {
 async function installCommunityPackage(pkg: UninstallableNodeItem, installMode: 'registry' | 'git'): Promise<boolean> {
   if (!pkg.package_id) {
     markCommunityPackageIdError({ item_id: pkg.item_id, title: pkg.title })
+    return false
+  }
+  if (installMode === 'registry' && !hasCommunityRegistryInstall(pkg)) {
+    failedPackages.value.set(pkg.package_id, 'No installable registry version is available. Use Git install if a repository is available.')
+    return false
+  }
+  if (installMode === 'git' && !pkg.repository) {
+    failedPackages.value.set(pkg.package_id, 'No Git repository is available for this community mapping.')
     return false
   }
   return queueInstallRequest(pkg.package_id, pkg.latest_version, installMode, pkg.repository)
@@ -862,7 +891,8 @@ async function installAllCommunityPackages(): Promise<InstallBatchSummary> {
         !queuedPackages.value.has(packageId) &&
         !failedPackages.value.has(packageId)) {
       summary.attempted++
-      const success = await installCommunityPackage(pkg, 'registry')
+      const installMode = communityInstallMode(pkg)
+      const success = installMode ? await installCommunityPackage(pkg, installMode) : false
       if (!success) {
         summary.failed++
       }

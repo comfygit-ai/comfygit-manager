@@ -189,7 +189,7 @@
             <div class="community-node-header">
               <h4 class="community-node-title">Community-Mapped Packages ({{ uninstallableNodeOptions.length }})</h4>
               <p class="community-node-description">
-                These mappings are actionable. Default install uses the registry; choose Git only when explicitly needed.
+                These mappings came from community metadata. Use a registry install only when a package version exists; otherwise install from Git or skip.
               </p>
             </div>
 
@@ -214,17 +214,18 @@
 
                 <div class="community-node-actions">
                   <BaseButton
+                    v-if="hasRegistryInstall(node)"
                     size="sm"
                     variant="secondary"
                     :disabled="!node.package.package_id"
                     @click="setUninstallableChoice(node, 'registry')"
                   >
-                    Install
+                    Install from Registry
                   </BaseButton>
                   <BaseButton
                     v-if="node.package.repository"
                     size="sm"
-                    variant="ghost"
+                    :variant="hasRegistryInstall(node) ? 'ghost' : 'secondary'"
                     :disabled="!node.package.package_id"
                     @click="setUninstallableChoice(node, 'git')"
                   >
@@ -958,8 +959,18 @@ function initializeCommunityNodeChoices() {
   for (const node of uninstallableNodeOptions.value) {
     const nodeType = node.reference.node_type
     if (nodeChoices.value.has(nodeType)) continue
-    setUninstallableChoice(node, 'registry')
+    if (hasRegistryInstall(node)) {
+      setUninstallableChoice(node, 'registry')
+    } else if (node.package.repository) {
+      setUninstallableChoice(node, 'git')
+    } else {
+      setUninstallableSkip(nodeType)
+    }
   }
+}
+
+function hasRegistryInstall(node: (typeof uninstallableNodeOptions.value)[number]): boolean {
+  return Boolean(node.package?.latest_version)
 }
 
 function sourceRank(source: string): number {

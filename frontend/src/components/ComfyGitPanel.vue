@@ -512,7 +512,19 @@ const selectedExportEnvironment = ref<string | null>(null)
 const showImportModal = ref(false)
 const showExportModal = ref(false)
 const versionControlTab = ref<'history' | 'branches' | 'remotes'>('remotes')
-const diagnosticsTab = ref<'manifest' | 'env' | 'workspace' | 'orchestrator'>('manifest')
+type DiagnosticsTab = 'manifest' | 'env' | 'workspace' | 'orchestrator'
+
+function getInitialDiagnosticsTab(initialView?: string): DiagnosticsTab {
+  const tabMap: Record<string, DiagnosticsTab> = {
+    'manifest': 'manifest',
+    'debug-env': 'env',
+    'debug-workspace': 'workspace',
+    'debug-orchestrator': 'orchestrator',
+  }
+  return initialView ? tabMap[initialView] ?? 'manifest' : 'manifest'
+}
+
+const diagnosticsTab = ref<DiagnosticsTab>(getInitialDiagnosticsTab(props.initialView))
 
 // First-time setup state
 const setupStatus = ref<SetupStatus | null>(null)
@@ -637,7 +649,7 @@ function openVersionControl(tab: 'history' | 'branches' | 'remotes') {
   selectView('version-control', 'version-control')
 }
 
-function openDiagnostics(tab: 'manifest' | 'env' | 'workspace' | 'orchestrator') {
+function openDiagnostics(tab: DiagnosticsTab) {
   diagnosticsTab.value = tab
   selectView('diagnostics', 'diagnostics')
 }
