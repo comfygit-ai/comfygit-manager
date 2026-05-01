@@ -223,6 +223,24 @@ dropping the node from resolution choices.
 Some blocked-node presentation exists, but this remains partial until all
 workflow/resource surfaces use the same status language.
 
+### CGM-UI-16A [PLANNED]: Node install choices should not hide source trust boundaries
+Validation: HUMAN_REVIEW
+
+When a user chooses a package from node registry search, the UI should show the
+available install sources as distinct actions instead of implying that every
+registry-listed package has a registry artifact.
+
+The UI should show:
+
+- `Install from Registry` only when the package has a registry artifact or the
+  API confirms one through live validation
+- `Install from GitHub` only when a repository URL is available
+- a blocked/no-installable-source state when neither source is available
+
+If a package appears in registry search but only has a GitHub repository, the
+primary action should make the GitHub trust boundary explicit. The UI should
+not label that path as a registry install.
+
 ### CGM-UI-17 [LIVE]: Local development source overrides are not portable environment UI
 Validation: HUMAN_REVIEW
 

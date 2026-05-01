@@ -1216,10 +1216,13 @@ function handleNodeOptionSelected(nodeType: string, index: number) {
   }
 }
 
-function handleNodeManualEntry(nodeType: string, packageId: string) {
+function handleNodeManualEntry(nodeType: string, packageId: string, choice: Partial<NodeChoice> = {}) {
   nodeChoices.value.set(nodeType, {
     action: 'install',
-    package_id: packageId
+    package_id: packageId,
+    install_source: choice.install_source,
+    repository: choice.repository,
+    version: choice.version
   })
 }
 
@@ -1346,31 +1349,37 @@ async function handleApply() {
     progress.nodesMarkedOptional = result.nodes_marked_optional || []
     progress.nodesMapped = result.nodes_mapped || []
 
-    const gitInstallSpecs = uninstallableNodeOptions.value
-      .map(node => {
-        const choice = getUninstallableChoice(node.reference.node_type)
+    const gitInstallSpecs = Array.from(nodeChoices.value.values())
+      .map(choice => {
         if (choice?.action !== 'install' || choice.install_source !== 'git') {
           return null
         }
-        const repository = choice.repository || node.package.repository
-        const packageId = choice.package_id || node.package.package_id
+        const repository = choice.repository
+        const packageId = choice.package_id
         if (!repository || !packageId) {
           return null
         }
         return {
           id: packageId,
           repository,
-          selectedVersion: choice.version || node.package.latest_version || 'latest'
+          selectedVersion: choice.version || 'latest'
         }
       })
       .filter((spec): spec is { id: string; repository: string; selectedVersion: string } => Boolean(spec))
 
     const gitPackageIds = new Set(gitInstallSpecs.map(spec => spec.id))
+    const explicitInstallPackageIds = new Set(
+      Array.from(nodeChoices.value.values())
+        .filter(choice => choice?.action === 'install' && Boolean(choice.package_id))
+        .map(choice => choice.package_id as string)
+    )
 
     // Step 3: Store nodes to install for UI display (include auto-install nodes, minus skipped)
     const allNodesToInstall = [
       ...(result.nodes_to_install || []),
-      ...finalNodesToInstall.value.map(n => n.package.package_id)
+      ...finalNodesToInstall.value
+        .filter(n => !explicitInstallPackageIds.has(n.package.package_id))
+        .map(n => n.package.package_id)
     ]
     // Deduplicate and remove explicit git installs from registry install list
     progress.nodesToInstall = [...new Set(allNodesToInstall)].filter(pkgId => !gitPackageIds.has(pkgId))

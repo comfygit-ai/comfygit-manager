@@ -37,8 +37,31 @@ Validation: LLM_REVIEW
 Registry and git install sources should be validated before the manager turns a
 community-mapped or inferred package into an install action.
 
-This remains partial because package identity and source-validation behavior
-should be reviewed whenever registry data or alias handling changes.
+The local global mappings table may be used to populate candidate packages and
+initial install-source capabilities, but it is not authoritative enough to
+execute an install without a final live check.
+
+The manager should classify each candidate source independently:
+
+- registry install: the package has a live registry install artifact/version
+  that can be downloaded from the registry/CDN path
+- git install: the package has a repository URL and the user explicitly chooses
+  to clone that repository
+- blocked: neither a live registry artifact nor an explicit git source is
+  available
+
+Core install behavior must not silently fall back from registry acquisition to
+git acquisition. If a registry candidate has no installable registry artifact,
+the user-facing flow should say that plainly and offer GitHub installation only
+as a distinct explicit choice when a repository URL is known.
+
+When git installation is chosen, the resulting manifest should honestly persist
+the node as git-sourced and pin the resolved commit or equivalent immutable git
+identity.
+
+This remains partial until the resolution modal and install APIs expose
+registry/git capabilities as separate actions and validate registry artifacts
+against the live registry endpoint immediately before install.
 
 ### CGM-NODE-04 [LIVE]: Canonical package identity should prevent duplicate install choices
 Validation: LLM_REVIEW

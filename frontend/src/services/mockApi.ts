@@ -1961,6 +1961,10 @@ export const mockApi = {
         repository: 'https://github.com/black-forest-labs/flux-comfy',
         downloads: 128400,
         github_stars: 4200,
+        registry_versions: ['1.0.0'],
+        registry_version: '1.0.0',
+        can_install_registry: true,
+        can_install_git: true,
         is_installed: false
       },
       {
@@ -1972,6 +1976,10 @@ export const mockApi = {
         repository: 'https://github.com/community/flux-toolkit',
         downloads: 27400,
         github_stars: 860,
+        registry_versions: [],
+        registry_version: null,
+        can_install_registry: false,
+        can_install_git: true,
         is_installed: false
       },
       {
@@ -1983,6 +1991,10 @@ export const mockApi = {
         repository: 'https://github.com/upscaler/comfyui-pack',
         downloads: 9130,
         github_stars: 315,
+        registry_versions: ['2.1.0'],
+        registry_version: '2.1.0',
+        can_install_registry: true,
+        can_install_git: true,
         is_installed: false
       },
       {
@@ -1994,6 +2006,10 @@ export const mockApi = {
         repository: 'https://github.com/tools/ultimate-image',
         downloads: 55100,
         github_stars: 1200,
+        registry_versions: ['1.4.2'],
+        registry_version: '1.4.2',
+        can_install_registry: true,
+        can_install_git: true,
         is_installed: true
       },
       {
@@ -2005,6 +2021,10 @@ export const mockApi = {
         repository: 'https://github.com/fannovel16/controlnet-aux',
         downloads: 234000,
         github_stars: 5100,
+        registry_versions: ['3.0.0'],
+        registry_version: '3.0.0',
+        can_install_registry: true,
+        can_install_git: true,
         is_installed: true
       }
     ]

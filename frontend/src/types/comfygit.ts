@@ -919,6 +919,10 @@ export interface NodeSearchResult {
   repository?: string
   downloads?: number | null
   github_stars?: number | null
+  registry_versions?: string[]
+  registry_version?: string | null
+  can_install_registry?: boolean
+  can_install_git?: boolean
   is_installed?: boolean
 }
 

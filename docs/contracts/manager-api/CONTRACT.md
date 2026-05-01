@@ -102,6 +102,24 @@ Current implementation note: the Manager API owns this mutation path today.
 The policy should migrate into ComfyGit core as a typed workflow
 node-decision service before the CLI needs parity with the panel.
 
+### CGM-API-09B [PLANNED]: Node install actions should carry explicit source intent
+Validation: MIXED
+
+Node install payloads produced by resource resolution should distinguish
+registry installs from git installs.
+
+The API may use the local global mappings table to produce candidate package
+metadata, but registry install execution should validate against the live
+registry install endpoint before continuing. If no live registry artifact is
+available, the API should return a blocked or git-available state rather than
+silently cloning the package repository.
+
+Registry install failures must not automatically fall back to git install.
+Git install requires an explicit `install_source = "git"` choice and a known
+repository URL. Git installs should return enough data for core to persist an
+honest git-sourced manifest entry with pinned commit or equivalent immutable
+identity.
+
 ### CGM-API-10 [LIVE]: Model-source endpoints should carry provider-specific metadata without hiding the generic model shape
 Validation: LLM_REVIEW
 

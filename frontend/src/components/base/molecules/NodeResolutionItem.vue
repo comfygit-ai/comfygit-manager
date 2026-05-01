@@ -55,6 +55,7 @@ interface InstalledNodePack {
 interface NodeChoice {
   action: 'install' | 'optional' | 'skip' | 'manual' | 'map-installed'
   package_id?: string
+  install_source?: 'registry' | 'git'
 }
 
 export type ResolutionStatus =
@@ -98,6 +99,12 @@ const availableInstalledNodePacks = computed(() => props.installedNodePacks || [
 const choiceSummary = computed(() => {
   switch (choiceAction.value) {
     case 'install':
+      if (props.choice?.install_source === 'git') {
+        return choicePackageId.value ? `Will install ${choicePackageId.value} from GitHub` : 'Will install from GitHub'
+      }
+      if (props.choice?.install_source === 'registry') {
+        return choicePackageId.value ? `Will install ${choicePackageId.value} from Registry` : 'Will install from Registry'
+      }
       return choicePackageId.value ? `Will install ${choicePackageId.value}` : 'Will install selected package'
     case 'map-installed':
       return choicePackageId.value ? `Mapped to ${choicePackageId.value}` : 'Mapped to installed node pack'

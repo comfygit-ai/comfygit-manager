@@ -114,7 +114,6 @@
                   v-for="result in searchResults"
                   :key="result.package_id"
                   class="node-search-result-item"
-                  @click="selectSearchResult(result)"
                 >
                   <div class="node-result-header">
                     <div class="node-result-title">
@@ -140,6 +139,24 @@
                     </div>
                   </div>
                   <div v-if="result.description" class="node-result-description">{{ result.description }}</div>
+                  <div class="node-result-actions">
+                    <button
+                      v-if="result.can_install_registry"
+                      type="button"
+                      class="node-result-action"
+                      @click="selectRegistryInstall(result)"
+                    >
+                      Install from Registry
+                    </button>
+                    <button
+                      v-if="result.can_install_git"
+                      type="button"
+                      class="node-result-action secondary"
+                      @click="selectGitInstall(result)"
+                    >
+                      Install from GitHub
+                    </button>
+                  </div>
                 </div>
               </div>
               <div v-else-if="isSearching" class="node-empty-state">Searching...</div>
@@ -229,7 +246,7 @@ const emit = defineEmits<{
   (e: 'mark-optional', nodeType: string): void
   (e: 'skip', nodeType: string): void
   (e: 'option-selected', nodeType: string, index: number): void
-  (e: 'manual-entry', nodeType: string, packageId: string): void
+  (e: 'manual-entry', nodeType: string, packageId: string, choice?: Partial<NodeChoice>): void
   (e: 'installed-pack-selected', nodeType: string, packageId: string): void
   (e: 'clear-choice', nodeType: string): void
   (e: 'package-skip', packageId: string): void
@@ -370,9 +387,22 @@ async function doModalSearch(query: string) {
   }
 }
 
-function selectSearchResult(result: NodeSearchResult) {
+function selectRegistryInstall(result: NodeSearchResult) {
   if (!currentNode.value) return
-  emit('manual-entry', currentNode.value.node_type, result.package_id)
+  emit('manual-entry', currentNode.value.node_type, result.package_id, {
+    install_source: 'registry',
+    version: result.registry_version || null
+  })
+  closeSearch()
+  nextTick(() => advanceToNextUnresolved())
+}
+
+function selectGitInstall(result: NodeSearchResult) {
+  if (!currentNode.value || !result.repository) return
+  emit('manual-entry', currentNode.value.node_type, result.package_id, {
+    install_source: 'git',
+    repository: result.repository
+  })
   closeSearch()
   nextTick(() => advanceToNextUnresolved())
 }
@@ -661,7 +691,6 @@ function submitManualEntry() {
   border: 1px solid var(--cg-color-border-subtle, #444);
   border-radius: 6px;
   background: var(--cg-color-bg-secondary, #252542);
-  cursor: pointer;
   transition: all 0.15s ease;
 }
 
@@ -717,6 +746,30 @@ function submitManualEntry() {
 .node-result-description {
   font-size: 12px;
   color: var(--cg-color-text-muted, #888);
+}
+
+.node-result-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.node-result-action {
+  border: 1px solid var(--cg-color-text-primary, #f5f5f5);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cg-color-text-primary, #f5f5f5);
+  cursor: pointer;
+  font-family: var(--cg-font-mono, monospace);
+  font-size: 12px;
+  line-height: 1;
+  padding: 7px 10px;
+}
+
+.node-result-action:hover {
+  background: var(--cg-color-bg-hover, #333);
 }
 
 .node-search-results-container {

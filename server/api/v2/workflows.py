@@ -97,6 +97,32 @@ def _safe_str_metadata(value) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def _registry_installable_versions(package_data) -> list[str]:
+    """Return registry versions with downloadable artifacts from mapping data."""
+    versions = getattr(package_data, "versions", None)
+    if not isinstance(versions, dict):
+        return []
+
+    installable = []
+    for version_id, version_data in versions.items():
+        if getattr(version_data, "deprecated", False):
+            continue
+        if not getattr(version_data, "download_url", None):
+            continue
+        installable.append(str(version_id))
+
+    def sort_key(version: str):
+        parts = []
+        for part in version.replace("-", ".").split("."):
+            if part.isdigit():
+                parts.append((0, int(part)))
+            else:
+                parts.append((1, part))
+        return parts
+
+    return sorted(installable, key=sort_key, reverse=True)
+
+
 @routes.post("/v2/comfygit/workflow/is-saved")
 @requires_environment
 async def check_workflow_saved(request: web.Request, env) -> web.Response:
@@ -565,6 +591,11 @@ def _collect_uninstallable_nodes_to_install(
         action = node_choice.get("action")
 
         if action == "install":
+            # Explicit install choices carry package/version/source intent and are
+            # collected separately. Avoid adding the package again without its
+            # selected version.
+            if node_choice.get("package_id"):
+                continue
             nodes_to_install.append(package_id)
             continue
 
@@ -578,6 +609,22 @@ def _collect_uninstallable_nodes_to_install(
         )
 
     return nodes_to_install
+
+
+def _explicit_registry_install_package_ids(node_choices: dict[str, dict]) -> set[str]:
+    """Return package ids covered by explicit non-Git install choices."""
+    package_ids: set[str] = set()
+
+    for choice in node_choices.values():
+        if not isinstance(choice, dict):
+            continue
+        if choice.get("action") != "install" or choice.get("install_source") == "git":
+            continue
+        package_id = choice.get("package_id")
+        if package_id:
+            package_ids.add(package_id)
+
+    return package_ids
 
 
 def _collect_explicit_nodes_to_install(
@@ -595,12 +642,18 @@ def _collect_explicit_nodes_to_install(
         action = choice.get("action")
         if action != "install":
             continue
+        if choice.get("install_source") == "git":
+            continue
 
         package_id = choice.get("package_id")
         if not package_id or package_id in installed or package_id in skipped_packages:
             continue
 
-        nodes_to_install.append(package_id)
+        version = choice.get("version")
+        if isinstance(version, str) and version and version != "latest":
+            nodes_to_install.append(f"{package_id}@{version}")
+        else:
+            nodes_to_install.append(package_id)
 
     return nodes_to_install
 
@@ -1579,6 +1632,8 @@ async def search_nodes(request: web.Request, env) -> web.Response:
     results = []
     for match in matches:
         package_data = match.package_data
+        registry_versions = _registry_installable_versions(package_data)
+        repository = _safe_str_metadata(getattr(package_data, "repository", None)) if package_data else None
         # Normalize: highest score becomes 1.0, others scale proportionally
         normalized_confidence = match.score / max_score
         results.append({
@@ -1587,9 +1642,13 @@ async def search_nodes(request: web.Request, env) -> web.Response:
             "match_confidence": normalized_confidence,
             "match_type": match.confidence,  # "high", "medium", "low"
             "description": _safe_str_metadata(getattr(package_data, "description", None)) if package_data else None,
-            "repository": _safe_str_metadata(getattr(package_data, "repository", None)) if package_data else None,
+            "repository": repository,
             "downloads": _safe_int_metadata(getattr(package_data, "downloads", None)) if package_data else None,
             "github_stars": _safe_int_metadata(getattr(package_data, "github_stars", None)) if package_data else None,
+            "registry_versions": registry_versions,
+            "registry_version": registry_versions[0] if registry_versions else None,
+            "can_install_registry": bool(registry_versions),
+            "can_install_git": bool(repository),
             "is_installed": match.package_id in installed
         })
 
@@ -1703,9 +1762,14 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
     # Collect what needs to be installed (excluding user-skipped packages)
     nodes_to_install = []
     installed = env.pyproject.nodes.get_existing()
+    explicit_registry_package_ids = _explicit_registry_install_package_ids(node_choices)
     for node in result.nodes_resolved:
         if node.package_id and node.match_type != "optional":
-            if node.package_id not in installed and node.package_id not in skipped_packages:
+            if (
+                node.package_id not in installed
+                and node.package_id not in skipped_packages
+                and node.package_id not in explicit_registry_package_ids
+            ):
                 nodes_to_install.append(node.package_id)
 
     nodes_to_install.extend(
@@ -1984,9 +2048,14 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
             # Collect nodes to install
             nodes_to_install = []
             installed = env.pyproject.nodes.get_existing()
+            explicit_registry_package_ids = _explicit_registry_install_package_ids(node_choices)
             for node in result.nodes_resolved:
                 if node.package_id and node.match_type != "optional":
-                    if node.package_id not in installed and node.package_id not in skipped_packages:
+                    if (
+                        node.package_id not in installed
+                        and node.package_id not in skipped_packages
+                        and node.package_id not in explicit_registry_package_ids
+                    ):
                         nodes_to_install.append(node.package_id)
 
             nodes_to_install.extend(

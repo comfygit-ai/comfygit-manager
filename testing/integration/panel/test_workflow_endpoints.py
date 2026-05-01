@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import Mock
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 # Add helpers to path
 helpers_dir = Path(__file__).parent.parent.parent / "helpers"
@@ -884,6 +885,10 @@ class TestSearchNodesEndpoint:
         mock_match1.package_data.repository = "https://github.com/ltdrdata/ComfyUI-Impact-Pack"
         mock_match1.package_data.downloads = 12345
         mock_match1.package_data.github_stars = 678
+        mock_match1.package_data.versions = {
+            "1.0.0": SimpleNamespace(download_url="https://cdn.comfy.org/impact/1.0.0/node.zip", deprecated=False),
+            "0.9.0": SimpleNamespace(download_url=None, deprecated=False),
+        }
 
         mock_match2 = Mock()
         mock_match2.package_id = "comfyui-impact-subpack"
@@ -895,6 +900,7 @@ class TestSearchNodesEndpoint:
         mock_match2.package_data.repository = "https://github.com/example/subpack"
         mock_match2.package_data.downloads = 234
         mock_match2.package_data.github_stars = 12
+        mock_match2.package_data.versions = {}
 
         # Mock pyproject.nodes.get_existing
         mock_environment.pyproject = Mock()
@@ -930,11 +936,17 @@ class TestSearchNodesEndpoint:
         assert result1["display_name"] == "ComfyUI Impact Pack"
         assert result1["downloads"] == 12345
         assert result1["github_stars"] == 678
+        assert result1["registry_versions"] == ["1.0.0"]
+        assert result1["registry_version"] == "1.0.0"
+        assert result1["can_install_registry"] is True
+        assert result1["can_install_git"] is True
         assert result1["is_installed"] is True
 
         # Check second result
         result2 = data["results"][1]
         assert result2["package_id"] == "comfyui-impact-subpack"
+        assert result2["can_install_registry"] is False
+        assert result2["can_install_git"] is True
         assert result2["is_installed"] is False
 
     async def test_empty_query_returns_empty(self, client, mock_environment):
@@ -1354,6 +1366,51 @@ class TestApplyResolutionEndpoint:
             "JWStringMultiline",
             "comfyui-simpletiles",
         )
+
+    async def test_explicit_registry_install_with_version_is_not_duplicated(self, client, mock_environment):
+        """Explicit registry choices should not also install the inferred unversioned package."""
+        mock_resolved_node = Mock()
+        mock_resolved_node.package_id = "qweneditutils"
+        mock_resolved_node.match_type = "custom_mapping"
+
+        mock_result = create_mock_resolution(
+            nodes_resolved=[mock_resolved_node],
+            nodes_uninstallable=[],
+            nodes_unresolved=[],
+            models_resolved=[],
+            models_unresolved=[],
+            models_ambiguous=[],
+        )
+        mock_environment.workflow_manager.analyze_and_resolve_workflow.return_value = (Mock(), mock_result)
+        mock_environment.workflow_manager.fix_resolution.return_value = mock_result
+
+        mock_environment.pyproject = Mock()
+        mock_environment.pyproject.nodes = Mock()
+        mock_environment.pyproject.nodes.get_existing.return_value = {}
+        mock_environment.pyproject.workflows = Mock()
+        mock_environment.pyproject.workflows.get_custom_node_map.return_value = {}
+        mock_environment.pyproject.workflows.get_workflow_models.return_value = []
+        mock_environment.pyproject.workflows.get_all_with_resolutions.return_value = {}
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/test.json/apply-resolution",
+            json={
+                "node_choices": {
+                    "JWStringMultiline": {
+                        "action": "install",
+                        "package_id": "qweneditutils",
+                        "install_source": "registry",
+                        "version": "2.0.7",
+                    },
+                },
+                "model_choices": {},
+            },
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["nodes_to_install"] == ["qweneditutils@2.0.7"]
+        assert "qweneditutils" not in data["nodes_to_install"]
 
     async def test_uninstallable_nodes_ignore_unknown_action(self, client, mock_environment, caplog):
         """Unknown uninstallable actions should warn and not auto-install."""
