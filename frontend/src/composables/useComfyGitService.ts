@@ -1278,14 +1278,25 @@ export function useComfyGitService() {
     options?: {
       beforeQueueStart?: (ui_id: string) => void | Promise<void>
     }
-  ): Promise<{ ui_id: string }> {
+  ): Promise<{
+    ui_id: string
+    result?: string
+    status?: {
+      status_str?: string
+      messages?: string[]
+    }
+  }> {
     if (USE_MOCK) {
       const ui_id = generateUUID()
       if (options?.beforeQueueStart) {
         await options.beforeQueueStart(ui_id)
       }
       await mockApi.installNode(params.id)
-      return { ui_id }
+      return {
+        ui_id,
+        result: 'success',
+        status: { status_str: 'success' }
+      }
     }
 
     const ui_id = generateUUID()
@@ -1341,7 +1352,27 @@ export function useComfyGitService() {
       method: 'POST'
     })
 
-    return { ui_id }
+    const historyResponse = await fetchApi<{
+      history?: Record<string, {
+        result?: string
+        status?: {
+          status_str?: string
+          messages?: string[]
+        }
+      }>
+    }>('/v2/manager/queue/history')
+    const entry = historyResponse?.history?.[ui_id]
+
+    if (entry?.result === 'error' || entry?.status?.status_str === 'error') {
+      const message = entry.status?.messages?.[0] || `Failed to install ${params.id}`
+      throw new ComfyGitApiError(message, 500, entry.status || {}, '/v2/manager/queue/start')
+    }
+
+    return {
+      ui_id,
+      result: entry?.result,
+      status: entry?.status
+    }
   }
 
   async function updateNode(nodeName: string): Promise<{ status: 'success' | 'error', message?: string }> {

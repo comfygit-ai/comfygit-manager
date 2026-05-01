@@ -176,9 +176,17 @@ async def get_commit_log(request: web.Request, env) -> web.Response:
     """Get commit history."""
     limit = int(request.query.get("limit", "20"))
     offset = int(request.query.get("offset", "0"))
+    branch = request.query.get("branch")
 
     # Get history with extra for pagination check
-    history = await run_sync(env.get_commit_history, limit=limit + offset + 1)
+    if branch:
+        history = await run_sync(
+            env.git_manager.get_version_history,
+            limit + offset + 1,
+            branch,
+        )
+    else:
+        history = await run_sync(env.get_commit_history, limit=limit + offset + 1)
 
     # Apply offset
     if offset > 0:

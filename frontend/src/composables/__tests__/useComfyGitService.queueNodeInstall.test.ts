@@ -9,6 +9,14 @@ function okResponse() {
   }
 }
 
+function jsonResponse(data: unknown) {
+  return {
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify(data)
+  }
+}
+
 describe('useComfyGitService queueNodeInstall', () => {
   beforeEach(() => {
     ;(window as any).app = {
@@ -31,6 +39,7 @@ describe('useComfyGitService queueNodeInstall', () => {
     const calls = (window as any).app.api.fetchApi.mock.calls
     expect(calls[0][0]).toBe('/v2/manager/queue/task')
     expect(calls[1][0]).toBe('/v2/manager/queue/start')
+    expect(calls[2][0]).toBe('/v2/manager/queue/history')
     expect(result.ui_id).toBeTruthy()
 
     const body = JSON.parse(calls[0][1].body)
@@ -85,8 +94,35 @@ describe('useComfyGitService queueNodeInstall', () => {
     expect(callOrder).toEqual([
       '/v2/manager/queue/task',
       'beforeQueueStart',
-      '/v2/manager/queue/start'
+      '/v2/manager/queue/start',
+      '/v2/manager/queue/history'
     ])
+  })
+
+  it('throws when the completed queue task failed', async () => {
+    const fetchApi = vi.fn()
+      .mockResolvedValueOnce(okResponse())
+      .mockResolvedValueOnce(okResponse())
+      .mockImplementationOnce(async () => {
+        const taskBody = JSON.parse(fetchApi.mock.calls[0][1].body)
+        return jsonResponse({
+          history: {
+            [taskBody.ui_id]: {
+              result: 'error',
+              status: {
+                status_str: 'error',
+                messages: ['Package install failed']
+              }
+            }
+          }
+        })
+      })
+    ;(window as any).app.api.fetchApi = fetchApi
+
+    const svc = useComfyGitService()
+    await expect(svc.queueNodeInstall({
+      id: 'kj-nodes'
+    })).rejects.toThrow('Package install failed')
   })
 
   it('throws when queue start request fails', async () => {

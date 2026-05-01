@@ -16,6 +16,16 @@
     </template>
 
     <template #content>
+      <div v-if="embedded && !showCreateInput" class="branch-toolbar">
+        <ActionButton
+          variant="primary"
+          size="sm"
+          @click="showCreateInput = true"
+        >
+          + Create Branch
+        </ActionButton>
+      </div>
+
       <!-- Create Branch Form -->
       <BranchCreateForm
         v-if="showCreateInput"
@@ -118,6 +128,12 @@ function handleSwitchFromModal(branchName: string) {
 </script>
 
 <style scoped>
+.branch-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--cg-space-3);
+}
+
 .branch-list {
   background: var(--cg-color-bg-tertiary);
   border: 1px solid var(--cg-color-border-subtle);

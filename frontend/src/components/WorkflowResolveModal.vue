@@ -1390,17 +1390,50 @@ async function handleApply() {
     }
 
     // Step 5: Queue explicit git installs after apply-resolution completes
-    for (const spec of gitInstallSpecs) {
-      await queueNodeInstall({
-        id: spec.id,
-        version: spec.selectedVersion,
-        selected_version: spec.selectedVersion,
-        repository: spec.repository,
-        install_source: 'git',
-        mode: 'remote',
-        channel: 'default'
-      })
-      progress.needsRestart = true
+    if (gitInstallSpecs.length > 0) {
+      progress.phase = 'installing'
+      const existingCompleted = progress.nodeInstallProgress?.completedNodes || []
+      const existingTotal = progress.nodeInstallProgress?.totalNodes || progress.nodesToInstall.length
+      progress.nodesToInstall = [
+        ...progress.nodesToInstall,
+        ...gitInstallSpecs.map(spec => spec.id)
+      ]
+      progress.nodeInstallProgress = {
+        completedNodes: existingCompleted,
+        totalNodes: existingTotal + gitInstallSpecs.length
+      }
+
+      for (const spec of gitInstallSpecs) {
+        const installIndex = progress.nodeInstallProgress.completedNodes.length
+        progress.nodeInstallProgress.currentNode = spec.id
+        progress.nodeInstallProgress.currentIndex = installIndex
+
+        try {
+          await queueNodeInstall({
+            id: spec.id,
+            version: spec.selectedVersion,
+            selected_version: spec.selectedVersion,
+            repository: spec.repository,
+            install_source: 'git',
+            mode: 'remote',
+            channel: 'default'
+          })
+          progress.nodeInstallProgress.completedNodes.push({
+            node_id: spec.id,
+            success: true
+          })
+          progress.nodesInstalled = [...new Set([...progress.nodesInstalled, spec.id])]
+          progress.needsRestart = true
+        } catch (err) {
+          const message = err instanceof Error ? err.message : `Failed to install ${spec.id}`
+          progress.nodeInstallProgress.completedNodes.push({
+            node_id: spec.id,
+            success: false,
+            error: message
+          })
+          progress.installError = message
+        }
+      }
     }
 
     // Step 6: Mark complete
