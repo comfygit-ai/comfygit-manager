@@ -753,15 +753,20 @@ export interface ResolvedNode {
   package: {
     package_id: string
     title: string
+    repository?: string | null
+    latest_version?: string | null
   }
   match_confidence: number
   match_type: string
   is_installed: boolean
+  is_optional?: boolean
+  saved_choice?: NodeChoice
 }
 
 export interface UnresolvedNode {
   reference: NodeReference
   reason: string
+  saved_choice?: NodeChoice
 }
 
 export interface VersionGatedNode {
@@ -783,10 +788,12 @@ export interface UninstallableNode {
   is_installed: boolean
   reason: string
   guidance?: string | null
+  saved_choice?: NodeChoice
 }
 
 export interface AmbiguousNode {
   reference: NodeReference
+  saved_choice?: NodeChoice
   options: Array<{
     package: {
       package_id: string
@@ -873,7 +880,7 @@ export interface FullResolutionResult {
 }
 
 export interface NodeChoice {
-  action: 'install' | 'optional' | 'skip' | 'manual'
+  action: 'install' | 'optional' | 'skip' | 'manual' | 'map-installed'
   package_id?: string
   manual_url?: string
   install_source?: 'registry' | 'git'
@@ -891,6 +898,8 @@ export interface ModelChoice {
 export interface AppliedResolutionResult {
   status: 'success' | 'error'
   nodes_to_install: string[]
+  nodes_marked_optional?: string[]
+  nodes_mapped?: Array<{ node_type: string; package_id: string }>
   models_to_download: Array<{
     filename: string
     url: string
@@ -903,10 +912,13 @@ export interface AppliedResolutionResult {
 
 export interface NodeSearchResult {
   package_id: string
+  display_name?: string
   match_confidence: number
   match_type: string
   description?: string
   repository?: string
+  downloads?: number | null
+  github_stars?: number | null
   is_installed?: boolean
 }
 
@@ -938,6 +950,8 @@ export interface ResolutionProgressState {
   completedFiles: Array<{ filename: string; success: boolean; error?: string; reused?: boolean }>
   nodesToInstall: string[]
   nodesInstalled: string[]
+  nodesMarkedOptional: string[]
+  nodesMapped: Array<{ node_type: string; package_id: string }>
   installError?: string
   needsRestart?: boolean
   error?: string

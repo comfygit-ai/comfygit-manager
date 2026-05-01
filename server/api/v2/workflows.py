@@ -85,6 +85,18 @@ def _get_disk_workflow_hashes(workflows_path: Path) -> dict[str, str]:
     return _workflow_hash_cache
 
 
+def _safe_int_metadata(value) -> int | None:
+    """Return JSON-safe integer metadata from registry fields."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
+
+
+def _safe_str_metadata(value) -> str | None:
+    """Return JSON-safe string metadata from registry fields."""
+    return value if isinstance(value, str) else None
+
+
 @routes.post("/v2/comfygit/workflow/is-saved")
 @requires_environment
 async def check_workflow_saved(request: web.Request, env) -> web.Response:
@@ -113,27 +125,36 @@ async def check_workflow_saved(request: web.Request, env) -> web.Response:
 # Serialization Helpers for Interactive Resolution Wizard
 # =============================================================================
 
-def _serialize_resolved_node(node: ResolvedNodePackage, workflow_name: str, uninstalled_set: set = None) -> dict:
+def _serialize_resolved_node(
+    node: ResolvedNodePackage,
+    workflow_name: str,
+    uninstalled_set: set = None,
+    saved_choice: dict | None = None,
+) -> dict:
     """Convert ResolvedNodePackage to frontend ResolvedNode format."""
     uninstalled_set = uninstalled_set or set()
 
     latest_version = get_latest_version(getattr(node.package_data, "versions", None))
 
-    return {
+    serialized = {
         "reference": {
             "node_type": node.node_type,
             "workflow": workflow_name
         },
         "package": {
-            "package_id": node.package_id,
-            "title": node.package_data.display_name if node.package_data else node.package_id,
+            "package_id": node.package_id or "",
+            "title": node.package_data.display_name if node.package_data else (node.package_id or node.node_type),
             "repository": node.package_data.repository if node.package_data else None,
             "latest_version": latest_version
         },
         "match_confidence": node.match_confidence,
         "match_type": node.match_type,
-        "is_installed": node.package_id not in uninstalled_set
+        "is_installed": node.package_id not in uninstalled_set,
+        "is_optional": bool(getattr(node, "is_optional", False)),
     }
+    if saved_choice:
+        serialized["saved_choice"] = saved_choice
+    return serialized
 
 
 def _serialize_version_gated_node(node, workflow_name: str, node_guidance: dict[str, str] | None = None) -> dict:
@@ -151,11 +172,16 @@ def _serialize_version_gated_node(node, workflow_name: str, node_guidance: dict[
     }
 
 
-def _serialize_uninstallable_node(node: ResolvedNodePackage, workflow_name: str, node_guidance: dict[str, str] | None = None) -> dict:
+def _serialize_uninstallable_node(
+    node: ResolvedNodePackage,
+    workflow_name: str,
+    node_guidance: dict[str, str] | None = None,
+    saved_choice: dict | None = None,
+) -> dict:
     """Convert uninstallable ResolvedNodePackage to frontend format."""
     node_guidance = node_guidance or {}
     latest_version = get_latest_version(getattr(node.package_data, "versions", None))
-    return {
+    serialized = {
         "reference": {
             "node_type": node.node_type,
             "workflow": workflow_name
@@ -172,11 +198,14 @@ def _serialize_uninstallable_node(node: ResolvedNodePackage, workflow_name: str,
         "reason": "no_installable_package_version",
         "guidance": node_guidance.get(node.node_type),
     }
+    if saved_choice:
+        serialized["saved_choice"] = saved_choice
+    return serialized
 
 
-def _serialize_unresolved_node(node, workflow_name: str) -> dict:
+def _serialize_unresolved_node(node, workflow_name: str, saved_choice: dict | None = None) -> dict:
     """Convert WorkflowNode to frontend UnresolvedNode format."""
-    return {
+    serialized = {
         "reference": {
             "node_type": node.type,
             "workflow": workflow_name,
@@ -184,15 +213,23 @@ def _serialize_unresolved_node(node, workflow_name: str) -> dict:
         },
         "reason": "not_found_in_registry"
     }
+    if saved_choice:
+        serialized["saved_choice"] = saved_choice
+    return serialized
 
 
-def _serialize_ambiguous_node(options: list[ResolvedNodePackage], workflow_name: str, uninstalled_set: set = None) -> dict:
+def _serialize_ambiguous_node(
+    options: list[ResolvedNodePackage],
+    workflow_name: str,
+    uninstalled_set: set = None,
+    saved_choice: dict | None = None,
+) -> dict:
     """Convert ambiguous node options to frontend AmbiguousNode format."""
     if not options:
         return None
     uninstalled_set = uninstalled_set or set()
 
-    return {
+    serialized = {
         "reference": {
             "node_type": options[0].node_type,
             "workflow": workflow_name
@@ -212,6 +249,9 @@ def _serialize_ambiguous_node(options: list[ResolvedNodePackage], workflow_name:
             for opt in options
         ]
     }
+    if saved_choice:
+        serialized["saved_choice"] = saved_choice
+    return serialized
 
 
 def _serialize_resolved_model(model: ResolvedModel) -> dict:
@@ -446,6 +486,65 @@ def _get_package_aliases(workflow_manager) -> dict[str, str]:
     return _safe_dict(aliases)
 
 
+def _reconstruct_optional_node_buckets(env, dependencies, workflow_name: str) -> dict[str, list]:
+    """Place saved optional node mappings back into their original resolution buckets."""
+    custom_map = env.pyproject.workflows.get_custom_node_map(workflow_name)
+    optional_node_types = {
+        node_type for node_type, mapping in custom_map.items()
+        if mapping is False
+    }
+    if not optional_node_types:
+        return {"unresolved": [], "ambiguous": [], "uninstallable": [], "resolved": []}
+
+    installed = env.pyproject.nodes.get_existing()
+    resolver = env.workflow_manager.global_node_resolver
+    node_context = NodeResolutionContext(
+        installed_packages=installed,
+        custom_mappings={
+            node_type: mapping for node_type, mapping in custom_map.items()
+            if mapping is not False
+        },
+        workflow_name=workflow_name,
+        auto_select_ambiguous=True,
+    )
+
+    unique_nodes = {}
+    for node in getattr(dependencies, "non_builtin_nodes", []) or []:
+        if node.type not in optional_node_types:
+            continue
+        existing = unique_nodes.get(node.type)
+        if existing is None or (node.properties.get("cnr_id") and not existing.properties.get("cnr_id")):
+            unique_nodes[node.type] = node
+
+    buckets = {"unresolved": [], "ambiguous": [], "uninstallable": [], "resolved": []}
+    for node in unique_nodes.values():
+        resolved_packages = resolver.resolve_single_node_with_context(node, node_context)
+        if resolved_packages is None:
+            buckets["unresolved"].append(node)
+            continue
+
+        if len(resolved_packages) == 1:
+            candidate = resolved_packages[0]
+            if candidate.is_manager_only_uninstallable:
+                buckets["uninstallable"].append(candidate)
+            else:
+                buckets["resolved"].append(candidate)
+            continue
+
+        installable_candidates = [
+            pkg for pkg in resolved_packages if not pkg.is_manager_only_uninstallable
+        ]
+        if len(installable_candidates) == 1:
+            buckets["resolved"].append(installable_candidates[0])
+        elif len(installable_candidates) > 1:
+            buckets["ambiguous"].append(installable_candidates)
+        else:
+            selected = min(resolved_packages, key=lambda x: x.rank or 999)
+            buckets["uninstallable"].append(selected)
+
+    return buckets
+
+
 def _collect_uninstallable_nodes_to_install(
     result,
     installed: dict,
@@ -469,16 +568,101 @@ def _collect_uninstallable_nodes_to_install(
             nodes_to_install.append(package_id)
             continue
 
-        if action == "skip" or not node_choice:
+        if action in ("optional", "skip") or not node_choice:
             continue
 
         logger.warning(
-            "Ignoring invalid uninstallable action '%s' for node_type '%s'; valid actions are 'install' or 'skip'",
+            "Ignoring invalid uninstallable action '%s' for node_type '%s'; valid actions are 'install', 'optional', or 'skip'",
             action,
             node_type,
         )
 
     return nodes_to_install
+
+
+def _collect_explicit_nodes_to_install(
+    installed: dict,
+    skipped_packages: set[str],
+    node_choices: dict[str, dict],
+) -> list[str]:
+    """Collect explicit registry/manual install choices that are not installed yet."""
+    nodes_to_install: list[str] = []
+
+    for choice in node_choices.values():
+        if not isinstance(choice, dict):
+            continue
+
+        action = choice.get("action")
+        if action != "install":
+            continue
+
+        package_id = choice.get("package_id")
+        if not package_id or package_id in installed or package_id in skipped_packages:
+            continue
+
+        nodes_to_install.append(package_id)
+
+    return nodes_to_install
+
+
+async def _apply_explicit_node_mapping_choices(
+    env,
+    workflow_name: str,
+    node_choices: dict[str, dict],
+) -> dict[str, list]:
+    """Persist explicit per-workflow node mapping choices before resolution."""
+    custom_map = await run_sync(env.pyproject.workflows.get_custom_node_map, workflow_name)
+    before = dict(custom_map) if isinstance(custom_map, dict) else {}
+
+    changes = {
+        "nodes_marked_optional": [],
+        "nodes_optional_cleared": [],
+        "nodes_mapped": [],
+    }
+
+    for node_type, choice in node_choices.items():
+        if not isinstance(choice, dict):
+            continue
+
+        action = choice.get("action")
+        if action in ("install", "map-installed"):
+            package_id = choice.get("package_id")
+            if not package_id or before.get(node_type) == package_id:
+                continue
+            await run_sync(
+                env.pyproject.workflows.set_custom_node_mapping,
+                workflow_name,
+                node_type,
+                package_id,
+            )
+            changes["nodes_mapped"].append({
+                "node_type": node_type,
+                "package_id": package_id,
+            })
+            continue
+
+        if action == "optional":
+            if before.get(node_type) is False:
+                continue
+            await run_sync(
+                env.pyproject.workflows.set_custom_node_mapping,
+                workflow_name,
+                node_type,
+                None,
+            )
+            changes["nodes_marked_optional"].append(node_type)
+            continue
+
+        if action == "skip" and node_type in before:
+            removed = await run_sync(
+                env.pyproject.workflows.remove_custom_node_mapping,
+                workflow_name,
+                node_type,
+            )
+            if removed:
+                changes["nodes_optional_cleared"].append(node_type)
+
+    return changes
 
 
 def _serialize_unresolved_model(ref: WorkflowNodeWidgetRef, workflow_name: str) -> dict:
@@ -538,8 +722,8 @@ class PanelNodeStrategy:
         Args:
             choices: Dict mapping node_type to choice dict:
                 {
-                    "action": "install" | "optional" | "skip" | "manual",
-                    "package_id": str (for install/manual),
+                    "action": "install" | "optional" | "skip" | "manual" | "map-installed",
+                    "package_id": str (for install/manual/map-installed),
                     "manual_url": str (for manual)
                 }
         """
@@ -565,7 +749,7 @@ class PanelNodeStrategy:
                 package_id=None
             )
 
-        if action in ("install", "manual"):
+        if action in ("install", "manual", "map-installed"):
             package_id = choice.get("package_id") or choice.get("manual_url")
             if not package_id:
                 return None
@@ -1042,7 +1226,7 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
 
     # Call analyze_and_resolve_workflow directly (NOT env.resolve_workflow)
     # This gives us analysis + resolution WITHOUT executing downloads
-    _, result = await run_sync(
+    dependencies, result = await run_sync(
         env.workflow_manager.analyze_and_resolve_workflow,
         name
     )
@@ -1069,6 +1253,18 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
     uninstallable_nodes = _safe_sequence(getattr(result, "nodes_uninstallable", None))
     node_guidance = _safe_dict(getattr(result, "node_guidance", None))
     package_aliases = _get_package_aliases(env.workflow_manager)
+    optional_buckets = _reconstruct_optional_node_buckets(env, dependencies, name)
+    saved_optional_choice = {"action": "optional"}
+    custom_node_map = env.pyproject.workflows.get_custom_node_map(name)
+    if not isinstance(custom_node_map, dict):
+        custom_node_map = {}
+    resolved_nodes = [
+        node for node in result.nodes_resolved
+        if not getattr(node, "is_optional", False)
+    ] + optional_buckets["resolved"]
+    unresolved_nodes = list(result.nodes_unresolved) + optional_buckets["unresolved"]
+    ambiguous_nodes = list(result.nodes_ambiguous) + optional_buckets["ambiguous"]
+    uninstallable_nodes = uninstallable_nodes + optional_buckets["uninstallable"]
 
     # needs_user_input: user must make choices for unresolved/ambiguous items
     needs_user_input = bool(
@@ -1098,12 +1294,46 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
     response = {
         "workflow": name,
         "nodes": {
-            "resolved": [_serialize_resolved_node(n, name, uninstalled_set) for n in result.nodes_resolved],
-            "unresolved": [_serialize_unresolved_node(n, name) for n in result.nodes_unresolved],
+            "resolved": [
+                _serialize_resolved_node(
+                    n,
+                    name,
+                    uninstalled_set,
+                    {
+                        "action": "map-installed",
+                        "package_id": custom_node_map.get(n.node_type),
+                    } if isinstance(custom_node_map.get(n.node_type), str) else None,
+                )
+                for n in resolved_nodes
+            ],
+            "unresolved": [
+                _serialize_unresolved_node(
+                    n,
+                    name,
+                    saved_optional_choice if n in optional_buckets["unresolved"] else None,
+                )
+                for n in unresolved_nodes
+            ],
             "version_gated": [_serialize_version_gated_node(n, name, node_guidance) for n in version_gated_nodes],
-            "uninstallable": [_serialize_uninstallable_node(n, name, node_guidance) for n in uninstallable_nodes],
+            "uninstallable": [
+                _serialize_uninstallable_node(
+                    n,
+                    name,
+                    node_guidance,
+                    saved_optional_choice if n in optional_buckets["uninstallable"] else None,
+                )
+                for n in uninstallable_nodes
+            ],
             "ambiguous": [
-                amb for amb in [_serialize_ambiguous_node(opts, name, uninstalled_set) for opts in result.nodes_ambiguous]
+                amb for amb in [
+                    _serialize_ambiguous_node(
+                        opts,
+                        name,
+                        uninstalled_set,
+                        saved_optional_choice if opts in optional_buckets["ambiguous"] else None,
+                    )
+                    for opts in ambiguous_nodes
+                ]
                 if amb is not None
             ]
         },
@@ -1119,9 +1349,9 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
         "node_guidance": node_guidance,
         "stats": {
             "total_nodes": (
-                len(result.nodes_resolved)
-                + len(result.nodes_unresolved)
-                + len(result.nodes_ambiguous)
+                len(resolved_nodes)
+                + len(unresolved_nodes)
+                + len(ambiguous_nodes)
                 + len(version_gated_nodes)
                 + len(uninstallable_nodes)
             ),
@@ -1348,14 +1578,18 @@ async def search_nodes(request: web.Request, env) -> web.Response:
 
     results = []
     for match in matches:
+        package_data = match.package_data
         # Normalize: highest score becomes 1.0, others scale proportionally
         normalized_confidence = match.score / max_score
         results.append({
             "package_id": match.package_id,
+            "display_name": _safe_str_metadata(getattr(package_data, "display_name", None)) if package_data else None,
             "match_confidence": normalized_confidence,
             "match_type": match.confidence,  # "high", "medium", "low"
-            "description": match.package_data.description if match.package_data else None,
-            "repository": match.package_data.repository if match.package_data else None,
+            "description": _safe_str_metadata(getattr(package_data, "description", None)) if package_data else None,
+            "repository": _safe_str_metadata(getattr(package_data, "repository", None)) if package_data else None,
+            "downloads": _safe_int_metadata(getattr(package_data, "downloads", None)) if package_data else None,
+            "github_stars": _safe_int_metadata(getattr(package_data, "github_stars", None)) if package_data else None,
             "is_installed": match.package_id in installed
         })
 
@@ -1442,6 +1676,13 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
     node_strategy = PanelNodeStrategy(node_choices)
     model_strategy = PanelModelStrategy(model_choices)
 
+    mapping_changes = await _apply_explicit_node_mapping_choices(
+        env=env,
+        workflow_name=name,
+        node_choices=node_choices,
+    )
+    await run_sync(env.workflow_cache.invalidate, env.name, name)
+
     # Get current resolution state (does NOT execute downloads)
     _, result = await run_sync(
         env.workflow_manager.analyze_and_resolve_workflow,
@@ -1456,6 +1697,8 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
             node_strategy,
             model_strategy
         )
+
+    nodes_marked_optional = mapping_changes["nodes_marked_optional"]
 
     # Collect what needs to be installed (excluding user-skipped packages)
     nodes_to_install = []
@@ -1473,6 +1716,14 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
             node_choices=node_choices,
         )
     )
+    nodes_to_install.extend(
+        _collect_explicit_nodes_to_install(
+            installed=installed,
+            skipped_packages=skipped_packages,
+            node_choices=node_choices,
+        )
+    )
+    nodes_to_install = list(dict.fromkeys(nodes_to_install))
 
     # Handle user overrides for existing download intents
     # Get current workflow models from pyproject to check for download intents
@@ -1629,6 +1880,9 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
     return web.json_response({
         "status": "success",
         "nodes_to_install": nodes_to_install,
+        "nodes_marked_optional": nodes_marked_optional,
+        "nodes_optional_cleared": mapping_changes["nodes_optional_cleared"],
+        "nodes_mapped": mapping_changes["nodes_mapped"],
         "models_to_download": models_to_download,
         "estimated_time_seconds": estimated_time
     })
@@ -1709,6 +1963,13 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
     async def run_resolution():
         """Run resolution in thread pool and signal completion."""
         try:
+            mapping_changes = await _apply_explicit_node_mapping_choices(
+                env=env,
+                workflow_name=name,
+                node_choices=node_choices,
+            )
+            await run_sync(env.workflow_cache.invalidate, env.name, name)
+
             result = await run_sync(
                 env.resolve_workflow,
                 name,
@@ -1717,6 +1978,8 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
                 fix=True,
                 download_callbacks=callbacks
             )
+
+            nodes_marked_optional = mapping_changes["nodes_marked_optional"]
 
             # Collect nodes to install
             nodes_to_install = []
@@ -1734,6 +1997,14 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
                     node_choices=node_choices,
                 )
             )
+            nodes_to_install.extend(
+                _collect_explicit_nodes_to_install(
+                    installed=installed,
+                    skipped_packages=skipped_packages,
+                    node_choices=node_choices,
+                )
+            )
+            nodes_to_install = list(dict.fromkeys(nodes_to_install))
 
             # Get download results
             download_results = []
@@ -1749,6 +2020,9 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
             queue_event("done", {
                 "status": "success",
                 "nodes_to_install": nodes_to_install,
+                "nodes_marked_optional": nodes_marked_optional,
+                "nodes_optional_cleared": mapping_changes["nodes_optional_cleared"],
+                "nodes_mapped": mapping_changes["nodes_mapped"],
                 "download_results": download_results
             })
         except Exception as e:

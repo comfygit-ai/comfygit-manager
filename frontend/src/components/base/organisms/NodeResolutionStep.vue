@@ -72,20 +72,13 @@
         <NodeResolutionItem
           :node-type="currentNode.node_type"
           :has-multiple-options="!!currentNode.options?.length"
-          :options="currentNode.options"
           :choice="nodeChoices?.get(currentNode.node_type)"
-          :status="currentNodeStatus"
-          :status-label="currentNodeStatusLabel"
-          :search-results="currentNodeSearchResults"
-          :is-searching="isCurrentNodeSearching"
           :installed-node-packs="installedNodePacks"
           @mark-optional="handleMarkOptional"
           @skip="handleSkip"
           @manual-entry="handleManualEntry"
           @search="handleSearch"
-          @option-selected="handleOptionSelected"
           @clear-choice="handleClearChoice"
-          @search-result-selected="handleSearchResultSelected"
           @installed-pack-selected="handleInstalledPackSelected"
         />
       </div>
@@ -106,13 +99,13 @@
       >
         <div class="node-search-modal" @mousedown="overlayMouseDown = false">
           <div class="node-modal-header">
-            <h4>Search Node Packages</h4>
+            <h4>Search Node Registry</h4>
             <button class="node-modal-close-btn" @click="closeSearch">✕</button>
           </div>
           <div class="node-modal-body">
             <BaseInput
               v-model="searchQuery"
-              placeholder="Search by node type, package name..."
+              placeholder="Search registry by node type or package name..."
               @input="handleSearchInput"
             />
             <div class="node-search-results-container">
@@ -124,8 +117,27 @@
                   @click="selectSearchResult(result)"
                 >
                   <div class="node-result-header">
-                    <code class="node-result-package-id">{{ result.package_id }}</code>
-                    <ConfidenceBadge v-if="result.match_confidence" :confidence="result.match_confidence" size="sm" />
+                    <div class="node-result-title">
+                      <code class="node-result-package-id">{{ result.package_id }}</code>
+                      <span
+                        v-if="result.display_name && result.display_name !== result.package_id"
+                        class="node-result-display-name"
+                      >
+                        {{ result.display_name }}
+                      </span>
+                    </div>
+                    <div
+                      v-if="hasPopularityStats(result)"
+                      class="node-result-stats"
+                      aria-label="Package popularity"
+                    >
+                      <span v-if="result.github_stars" class="node-result-stat">
+                        ★ {{ formatCompactNumber(result.github_stars) }}
+                      </span>
+                      <span v-if="result.downloads" class="node-result-stat">
+                        ↓ {{ formatCompactNumber(result.downloads) }}
+                      </span>
+                    </div>
                   </div>
                   <div v-if="result.description" class="node-result-description">{{ result.description }}</div>
                 </div>
@@ -171,11 +183,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import NodeResolutionItem from '../molecules/NodeResolutionItem.vue'
-import type { ResolutionStatus } from '../molecules/NodeResolutionItem.vue'
 import ItemNavigator from '../molecules/ItemNavigator.vue'
-import ConfidenceBadge from '../atoms/ConfidenceBadge.vue'
 import BaseButton from '../BaseButton.vue'
 import BaseInput from '../BaseInput.vue'
 import type { NodeSearchResult, NodeChoice } from '@/types/comfygit'
@@ -220,6 +230,7 @@ const emit = defineEmits<{
   (e: 'skip', nodeType: string): void
   (e: 'option-selected', nodeType: string, index: number): void
   (e: 'manual-entry', nodeType: string, packageId: string): void
+  (e: 'installed-pack-selected', nodeType: string, packageId: string): void
   (e: 'clear-choice', nodeType: string): void
   (e: 'package-skip', packageId: string): void
 }>()
@@ -234,10 +245,6 @@ const searchQuery = ref('')
 const manualPackageInput = ref('')
 const searchResults = ref<NodeSearchResult[]>([])
 const isSearching = ref(false)
-
-// Cache of inline search results per node type
-const inlineSearchCache = ref<Map<string, NodeSearchResult[]>>(new Map())
-const inlineSearchLoading = ref<Set<string>>(new Set())
 
 // Track if mousedown started on overlay (for proper click-outside detection)
 const overlayMouseDown = ref(false)
@@ -257,44 +264,6 @@ const resolvedCount = computed(() => {
   return props.nodes.filter(n => props.nodeChoices.has(n.node_type)).length
 })
 
-// Get cached search results for current node
-const currentNodeSearchResults = computed(() => {
-  if (!currentNode.value) return []
-  return inlineSearchCache.value.get(currentNode.value.node_type) || []
-})
-
-const isCurrentNodeSearching = computed(() => {
-  if (!currentNode.value) return false
-  return inlineSearchLoading.value.has(currentNode.value.node_type)
-})
-
-// Auto-search for unresolved nodes (no options) when they become current
-watch(currentNode, async (node) => {
-  if (!node) return
-  // Only auto-search for unresolved nodes (no options array)
-  if (node.options?.length) return
-  // Skip if already searched or currently searching
-  if (inlineSearchCache.value.has(node.node_type)) return
-  if (inlineSearchLoading.value.has(node.node_type)) return
-  // Skip if user already made a choice
-  if (props.nodeChoices.has(node.node_type)) return
-
-  await runInlineSearch(node.node_type)
-}, { immediate: true })
-
-async function runInlineSearch(nodeType: string) {
-  inlineSearchLoading.value.add(nodeType)
-  try {
-    const results = await searchNodes(nodeType, 5)
-    inlineSearchCache.value.set(nodeType, results)
-  } catch {
-    // Silently fail - user can still manually search
-    inlineSearchCache.value.set(nodeType, [])
-  } finally {
-    inlineSearchLoading.value.delete(nodeType)
-  }
-}
-
 // Auto-resolved packages helpers
 const packagesToInstallCount = computed(() => {
   return props.autoResolvedPackages.filter(p => !props.skippedPackages.has(p.package_id)).length
@@ -307,45 +276,6 @@ function isPackageSkipped(packageId: string): boolean {
 function togglePackageSkip(packageId: string) {
   emit('package-skip', packageId)
 }
-
-// Compute status for ItemNavigator
-const currentNodeStatus = computed((): ResolutionStatus => {
-  if (!currentNode.value) return 'not-found'
-
-  const choice = props.nodeChoices.get(currentNode.value.node_type)
-  if (choice) {
-    switch (choice.action) {
-      case 'install': return 'install'
-      case 'optional': return 'optional'
-      case 'skip': return 'skip'
-    }
-  }
-
-  // No choice yet - show current state
-  if (currentNode.value.options?.length) {
-    return 'ambiguous'
-  }
-  return 'not-found'
-})
-
-const currentNodeStatusLabel = computed((): string | undefined => {
-  if (!currentNode.value) return undefined
-
-  const choice = props.nodeChoices.get(currentNode.value.node_type)
-  if (choice) {
-    switch (choice.action) {
-      case 'install': return choice.package_id ? `→ ${choice.package_id}` : 'Installing'
-      case 'optional': return 'Optional'
-      case 'skip': return 'Skipped'
-    }
-  }
-
-  // No choice yet
-  if (currentNode.value.options?.length) {
-    return `${currentNode.value.options.length} matches`
-  }
-  return 'Not Found'
-})
 
 // Item navigation (within section)
 function goToItem(index: number) {
@@ -380,12 +310,6 @@ function handleSkip() {
   nextTick(() => advanceToNextUnresolved())
 }
 
-function handleOptionSelected(index: number) {
-  if (!currentNode.value) return
-  emit('option-selected', currentNode.value.node_type, index)
-  nextTick(() => advanceToNextUnresolved())
-}
-
 function handleClearChoice() {
   if (!currentNode.value) return
   emit('clear-choice', currentNode.value.node_type)
@@ -394,7 +318,7 @@ function handleClearChoice() {
 function handleSearch() {
   if (!currentNode.value) return
   searchQuery.value = currentNode.value.node_type
-  searchResults.value = currentNodeSearchResults.value // Pre-populate with cached results
+  searchResults.value = []
   showSearch.value = true
   // Auto-search on modal open
   doModalSearch(searchQuery.value)
@@ -407,7 +331,7 @@ function handleManualEntry() {
 
 function handleInstalledPackSelected(packageId: string) {
   if (!currentNode.value) return
-  emit('manual-entry', currentNode.value.node_type, packageId)
+  emit('installed-pack-selected', currentNode.value.node_type, packageId)
   nextTick(() => advanceToNextUnresolved())
 }
 
@@ -453,11 +377,16 @@ function selectSearchResult(result: NodeSearchResult) {
   nextTick(() => advanceToNextUnresolved())
 }
 
-// Handler for inline search result selection
-function handleSearchResultSelected(result: NodeSearchResult) {
-  if (!currentNode.value) return
-  emit('manual-entry', currentNode.value.node_type, result.package_id)
-  nextTick(() => advanceToNextUnresolved())
+function hasPopularityStats(result: NodeSearchResult): boolean {
+  return !!result.github_stars || !!result.downloads
+}
+
+function formatCompactNumber(value: number | null | undefined): string {
+  if (!value) return ''
+  return Intl.NumberFormat('en', {
+    notation: 'compact',
+    maximumFractionDigits: value >= 1000 ? 1 : 0
+  }).format(value)
 }
 
 function submitManualEntry() {
@@ -743,9 +672,20 @@ function submitManualEntry() {
 
 .node-result-header {
   display: flex;
+  justify-content: space-between;
   align-items: center;
   gap: 8px;
   margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.node-result-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: wrap;
 }
 
 .node-result-package-id {
@@ -753,6 +693,25 @@ function submitManualEntry() {
   font-weight: 600;
   font-size: 13px;
   color: var(--cg-color-accent, #7c3aed);
+}
+
+.node-result-display-name {
+  color: var(--cg-color-text-secondary, #aaa);
+  font-size: 13px;
+}
+
+.node-result-stats {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  color: var(--cg-color-text-secondary, #aaa);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.node-result-stat {
+  font-family: var(--cg-font-mono, monospace);
 }
 
 .node-result-description {

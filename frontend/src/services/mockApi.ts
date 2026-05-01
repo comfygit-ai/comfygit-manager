@@ -1903,12 +1903,18 @@ export const mockApi = {
     await delay(800)
 
     const nodesToInstall: string[] = []
+    const nodesMarkedOptional: string[] = []
+    const nodesMapped: Array<{ node_type: string; package_id: string }> = []
     const modelsToDownload: any[] = []
 
     // Process node choices
     nodeChoices.forEach((choice, nodeType) => {
       if (choice.action === 'install' && choice.package_id) {
         nodesToInstall.push(choice.package_id)
+      } else if (choice.action === 'optional') {
+        nodesMarkedOptional.push(nodeType)
+      } else if (choice.action === 'map-installed' && choice.package_id) {
+        nodesMapped.push({ node_type: nodeType, package_id: choice.package_id })
       }
     })
 
@@ -1930,6 +1936,8 @@ export const mockApi = {
     return {
       status: 'success',
       nodes_to_install: nodesToInstall,
+      nodes_marked_optional: nodesMarkedOptional,
+      nodes_mapped: nodesMapped,
       models_to_download: modelsToDownload,
       estimated_time_seconds: nodesToInstall.length * 30 + modelsToDownload.length * 120
     }
@@ -1946,42 +1954,57 @@ export const mockApi = {
     const allResults = [
       {
         package_id: 'comfyui-flux-official',
+        display_name: 'ComfyUI FLUX Official',
         match_confidence: 0.95,
         match_type: 'fuzzy',
         description: 'Official FLUX model support for ComfyUI with optimized samplers',
         repository: 'https://github.com/black-forest-labs/flux-comfy',
+        downloads: 128400,
+        github_stars: 4200,
         is_installed: false
       },
       {
         package_id: 'flux-advanced-toolkit',
+        display_name: 'FLUX Advanced Toolkit',
         match_confidence: 0.88,
         match_type: 'fuzzy',
         description: 'Advanced FLUX tools including custom schedulers and samplers',
         repository: 'https://github.com/community/flux-toolkit',
+        downloads: 27400,
+        github_stars: 860,
         is_installed: false
       },
       {
         package_id: 'comfyui-upscaler-pack',
+        display_name: 'ComfyUI Upscaler Pack',
         match_confidence: 0.82,
         match_type: 'fuzzy',
         description: 'Collection of upscaling nodes with various models',
         repository: 'https://github.com/upscaler/comfyui-pack',
+        downloads: 9130,
+        github_stars: 315,
         is_installed: false
       },
       {
         package_id: 'ultimate-image-tools',
+        display_name: 'Ultimate Image Tools',
         match_confidence: 0.75,
         match_type: 'partial',
         description: 'Ultimate image processing toolkit for ComfyUI',
         repository: 'https://github.com/tools/ultimate-image',
+        downloads: 55100,
+        github_stars: 1200,
         is_installed: true
       },
       {
         package_id: 'comfyui-controlnet-aux',
+        display_name: 'ComfyUI ControlNet Aux',
         match_confidence: 0.70,
         match_type: 'partial',
         description: 'Auxiliary ControlNet preprocessors',
         repository: 'https://github.com/fannovel16/controlnet-aux',
+        downloads: 234000,
+        github_stars: 5100,
         is_installed: true
       }
     ]

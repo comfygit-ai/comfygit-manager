@@ -699,6 +699,12 @@ app.registerExtension({
       closePanel()
     }) as EventListener)
 
+    window.addEventListener('comfygit:status-refresh', (async () => {
+      await fetchStatus()
+      updateCommitIndicator()
+      updateCommitButtonState()
+    }) as EventListener)
+
     // Load any pending downloads from previous session
     const { loadPendingDownloads } = useModelDownloadQueue()
     loadPendingDownloads()

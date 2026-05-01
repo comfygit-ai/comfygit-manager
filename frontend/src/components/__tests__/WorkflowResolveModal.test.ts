@@ -75,6 +75,7 @@ describe('WorkflowResolveModal - Community-Mapped Flow', () => {
   const mockResetProgress = vi.fn()
   const mockQueueNodeInstall = vi.fn()
   const mockOpenFileLocation = vi.fn()
+  const mockGetNodes = vi.fn()
   const mockLoadPendingDownloads = vi.fn()
 
   beforeEach(() => {
@@ -92,6 +93,7 @@ describe('WorkflowResolveModal - Community-Mapped Flow', () => {
       message: 'ok'
     })
     mockQueueNodeInstall.mockResolvedValue({ ui_id: 'ui-1' })
+    mockGetNodes.mockResolvedValue({ nodes: [] })
     mockLoadPendingDownloads.mockResolvedValue(undefined)
 
     vi.mocked(useWorkflowResolution).mockReturnValue({
@@ -105,13 +107,15 @@ describe('WorkflowResolveModal - Community-Mapped Flow', () => {
         completedFiles: [],
         nodesToInstall: [],
         nodesInstalled: [],
+        nodesMarkedOptional: [],
         nodeInstallProgress: { completedNodes: [] }
       }
     } as any)
 
     vi.mocked(useComfyGitService).mockReturnValue({
       openFileLocation: mockOpenFileLocation,
-      queueNodeInstall: mockQueueNodeInstall
+      queueNodeInstall: mockQueueNodeInstall,
+      getNodes: mockGetNodes
     } as any)
 
     vi.mocked(useModelDownloadQueue).mockReturnValue({
@@ -143,16 +147,33 @@ describe('WorkflowResolveModal - Community-Mapped Flow', () => {
     await flushPromises()
 
     const text = document.body.textContent || ''
-    expect(text).toContain('community-mapped node type needs installation choices')
+    expect(text).toContain('1 item need your input')
     expect(text).not.toContain('blocked and require manual action')
     wrapper.unmount()
   })
 
-  it('sends uninstallable choices in apply-resolution payload with registry default', async () => {
+  it('treats saved optional uninstallable choices as already decided', async () => {
+    const analysis = buildAnalysisResult()
+    analysis.nodes.uninstallable[0].saved_choice = { action: 'optional' }
+    mockAnalyzeWorkflow.mockResolvedValueOnce(analysis)
+
+    const wrapper = mountModal()
+    await flushPromises()
+
+    const text = document.body.textContent || ''
+    expect(text).toContain('All dependencies are resolved!')
+    expect(text).not.toContain('1 item need your input')
+    expect(text).not.toContain('community-mapped node type needs installation choices')
+    wrapper.unmount()
+  })
+
+  it('sends explicit uninstallable registry choices in apply-resolution payload', async () => {
     const wrapper = mountModal()
     await flushPromises()
 
     clickButtonByText('Continue')
+    await flushPromises()
+    clickButtonByText('Install from Registry')
     await flushPromises()
     clickButtonByText('Continue to Review')
     await flushPromises()
@@ -200,6 +221,36 @@ describe('WorkflowResolveModal - Community-Mapped Flow', () => {
         install_source: 'git'
       })
     )
+    wrapper.unmount()
+  })
+
+  it('sends optional uninstallable package choices without installing', async () => {
+    mockApplyResolution.mockResolvedValueOnce({
+      status: 'success',
+      nodes_to_install: [],
+      nodes_marked_optional: ['GetNode'],
+      models_to_download: []
+    })
+
+    const wrapper = mountModal()
+    await flushPromises()
+
+    clickButtonByText('Continue')
+    await flushPromises()
+    clickButtonByText('Optional')
+    await flushPromises()
+    clickButtonByText('Continue to Review')
+    await flushPromises()
+    clickButtonByText('Apply Resolution')
+    await flushPromises()
+
+    expect(mockApplyResolution).toHaveBeenCalledTimes(1)
+    const nodeChoices = mockApplyResolution.mock.calls[0][1] as Map<string, any>
+    expect(nodeChoices.get('GetNode')).toMatchObject({
+      action: 'optional'
+    })
+    expect(mockInstallNodes).not.toHaveBeenCalled()
+    expect(mockQueueNodeInstall).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 })

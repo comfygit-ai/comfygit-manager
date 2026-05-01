@@ -80,6 +80,28 @@ queued or returned model download intents, and unresolved manual actions.
 This distinction prevents the UI from treating a queued model download as if it
 were already installed.
 
+### CGM-API-09A [LIVE]: Apply-resolution endpoints should report saved workflow node-decision mutations
+Validation: TEST
+
+When the user changes a workflow node decision, the apply-resolution response
+should expose the durable manifest mutation separately from install/download
+work.
+
+The response should distinguish at least:
+
+- `nodes_mapped`: node types mapped to an already installed node package
+- `nodes_marked_optional`: node types explicitly marked optional for the
+  workflow
+- `nodes_optional_cleared`: previously saved node decisions removed by an
+  explicit skip or replacement
+
+These fields let the frontend show an accurate completion summary even when no
+node package install or model download is triggered.
+
+Current implementation note: the Manager API owns this mutation path today.
+The policy should migrate into ComfyGit core as a typed workflow
+node-decision service before the CLI needs parity with the panel.
+
 ### CGM-API-10 [LIVE]: Model-source endpoints should carry provider-specific metadata without hiding the generic model shape
 Validation: LLM_REVIEW
 

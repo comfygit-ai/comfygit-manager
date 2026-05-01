@@ -50,9 +50,9 @@
                     <span class="stat-count">{{ analysisResult.stats.packages_needing_installation }}</span>
                     <span class="stat-label">to install</span>
                   </div>
-                  <div v-if="analysisResult.nodes.ambiguous.length > 0" class="stat-item warning">
+                  <div v-if="ambiguousNodesNeedingChoiceCount > 0" class="stat-item warning">
                     <span class="stat-icon">?</span>
-                    <span class="stat-count">{{ analysisResult.nodes.ambiguous.length }}</span>
+                    <span class="stat-count">{{ ambiguousNodesNeedingChoiceCount }}</span>
                     <span class="stat-label">ambiguous</span>
                   </div>
                   <div v-if="versionGatedNodes.length > 0" class="stat-item warning">
@@ -60,14 +60,14 @@
                     <span class="stat-count">{{ versionGatedNodes.length }}</span>
                     <span class="stat-label">requires newer ComfyUI</span>
                   </div>
-                  <div v-if="uninstallableNodes.length > 0" class="stat-item warning">
+                  <div v-if="undecidedCommunityPackageCount > 0" class="stat-item warning">
                     <span class="stat-icon">⚠</span>
-                    <span class="stat-count">{{ uninstallableNodes.length }}</span>
+                    <span class="stat-count">{{ undecidedCommunityPackageCount }}</span>
                     <span class="stat-label">community-mapped</span>
                   </div>
-                  <div v-if="analysisResult.nodes.unresolved.length > 0" class="stat-item error">
+                  <div v-if="unresolvedNodesNeedingChoiceCount > 0" class="stat-item error">
                     <span class="stat-icon">✗</span>
-                    <span class="stat-count">{{ analysisResult.nodes.unresolved.length }}</span>
+                    <span class="stat-count">{{ unresolvedNodesNeedingChoiceCount }}</span>
                     <span class="stat-label">missing</span>
                   </div>
                 </div>
@@ -106,17 +106,17 @@
               </div>
             </div>
 
-            <div v-if="needsUserInput" class="status-message warning">
+            <div v-if="itemsNeedingInputCount > 0" class="status-message warning">
               <span class="status-icon">⚠</span>
-              <span class="status-text">{{ unresolvedAndAmbiguousNodes.length + unresolvedAndAmbiguousModels.length }} items need your input</span>
+              <span class="status-text">{{ itemsNeedingInputCount }} item{{ itemsNeedingInputCount === 1 ? '' : 's' }} need your input</span>
             </div>
             <div v-else-if="hasBlockedNodeIssues" class="status-message warning">
               <span class="status-icon">⚠</span>
               <span class="status-text">{{ versionGatedNodes.length }} node type{{ versionGatedNodes.length > 1 ? 's are' : ' is' }} blocked and require manual action</span>
             </div>
-            <div v-else-if="uninstallableNodes.length > 0" class="status-message info">
+            <div v-else-if="undecidedCommunityPackageCount > 0" class="status-message info">
               <span class="status-icon">⚠</span>
-              <span class="status-text">{{ uninstallableNodes.length }} community-mapped node type{{ uninstallableNodes.length > 1 ? 's need' : ' needs' }} installation choices</span>
+              <span class="status-text">{{ undecidedCommunityPackageCount }} community-mapped node type{{ undecidedCommunityPackageCount > 1 ? 's need' : ' needs' }} installation choices</span>
             </div>
             <div v-else-if="hasNodesToInstall" class="status-message info">
               <span class="status-icon">⬇</span>
@@ -174,16 +174,62 @@
           <NodeResolutionStep
             :nodes="unresolvedAndAmbiguousNodes"
             :node-choices="nodeChoices"
-            :auto-resolved-packages="autoResolvedPackages"
+            :auto-resolved-packages="[]"
             :skipped-packages="skippedPackages"
             :installed-node-packs="installedNodePacks"
             @mark-optional="handleNodeMarkOptional"
             @skip="handleNodeSkip"
             @option-selected="handleNodeOptionSelected"
             @manual-entry="handleNodeManualEntry"
+            @installed-pack-selected="handleNodeInstalledPackSelected"
             @clear-choice="handleNodeClearChoice"
             @package-skip="handlePackageSkip"
           />
+        </div>
+
+        <!-- Package Resolution Step -->
+        <div v-if="currentStep === 'packages'" class="step-content package-step-content">
+          <div class="package-step-header">
+            <div>
+              <h3 class="summary-title">Review Node Packages</h3>
+              <p class="summary-description">
+                Choose which package-level installs should run. These decisions are separate from mapping unresolved node names.
+              </p>
+            </div>
+            <span class="stat-badge">{{ packagesResolvedCount }}/{{ packagesTotalCount }} decided</span>
+          </div>
+
+          <div v-if="autoResolvedPackages.length > 0" class="package-section">
+            <div class="package-section-header">
+              <div>
+                <h4 class="package-section-title">Resolved Packages ({{ autoResolvedPackages.length }})</h4>
+                <p class="package-section-description">
+                  These packages were matched automatically. Skip any package you do not want installed.
+                </p>
+              </div>
+              <span class="stat-badge">{{ packagesToInstallCount }}/{{ autoResolvedPackages.length }} to install</span>
+            </div>
+
+            <div class="package-list">
+              <div
+                v-for="pkg in autoResolvedPackages"
+                :key="pkg.package_id"
+                class="package-item"
+              >
+                <div class="package-info">
+                  <code class="item-name">{{ pkg.package_id }}</code>
+                  <span class="package-meta">{{ pkg.node_types_count }} node type{{ pkg.node_types_count > 1 ? 's' : '' }}</span>
+                </div>
+                <div class="package-actions">
+                  <span v-if="!skippedPackages.has(pkg.package_id)" class="choice-badge install">Will Install</span>
+                  <span v-else class="choice-badge skip">Skipped</span>
+                  <BaseButton size="sm" variant="secondary" @click="handlePackageSkip(pkg.package_id)">
+                    {{ skippedPackages.has(pkg.package_id) ? 'Include' : 'Skip' }}
+                  </BaseButton>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div v-if="uninstallableNodeOptions.length > 0" class="community-node-section">
             <div class="community-node-header">
@@ -209,12 +255,26 @@
                     Found via community mapping — registry metadata may be incomplete.
                     <span v-if="node.guidance"> {{ node.guidance }}</span>
                   </div>
-                  <div class="community-choice-status">{{ getUninstallableChoiceLabel(node.reference.node_type) }}</div>
                 </div>
 
-                <div class="community-node-actions">
+                <div v-if="getUninstallableChoice(node.reference.node_type)" class="community-node-selection">
+                  <div class="community-selected-label">
+                    {{ getUninstallableSelectedLabel(node.reference.node_type) }}
+                  </div>
+                  <BaseButton
+                    class="change-selection-button"
+                    size="sm"
+                    variant="ghost"
+                    @click="clearUninstallableChoice(node.reference.node_type)"
+                  >
+                    Change Selection
+                  </BaseButton>
+                </div>
+
+                <div v-else class="community-node-actions">
                   <BaseButton
                     v-if="hasRegistryInstall(node)"
+                    class="community-choice-button install-choice"
                     size="sm"
                     variant="secondary"
                     :disabled="!node.package.package_id"
@@ -224,23 +284,35 @@
                   </BaseButton>
                   <BaseButton
                     v-if="node.package.repository"
+                    class="community-choice-button install-choice"
                     size="sm"
-                    :variant="hasRegistryInstall(node) ? 'ghost' : 'secondary'"
+                    variant="secondary"
                     :disabled="!node.package.package_id"
                     @click="setUninstallableChoice(node, 'git')"
                   >
                     Install via Git
                   </BaseButton>
-                  <BaseButton size="sm" variant="secondary" @click="setUninstallableOptional(node.reference.node_type)">
+                  <BaseButton
+                    class="community-choice-button"
+                    size="sm"
+                    variant="secondary"
+                    @click="setUninstallableOptional(node.reference.node_type)"
+                  >
                     Optional
                   </BaseButton>
-                  <BaseButton size="sm" variant="secondary" @click="setUninstallableSkip(node.reference.node_type)">
+                  <BaseButton
+                    class="community-choice-button"
+                    size="sm"
+                    variant="secondary"
+                    @click="setUninstallableSkip(node.reference.node_type)"
+                  >
                     Skip
                   </BaseButton>
                 </div>
               </div>
             </div>
           </div>
+
         </div>
 
         <!-- Model Resolution Step -->
@@ -350,6 +422,9 @@
                     <template v-if="nodeChoices.has(node.node_type)">
                       <span v-if="nodeChoices.get(node.node_type)?.action === 'install'" class="choice-badge install">
                         {{ nodeChoices.get(node.node_type)?.package_id }}
+                      </span>
+                      <span v-else-if="nodeChoices.get(node.node_type)?.action === 'map-installed'" class="choice-badge mapped">
+                        Mapped to {{ nodeChoices.get(node.node_type)?.package_id }}
                       </span>
                       <span v-else-if="nodeChoices.get(node.node_type)?.action === 'optional'" class="choice-badge optional">
                         Optional
@@ -478,22 +553,13 @@
         {{ nextStepFromAnalysis === 'review' ? 'Continue to Review →' : 'Continue' }}
       </BaseButton>
 
-      <!-- Nodes Step: Continue to Models or Review -->
+      <!-- Resolution Steps: Continue -->
       <BaseButton
-        v-if="currentStep === 'nodes'"
+        v-if="currentStep === 'nodes' || currentStep === 'packages' || currentStep === 'models'"
         variant="primary"
         @click="navigateToNextSection"
       >
-        {{ needsModelResolution ? 'Continue to Models →' : 'Continue to Review →' }}
-      </BaseButton>
-
-      <!-- Models Step: Continue to Review -->
-      <BaseButton
-        v-if="currentStep === 'models'"
-        variant="primary"
-        @click="navigateToNextSection"
-      >
-        Continue to Review →
+        Continue to {{ getNextStepLabel() }} →
       </BaseButton>
 
       <!-- Review Step: Apply -->
@@ -551,7 +617,7 @@ const applying = ref(false)
 const error = ref<string | null>(null)
 
 // Wizard state
-type WizardStep = 'analysis' | 'nodes' | 'models' | 'review' | 'applying'
+type WizardStep = 'analysis' | 'nodes' | 'packages' | 'models' | 'review' | 'applying'
 const currentStep = ref<WizardStep>('analysis')
 const completedSteps = ref<WizardStep[]>([])
 
@@ -563,15 +629,20 @@ const modelChoices = ref<Map<string, ModelChoice>>(new Map())
 // Track which auto-resolved packages user wants to skip
 const skippedPackages = ref<Set<string>>(new Set())
 
-// Wizard steps configuration - always show Nodes if there are packages to install (for override capability)
+// Wizard steps configuration
 const wizardSteps = computed(() => {
   const steps = [
     { id: 'analysis', label: 'Analysis' }
   ]
 
-  // Show Nodes step if ANY nodes need resolution OR packages need installation
-  if (needsNodeResolution.value || hasNodesToInstall.value || hasCommunityPackages.value) {
+  // Show Nodes only for node-type mapping decisions.
+  if (needsNodeResolution.value) {
     steps.push({ id: 'nodes', label: 'Nodes' })
+  }
+
+  // Show Packages for package-level install/skip choices.
+  if (hasPackageResolution.value) {
+    steps.push({ id: 'packages', label: 'Packages' })
   }
 
   // Show Models step ONLY if user needs to make choices (unresolved/ambiguous)
@@ -595,6 +666,36 @@ const needsUserInput = computed(() => {
   return analysisResult.value.stats.needs_user_input
 })
 
+const undecidedCommunityPackageCount = computed(() => {
+  return uninstallableNodeOptions.value.filter(
+    node => !nodeChoices.value.has(node.reference.node_type)
+  ).length
+})
+
+const itemsNeedingInputCount = computed(() => {
+  const undecidedNodeCount = unresolvedAndAmbiguousNodes.value.filter(
+    node => !nodeChoices.value.has(node.node_type)
+  ).length
+
+  return undecidedNodeCount +
+    unresolvedAndAmbiguousModels.value.length +
+    undecidedCommunityPackageCount.value
+})
+
+const unresolvedNodesNeedingChoiceCount = computed(() => {
+  if (!analysisResult.value) return 0
+  return analysisResult.value.nodes.unresolved.filter(
+    node => !nodeChoices.value.has(node.reference.node_type)
+  ).length
+})
+
+const ambiguousNodesNeedingChoiceCount = computed(() => {
+  if (!analysisResult.value) return 0
+  return analysisResult.value.nodes.ambiguous.filter(
+    node => !nodeChoices.value.has(node.reference.node_type)
+  ).length
+})
+
 const versionGatedNodes = computed(() => {
   if (!analysisResult.value) return []
   return analysisResult.value.nodes.version_gated || []
@@ -616,7 +717,8 @@ const hasBlockedNodeIssues = computed(() => {
 const needsNodeResolution = computed(() => {
   if (!analysisResult.value) return false
   return analysisResult.value.nodes.unresolved.length > 0 ||
-         analysisResult.value.nodes.ambiguous.length > 0
+         analysisResult.value.nodes.ambiguous.length > 0 ||
+         savedMappedResolvedNodes.value.length > 0
 })
 
 const needsModelResolution = computed(() => {
@@ -639,6 +741,8 @@ const hasNodesToInstall = computed(() => {
 
 const hasCommunityPackages = computed(() => uninstallableNodeOptions.value.length > 0)
 
+const hasPackageResolution = computed(() => hasNodesToInstall.value || hasCommunityPackages.value)
+
 // Count of all resolved nodes (matched to packages, may or may not be installed)
 const resolvedNodesCount = computed(() => {
   if (!analysisResult.value) return 0
@@ -655,8 +759,10 @@ const hasCategoryMismatch = computed(() => categoryMismatchModels.value.length >
 
 // Determine next step from Analysis
 const nextStepFromAnalysis = computed(() => {
-  if (needsNodeResolution.value || hasNodesToInstall.value || hasCommunityPackages.value) {
+  if (needsNodeResolution.value) {
     return 'nodes'
+  } else if (hasPackageResolution.value) {
+    return 'packages'
   } else if (needsModelResolution.value) {
     return 'models'
   }
@@ -698,6 +804,21 @@ const autoResolvedPackages = computed(() => {
   return Array.from(packageMap.values())
 })
 
+const packagesToInstallCount = computed(() => {
+  return autoResolvedPackages.value.filter(pkg => !skippedPackages.value.has(pkg.package_id)).length
+})
+
+const packagesTotalCount = computed(() => {
+  return autoResolvedPackages.value.length + uninstallableNodeOptions.value.length
+})
+
+const packagesResolvedCount = computed(() => {
+  const communityResolved = uninstallableNodeOptions.value.filter(
+    node => nodeChoices.value.has(node.reference.node_type)
+  ).length
+  return autoResolvedPackages.value.length + communityResolved
+})
+
 // Final list of packages to install (excluding skipped)
 const finalNodesToInstall = computed(() => {
   return nodesToInstall.value.filter(n => !skippedPackages.value.has(n.package.package_id))
@@ -726,6 +847,13 @@ const downloadIntentModels = computed(() => {
 const unresolvedAndAmbiguousNodes = computed(() => {
   if (!analysisResult.value) return []
 
+  const savedMapped = savedMappedResolvedNodes.value.map(node => ({
+    node_type: node.reference.node_type,
+    reason: 'saved_mapping',
+    is_unresolved: false,
+    options: undefined as undefined | { package_id: string; title: string; match_confidence: number; match_type: string; is_installed: boolean }[]
+  }))
+
   const unresolved = analysisResult.value.nodes.unresolved.map(node => ({
     node_type: node.reference.node_type,
     reason: node.reason,
@@ -745,7 +873,14 @@ const unresolvedAndAmbiguousNodes = computed(() => {
     }))
   }))
 
-  return [...unresolved, ...ambiguous]
+  return [...savedMapped, ...unresolved, ...ambiguous]
+})
+
+const savedMappedResolvedNodes = computed(() => {
+  if (!analysisResult.value) return []
+  return analysisResult.value.nodes.resolved.filter(
+    node => node.saved_choice?.action === 'map-installed'
+  )
 })
 
 interface ModelOptionType {
@@ -899,18 +1034,20 @@ const stepStats = computed(() => {
   stats['analysis'] = { resolved: 1, total: 1 }
 
   // Node stats
-  if (needsNodeResolution.value || hasCommunityPackages.value) {
+  if (needsNodeResolution.value) {
     const unresolvedTotal = unresolvedAndAmbiguousNodes.value.length
-    const communityTotal = uninstallableNodeOptions.value.length
     const unresolvedResolved = unresolvedAndAmbiguousNodes.value.filter(
       n => nodeChoices.value.has(n.node_type)
     ).length
-    const communityResolved = uninstallableNodeOptions.value.filter(
-      n => nodeChoices.value.has(n.reference.node_type)
-    ).length
-    const total = unresolvedTotal + communityTotal
-    const resolved = unresolvedResolved + communityResolved
-    stats['nodes'] = { resolved, total }
+    stats['nodes'] = { resolved: unresolvedResolved, total: unresolvedTotal }
+  }
+
+  // Package stats
+  if (hasPackageResolution.value) {
+    stats['packages'] = {
+      resolved: packagesResolvedCount.value,
+      total: packagesTotalCount.value || 1
+    }
   }
 
   // Model stats - only for models needing user choices
@@ -955,18 +1092,10 @@ function navigateToNextSection() {
   }
 }
 
-function initializeCommunityNodeChoices() {
-  for (const node of uninstallableNodeOptions.value) {
-    const nodeType = node.reference.node_type
-    if (nodeChoices.value.has(nodeType)) continue
-    if (hasRegistryInstall(node)) {
-      setUninstallableChoice(node, 'registry')
-    } else if (node.package.repository) {
-      setUninstallableChoice(node, 'git')
-    } else {
-      setUninstallableSkip(nodeType)
-    }
-  }
+function getNextStepLabel(): string {
+  const currentIndex = wizardSteps.value.findIndex(s => s.id === currentStep.value)
+  const nextStep = wizardSteps.value[currentIndex + 1]
+  return nextStep?.label || 'Review'
 }
 
 function hasRegistryInstall(node: (typeof uninstallableNodeOptions.value)[number]): boolean {
@@ -1014,11 +1143,39 @@ async function loadAnalysis() {
     ])
     analysisResult.value = analysis
     installedNodePacks.value = buildInstalledNodePackChoices(nodes.nodes)
-    initializeCommunityNodeChoices()
+    initializeSavedNodeChoices(analysis)
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to analyze workflow'
   } finally {
     loading.value = false
+  }
+}
+
+function initializeSavedNodeChoices(analysis: FullResolutionResult) {
+  nodeChoices.value.clear()
+
+  for (const node of analysis.nodes.unresolved) {
+    if (node.saved_choice) {
+      nodeChoices.value.set(node.reference.node_type, node.saved_choice)
+    }
+  }
+
+  for (const node of analysis.nodes.resolved) {
+    if (node.saved_choice) {
+      nodeChoices.value.set(node.reference.node_type, node.saved_choice)
+    }
+  }
+
+  for (const node of analysis.nodes.ambiguous) {
+    if (node.saved_choice) {
+      nodeChoices.value.set(node.reference.node_type, node.saved_choice)
+    }
+  }
+
+  for (const node of analysis.nodes.uninstallable) {
+    if (node.saved_choice) {
+      nodeChoices.value.set(node.reference.node_type, node.saved_choice)
+    }
   }
 }
 
@@ -1027,9 +1184,10 @@ function handleContinueFromAnalysis() {
     completedSteps.value.push('analysis')
   }
 
-  // Always show nodes step if there are packages to install (for override capability)
-  if (needsNodeResolution.value || hasNodesToInstall.value || hasCommunityPackages.value) {
+  if (needsNodeResolution.value) {
     currentStep.value = 'nodes'
+  } else if (hasPackageResolution.value) {
+    currentStep.value = 'packages'
   } else if (needsModelResolution.value) {
     // Only go to models if user needs to make choices
     // Download intents don't need user input - skip to review
@@ -1065,6 +1223,13 @@ function handleNodeManualEntry(nodeType: string, packageId: string) {
   })
 }
 
+function handleNodeInstalledPackSelected(nodeType: string, packageId: string) {
+  nodeChoices.value.set(nodeType, {
+    action: 'map-installed',
+    package_id: packageId
+  })
+}
+
 function handleNodeClearChoice(nodeType: string) {
   nodeChoices.value.delete(nodeType)
 }
@@ -1073,15 +1238,15 @@ function getUninstallableChoice(nodeType: string): NodeChoice | undefined {
   return nodeChoices.value.get(nodeType)
 }
 
-function getUninstallableChoiceLabel(nodeType: string): string {
+function getUninstallableSelectedLabel(nodeType: string): string {
   const choice = getUninstallableChoice(nodeType)
-  if (!choice) return 'Skipped'
-  if (choice.action === 'optional') return 'Marked optional'
-  if (choice.action === 'skip') return 'Skipped'
+  if (!choice) return 'Undecided'
+  if (choice.action === 'optional') return 'Will be marked optional'
+  if (choice.action === 'skip') return 'Will be skipped'
   if (choice.action === 'install') {
-    return choice.install_source === 'git' ? 'Will install via Git' : 'Will install from registry'
+    return choice.install_source === 'git' ? 'Will install via Git' : 'Will install from Registry'
   }
-  return 'Skipped'
+  return 'Undecided'
 }
 
 function setUninstallableChoice(node: (typeof uninstallableNodeOptions.value)[number], installSource: 'registry' | 'git') {
@@ -1108,6 +1273,10 @@ function setUninstallableOptional(nodeType: string) {
 
 function setUninstallableSkip(nodeType: string) {
   nodeChoices.value.set(nodeType, { action: 'skip' })
+}
+
+function clearUninstallableChoice(nodeType: string) {
+  nodeChoices.value.delete(nodeType)
 }
 
 // Auto-resolved package skip handler
@@ -1174,6 +1343,8 @@ async function handleApply() {
     if (result.models_to_download && result.models_to_download.length > 0) {
       queueModelDownloads(props.workflowName, result.models_to_download)
     }
+    progress.nodesMarkedOptional = result.nodes_marked_optional || []
+    progress.nodesMapped = result.nodes_mapped || []
 
     const gitInstallSpecs = uninstallableNodeOptions.value
       .map(node => {
@@ -1229,19 +1400,9 @@ async function handleApply() {
     // Step 7: Refresh download queue to reflect any cancelled downloads
     await loadPendingDownloads()
 
-    // Keep modal open if:
-    // - Restart is needed (nodes were installed)
-    // - There were installation failures (user needs to see errors)
-    const hasFailures = progress.installError || (progress.nodeInstallProgress?.completedNodes.some(n => !n.success))
-    if (!progress.needsRestart && !hasFailures) {
-      // Auto-close only if everything succeeded and no restart needed
-      setTimeout(() => {
-        emit('refresh')
-        emit('install')
-        emit('close')
-      }, 1500)
-    }
-    // Otherwise modal stays open for user to review
+    window.dispatchEvent(new CustomEvent('comfygit:status-refresh'))
+    emit('refresh')
+    emit('install')
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to apply resolution'
     progress.error = error.value
@@ -1485,6 +1646,89 @@ onMounted(loadAnalysis)
   gap: var(--cg-space-3);
 }
 
+.package-step-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-3);
+}
+
+.package-step-header,
+.package-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cg-space-3);
+}
+
+.package-section {
+  background: var(--cg-color-bg-secondary);
+  border: 1px solid var(--cg-color-border);
+  border-radius: var(--cg-radius-md);
+  padding: var(--cg-space-3);
+}
+
+.package-section-title {
+  margin: 0 0 var(--cg-space-1) 0;
+  color: var(--cg-color-text-primary);
+  font-size: var(--cg-font-size-sm);
+  font-weight: var(--cg-font-weight-semibold);
+}
+
+.package-section-description {
+  margin: 0;
+  color: var(--cg-color-text-secondary);
+  font-size: var(--cg-font-size-xs);
+}
+
+.package-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-2);
+  margin-top: var(--cg-space-2);
+}
+
+.package-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cg-space-3);
+  padding: var(--cg-space-2);
+  border: 1px solid var(--cg-color-border-subtle);
+  border-radius: var(--cg-radius-sm);
+  background: var(--cg-color-bg-tertiary);
+}
+
+.package-info {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.package-meta {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+}
+
+.package-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.stat-badge {
+  padding: var(--cg-space-1) var(--cg-space-2);
+  border: 1px solid var(--cg-color-border);
+  border-radius: var(--cg-radius-sm);
+  background: var(--cg-color-bg-tertiary);
+  color: var(--cg-color-text-secondary);
+  font-size: var(--cg-font-size-xs);
+  white-space: nowrap;
+}
+
 .community-node-section {
   background: var(--cg-color-warning-muted);
   border: 1px solid var(--cg-color-warning);
@@ -1517,8 +1761,7 @@ onMounted(loadAnalysis)
 
 .community-node-item {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  flex-direction: column;
   gap: var(--cg-space-3);
   padding: var(--cg-space-2);
   border: 1px solid var(--cg-color-border-subtle);
@@ -1531,6 +1774,7 @@ onMounted(loadAnalysis)
   flex-direction: column;
   gap: var(--cg-space-1);
   min-width: 0;
+  width: 100%;
 }
 
 .community-node-heading {
@@ -1557,18 +1801,50 @@ onMounted(loadAnalysis)
   font-size: var(--cg-font-size-xs);
 }
 
-.community-choice-status {
-  color: var(--cg-color-warning);
-  font-size: var(--cg-font-size-xs);
-  font-weight: var(--cg-font-weight-medium);
-}
-
 .community-node-actions {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: var(--cg-space-1);
+  gap: var(--cg-space-2);
   flex-wrap: wrap;
   justify-content: flex-end;
+  width: 100%;
+}
+
+.community-node-selection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cg-space-3);
+  width: 100%;
+}
+
+.community-selected-label {
+  color: var(--cg-color-success);
+  font-size: var(--cg-font-size-xs);
+  font-weight: var(--cg-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+}
+
+.community-node-actions :deep(.base-btn) {
+  min-width: 96px;
+  white-space: nowrap;
+}
+
+.community-node-actions :deep(.install-choice) {
+  min-width: 132px;
+}
+
+.community-node-selection :deep(.change-selection-button) {
+  border-color: transparent;
+  min-width: 0;
+  color: var(--cg-color-text-muted);
+}
+
+.community-node-selection :deep(.change-selection-button:hover:not(:disabled)) {
+  color: var(--cg-color-accent);
+  border-color: transparent;
+  background: transparent;
 }
 
 /* Review Summary */
@@ -1665,6 +1941,11 @@ onMounted(loadAnalysis)
 
 .choice-badge.install,
 .choice-badge.download {
+  background: var(--cg-color-success-muted);
+  color: var(--cg-color-success);
+}
+
+.choice-badge.mapped {
   background: var(--cg-color-success-muted);
   color: var(--cg-color-success);
 }

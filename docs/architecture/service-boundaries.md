@@ -38,6 +38,9 @@ Core owns:
 - workflow-scoped portable execution contract representation
 - environment-local contract read/write helpers
 - revision portability of saved contract state
+- durable workflow node-decision policy for mapping node types to packages,
+  marking workflow node types optional, and clearing saved workflow node
+  decisions
 
 Core should not own:
 - manager modal layout
@@ -76,6 +79,25 @@ Validation: HUMAN_REVIEW
 
 ### CGM-SB-04 [PLANNED]: Portable workflow contract state should remain valid without any cloud layer present
 Validation: HUMAN_REVIEW
+
+### CGM-SB-04A [PLANNED]: Core should own workflow node-decision manifest mutations
+Validation: MIXED
+
+The manager currently applies workflow node-decision mutations through its
+local API endpoint because the panel is the only implemented user-facing
+adapter for this flow.
+
+The durable policy belongs in ComfyGit core once another adapter needs parity.
+Core should provide a typed service for:
+
+- mapping a workflow node type to an installed or declared package
+- marking a workflow node type optional
+- clearing a saved workflow node decision
+- invalidating or refreshing affected workflow resolution state
+- returning a typed summary of the durable mutations
+
+The manager should then remain an adapter that parses UI choices, calls core,
+and renders the result.
 
 ### CGM-SB-05 [RETIRED]: The local panel may provide cloud linkage and revision publication without duplicating full cloud control-plane behavior
 Validation: HUMAN_REVIEW

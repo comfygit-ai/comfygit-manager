@@ -72,6 +72,18 @@
           <span class="summary-text">{{ progress.nodesInstalled.length }} node package{{ progress.nodesInstalled.length > 1 ? 's' : '' }} installed</span>
         </div>
 
+        <!-- Nodes marked optional -->
+        <div v-if="nodesMarkedOptionalCount > 0" class="summary-item success">
+          <span class="summary-icon">✓</span>
+          <span class="summary-text">{{ nodesMarkedOptionalCount }} node type{{ nodesMarkedOptionalCount > 1 ? 's' : '' }} marked optional</span>
+        </div>
+
+        <!-- Existing node mappings changed -->
+        <div v-if="nodesMappedCount > 0" class="summary-item success">
+          <span class="summary-icon">✓</span>
+          <span class="summary-text">{{ nodesMappedCount }} node mapping{{ nodesMappedCount > 1 ? 's' : '' }} changed</span>
+        </div>
+
         <!-- Failed installations summary -->
         <div v-if="failedNodes.length > 0" class="summary-item error">
           <span class="summary-icon">✗</span>
@@ -93,10 +105,10 @@
 
         <div v-if="!hasFailures" class="summary-item success">
           <span class="summary-icon">✓</span>
-          <span class="summary-text">Workflow dependencies resolved</span>
+          <span class="summary-text">{{ completionMessage }}</span>
         </div>
 
-        <p class="summary-note">Model downloads (if any) will continue in the background.</p>
+        <p v-if="hasBackgroundDownloads" class="summary-note">Model downloads will continue in the background.</p>
 
         <!-- Restart required message -->
         <div v-if="progress.needsRestart" class="restart-prompt">
@@ -151,6 +163,29 @@ const failedNodes = computed(() => {
 
 const hasFailures = computed(() => {
   return failedNodes.value.length > 0
+})
+
+const successfulNodeInstalls = computed(() => props.progress.nodesInstalled.length)
+
+const nodesMarkedOptionalCount = computed(() => props.progress.nodesMarkedOptional?.length || 0)
+
+const nodesMappedCount = computed(() => props.progress.nodesMapped?.length || 0)
+
+const hasBackgroundDownloads = computed(() => props.progress.completedFiles.length > 0)
+
+const hasAppliedChanges = computed(() => {
+  return successfulNodeInstalls.value > 0 ||
+    nodesMarkedOptionalCount.value > 0 ||
+    nodesMappedCount.value > 0 ||
+    hasBackgroundDownloads.value ||
+    Boolean(props.progress.needsRestart)
+})
+
+const completionMessage = computed(() => {
+  if (!hasAppliedChanges.value) {
+    return 'No changes applied'
+  }
+  return 'Workflow dependencies resolved'
 })
 
 function getNodeInstallStatus(nodeId: string, index: number): 'pending' | 'installing' | 'complete' | 'failed' {

@@ -46,16 +46,16 @@
               <ActionButton
                 variant="secondary"
                 size="sm"
-                @click="handleContract(wf.name)"
+                @click="handleDetails(wf.name)"
               >
-                Contract
+                Details ▸
               </ActionButton>
               <ActionButton
                 variant="secondary"
                 size="sm"
-                @click="handleDetails(wf.name)"
+                @click="handleContract(wf.name)"
               >
-                Details ▸
+                Contract
               </ActionButton>
             </template>
           </ItemCard>
@@ -79,16 +79,16 @@
               <ActionButton
                 variant="secondary"
                 size="sm"
-                @click="handleContract(wf.name)"
+                @click="handleDetails(wf.name)"
               >
-                Contract
+                Details
               </ActionButton>
               <ActionButton
                 variant="secondary"
                 size="sm"
-                @click="handleDetails(wf.name)"
+                @click="handleContract(wf.name)"
               >
-                Details
+                Contract
               </ActionButton>
             </template>
           </ItemCard>
@@ -112,16 +112,16 @@
               <ActionButton
                 variant="secondary"
                 size="sm"
-                @click="handleContract(wf.name)"
+                @click="handleDetails(wf.name)"
               >
-                Contract
+                Details
               </ActionButton>
               <ActionButton
                 variant="secondary"
                 size="sm"
-                @click="handleDetails(wf.name)"
+                @click="handleContract(wf.name)"
               >
-                Details
+                Contract
               </ActionButton>
             </template>
           </ItemCard>
@@ -148,16 +148,16 @@
               <ActionButton
                 variant="secondary"
                 size="sm"
-                @click="handleContract(wf.name)"
+                @click="handleDetails(wf.name)"
               >
-                Contract
+                Details
               </ActionButton>
               <ActionButton
                 variant="secondary"
                 size="sm"
-                @click="handleDetails(wf.name)"
+                @click="handleContract(wf.name)"
               >
-                Details
+                Contract
               </ActionButton>
             </template>
           </ItemCard>
@@ -199,7 +199,7 @@
     :workflow-name="selectedWorkflow"
     @close="handleResolveModalClose"
     @install="handleInstall"
-    @refresh="emit('refresh')"
+    @refresh="handleResolveRefresh"
     @restart="handleRestart"
   />
 
@@ -223,7 +223,7 @@ import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
 
 const emit = defineEmits<{
-  refresh: []
+  refresh: [options?: { refreshWorkflows?: boolean }]
 }>()
 
 const { getWorkflows } = useComfyGitService()
@@ -314,6 +314,7 @@ function handleDetails(name: string) {
 
 function handleResolve(name: string) {
   selectedWorkflow.value = name
+  showDetailsModal.value = false
   showResolveModal.value = true
 }
 
@@ -333,7 +334,14 @@ function handleOpenWorkflowContract(event: Event) {
 }
 
 function handleInstall() {
-  emit('refresh')
+  // The resolve modal emits install immediately before close on success.
+  // The close handler performs the single workflow reload for this view.
+}
+
+function handleResolveRefresh() {
+  // Keep parent status/header metadata fresh without asking the parent to
+  // reload this workflow list a second time.
+  emit('refresh', { refreshWorkflows: false })
 }
 
 async function handleResolveModalClose() {

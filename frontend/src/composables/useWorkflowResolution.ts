@@ -187,7 +187,9 @@ export function useWorkflowResolution() {
     phase: 'idle',
     completedFiles: [],
     nodesToInstall: [],
-    nodesInstalled: []
+    nodesInstalled: [],
+    nodesMarkedOptional: [],
+    nodesMapped: []
   })
 
   function resetProgress() {
@@ -200,6 +202,8 @@ export function useWorkflowResolution() {
     progress.completedFiles = []
     progress.nodesToInstall = []
     progress.nodesInstalled = []
+    progress.nodesMarkedOptional = []
+    progress.nodesMapped = []
     progress.installError = undefined
     progress.needsRestart = undefined
     progress.error = undefined
@@ -312,6 +316,8 @@ export function useWorkflowResolution() {
       const data = await mockApi.applyResolution(workflowName, nodeChoices, modelChoices)
       appliedResult.value = data
       progress.nodesToInstall = data.nodes_to_install
+      progress.nodesMarkedOptional = data.nodes_marked_optional || []
+      progress.nodesMapped = data.nodes_mapped || []
       progress.phase = 'complete'
       return
     }
@@ -421,6 +427,10 @@ export function useWorkflowResolution() {
 
       case 'done':
         progress.nodesToInstall = (data.nodes_to_install as string[]) || []
+        progress.nodesMarkedOptional = (data.nodes_marked_optional as string[]) || []
+        progress.nodesMapped = (
+          data.nodes_mapped as Array<{ node_type: string; package_id: string }>
+        ) || []
         if (data.download_results) {
           // Update completed files with full info
           progress.completedFiles = (data.download_results as Array<{
