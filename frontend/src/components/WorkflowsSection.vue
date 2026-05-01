@@ -221,6 +221,7 @@ import ActionButton from '@/components/base/atoms/ActionButton.vue'
 import EmptyState from '@/components/base/molecules/EmptyState.vue'
 import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
+import { activateSavedWorkflow } from '@/utils/workflowLoader'
 
 const emit = defineEmits<{
   refresh: [options?: { refreshWorkflows?: boolean }]
@@ -318,8 +319,16 @@ function handleResolve(name: string) {
   showResolveModal.value = true
 }
 
-function handleContract(name: string) {
+async function handleContract(name: string) {
   selectedWorkflow.value = name
+  try {
+    await activateSavedWorkflow(name)
+  } catch (err) {
+    console.error('[ComfyGit] Failed to activate workflow for contract mapping:', err)
+    error.value = err instanceof Error ? err.message : 'Failed to open workflow for contract mapping'
+    return
+  }
+
   window.dispatchEvent(new CustomEvent('comfygit:open-io-mapping', {
     detail: { workflowName: name }
   }))
