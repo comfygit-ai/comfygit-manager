@@ -25751,12 +25751,12 @@ window.ComfyGitDev = {
 let Os = null, ho = null, ds = null, yo = null, eo = null, Vi = null, to = null, Bi = null, so = null, Wi = null;
 const zn = _(null);
 let So = "no_workspace", Vc = !1;
-async function lo() {
-  const e = Hn();
-  if (!e) return null;
+async function lo(e = !1) {
+  const t = Hn();
+  if (!t) return null;
   try {
-    const t = await e.fetchApi("/v2/comfygit/status");
-    t.ok && (zn.value = await t.json());
+    const n = e ? "/v2/comfygit/status?refresh=true" : "/v2/comfygit/status", a = await t.fetchApi(n);
+    a.ok && (zn.value = await a.json());
   } catch {
   }
 }

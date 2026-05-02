@@ -24,7 +24,8 @@ def get_workspace_from_cwd():
 # Import panel-specific logging infrastructure
 try:
     from panel_environment_logger import EnvironmentLogger, WorkspaceLogger
-    from panel_logging_config import get_logger
+    from panel_logging_config import configure_panel_logging, get_logger
+    configure_panel_logging()
     logger = get_logger(__name__)
 except Exception as e:
     # Graceful degradation

@@ -112,11 +112,12 @@ let hasComfyUIManager = false
 let buttonGroup: HTMLElement | null = null
 
 // Fetch status for commit indicator
-async function fetchStatus() {
+async function fetchStatus(forceRefresh = false) {
   const api = getComfyApi()
   if (!api) return null
   try {
-    const response = await api.fetchApi('/v2/comfygit/status')
+    const url = forceRefresh ? '/v2/comfygit/status?refresh=true' : '/v2/comfygit/status'
+    const response = await api.fetchApi(url)
     if (response.ok) {
       globalStatus.value = await response.json()
     }
@@ -745,7 +746,8 @@ app.registerExtension({
         const { change_type, workflow_name } = event.detail
         console.log(`[ComfyGit] Workflow ${change_type}: ${workflow_name}`)
 
-        // Trigger immediate status check
+        // The backend watcher debounces save bursts before broadcasting, so a
+        // normal status read is enough here and avoids expensive full reloads.
         await fetchStatus()
         updateCommitIndicator()
       })
