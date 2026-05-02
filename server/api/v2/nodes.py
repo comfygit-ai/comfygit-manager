@@ -2,6 +2,10 @@
 from collections import defaultdict
 from aiohttp import web
 
+from cgm_core.dependency_preview import (
+    build_install_identifier,
+    serialize_dependency_preview,
+)
 from cgm_core.decorators import requires_environment, logged_operation
 from cgm_utils.async_helpers import run_sync
 
@@ -379,6 +383,27 @@ async def install_node(request: web.Request, env) -> web.Response:
     except Exception as e:
         return web.json_response({
             "error": str(e)
+        }, status=500)
+
+
+@routes.post("/v2/comfygit/nodes/dependency-preview")
+@requires_environment
+async def preview_node_dependency_changes(request: web.Request, env) -> web.Response:
+    """Preview dependency changes for installing a node package without applying."""
+    try:
+        params = await request.json()
+        identifier = build_install_identifier(params)
+        preview = await run_sync(env.preview_add_node_dependency_changes, identifier)
+
+        return web.json_response({
+            "status": "success" if preview.success else "error",
+            "identifier": identifier,
+            "preview": serialize_dependency_preview(preview),
+        })
+    except Exception as e:
+        return web.json_response({
+            "status": "error",
+            "error": str(e),
         }, status=500)
 
 

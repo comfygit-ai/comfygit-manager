@@ -39,7 +39,9 @@ import type {
   ManifestFileResponse,
   NodeCriticality,
   NodeInfo,
+  NodeInstallQueueStatus,
   NodesResult,
+  DependencyResolutionPreview,
   RemotesResult,
   RemoteOperationResult,
   RemoteSyncStatus,
@@ -1281,10 +1283,7 @@ export function useComfyGitService() {
   ): Promise<{
     ui_id: string
     result?: string
-    status?: {
-      status_str?: string
-      messages?: string[]
-    }
+    status?: NodeInstallQueueStatus
   }> {
     if (USE_MOCK) {
       const ui_id = generateUUID()
@@ -1355,10 +1354,7 @@ export function useComfyGitService() {
     const historyResponse = await fetchApi<{
       history?: Record<string, {
         result?: string
-        status?: {
-          status_str?: string
-          messages?: string[]
-        }
+        status?: NodeInstallQueueStatus
       }>
     }>('/v2/manager/queue/history')
     const entry = historyResponse?.history?.[ui_id]
@@ -1373,6 +1369,24 @@ export function useComfyGitService() {
       result: entry?.result,
       status: entry?.status
     }
+  }
+
+  async function previewNodeDependencyChanges(params: {
+    id: string
+    version?: string
+    selected_version?: string
+    repository?: string
+    install_source?: 'registry' | 'git'
+  }): Promise<{
+    status: 'success' | 'error'
+    identifier: string
+    preview: DependencyResolutionPreview
+  }> {
+    return fetchApi('/v2/comfygit/nodes/dependency-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    })
   }
 
   async function updateNode(nodeName: string): Promise<{ status: 'success' | 'error', message?: string }> {
@@ -2224,6 +2238,7 @@ export function useComfyGitService() {
     trackNodeAsDev,
     installNode,
     queueNodeInstall,
+    previewNodeDependencyChanges,
     updateNode,
     updateNodeCriticality,
     uninstallNode,

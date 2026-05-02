@@ -38,7 +38,7 @@
               </div>
               <!-- Install button: show when not installed, not queued, not failed -->
               <BaseButton
-                v-if="!installedPackages.has(pkg.package_id) && !queuedPackages.has(pkg.package_id) && !failedPackages.has(pkg.package_id)"
+                v-if="!installedPackages.has(pkg.package_id) && !queuedPackages.has(pkg.package_id) && !failedPackages.has(pkg.package_id) && !reviewNeededPackages.has(pkg.package_id)"
                 size="sm"
                 variant="secondary"
                 :disabled="installingPackage === pkg.package_id"
@@ -56,6 +56,15 @@
                 class="failed-badge"
                 :title="failedPackages.get(pkg.package_id)"
               >Failed ⚠</span>
+              <BaseButton
+                v-else-if="reviewNeededPackages.has(pkg.package_id)"
+                size="sm"
+                variant="secondary"
+                :disabled="isInstallQueueActive"
+                @click="openDependencyReview(pkg.package_id)"
+              >
+                Needs Review
+              </BaseButton>
               <!-- Installed: successfully installed -->
               <span v-else class="installed-badge">Installed</span>
             </div>
@@ -133,7 +142,7 @@
                 </div>
               </div>
               <template v-if="pkg.package_id">
-                <div v-if="!installedPackages.has(pkg.package_id) && !queuedPackages.has(pkg.package_id) && !failedPackages.has(pkg.package_id)" class="community-actions">
+                <div v-if="!installedPackages.has(pkg.package_id) && !queuedPackages.has(pkg.package_id) && !failedPackages.has(pkg.package_id) && !reviewNeededPackages.has(pkg.package_id)" class="community-actions">
                   <BaseButton
                     v-if="hasCommunityRegistryInstall(pkg)"
                     size="sm"
@@ -160,6 +169,15 @@
                   class="failed-badge"
                   :title="failedPackages.get(pkg.package_id)"
                 >Failed ⚠</span>
+                <BaseButton
+                  v-else-if="reviewNeededPackages.has(pkg.package_id)"
+                  size="sm"
+                  variant="secondary"
+                  :disabled="isInstallQueueActive"
+                  @click="openDependencyReview(pkg.package_id)"
+                >
+                  Needs Review
+                </BaseButton>
                 <span v-else class="installed-badge">Installed</span>
               </template>
               <template v-else>
@@ -262,6 +280,14 @@
     @action="handleDetailAction"
     @bulk-action="handleDetailBulkAction"
   />
+
+  <DependencyReviewPreviewModal
+    v-if="dependencyReviewModalOpen"
+    :loading="dependencyReviewLoading"
+    :error="dependencyReviewError"
+    :preview="dependencyReviewPreview"
+    @close="closeDependencyReview"
+  />
 </template>
 
 <script setup lang="ts">
@@ -269,10 +295,12 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import BaseModal from './base/BaseModal.vue'
 import BaseButton from './base/BaseButton.vue'
 import BaseCheckbox from './base/BaseCheckbox.vue'
+import DependencyReviewPreviewModal from './DependencyReviewPreviewModal.vue'
 import MissingResourcesDetailModal, { type ResourceItem, type ResourceAction } from './MissingResourcesDetailModal.vue'
 import { useModelDownloadQueue } from '@/composables/useModelDownloadQueue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import { getComfyApi as resolveComfyApi } from '@/utils/comfyApi'
+import type { DependencyResolutionPreview, NodeInstallQueueStatus } from '@/types/comfygit'
 
 interface MissingPackage {
   package_id: string
@@ -318,11 +346,16 @@ const visible = ref(false)
 const installedPackages = ref<Set<string>>(new Set())  // Packages that have been installed
 const queuedPackages = ref<Set<string>>(new Set())     // Packages queued for install (via Manager queue)
 const failedPackages = ref<Map<string, string>>(new Map())  // package_id or item_id -> error message
+const reviewNeededPackages = ref<Map<string, InstallPreviewRequest>>(new Map())
 const queuedModels = ref<Set<string>>(new Set())       // Models queued for download
 const dontShowAgain = ref(false)
 const installingPackage = ref<string | null>(null)     // Currently installing package (from WebSocket cm-task-started)
 const installedCount = ref(0)  // Track total installed for restart notification
 const activeDetailView = ref<'models' | 'packages' | 'community' | null>(null)
+const dependencyReviewModalOpen = ref(false)
+const dependencyReviewLoading = ref(false)
+const dependencyReviewError = ref<string | null>(null)
+const dependencyReviewPreview = ref<DependencyResolutionPreview | null>(null)
 
 // Session-based suppression - workflow IDs that have shown popup this session
 // Cleared on browser refresh (in-memory only)
@@ -334,7 +367,17 @@ const queueTimeouts = ref<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 const QUEUE_START_TIMEOUT_MS = 30_000
 
 const { addToQueue } = useModelDownloadQueue()
-const { queueNodeInstall } = useComfyGitService()
+const { queueNodeInstall, previewNodeDependencyChanges } = useComfyGitService()
+
+interface InstallPreviewRequest {
+  id: string
+  version: string
+  selected_version: string
+  mode: string
+  channel: string
+  repository?: string
+  install_source?: 'registry' | 'git'
+}
 
 const packageAliases = computed<Record<string, string>>(() => {
   return analysis.value?.package_aliases || {}
@@ -371,6 +414,45 @@ function clearPendingInstallByPackageId(packageId: string) {
       pendingInstalls.value.delete(taskId)
     }
   }
+}
+
+function markDependencyReviewNeeded(packageId: string, installParams: InstallPreviewRequest, status?: NodeInstallQueueStatus) {
+  failedPackages.value.delete(packageId)
+  queuedPackages.value.delete(packageId)
+  reviewNeededPackages.value.set(packageId, installParams)
+  console.warn('[ComfyGit] Package requires dependency review:', {
+    packageId,
+    reason: status?.dependency_review?.reason || status?.messages?.[0]
+  })
+}
+
+async function openDependencyReview(packageId: string) {
+  const request = reviewNeededPackages.value.get(packageId)
+  if (!request || isInstallQueueActive.value) return
+
+  dependencyReviewModalOpen.value = true
+  dependencyReviewLoading.value = true
+  dependencyReviewError.value = null
+  dependencyReviewPreview.value = null
+
+  try {
+    const response = await previewNodeDependencyChanges(request)
+    dependencyReviewPreview.value = response.preview
+    if (!response.preview.success) {
+      dependencyReviewError.value = response.preview.error || 'Unable to generate dependency preview'
+    }
+  } catch (err) {
+    dependencyReviewError.value = getErrorMessage(err, 'Unable to generate dependency preview')
+  } finally {
+    dependencyReviewLoading.value = false
+  }
+}
+
+function closeDependencyReview() {
+  dependencyReviewModalOpen.value = false
+  dependencyReviewLoading.value = false
+  dependencyReviewError.value = null
+  dependencyReviewPreview.value = null
 }
 
 function clearQueueTimeout(packageId: string) {
@@ -422,6 +504,12 @@ const hasIssues = computed(() => {
     versionGatedNodes.value.length > 0 ||
     communityMappedPackages.value.length > 0 ||
     missingModels.value.length > 0
+})
+
+const isInstallQueueActive = computed(() => {
+  return pendingInstalls.value.size > 0 ||
+    queuedPackages.value.size > 0 ||
+    Boolean(installingPackage.value)
 })
 
 // Deduplicated packages from missing nodes
@@ -535,7 +623,8 @@ const allCommunityPackagesDone = computed(() => {
       const packageId = pkg.package_id!
       return installedPackages.value.has(packageId) ||
         queuedPackages.value.has(packageId) ||
-        failedPackages.value.has(packageId)
+        failedPackages.value.has(packageId) ||
+        reviewNeededPackages.value.has(packageId)
     })
 })
 
@@ -648,7 +737,8 @@ const allPackagesInstalled = computed(() => {
     missingPackages.value.every(pkg =>
       installedPackages.value.has(pkg.package_id) ||
       queuedPackages.value.has(pkg.package_id) ||
-      failedPackages.value.has(pkg.package_id)
+      failedPackages.value.has(pkg.package_id) ||
+      reviewNeededPackages.value.has(pkg.package_id)
     )
 })
 
@@ -773,7 +863,8 @@ async function queueInstallRequest(
   const selectedVersion = latestVersion || 'latest'
   if (installedPackages.value.has(canonicalPackageId) ||
       queuedPackages.value.has(canonicalPackageId) ||
-      failedPackages.value.has(canonicalPackageId)) {
+      failedPackages.value.has(canonicalPackageId) ||
+      reviewNeededPackages.value.has(canonicalPackageId)) {
     return true
   }
 
@@ -803,7 +894,7 @@ async function queueInstallRequest(
       installParams.install_source = 'git'
     }
 
-    const { ui_id } = await queueNodeInstall(installParams, {
+    const { ui_id, status } = await queueNodeInstall(installParams, {
       beforeQueueStart: (taskId) => {
         queuedTaskId = taskId
         pendingInstalls.value.set(taskId, canonicalPackageId)
@@ -816,6 +907,19 @@ async function queueInstallRequest(
         })
       }
     })
+
+    if (status?.status_str === 'dependency_review_required') {
+      if (queuedTaskId) {
+        pendingInstalls.value.delete(queuedTaskId)
+      }
+      clearPendingInstallByPackageId(canonicalPackageId)
+      clearQueueTimeout(canonicalPackageId)
+      if (installingPackage.value === canonicalPackageId) {
+        installingPackage.value = null
+      }
+      markDependencyReviewNeeded(canonicalPackageId, installParams, status)
+      return false
+    }
 
     // Fallback for older service implementations that may ignore beforeQueueStart.
     if (!queuedTaskId) {
@@ -840,6 +944,7 @@ async function queueInstallRequest(
     clearPendingInstallByPackageId(canonicalPackageId)
     clearQueueTimeout(canonicalPackageId)
     queuedPackages.value.delete(canonicalPackageId)
+    reviewNeededPackages.value.delete(canonicalPackageId)
     failedPackages.value.set(canonicalPackageId, errorMessage)
     return false
   } finally {
@@ -872,7 +977,8 @@ async function installAllNodes(): Promise<InstallBatchSummary> {
     // Skip already installed, queued, or failed packages
     if (!installedPackages.value.has(pkg.package_id) &&
         !queuedPackages.value.has(pkg.package_id) &&
-        !failedPackages.value.has(pkg.package_id)) {
+        !failedPackages.value.has(pkg.package_id) &&
+        !reviewNeededPackages.value.has(pkg.package_id)) {
       summary.attempted++
       const success = await installPackage(pkg)
       if (!success) {
@@ -889,7 +995,8 @@ async function installAllCommunityPackages(): Promise<InstallBatchSummary> {
     const packageId = pkg.package_id!
     if (!installedPackages.value.has(packageId) &&
         !queuedPackages.value.has(packageId) &&
-        !failedPackages.value.has(packageId)) {
+        !failedPackages.value.has(packageId) &&
+        !reviewNeededPackages.value.has(packageId)) {
       summary.attempted++
       const installMode = communityInstallMode(pkg)
       const success = installMode ? await installCommunityPackage(pkg, installMode) : false
@@ -1015,6 +1122,7 @@ async function analyzeWorkflow(workflow: any) {
   installedPackages.value = new Set()
   queuedPackages.value = new Set()
   failedPackages.value = new Map()
+  reviewNeededPackages.value = new Map()
   queuedModels.value = new Set()
   pendingInstalls.value = new Map()
   dontShowAgain.value = false
@@ -1107,6 +1215,13 @@ function handleTaskCompleted(event: CustomEvent) {
       installedPackages.value.add(packageId)
       installedCount.value++
       console.log('[ComfyGit] Package installed successfully:', packageId)
+    } else if (status === 'dependency_review_required') {
+      const installParams = event.detail?.task?.params || event.detail?.params
+      if (installParams?.id) {
+        markDependencyReviewNeeded(packageId, installParams, event.detail?.status)
+      } else {
+        failedPackages.value.set(packageId, 'Dependency review required')
+      }
     } else {
       const errorMsg = event.detail?.status?.messages?.[0] || event.detail?.result || 'Unknown error'
       failedPackages.value.set(packageId, errorMsg)

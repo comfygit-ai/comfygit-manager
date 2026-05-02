@@ -22,6 +22,7 @@ from comfygit_core.models.workflow import (
 from comfygit_core.analyzers.workflow_dependency_parser import WorkflowDependencyParser
 
 from cgm_core.decorators import requires_environment, logged_operation
+from cgm_core.dependency_preview import dependency_review_response
 from cgm_core.serializers import (
     serialize_workflow_contract_summary,
     serialize_workflow_details,
@@ -1230,29 +1231,40 @@ async def install_workflow(request: web.Request, env) -> web.Response:
         # Install each node, continuing on failure
         installed = []
         failed = []
+        dependency_review_required = []
         for node_id in uninstalled:
             try:
                 await run_sync(env.add_node, node_id)
                 installed.append(node_id)
             except Exception as e:
+                review_result = dependency_review_response(node_id, e)
+                if review_result:
+                    dependency_review_required.append({
+                        "node_id": node_id,
+                        "error": str(e),
+                        "dependency_review": review_result.get("dependency_review"),
+                    })
+                    continue
                 failed.append({"node_id": node_id, "error": str(e)})
 
         # Determine overall status
-        if len(failed) == 0:
+        if len(failed) == 0 and len(dependency_review_required) == 0:
             status = "success"
             message = f"Installed {len(installed)} node packages"
-        elif len(installed) == 0:
+        elif len(installed) == 0 and len(dependency_review_required) == 0:
             status = "error"
             message = f"All {len(failed)} packages failed to install"
         else:
             status = "partial"
-            message = f"Installed {len(installed)} packages, {len(failed)} failed"
+            blocked = len(failed) + len(dependency_review_required)
+            message = f"Installed {len(installed)} packages, {blocked} need attention"
 
         return web.json_response({
             "status": status,
             "message": message,
             "nodes_installed": installed,
-            "failed": failed
+            "failed": failed,
+            "dependency_review_required": dependency_review_required,
         })
     except Exception as e:
         return web.json_response({

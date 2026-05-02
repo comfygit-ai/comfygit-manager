@@ -926,6 +926,48 @@ export interface NodeSearchResult {
   is_installed?: boolean
 }
 
+export type DependencyPackageChangeKind = 'added' | 'removed' | 'upgraded' | 'downgraded' | 'changed'
+
+export interface DependencyPackageChange {
+  name: string
+  current: string | null
+  proposed: string | null
+  kind: DependencyPackageChangeKind
+}
+
+export interface DependencyResolutionPreview {
+  success: boolean
+  node_name: string
+  requirements: string[]
+  changes: DependencyPackageChange[]
+  lockfile_changed: boolean
+  error?: string | null
+  stderr?: string
+  warnings: string[]
+  summary: {
+    added: number
+    removed: number
+    upgraded: number
+    downgraded: number
+    changed: number
+    total: number
+  }
+}
+
+export interface DependencyReviewPayload {
+  identifier: string
+  reason: string
+  conflict_kind?: string | null
+  conflict_descriptions?: string[]
+  preview?: DependencyResolutionPreview
+}
+
+export interface NodeInstallQueueStatus {
+  status_str?: string
+  messages?: string[]
+  dependency_review?: DependencyReviewPayload
+}
+
 export interface ModelSearchResult {
   filename: string
   hash: string
@@ -940,7 +982,12 @@ export interface NodeInstallProgress {
   currentNode?: string
   currentIndex?: number
   totalNodes?: number
-  completedNodes: Array<{ node_id: string; success: boolean; error?: string }>
+  completedNodes: Array<{
+    node_id: string
+    success: boolean
+    error?: string
+    dependency_review?: DependencyReviewPayload
+  }>
 }
 
 // SSE Resolution Progress Types
@@ -956,6 +1003,7 @@ export interface ResolutionProgressState {
   nodesInstalled: string[]
   nodesMarkedOptional: string[]
   nodesMapped: Array<{ node_type: string; package_id: string }>
+  dependencyReviews?: Array<{ node_id: string; dependency_review: DependencyReviewPayload }>
   installError?: string
   needsRestart?: boolean
   error?: string

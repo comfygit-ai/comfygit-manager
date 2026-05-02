@@ -204,6 +204,7 @@ export function useWorkflowResolution() {
     progress.nodesInstalled = []
     progress.nodesMarkedOptional = []
     progress.nodesMapped = []
+    progress.dependencyReviews = []
     progress.installError = undefined
     progress.needsRestart = undefined
     progress.error = undefined
@@ -264,6 +265,11 @@ export function useWorkflowResolution() {
       status: string
       message?: string
       failed?: Array<{ node_id: string; error: string }>
+      dependency_review_required?: Array<{
+        node_id: string
+        error?: string
+        dependency_review: NonNullable<ResolutionProgressState['dependencyReviews']>[number]['dependency_review']
+      }>
     }>(
       `/v2/comfygit/workflow/${workflowName}/install`,
       {
@@ -279,24 +285,29 @@ export function useWorkflowResolution() {
     if (progress.nodeInstallProgress) {
       progress.nodeInstallProgress.totalNodes = progress.nodesToInstall.length
       const failedMap = new Map(data.failed?.map(f => [f.node_id, f.error]) || [])
+      const reviewMap = new Map((data.dependency_review_required || []).map(item => [item.node_id, item]))
 
       for (let i = 0; i < progress.nodesToInstall.length; i++) {
         const nodeId = progress.nodesToInstall[i]
         const error = failedMap.get(nodeId)
+        const reviewItem = reviewMap.get(nodeId)
         progress.nodeInstallProgress.completedNodes.push({
           node_id: nodeId,
-          success: !error,
-          error
+          success: !error && !reviewItem,
+          error: error || reviewItem?.error,
+          dependency_review: reviewItem?.dependency_review
         })
       }
     }
 
     progress.nodesInstalled = data.nodes_installed
+    progress.dependencyReviews = data.dependency_review_required || []
     progress.needsRestart = data.nodes_installed.length > 0
 
     // Store install error summary if there were failures
-    if (data.failed && data.failed.length > 0) {
-      progress.installError = `${data.failed.length} package(s) failed to install`
+    const attentionCount = (data.failed?.length || 0) + (data.dependency_review_required?.length || 0)
+    if (attentionCount > 0) {
+      progress.installError = `${attentionCount} package(s) need attention`
     }
 
     return data

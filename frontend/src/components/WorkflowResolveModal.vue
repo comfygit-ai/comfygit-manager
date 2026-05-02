@@ -1409,7 +1409,7 @@ async function handleApply() {
         progress.nodeInstallProgress.currentIndex = installIndex
 
         try {
-          await queueNodeInstall({
+          const queueResult = await queueNodeInstall({
             id: spec.id,
             version: spec.selectedVersion,
             selected_version: spec.selectedVersion,
@@ -1418,6 +1418,21 @@ async function handleApply() {
             mode: 'remote',
             channel: 'default'
           })
+          if (queueResult.status?.status_str === 'dependency_review_required') {
+            progress.nodeInstallProgress.completedNodes.push({
+              node_id: spec.id,
+              success: false,
+              error: queueResult.status.messages?.[0] || 'Dependency review required',
+              dependency_review: queueResult.status.dependency_review
+            })
+            progress.dependencyReviews = [
+              ...(progress.dependencyReviews || []),
+              ...(queueResult.status.dependency_review
+                ? [{ node_id: spec.id, dependency_review: queueResult.status.dependency_review }]
+                : [])
+            ]
+            continue
+          }
           progress.nodeInstallProgress.completedNodes.push({
             node_id: spec.id,
             success: true

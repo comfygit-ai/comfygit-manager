@@ -13,6 +13,10 @@ from datetime import datetime
 from aiohttp import web
 from server import PromptServer
 import orchestrator
+from cgm_core.dependency_preview import (
+    build_install_identifier,
+    dependency_review_response,
+)
 from cgm_core.runtime_context import build_runtime_context, ensure_capability
 
 # Import panel logging infrastructure for operation logging
@@ -40,6 +44,7 @@ if _is_managed:
         print("[ComfyGit] Injected --enable-manager into sys.argv")
 
     # Inject extension.manager.supports_v4 into ComfyUI's feature flags
+    identifier = None
     try:
         from comfy_api import feature_flags
         if hasattr(feature_flags, 'SERVER_FEATURE_FLAGS'):
@@ -679,26 +684,24 @@ async def process_install(env, params: dict) -> dict:
             }
 
         # Build install identifier using explicit source selection.
+        identifier = build_install_identifier(params)
         if install_source == "git":
             logger.info(
                 "process_install selecting git source for '%s' using repository '%s'",
                 pack_id,
                 repository,
             )
-            identifier = repository
         elif version and version != "latest":
             logger.info(
                 "process_install selecting registry source for '%s' at version '%s'",
                 pack_id,
                 version,
             )
-            identifier = f"{pack_id}@{version}"
         else:
             logger.info(
                 "process_install selecting registry source for '%s' at latest/default",
                 pack_id,
             )
-            identifier = pack_id
 
         await loop.run_in_executor(
             None,
@@ -711,6 +714,11 @@ async def process_install(env, params: dict) -> dict:
             "messages": [f"Successfully installed {identifier}"]
         }
     except Exception as e:
+        if identifier:
+            review_result = dependency_review_response(identifier, e)
+            if review_result:
+                return review_result
+
         result = {
             "status_str": "error",
             "completed": True,
