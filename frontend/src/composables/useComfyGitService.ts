@@ -41,6 +41,7 @@ import type {
   NodeInfo,
   NodeInstallQueueStatus,
   NodesResult,
+  DependencyResolutionApplyResult,
   DependencyResolutionPreview,
   RemotesResult,
   RemoteOperationResult,
@@ -1389,6 +1390,25 @@ export function useComfyGitService() {
     })
   }
 
+  async function applyReviewedNodeDependencyChanges(params: {
+    id: string
+    version?: string
+    selected_version?: string
+    repository?: string
+    install_source?: 'registry' | 'git'
+    accepted_preview: {
+      baseline_fingerprint: string
+      diff_fingerprint: string
+      proposed_fingerprint: string
+    }
+  }): Promise<DependencyResolutionApplyResult> {
+    return fetchApi('/v2/comfygit/nodes/dependency-apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    })
+  }
+
   async function updateNode(nodeName: string): Promise<{ status: 'success' | 'error', message?: string }> {
     if (USE_MOCK) {
       await mockApi.updateNode(nodeName)
@@ -2239,6 +2259,7 @@ export function useComfyGitService() {
     installNode,
     queueNodeInstall,
     previewNodeDependencyChanges,
+    applyReviewedNodeDependencyChanges,
     updateNode,
     updateNodeCriticality,
     uninstallNode,

@@ -109,6 +109,18 @@ directly. This is acceptable for the current local panel slice, but the
 manifest mutation policy should move into ComfyGit core once CLI or other
 adapters need the same workflow node-decision behavior.
 
+### CGM-RRL-06B [LIVE]: Risky node dependency changes require explicit review before apply
+Validation: TEST
+
+When a node install attempt discovers that the package would materially change
+already-resolved Python dependencies, the manager should pause that package as
+`Needs Review` rather than silently applying the change.
+
+The review surface should request a fresh core resolver preview only when no
+node install queue is actively mutating the environment. Applying the reviewed
+change should pass the accepted preview fingerprints back through the Manager
+API so core can reject stale previews before installing the package.
+
 ### CGM-RRL-07 [PLANNED]: Workflow model links should feed both missing-model and provenance repair flows
 Validation: MIXED
 

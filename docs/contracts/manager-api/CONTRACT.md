@@ -120,6 +120,18 @@ repository URL. Git installs should return enough data for core to persist an
 honest git-sourced manifest entry with pinned commit or equivalent immutable
 identity.
 
+### CGM-API-09C [LIVE]: Reviewed dependency apply endpoints must preserve preview identity
+Validation: TEST
+
+When the API exposes a dependency-review apply action, the request must include
+the install identifier and the accepted dependency-preview fingerprints. The API
+must call the core guarded apply primitive rather than reimplementing dependency
+mutation policy in the manager.
+
+If core reports that the accepted preview is stale, the API should return a
+non-success stale-preview response so the frontend can ask the user to refresh
+the review before applying.
+
 ### CGM-API-10 [LIVE]: Model-source endpoints should carry provider-specific metadata without hiding the generic model shape
 Validation: LLM_REVIEW
 

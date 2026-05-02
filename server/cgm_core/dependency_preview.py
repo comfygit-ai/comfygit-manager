@@ -58,6 +58,9 @@ def serialize_dependency_preview(preview: Any) -> dict[str, Any]:
         "error": getattr(preview, "error", None),
         "stderr": getattr(preview, "stderr", ""),
         "warnings": list(getattr(preview, "warnings", ())),
+        "baseline_fingerprint": getattr(preview, "baseline_fingerprint", ""),
+        "diff_fingerprint": getattr(preview, "diff_fingerprint", ""),
+        "proposed_fingerprint": getattr(preview, "proposed_fingerprint", ""),
         "summary": {
             "added": sum(1 for change in changes if change["kind"] == "added"),
             "removed": sum(1 for change in changes if change["kind"] == "removed"),

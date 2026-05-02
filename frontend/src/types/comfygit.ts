@@ -944,6 +944,9 @@ export interface DependencyResolutionPreview {
   error?: string | null
   stderr?: string
   warnings: string[]
+  baseline_fingerprint: string
+  diff_fingerprint: string
+  proposed_fingerprint: string
   summary: {
     added: number
     removed: number
@@ -952,6 +955,16 @@ export interface DependencyResolutionPreview {
     changed: number
     total: number
   }
+}
+
+export interface DependencyResolutionApplyResult {
+  status: 'success' | 'stale_preview' | 'error'
+  identifier?: string
+  node_name?: string
+  installed?: boolean
+  needs_restart?: boolean
+  message?: string
+  error?: string
 }
 
 export interface DependencyReviewPayload {

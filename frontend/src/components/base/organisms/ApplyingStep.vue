@@ -72,6 +72,11 @@
           <span class="summary-text">{{ progress.nodesInstalled.length }} node package{{ progress.nodesInstalled.length > 1 ? 's' : '' }} installed</span>
         </div>
 
+        <div v-if="appliedDependencyReviewCount > 0" class="summary-item success">
+          <span class="summary-icon">✓</span>
+          <span class="summary-text">{{ appliedDependencyReviewCount }} reviewed package{{ appliedDependencyReviewCount > 1 ? 's' : '' }} installed</span>
+        </div>
+
         <!-- Nodes marked optional -->
         <div v-if="nodesMarkedOptionalCount > 0" class="summary-item success">
           <span class="summary-icon">✓</span>
@@ -129,7 +134,7 @@
         <p v-if="hasBackgroundDownloads" class="summary-note">Model downloads will continue in the background.</p>
 
         <!-- Restart required message -->
-        <div v-if="progress.needsRestart" class="restart-prompt">
+        <div v-if="needsRestart" class="restart-prompt">
           <div class="restart-warning">
             <span class="warning-icon">⚠</span>
             <div class="warning-content">
@@ -158,7 +163,10 @@
       :loading="dependencyReviewLoading"
       :error="dependencyReviewError"
       :preview="activeDependencyPreview"
+      :can-apply="Boolean(activeDependencyReviewIdentifier && activeDependencyPreview?.success)"
+      :applying="dependencyReviewApplyLoading"
       @close="closeDependencyReview"
+      @apply="applyDependencyReview"
     />
   </div>
 </template>
@@ -178,7 +186,12 @@ defineEmits<{
   'retry-failed': []
 }>()
 
-const { previewNodeDependencyChanges } = useComfyGitService()
+const {
+  previewNodeDependencyChanges,
+  applyReviewedNodeDependencyChanges
+} = useComfyGitService()
+
+const appliedDependencyReviewNodes = ref<Set<string>>(new Set())
 
 const installProgressPercent = computed(() => {
   const total = props.progress.nodeInstallProgress?.totalNodes || props.progress.nodesToInstall.length
@@ -191,9 +204,19 @@ const failedNodes = computed(() => {
   return props.progress.nodeInstallProgress?.completedNodes.filter(n => !n.success && !n.dependency_review) || []
 })
 
+function dependencyReviewIdentifier(node: NonNullable<ResolutionProgressState['nodeInstallProgress']>['completedNodes'][number]): string {
+  return node.dependency_review?.identifier || node.node_id
+}
+
 const dependencyReviewNodes = computed(() => {
-  return props.progress.nodeInstallProgress?.completedNodes.filter(n => n.dependency_review) || []
+  return props.progress.nodeInstallProgress?.completedNodes.filter(n => {
+    return n.dependency_review && !appliedDependencyReviewNodes.value.has(dependencyReviewIdentifier(n))
+  }) || []
 })
+
+const appliedDependencyReviewCount = computed(() => appliedDependencyReviewNodes.value.size)
+
+const needsRestart = computed(() => props.progress.needsRestart || appliedDependencyReviewCount.value > 0)
 
 const hasFailures = computed(() => {
   return failedNodes.value.length > 0 || dependencyReviewNodes.value.length > 0
@@ -212,7 +235,8 @@ const hasAppliedChanges = computed(() => {
     nodesMarkedOptionalCount.value > 0 ||
     nodesMappedCount.value > 0 ||
     hasBackgroundDownloads.value ||
-    Boolean(props.progress.needsRestart)
+    needsRestart.value ||
+    appliedDependencyReviewCount.value > 0
 })
 
 const completionMessage = computed(() => {
@@ -239,13 +263,17 @@ function getNodeInstallError(nodeId: string): string | undefined {
 
 const dependencyReviewModalOpen = ref(false)
 const dependencyReviewLoading = ref(false)
+const dependencyReviewApplyLoading = ref(false)
 const dependencyReviewError = ref<string | null>(null)
 const activeDependencyPreview = ref<DependencyResolutionPreview | null>(null)
+const activeDependencyReviewIdentifier = ref<string | null>(null)
 
 async function openDependencyReview(node: NonNullable<ResolutionProgressState['nodeInstallProgress']>['completedNodes'][number]) {
-  const identifier = node.dependency_review?.identifier || node.node_id
+  const identifier = dependencyReviewIdentifier(node)
+  activeDependencyReviewIdentifier.value = identifier
   dependencyReviewModalOpen.value = true
   dependencyReviewLoading.value = true
+  dependencyReviewApplyLoading.value = false
   dependencyReviewError.value = null
   activeDependencyPreview.value = null
 
@@ -267,11 +295,47 @@ async function openDependencyReview(node: NonNullable<ResolutionProgressState['n
   }
 }
 
+async function applyDependencyReview() {
+  const identifier = activeDependencyReviewIdentifier.value
+  const preview = activeDependencyPreview.value
+  if (!identifier || !preview || dependencyReviewApplyLoading.value) return
+
+  dependencyReviewApplyLoading.value = true
+  dependencyReviewError.value = null
+
+  try {
+    const result = await applyReviewedNodeDependencyChanges({
+      id: identifier,
+      accepted_preview: {
+        baseline_fingerprint: preview.baseline_fingerprint,
+        diff_fingerprint: preview.diff_fingerprint,
+        proposed_fingerprint: preview.proposed_fingerprint
+      }
+    })
+
+    if (result.status !== 'success') {
+      throw new Error(result.error || result.message || 'Unable to apply dependency changes')
+    }
+
+    appliedDependencyReviewNodes.value = new Set([
+      ...appliedDependencyReviewNodes.value,
+      identifier
+    ])
+    closeDependencyReview()
+  } catch (err) {
+    dependencyReviewError.value = err instanceof Error ? err.message : 'Unable to apply dependency changes'
+  } finally {
+    dependencyReviewApplyLoading.value = false
+  }
+}
+
 function closeDependencyReview() {
   dependencyReviewModalOpen.value = false
   dependencyReviewLoading.value = false
+  dependencyReviewApplyLoading.value = false
   dependencyReviewError.value = null
   activeDependencyPreview.value = null
+  activeDependencyReviewIdentifier.value = null
 }
 </script>
 

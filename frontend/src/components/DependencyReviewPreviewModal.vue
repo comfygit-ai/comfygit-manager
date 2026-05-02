@@ -12,7 +12,7 @@
           <h3>{{ preview.node_name }}</h3>
           <p>
             Installing this node package would change Python dependencies in the environment.
-            Review is informational for now; applying risky changes is not enabled yet.
+            Apply only if you accept these package changes in the current environment.
           </p>
         </div>
 
@@ -72,6 +72,15 @@
 
     <template #footer>
       <BaseButton variant="secondary" @click="emit('close')">Close</BaseButton>
+      <BaseButton
+        v-if="canApply && preview?.success"
+        variant="primary"
+        :loading="applying"
+        :disabled="loading || applying"
+        @click="emit('apply')"
+      >
+        Apply to Current Environment
+      </BaseButton>
     </template>
   </BaseModal>
 </template>
@@ -86,10 +95,13 @@ const props = defineProps<{
   loading?: boolean
   error?: string | null
   preview?: DependencyResolutionPreview | null
+  canApply?: boolean
+  applying?: boolean
 }>()
 
 const emit = defineEmits<{
   close: []
+  apply: []
 }>()
 
 const changeRank: Record<DependencyPackageChangeKind, number> = {

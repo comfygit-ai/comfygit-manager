@@ -1,6 +1,8 @@
 """Node management API."""
 from collections import defaultdict
 from aiohttp import web
+from comfygit_core.models.dependency_resolution import DependencyResolutionAcceptance
+from comfygit_core.models.exceptions import CDDependencyPreviewStaleError
 
 from cgm_core.dependency_preview import (
     build_install_identifier,
@@ -400,6 +402,47 @@ async def preview_node_dependency_changes(request: web.Request, env) -> web.Resp
             "identifier": identifier,
             "preview": serialize_dependency_preview(preview),
         })
+    except Exception as e:
+        return web.json_response({
+            "status": "error",
+            "error": str(e),
+        }, status=500)
+
+
+@routes.post("/v2/comfygit/nodes/dependency-apply")
+@requires_environment
+async def apply_node_dependency_changes(request: web.Request, env) -> web.Response:
+    """Apply a reviewed dependency change if the accepted preview is still current."""
+    try:
+        params = await request.json()
+        identifier = build_install_identifier(params)
+        accepted_preview = _safe_mapping(params.get("accepted_preview"))
+        acceptance = DependencyResolutionAcceptance(
+            identifier=identifier,
+            baseline_fingerprint=str(accepted_preview.get("baseline_fingerprint") or ""),
+            diff_fingerprint=str(accepted_preview.get("diff_fingerprint") or ""),
+            proposed_fingerprint=str(accepted_preview.get("proposed_fingerprint") or ""),
+        )
+
+        result = await run_sync(
+            env.apply_reviewed_node_dependency_changes,
+            identifier,
+            acceptance,
+        )
+
+        return web.json_response({
+            "status": "success",
+            "identifier": result.identifier,
+            "node_name": result.node_name,
+            "installed": result.installed,
+            "needs_restart": result.needs_restart,
+            "message": result.message,
+        })
+    except CDDependencyPreviewStaleError as e:
+        return web.json_response({
+            "status": "stale_preview",
+            "error": str(e),
+        }, status=409)
     except Exception as e:
         return web.json_response({
             "status": "error",

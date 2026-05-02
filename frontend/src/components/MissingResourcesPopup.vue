@@ -286,7 +286,10 @@
     :loading="dependencyReviewLoading"
     :error="dependencyReviewError"
     :preview="dependencyReviewPreview"
+    :can-apply="Boolean(activeDependencyReviewPackageId && dependencyReviewPreview?.success)"
+    :applying="dependencyReviewApplyLoading"
     @close="closeDependencyReview"
+    @apply="applyDependencyReview"
   />
 </template>
 
@@ -354,8 +357,10 @@ const installedCount = ref(0)  // Track total installed for restart notification
 const activeDetailView = ref<'models' | 'packages' | 'community' | null>(null)
 const dependencyReviewModalOpen = ref(false)
 const dependencyReviewLoading = ref(false)
+const dependencyReviewApplyLoading = ref(false)
 const dependencyReviewError = ref<string | null>(null)
 const dependencyReviewPreview = ref<DependencyResolutionPreview | null>(null)
+const activeDependencyReviewPackageId = ref<string | null>(null)
 
 // Session-based suppression - workflow IDs that have shown popup this session
 // Cleared on browser refresh (in-memory only)
@@ -367,7 +372,11 @@ const queueTimeouts = ref<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 const QUEUE_START_TIMEOUT_MS = 30_000
 
 const { addToQueue } = useModelDownloadQueue()
-const { queueNodeInstall, previewNodeDependencyChanges } = useComfyGitService()
+const {
+  queueNodeInstall,
+  previewNodeDependencyChanges,
+  applyReviewedNodeDependencyChanges
+} = useComfyGitService()
 
 interface InstallPreviewRequest {
   id: string
@@ -432,8 +441,10 @@ async function openDependencyReview(packageId: string) {
 
   dependencyReviewModalOpen.value = true
   dependencyReviewLoading.value = true
+  dependencyReviewApplyLoading.value = false
   dependencyReviewError.value = null
   dependencyReviewPreview.value = null
+  activeDependencyReviewPackageId.value = packageId
 
   try {
     const response = await previewNodeDependencyChanges(request)
@@ -448,11 +459,52 @@ async function openDependencyReview(packageId: string) {
   }
 }
 
+async function applyDependencyReview() {
+  const packageId = activeDependencyReviewPackageId.value
+  const preview = dependencyReviewPreview.value
+  const request = packageId ? reviewNeededPackages.value.get(packageId) : null
+  if (!packageId || !preview || !request || dependencyReviewApplyLoading.value) return
+
+  dependencyReviewApplyLoading.value = true
+  dependencyReviewError.value = null
+
+  try {
+    const result = await applyReviewedNodeDependencyChanges({
+      ...request,
+      accepted_preview: {
+        baseline_fingerprint: preview.baseline_fingerprint,
+        diff_fingerprint: preview.diff_fingerprint,
+        proposed_fingerprint: preview.proposed_fingerprint
+      }
+    })
+
+    if (result.status !== 'success') {
+      throw new Error(result.error || result.message || 'Unable to apply dependency changes')
+    }
+
+    reviewNeededPackages.value.delete(packageId)
+    failedPackages.value.delete(packageId)
+    queuedPackages.value.delete(packageId)
+    installedPackages.value.add(packageId)
+    installedCount.value++
+    window.dispatchEvent(new CustomEvent('comfygit:nodes-installed', {
+      detail: { count: 1 }
+    }))
+    closeDependencyReview()
+  } catch (err) {
+    dependencyReviewError.value = getErrorMessage(err, 'Unable to apply dependency changes')
+  } finally {
+    dependencyReviewApplyLoading.value = false
+  }
+}
+
 function closeDependencyReview() {
   dependencyReviewModalOpen.value = false
   dependencyReviewLoading.value = false
+  dependencyReviewApplyLoading.value = false
   dependencyReviewError.value = null
   dependencyReviewPreview.value = null
+  activeDependencyReviewPackageId.value = null
 }
 
 function clearQueueTimeout(packageId: string) {
