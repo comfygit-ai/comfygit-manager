@@ -89,6 +89,12 @@
           <span class="summary-text">{{ nodesMappedCount }} node mapping{{ nodesMappedCount > 1 ? 's' : '' }} changed</span>
         </div>
 
+        <!-- Model paths synced -->
+        <div v-if="modelPathsSyncedCount > 0" class="summary-item success">
+          <span class="summary-icon">✓</span>
+          <span class="summary-text">{{ modelPathsSyncedCount }} model path{{ modelPathsSyncedCount > 1 ? 's' : '' }} synced</span>
+        </div>
+
         <!-- Failed installations summary -->
         <div v-if="failedNodes.length > 0" class="summary-item error">
           <span class="summary-icon">✗</span>
@@ -228,12 +234,15 @@ const nodesMarkedOptionalCount = computed(() => props.progress.nodesMarkedOption
 
 const nodesMappedCount = computed(() => props.progress.nodesMapped?.length || 0)
 
+const modelPathsSyncedCount = computed(() => props.progress.modelPathsSynced || 0)
+
 const hasBackgroundDownloads = computed(() => props.progress.completedFiles.length > 0)
 
 const hasAppliedChanges = computed(() => {
   return successfulNodeInstalls.value > 0 ||
     nodesMarkedOptionalCount.value > 0 ||
     nodesMappedCount.value > 0 ||
+    modelPathsSyncedCount.value > 0 ||
     hasBackgroundDownloads.value ||
     needsRestart.value ||
     appliedDependencyReviewCount.value > 0

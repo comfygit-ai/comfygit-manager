@@ -1348,6 +1348,7 @@ async function handleApply() {
     }
     progress.nodesMarkedOptional = result.nodes_marked_optional || []
     progress.nodesMapped = result.nodes_mapped || []
+    progress.modelPathsSynced = result.model_paths_synced || 0
 
     const gitInstallSpecs = Array.from(nodeChoices.value.values())
       .map(choice => {

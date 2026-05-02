@@ -900,6 +900,7 @@ export interface AppliedResolutionResult {
   nodes_to_install: string[]
   nodes_marked_optional?: string[]
   nodes_mapped?: Array<{ node_type: string; package_id: string }>
+  model_paths_synced?: number
   models_to_download: Array<{
     filename: string
     url: string
@@ -1016,6 +1017,7 @@ export interface ResolutionProgressState {
   nodesInstalled: string[]
   nodesMarkedOptional: string[]
   nodesMapped: Array<{ node_type: string; package_id: string }>
+  modelPathsSynced?: number
   dependencyReviews?: Array<{ node_id: string; dependency_review: DependencyReviewPayload }>
   installError?: string
   needsRestart?: boolean

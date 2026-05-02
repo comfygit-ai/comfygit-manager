@@ -189,7 +189,8 @@ export function useWorkflowResolution() {
     nodesToInstall: [],
     nodesInstalled: [],
     nodesMarkedOptional: [],
-    nodesMapped: []
+    nodesMapped: [],
+    modelPathsSynced: 0
   })
 
   function resetProgress() {
@@ -204,6 +205,7 @@ export function useWorkflowResolution() {
     progress.nodesInstalled = []
     progress.nodesMarkedOptional = []
     progress.nodesMapped = []
+    progress.modelPathsSynced = 0
     progress.dependencyReviews = []
     progress.installError = undefined
     progress.needsRestart = undefined
@@ -329,6 +331,7 @@ export function useWorkflowResolution() {
       progress.nodesToInstall = data.nodes_to_install
       progress.nodesMarkedOptional = data.nodes_marked_optional || []
       progress.nodesMapped = data.nodes_mapped || []
+      progress.modelPathsSynced = data.model_paths_synced || 0
       progress.phase = 'complete'
       return
     }
@@ -442,6 +445,7 @@ export function useWorkflowResolution() {
         progress.nodesMapped = (
           data.nodes_mapped as Array<{ node_type: string; package_id: string }>
         ) || []
+        progress.modelPathsSynced = (data.model_paths_synced as number) || 0
         if (data.download_results) {
           // Update completed files with full info
           progress.completedFiles = (data.download_results as Array<{

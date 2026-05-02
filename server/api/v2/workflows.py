@@ -1759,6 +1759,11 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
         env.workflow_manager.analyze_and_resolve_workflow,
         name
     )
+    model_paths_to_sync = sum(
+        1 for model in result.models_resolved
+        if getattr(model, "needs_path_sync", False)
+    )
+    model_paths_synced = 0
 
     # Apply strategies to fix unresolved issues (writes to pyproject.toml)
     if result.has_issues:
@@ -1767,6 +1772,12 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
             result,
             node_strategy,
             model_strategy
+        )
+        model_paths_synced = model_paths_to_sync
+    elif model_paths_to_sync > 0:
+        model_paths_synced = await run_sync(
+            env.workflow_manager.update_workflow_model_paths,
+            result
         )
 
     nodes_marked_optional = mapping_changes["nodes_marked_optional"]
@@ -1959,6 +1970,7 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
         "nodes_marked_optional": nodes_marked_optional,
         "nodes_optional_cleared": mapping_changes["nodes_optional_cleared"],
         "nodes_mapped": mapping_changes["nodes_mapped"],
+        "model_paths_synced": model_paths_synced,
         "models_to_download": models_to_download,
         "estimated_time_seconds": estimated_time
     })
@@ -2054,6 +2066,10 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
                 fix=True,
                 download_callbacks=callbacks
             )
+            model_paths_synced = sum(
+                1 for model in result.models_resolved
+                if getattr(model, "needs_path_sync", False)
+            )
 
             nodes_marked_optional = mapping_changes["nodes_marked_optional"]
 
@@ -2104,6 +2120,7 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
                 "nodes_marked_optional": nodes_marked_optional,
                 "nodes_optional_cleared": mapping_changes["nodes_optional_cleared"],
                 "nodes_mapped": mapping_changes["nodes_mapped"],
+                "model_paths_synced": model_paths_synced,
                 "download_results": download_results
             })
         except Exception as e:
