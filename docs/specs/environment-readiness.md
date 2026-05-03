@@ -134,6 +134,26 @@ The readiness review surface should not route users through Model Details just
 to repair a missing model source. Model Details remains available for factual
 inspection, while readiness is a guided repair flow.
 
+### CGM-READY-04A [PLANNED]: Model source readiness should be based on manifest portability
+Validation: MIXED
+
+For environment reproducibility, a model source is resolved only when the
+current environment manifest records a portable source for that model.
+
+The workspace model index may provide candidate source URLs for manifest models
+that lack sources, but index knowledge alone should not make the environment
+readiness warning disappear. The readiness payload should distinguish:
+
+- no known source
+- source candidate exists in the workspace model index
+- source staged for the current environment
+- source applied to the current environment manifest
+
+Export, push, and future cloud/build handoff checks should use manifest
+source state as the portability gate. They may route users to readiness review
+when model-index candidates are available, but they should not silently mutate
+the manifest during export or push.
+
 ### CGM-READY-05 [PLANNED]: Workflow contract readiness should feed the same review surface
 Validation: MIXED
 

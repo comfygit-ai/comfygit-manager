@@ -180,3 +180,42 @@ or explicitly asks for stronger identity evidence, such as:
 
 Once computed, full hashes should be cached in the model index and reused by
 source discovery, readiness checks, and future cloud dependency proofs.
+
+### CGM-MDL-12 [PLANNED]: Workspace model sources are global knowledge, not environment truth
+Validation: MIXED
+
+The workspace model index may store source URLs for any local model in the
+workspace, whether or not that model is used by the currently active
+environment.
+
+Adding or changing a source from the general Model Index surface should update
+the workspace model index only. It should not search every environment and
+mutate every manifest that references the same model.
+
+When the same source repair happens from an environment-scoped readiness flow,
+the selected source should be applied to that environment's manifest through
+the environment model-source mutation path. That mutation may also update the
+workspace model index, but the manifest write is what makes the environment
+portable.
+
+### CGM-MDL-13 [PLANNED]: Readiness source repair should stage manifest source decisions before apply
+Validation: MIXED
+
+The readiness source-repair flow should behave like a small transaction for the
+current environment.
+
+When readiness detects manifest models without sources, it may prefill source
+choices from the workspace model index or from source discovery. Those choices
+should be visible as pending environment changes until the user applies them.
+
+The user should be able to:
+
+- accept a source already found in the model index
+- run source discovery and select a different source
+- change a staged source before apply
+- apply staged choices to the current environment manifest
+
+After apply, the manifest should contain the selected source URLs and the
+workspace model index should remain updated with the same source knowledge.
+The commit indicator should treat those manifest source updates as normal
+uncommitted environment changes.

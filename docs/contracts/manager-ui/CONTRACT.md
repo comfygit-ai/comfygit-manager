@@ -213,6 +213,25 @@ surface opened from that action.
 Contextual readiness repair may open that same source-repair surface directly
 when the user is already acting on a missing-source issue.
 
+### CGM-UI-15C [PLANNED]: Readiness source repair should apply environment manifest changes explicitly
+Validation: HUMAN_REVIEW
+
+When the user opens model source repair from Status, export, push, or another
+environment-readiness context, the UI should present source choices as changes
+to the current environment.
+
+If a source already exists in the workspace model index, the readiness repair
+surface may show it as a preselected candidate such as "source found in model
+index." The user should still be able to change the source before applying.
+
+The readiness repair surface should use an explicit `Apply` action for staged
+source choices. Applying should update the current environment manifest and
+make the normal commit indicator reflect the resulting uncommitted changes.
+
+The general Model Index source-repair flow may continue to use an immediate
+`Use as source` action because that flow edits shared workspace knowledge, not
+a specific environment manifest.
+
 ### CGM-UI-16 [PARTIAL]: Blocked custom nodes should be visible as blocked, not hidden
 Validation: LLM_REVIEW
 

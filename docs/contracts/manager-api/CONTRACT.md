@@ -164,6 +164,39 @@ Computed Blake3 and SHA256 values should be persisted in the model index so
 future source discovery, export/push readiness, and cloud dependency-proof
 flows can reuse them without repeatedly rescanning the same model file.
 
+### CGM-API-10C [PLANNED]: Model source mutations should distinguish workspace index scope from environment scope
+Validation: MIXED
+
+The manager API should expose or route model-source mutations according to
+their scope.
+
+Workspace-scoped source mutations update the shared model index and should be
+used by general Model Index management. They must not mutate environment
+manifests that happen to reference the same model.
+
+Environment-scoped source mutations update the current environment manifest
+through ComfyGit core's environment model-source service. That service may also
+update the workspace model index, but the manifest write is the durable
+portable-environment mutation.
+
+Readiness repair actions must use the environment-scoped mutation path when
+the user applies source decisions for the current environment.
+
+### CGM-API-10D [PLANNED]: Readiness APIs should expose model-index source candidates without treating them as resolved
+Validation: MIXED
+
+Readiness payloads for manifest models without sources should be able to carry
+candidate source URLs already known by the workspace model index.
+
+Those candidates are repair hints. They should not remove the reproducibility
+warning until the user applies a candidate or selected source to the current
+environment manifest.
+
+Export and push validation should not silently copy model-index sources into
+the manifest. If candidates exist, validation should return an actionable
+readiness issue that lets the frontend route the user to the readiness repair
+surface.
+
 ### CGM-API-11 [PARTIAL]: Environment switch status should expose terminal failure states
 Validation: TEST
 
