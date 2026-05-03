@@ -26,6 +26,7 @@
         @switch="emit('switch', $event)"
         @create="emit('create', $event)"
         @delete="emit('delete', $event)"
+        @revert-current="emit('revert-current')"
       />
 
       <RemotesSection
@@ -61,6 +62,7 @@ const emit = defineEmits<{
   switch: [branch: string]
   create: [name: string]
   delete: [branch: string]
+  'revert-current': []
   toast: [message: string, type: 'info' | 'success' | 'warning' | 'error']
 }>()
 

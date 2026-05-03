@@ -270,6 +270,11 @@ export interface SwitchBranchResult {
   reason?: 'uncommitted_changes' | 'restart_required'
 }
 
+export interface RevertChangesResult {
+  status: 'success' | 'error'
+  message?: string
+}
+
 // Environment Management Types
 export interface EnvironmentInfo {
   name: string

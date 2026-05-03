@@ -220,6 +220,7 @@
             @switch="handleBranchSwitch"
             @create="handleBranchCreate"
             @delete="handleBranchDelete"
+            @revert-current="handleRevertCurrentBranchChanges"
             @toast="handleToast"
           />
 
@@ -484,6 +485,7 @@ const {
   checkout,
   createBranch,
   switchBranch,
+  revertChanges,
   deleteBranch,
   getEnvironments,
   switchEnvironment,
@@ -903,15 +905,20 @@ function handleCommitSelect(commit: CommitInfo) {
   selectedCommit.value = commit
 }
 
-async function handleCheckout(commit: CommitInfo) {
-  selectedCommit.value = null
-
-  const hasChanges = status.value && (
+function hasUncommittedChanges(): boolean {
+  if (!status.value) return false
+  return (
     status.value.workflows.new.length > 0 ||
     status.value.workflows.modified.length > 0 ||
     status.value.workflows.deleted.length > 0 ||
     status.value.has_changes
   )
+}
+
+async function handleCheckout(commit: CommitInfo) {
+  selectedCommit.value = null
+
+  const hasChanges = hasUncommittedChanges()
 
   confirmDialog.value = {
     title: hasChanges ? 'Checkout with Uncommitted Changes' : 'Checkout Commit',
@@ -944,12 +951,7 @@ async function handleCheckout(commit: CommitInfo) {
 }
 
 async function handleBranchSwitch(branchName: string) {
-  const hasChanges = status.value && (
-    status.value.workflows.new.length > 0 ||
-    status.value.workflows.modified.length > 0 ||
-    status.value.workflows.deleted.length > 0 ||
-    status.value.has_changes
-  )
+  const hasChanges = hasUncommittedChanges()
 
   confirmDialog.value = {
     title: hasChanges ? 'Switch Branch with Uncommitted Changes' : 'Switch Branch',
@@ -977,6 +979,37 @@ async function handleBranchSwitch(branchName: string) {
         showToast('Restarting ComfyUI...', 'success')
       } else {
         showToast(result.message || 'Branch switch failed', 'error')
+      }
+    }
+  }
+}
+
+async function handleRevertCurrentBranchChanges() {
+  if (!hasUncommittedChanges()) {
+    showToast('No uncommitted changes to revert', 'info')
+    return
+  }
+
+  confirmDialog.value = {
+    title: 'Revert Uncommitted Changes',
+    message: 'Discard all uncommitted changes on the current branch?',
+    details: getChangeDetails(),
+    warning: 'This permanently discards uncommitted workflow and manifest changes, then restarts ComfyUI from the current HEAD.',
+    confirmLabel: 'Revert Changes',
+    cancelLabel: 'Cancel',
+    destructive: true,
+    onConfirm: async () => {
+      confirmDialog.value = null
+      setRefreshFlag()
+
+      const toastId = showToast('Reverting uncommitted changes...', 'info', 0)
+      const result = await revertChanges()
+      removeToast(toastId)
+
+      if (result.status === 'success') {
+        showToast('Restarting ComfyUI...', 'success')
+      } else {
+        showToast(result.message || 'Revert failed', 'error')
       }
     }
   }
@@ -1551,6 +1584,9 @@ function getChangeDetails(): string[] {
   if (wf.new.length) details.push(`${wf.new.length} new workflow(s)`)
   if (wf.modified.length) details.push(`${wf.modified.length} modified workflow(s)`)
   if (wf.deleted.length) details.push(`${wf.deleted.length} deleted workflow(s)`)
+  if (status.value.has_changes && details.length === 0) {
+    details.push('manifest or environment metadata changes')
+  }
   return details
 }
 

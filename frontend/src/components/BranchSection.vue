@@ -72,6 +72,7 @@
         @close="selectedBranch = null"
         @delete="handleDeleteFromModal"
         @switch="handleSwitchFromModal"
+        @revert-current="handleRevertCurrentFromModal"
       />
     </template>
   </PanelLayout>
@@ -98,6 +99,7 @@ const emit = defineEmits<{
   switch: [branch: string]
   create: [name: string]
   delete: [branch: string]
+  'revert-current': []
 }>()
 
 const showCreateInput = ref(false)
@@ -124,6 +126,11 @@ function handleDeleteFromModal(branchName: string) {
 function handleSwitchFromModal(branchName: string) {
   selectedBranch.value = null
   emit('switch', branchName)
+}
+
+function handleRevertCurrentFromModal() {
+  selectedBranch.value = null
+  emit('revert-current')
 }
 </script>
 

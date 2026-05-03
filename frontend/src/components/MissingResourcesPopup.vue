@@ -27,7 +27,7 @@
               :disabled="allPackagesInstalled"
               @click="installAllNodes"
             >
-              {{ allPackagesInstalled ? 'All Queued' : 'Install All' }}
+              {{ allPackagesInstalled ? 'All Done' : 'Install All' }}
             </BaseButton>
           </div>
           <div class="item-list">
@@ -123,7 +123,7 @@
               :disabled="allCommunityPackagesDone"
               @click="installAllCommunityPackages"
             >
-              {{ allCommunityPackagesDone ? 'All Queued' : 'Install All' }}
+              {{ allCommunityPackagesDone ? 'All Done' : 'Install All' }}
             </BaseButton>
           </div>
           <div class="item-list">
@@ -258,8 +258,7 @@
       <BaseButton
         v-if="hasDownloadableItems"
         variant="primary"
-        :disabled="allItemsDone"
-        @click="downloadAll"
+        @click="handleFooterAction"
       >
         {{ allItemsDone ? 'All Done' : 'Download All' }}
       </BaseButton>
@@ -1093,6 +1092,14 @@ async function downloadAll() {
     const succeeded = attempted - failed
     error.value = `${succeeded} of ${attempted} installs queued, ${failed} failed`
   }
+}
+
+function handleFooterAction() {
+  if (allItemsDone.value) {
+    dismiss()
+    return
+  }
+  downloadAll()
 }
 
 // Handle "don't show this popup" change (global setting)

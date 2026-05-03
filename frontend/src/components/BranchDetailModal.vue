@@ -50,6 +50,14 @@
 
     <template #footer>
       <ActionButton
+        v-if="isCurrent"
+        variant="destructive"
+        size="sm"
+        @click="$emit('revert-current')"
+      >
+        Revert Changes
+      </ActionButton>
+      <ActionButton
         v-if="!isCurrent"
         variant="destructive"
         size="sm"
@@ -88,6 +96,7 @@ defineEmits<{
   close: []
   delete: [branchName: string]
   switch: [branchName: string]
+  'revert-current': []
 }>()
 
 const { getBranchHistory } = useComfyGitService()

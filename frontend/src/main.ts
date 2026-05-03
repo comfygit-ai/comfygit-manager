@@ -1068,6 +1068,13 @@ app.registerExtension({
               console.log('[ComfyGit] Reconnected after restart, refreshing node definitions...')
 
               try {
+                const autoRefresh = localStorage.getItem('ComfyGit.Settings.AutoRefresh') !== 'false'
+                if (autoRefresh) {
+                  console.log('[ComfyGit] Auto-refresh enabled after node install restart, reloading page...')
+                  clearWorkflowStateAndReload()
+                  return
+                }
+
                 // Refresh node definitions (like Manager does)
                 if ((app as any).refreshComboInNodes) {
                   await (app as any).refreshComboInNodes()

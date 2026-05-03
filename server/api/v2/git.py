@@ -376,6 +376,39 @@ async def checkout_commit(request: web.Request, env) -> web.Response:
     })
 
 
+@routes.post("/v2/comfygit/revert-changes")
+@logged_operation("revert changes")
+async def revert_changes(request: web.Request, env) -> web.Response:
+    """Discard uncommitted changes on the current branch and restart."""
+    import os
+    import asyncio
+    from comfygit_core.models.exceptions import CDEnvironmentError
+
+    try:
+        await run_sync(env.reset, "HEAD", mode="hard", strategy=None, force=True)
+    except CDEnvironmentError as e:
+        return web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=400)
+    except Exception as e:
+        return web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
+
+    async def delayed_exit():
+        await asyncio.sleep(0.3)
+        os._exit(42)
+
+    asyncio.create_task(delayed_exit())
+
+    return web.json_response({
+        "status": "success",
+        "message": "Restarting from current HEAD..."
+    })
+
+
 @routes.get("/v2/comfygit/branches")
 @requires_environment
 async def list_branches(request: web.Request, env) -> web.Response:

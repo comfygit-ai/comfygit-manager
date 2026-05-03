@@ -16,6 +16,7 @@ import type {
   CheckoutResult,
   CreateBranchResult,
   SwitchBranchResult,
+  RevertChangesResult,
   EnvironmentInfo,
   EnvironmentDetail,
   SwitchEnvironmentProgress,
@@ -566,6 +567,16 @@ export function useComfyGitService() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ branch, force })
+    })
+  }
+
+  async function revertChanges(): Promise<RevertChangesResult> {
+    if (USE_MOCK) return { status: 'success', message: 'Restarting from current HEAD...' }
+
+    return fetchApi<RevertChangesResult>('/v2/comfygit/revert-changes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
     })
   }
 
@@ -2194,6 +2205,7 @@ export function useComfyGitService() {
     checkout,
     createBranch,
     switchBranch,
+    revertChanges,
     deleteBranch,
     // Environment Management
     listEnvironments,
