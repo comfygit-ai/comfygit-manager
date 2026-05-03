@@ -384,6 +384,30 @@ def _safe_dict(value) -> dict:
     return {}
 
 
+def _widget_value_at(widgets_values, index: int):
+    """Return a widget value from ComfyUI list-style or dict-style widget data."""
+    if isinstance(widgets_values, (list, tuple)):
+        return widgets_values[index] if index < len(widgets_values) else None
+    if isinstance(widgets_values, dict):
+        if index in widgets_values:
+            return widgets_values[index]
+        return widgets_values.get(str(index))
+    return None
+
+
+def _iter_widget_values(widgets_values):
+    """Yield stable widget index/value pairs for fallback contract context."""
+    if isinstance(widgets_values, (list, tuple)):
+        yield from enumerate(widgets_values)
+        return
+    if isinstance(widgets_values, dict):
+        for key, value in widgets_values.items():
+            try:
+                yield int(key), value
+            except (TypeError, ValueError):
+                yield key, value
+
+
 def _get_workflow_contract_context(env, workflow_name: str) -> dict | None:
     """Build lightweight contract-authoring context from the current workflow file."""
     try:
@@ -410,12 +434,12 @@ def _get_workflow_contract_context(env, workflow_name: str) -> dict | None:
                 "widget_idx": widget_idx,
                 "name": input_def.name,
                 "type": input_def.type,
-                "value": node.widgets_values[widget_idx] if widget_idx < len(node.widgets_values) else None,
+                "value": _widget_value_at(node.widgets_values, widget_idx),
             })
             widget_idx += 1
 
         if not widget_candidates:
-            for idx, value in enumerate(node.widgets_values):
+            for idx, value in _iter_widget_values(node.widgets_values):
                 inferred_type = "number" if isinstance(value, int | float) else "string"
                 widget_candidates.append({
                     "widget_idx": idx,
