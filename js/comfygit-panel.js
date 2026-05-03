@@ -18333,7 +18333,10 @@ const PC = { class: "workspace-settings-content" }, RC = { class: "settings-sect
           key: 0,
           icon: "📜",
           message: "No commits yet"
-        })) : (o(), R(Ic, { key: 1 }, {
+        })) : (o(), R(Ic, {
+          key: 1,
+          class: "history-commits"
+        }, {
           default: h(() => [
             (o(!0), i(B, null, ye(e.commits, (r) => (o(), R(Ec, {
               key: r.hash,
@@ -18379,7 +18382,7 @@ const PC = { class: "workspace-settings-content" }, RC = { class: "settings-sect
       }
     ]), 1024));
   }
-}), m5 = /* @__PURE__ */ Te(d5, [["__scopeId", "data-v-fa4bf3a1"]]), f5 = { class: "branch-create-form" }, v5 = { class: "form-actions" }, p5 = /* @__PURE__ */ Ee({
+}), m5 = /* @__PURE__ */ Te(d5, [["__scopeId", "data-v-dc0d8955"]]), f5 = { class: "branch-create-form" }, v5 = { class: "form-actions" }, p5 = /* @__PURE__ */ Ee({
   __name: "BranchCreateForm",
   emits: ["create", "cancel"],
   setup(e, { emit: t }) {
@@ -22853,7 +22856,7 @@ const NM = { class: "comfygit-panel" }, LM = { class: "panel-header" }, UM = { c
       try {
         const [q, Ye, nt, gt] = await Promise.all([
           l(!0),
-          r(),
+          r(50),
           c(),
           p()
         ]);
@@ -23589,7 +23592,7 @@ const NM = { class: "comfygit-panel" }, LM = { class: "panel-header" }, UM = { c
       ]);
     };
   }
-}), pP = /* @__PURE__ */ Te(vP, [["__scopeId", "data-v-93abae9b"]]), gP = { class: "item-header" }, hP = { class: "item-info" }, yP = { class: "filename" }, wP = { class: "metadata" }, _P = { class: "size" }, kP = {
+}), pP = /* @__PURE__ */ Te(vP, [["__scopeId", "data-v-cf278f6e"]]), gP = { class: "item-header" }, hP = { class: "item-info" }, yP = { class: "filename" }, wP = { class: "metadata" }, _P = { class: "size" }, kP = {
   key: 0,
   class: "type"
 }, bP = { class: "item-actions" }, $P = {

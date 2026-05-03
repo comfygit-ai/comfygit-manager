@@ -873,7 +873,7 @@ async function refresh(options: { refreshWorkflows?: boolean } = {}) {
     // Use forceRefresh=true to clear cached environment state
     const [statusRes, historyRes, branchesRes, envsRes] = await Promise.all([
       getStatus(true),
-      getHistory(),
+      getHistory(50),
       getBranches(),
       getEnvironments()
     ])

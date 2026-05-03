@@ -11,7 +11,7 @@
         message="No commits yet"
       />
 
-      <CommitList v-else>
+      <CommitList v-else class="history-commits">
         <CommitItem
           v-for="commit in commits"
           :key="commit.hash"
@@ -66,5 +66,8 @@ defineEmits<{
 </script>
 
 <style scoped>
-/* Minimal custom styles - everything else comes from atomic components */
+.history-commits {
+  max-height: min(420px, calc(70vh - 260px));
+  overflow-y: auto;
+}
 </style>
