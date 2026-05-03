@@ -211,12 +211,15 @@
           <VersionControlSection
             v-else-if="currentView === 'version-control'"
             :commits="commits"
+            :history-has-more="historyHasMore"
+            :is-loading-history-more="isLoadingHistoryMore"
             :current-ref="status?.branch"
             :branches="branches"
             :current="status?.branch || null"
             :initial-tab="versionControlTab"
             @select="handleCommitSelect"
             @checkout="handleCheckout"
+            @load-more-history="loadMoreHistory"
             @switch="handleBranchSwitch"
             @create="handleBranchCreate"
             @delete="handleBranchDelete"
@@ -507,6 +510,8 @@ type SectionName = 'this-env' | 'version-control' | 'workspace' | 'diagnostics'
 
 const status = ref<ComfyGitStatus | null>(null)
 const commits = ref<CommitInfo[]>([])
+const historyHasMore = ref(false)
+const isLoadingHistoryMore = ref(false)
 const branches = ref<BranchInfo[]>([])
 const environments = ref<EnvironmentInfo[]>([])
 const currentEnvironment = computed(() => environments.value.find(e => e.is_current))
@@ -875,12 +880,13 @@ async function refresh(options: { refreshWorkflows?: boolean } = {}) {
     // Use forceRefresh=true to clear cached environment state
     const [statusRes, historyRes, branchesRes, envsRes] = await Promise.all([
       getStatus(true),
-      getHistory(50),
+      getHistory(HISTORY_PAGE_SIZE),
       getBranches(),
       getEnvironments()
     ])
     status.value = statusRes
     commits.value = historyRes.commits
+    historyHasMore.value = historyRes.has_more
     branches.value = branchesRes.branches
     environments.value = envsRes
     emit('statusUpdate', statusRes)
@@ -895,9 +901,27 @@ async function refresh(options: { refreshWorkflows?: boolean } = {}) {
     error.value = err instanceof Error ? err.message : 'Failed to load status'
     status.value = null
     commits.value = []
+    historyHasMore.value = false
     branches.value = []
   } finally {
     isLoading.value = false
+  }
+}
+
+const HISTORY_PAGE_SIZE = 50
+
+async function loadMoreHistory() {
+  if (isLoadingHistoryMore.value || !historyHasMore.value) return
+
+  isLoadingHistoryMore.value = true
+  try {
+    const result = await getHistory(HISTORY_PAGE_SIZE, commits.value.length)
+    commits.value = [...commits.value, ...result.commits]
+    historyHasMore.value = result.has_more
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Failed to load more commits', 'error')
+  } finally {
+    isLoadingHistoryMore.value = false
   }
 }
 

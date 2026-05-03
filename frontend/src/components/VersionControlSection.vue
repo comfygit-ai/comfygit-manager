@@ -13,9 +13,12 @@
         v-if="activeTab === 'history'"
         embedded
         :commits="commits"
+        :has-more="historyHasMore"
+        :is-loading-more="isLoadingHistoryMore"
         :current-ref="currentRef"
         @select="emit('select', $event)"
         @checkout="emit('checkout', $event)"
+        @load-more="emit('load-more-history')"
       />
 
       <BranchSection
@@ -50,6 +53,8 @@ import RemotesSection from './RemotesSection.vue'
 
 const props = defineProps<{
   commits: CommitInfo[]
+  historyHasMore?: boolean
+  isLoadingHistoryMore?: boolean
   currentRef?: string | null
   branches: BranchInfo[]
   current: string | null
@@ -59,6 +64,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   select: [commit: CommitInfo]
   checkout: [commit: CommitInfo]
+  'load-more-history': []
   switch: [branch: string]
   create: [name: string]
   delete: [branch: string]

@@ -448,23 +448,29 @@ export function useComfyGitService() {
 
   async function getHistory(limit = 10, offset = 0): Promise<LogResult> {
     if (USE_MOCK) {
-      const commits = await mockApi.getCommitHistory(limit)
+      const allCommits = await mockApi.getCommitHistory(limit + offset + 1)
+      const commits = allCommits.slice(offset, offset + limit)
       return {
         commits,
-        total: commits.length,
-        offset
+        has_more: allCommits.length > offset + limit,
+        current_branch: null
       }
     }
 
     return fetchApi<LogResult>(`/v2/comfygit/log?limit=${limit}&offset=${offset}`)
   }
 
-  async function getBranchHistory(branchName: string, limit = 50): Promise<LogResult> {
+  async function getBranchHistory(branchName: string, limit = 50, offset = 0): Promise<LogResult> {
     if (USE_MOCK) {
-      const commits = await mockApi.getCommitHistory(limit)
-      return { commits, has_more: false, current_branch: branchName }
+      const allCommits = await mockApi.getCommitHistory(limit + offset + 1)
+      const commits = allCommits.slice(offset, offset + limit)
+      return {
+        commits,
+        has_more: allCommits.length > offset + limit,
+        current_branch: branchName
+      }
     }
-    return fetchApi<LogResult>(`/v2/comfygit/log?branch=${encodeURIComponent(branchName)}&limit=${limit}`)
+    return fetchApi<LogResult>(`/v2/comfygit/log?branch=${encodeURIComponent(branchName)}&limit=${limit}&offset=${offset}`)
   }
 
   async function exportEnv(outputPath?: string): Promise<ExportResult> {
