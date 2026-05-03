@@ -724,7 +724,8 @@ const needsNodeResolution = computed(() => {
 const needsModelResolution = computed(() => {
   if (!analysisResult.value) return false
   return analysisResult.value.models.unresolved.length > 0 ||
-         analysisResult.value.models.ambiguous.length > 0
+         analysisResult.value.models.ambiguous.length > 0 ||
+         savedOptionalModels.value.length > 0
 })
 
 // Check if there are download intents that user might want to edit
@@ -916,9 +917,39 @@ const unresolvedAndAmbiguousModels = computed(() => {
   return [...unresolved, ...ambiguous]
 })
 
+const savedOptionalModels = computed(() => {
+  if (!analysisResult.value) return []
+
+  const reconstructed = (analysisResult.value.models.saved_optional || []).map(model => ({
+    filename: model.filename || model.reference.widget_value,
+    reference: model.reference,
+    reason: model.reason,
+    is_unresolved: true,
+    is_saved_optional: true,
+    options: undefined as undefined | ModelOptionType[]
+  }))
+
+  const resolvedOptional = analysisResult.value.models.resolved
+    .filter(model => model.is_optional)
+    .map(model => ({
+      filename: model.reference.widget_value,
+      reference: model.reference,
+      reason: 'saved_optional',
+      is_unresolved: true,
+      is_saved_optional: true,
+      options: undefined as undefined | ModelOptionType[]
+    }))
+
+  return [...reconstructed, ...resolvedOptional]
+})
+
 // Combined list including download intents for the Models step
 const allEditableModels = computed(() => {
   const base = unresolvedAndAmbiguousModels.value
+  const existingFilenames = new Set(base.map(model => model.filename))
+  const savedOptional = savedOptionalModels.value.filter(
+    model => !existingFilenames.has(model.filename)
+  )
 
   // Add download intents as editable items (include existing URL/path for editing)
   const downloadIntents = downloadIntentModels.value.map(m => ({
@@ -931,7 +962,7 @@ const allEditableModels = computed(() => {
     options: undefined as undefined | ModelOptionType[]
   }))
 
-  return [...base, ...downloadIntents]
+  return [...base, ...savedOptional, ...downloadIntents]
 })
 
 // Download intents that will actually be downloaded (for Review step details)
@@ -1144,6 +1175,7 @@ async function loadAnalysis() {
     analysisResult.value = analysis
     installedNodePacks.value = buildInstalledNodePackChoices(nodes.nodes)
     initializeSavedNodeChoices(analysis)
+    initializeSavedModelChoices(analysis)
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to analyze workflow'
   } finally {
@@ -1175,6 +1207,34 @@ function initializeSavedNodeChoices(analysis: FullResolutionResult) {
   for (const node of analysis.nodes.uninstallable) {
     if (node.saved_choice) {
       nodeChoices.value.set(node.reference.node_type, node.saved_choice)
+    }
+  }
+}
+
+function initializeSavedModelChoices(analysis: FullResolutionResult) {
+  modelChoices.value.clear()
+
+  for (const model of analysis.models.saved_optional || []) {
+    if (model.saved_choice) {
+      modelChoices.value.set(model.filename || model.reference.widget_value, model.saved_choice)
+    }
+  }
+
+  for (const model of analysis.models.unresolved) {
+    if (model.saved_choice) {
+      modelChoices.value.set(model.filename || model.reference.widget_value, model.saved_choice)
+    }
+  }
+
+  for (const model of analysis.models.ambiguous) {
+    if (model.saved_choice) {
+      modelChoices.value.set(model.reference.widget_value, model.saved_choice)
+    }
+  }
+
+  for (const model of analysis.models.resolved) {
+    if (model.is_optional) {
+      modelChoices.value.set(model.reference.widget_value, { action: 'optional' })
     }
   }
 }
@@ -1348,6 +1408,8 @@ async function handleApply() {
     }
     progress.nodesMarkedOptional = result.nodes_marked_optional || []
     progress.nodesMapped = result.nodes_mapped || []
+    progress.modelsMarkedOptional = result.models_marked_optional || []
+    progress.modelDownloadIntentsChanged = result.model_download_intents_changed || []
     progress.modelPathsSynced = result.model_paths_synced || 0
 
     const gitInstallSpecs = Array.from(nodeChoices.value.values())

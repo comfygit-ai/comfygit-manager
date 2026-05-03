@@ -869,10 +869,13 @@ export interface ResolvedModel {
 export interface UnresolvedModel {
   reference: ModelReference
   reason: string
+  filename?: string
+  saved_choice?: ModelChoice
 }
 
 export interface AmbiguousModel {
   reference: ModelReference
+  saved_choice?: ModelChoice
   options: Array<{
     model: ResolvedModelData
     match_confidence: number
@@ -895,6 +898,7 @@ export interface FullResolutionResult {
   models: {
     resolved: ResolvedModel[]
     unresolved: UnresolvedModel[]
+    saved_optional?: UnresolvedModel[]
     ambiguous: AmbiguousModel[]
   }
   stats: {
@@ -930,6 +934,8 @@ export interface AppliedResolutionResult {
   nodes_to_install: string[]
   nodes_marked_optional?: string[]
   nodes_mapped?: Array<{ node_type: string; package_id: string }>
+  models_marked_optional?: string[]
+  model_download_intents_changed?: string[]
   model_paths_synced?: number
   models_to_download: Array<{
     filename: string
@@ -1047,6 +1053,8 @@ export interface ResolutionProgressState {
   nodesInstalled: string[]
   nodesMarkedOptional: string[]
   nodesMapped: Array<{ node_type: string; package_id: string }>
+  modelsMarkedOptional: string[]
+  modelDownloadIntentsChanged: string[]
   modelPathsSynced?: number
   dependencyReviews?: Array<{ node_id: string; dependency_review: DependencyReviewPayload }>
   installError?: string

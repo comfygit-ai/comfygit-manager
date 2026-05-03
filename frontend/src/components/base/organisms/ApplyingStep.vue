@@ -95,6 +95,16 @@
           <span class="summary-text">{{ modelPathsSyncedCount }} model path{{ modelPathsSyncedCount > 1 ? 's' : '' }} synced</span>
         </div>
 
+        <div v-if="modelsMarkedOptionalCount > 0" class="summary-item success">
+          <span class="summary-icon">✓</span>
+          <span class="summary-text">{{ modelsMarkedOptionalCount }} model{{ modelsMarkedOptionalCount > 1 ? 's' : '' }} marked optional</span>
+        </div>
+
+        <div v-if="modelDownloadIntentsChangedCount > 0" class="summary-item success">
+          <span class="summary-icon">✓</span>
+          <span class="summary-text">{{ modelDownloadIntentsChangedCount }} model decision{{ modelDownloadIntentsChangedCount > 1 ? 's' : '' }} changed</span>
+        </div>
+
         <!-- Failed installations summary -->
         <div v-if="failedNodes.length > 0" class="summary-item error">
           <span class="summary-icon">✗</span>
@@ -236,6 +246,10 @@ const nodesMappedCount = computed(() => props.progress.nodesMapped?.length || 0)
 
 const modelPathsSyncedCount = computed(() => props.progress.modelPathsSynced || 0)
 
+const modelsMarkedOptionalCount = computed(() => props.progress.modelsMarkedOptional?.length || 0)
+
+const modelDownloadIntentsChangedCount = computed(() => props.progress.modelDownloadIntentsChanged?.length || 0)
+
 const hasBackgroundDownloads = computed(() => props.progress.completedFiles.length > 0)
 
 const hasAppliedChanges = computed(() => {
@@ -243,6 +257,8 @@ const hasAppliedChanges = computed(() => {
     nodesMarkedOptionalCount.value > 0 ||
     nodesMappedCount.value > 0 ||
     modelPathsSyncedCount.value > 0 ||
+    modelsMarkedOptionalCount.value > 0 ||
+    modelDownloadIntentsChangedCount.value > 0 ||
     hasBackgroundDownloads.value ||
     needsRestart.value ||
     appliedDependencyReviewCount.value > 0

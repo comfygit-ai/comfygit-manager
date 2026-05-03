@@ -743,9 +743,13 @@ async def _apply_explicit_node_mapping_choices(
     return changes
 
 
-def _serialize_unresolved_model(ref: WorkflowNodeWidgetRef, workflow_name: str) -> dict:
+def _serialize_unresolved_model(
+    ref: WorkflowNodeWidgetRef,
+    workflow_name: str,
+    saved_choice: dict | None = None,
+) -> dict:
     """Convert WorkflowNodeWidgetRef to frontend UnresolvedModel format."""
-    return {
+    serialized = {
         "reference": {
             "workflow": workflow_name,
             "node_id": ref.node_id,
@@ -755,14 +759,80 @@ def _serialize_unresolved_model(ref: WorkflowNodeWidgetRef, workflow_name: str) 
         },
         "reason": "not_found_in_index"
     }
+    if saved_choice:
+        serialized["saved_choice"] = saved_choice
+    return serialized
 
 
-def _serialize_ambiguous_model(options: list[ResolvedModel]) -> dict:
+def _serialize_saved_optional_model(manifest_model, ref: WorkflowNodeWidgetRef, workflow_name: str) -> dict:
+    """Serialize a durable optional model decision as an editable model choice."""
+    return {
+        "reference": {
+            "workflow": workflow_name,
+            "node_id": ref.node_id,
+            "node_type": ref.node_type,
+            "widget_name": getattr(ref, 'widget_name', None),
+            "widget_value": ref.widget_value,
+        },
+        "filename": manifest_model.filename,
+        "reason": "saved_optional",
+        "saved_choice": {"action": "optional"},
+    }
+
+
+def _model_ref_key(ref: WorkflowNodeWidgetRef) -> tuple[str, int | None, str]:
+    return (
+        str(getattr(ref, "node_id", "")),
+        getattr(ref, "widget_index", None),
+        str(getattr(ref, "widget_value", "")),
+    )
+
+
+def _reconstruct_saved_optional_models(env, workflow_name: str, result) -> list[dict]:
+    """Return optional manifest model choices that should stay editable."""
+    existing_refs = set()
+    for model in list(getattr(result, "models_resolved", []) or []):
+        existing_refs.add(_model_ref_key(model.reference))
+    for ref in list(getattr(result, "models_unresolved", []) or []):
+        existing_refs.add(_model_ref_key(ref))
+    for options in list(getattr(result, "models_ambiguous", []) or []):
+        for model in options:
+            existing_refs.add(_model_ref_key(model.reference))
+
+    saved_models = []
+    for manifest_model in env.pyproject.workflows.get_workflow_models(workflow_name):
+        if manifest_model.criticality != "optional":
+            continue
+        if manifest_model.sources:
+            continue
+        for ref in manifest_model.nodes:
+            ref_key = _model_ref_key(ref)
+            if ref_key in existing_refs:
+                continue
+            saved_models.append(_serialize_saved_optional_model(manifest_model, ref, workflow_name))
+            existing_refs.add(ref_key)
+
+    return saved_models
+
+
+def _saved_optional_model_choice_map(env, workflow_name: str) -> dict[tuple[str, int | None, str], dict]:
+    saved = {}
+    for manifest_model in env.pyproject.workflows.get_workflow_models(workflow_name):
+        if manifest_model.criticality != "optional":
+            continue
+        if manifest_model.sources:
+            continue
+        for ref in manifest_model.nodes:
+            saved[_model_ref_key(ref)] = {"action": "optional"}
+    return saved
+
+
+def _serialize_ambiguous_model(options: list[ResolvedModel], saved_choice: dict | None = None) -> dict:
     """Convert ambiguous model options to frontend AmbiguousModel format."""
     if not options:
         return None
     ref = options[0].reference
-    return {
+    serialized = {
         "reference": {
             "workflow": options[0].workflow,
             "node_id": ref.node_id,
@@ -786,6 +856,9 @@ def _serialize_ambiguous_model(options: list[ResolvedModel]) -> dict:
             for opt in options if opt.resolved_model
         ]
     }
+    if saved_choice:
+        serialized["saved_choice"] = saved_choice
+    return serialized
 
 
 # =============================================================================
@@ -936,6 +1009,117 @@ class PanelModelStrategy:
             )
 
         return None
+
+
+def _apply_explicit_model_choices_to_manifest(env, workflow_name: str, model_choices: dict[str, dict]) -> dict:
+    """Apply explicit model choices that may not appear in fresh issue analysis."""
+    changes = {
+        "models_marked_optional": [],
+        "model_download_intents_changed": [],
+    }
+    if not model_choices:
+        return changes
+
+    try:
+        current_models = env.pyproject.workflows.get_workflow_models(workflow_name)
+    except Exception:
+        logger.exception("Failed to read workflow models for '%s'", workflow_name)
+        return changes
+
+    updated_models = False
+    for model in current_models:
+        choice = model_choices.get(model.filename)
+        if not choice:
+            continue
+
+        action = choice.get("action")
+        if action == "optional":
+            changed = (
+                model.status != "unresolved"
+                or model.criticality != "optional"
+                or bool(model.sources)
+                or model.relative_path is not None
+                or model.hash is not None
+            )
+            model.status = "unresolved"
+            model.criticality = "optional"
+            model.sources = []
+            model.relative_path = None
+            model.hash = None
+            if changed:
+                changes["models_marked_optional"].append(model.filename)
+                updated_models = True
+            continue
+
+        if action in ("skip", "cancel_download"):
+            changed = (
+                model.criticality == "optional"
+                or bool(model.sources)
+                or model.relative_path is not None
+            )
+            model.status = "unresolved"
+            model.criticality = "required"
+            model.sources = []
+            model.relative_path = None
+            model.hash = None
+            if changed:
+                changes["model_download_intents_changed"].append(model.filename)
+                updated_models = True
+            continue
+
+        if action == "download":
+            url = choice.get("url")
+            if not url:
+                continue
+            target_path = choice.get("target_path")
+            changed = (
+                model.status != "unresolved"
+                or model.criticality != "required"
+                or model.sources != [url]
+                or model.relative_path != target_path
+                or model.hash is not None
+            )
+            model.status = "unresolved"
+            model.criticality = "required"
+            model.sources = [url]
+            model.relative_path = target_path
+            model.hash = None
+            if changed:
+                changes["model_download_intents_changed"].append(model.filename)
+                updated_models = True
+            continue
+
+        if action == "select":
+            selected = choice.get("selected_model") or {}
+            selected_hash = selected.get("hash")
+            if not selected_hash:
+                continue
+            changed = (
+                model.status != "resolved"
+                or model.criticality != "required"
+                or model.hash != selected_hash
+                or model.filename != selected.get("filename", model.filename)
+            )
+            model.status = "resolved"
+            model.criticality = "required"
+            model.hash = selected_hash
+            model.filename = selected.get("filename", model.filename)
+            model.category = selected.get("category", model.category)
+            model.sources = []
+            model.relative_path = None
+            if changed:
+                changes["model_download_intents_changed"].append(model.filename)
+                updated_models = True
+
+    if updated_models:
+        try:
+            env.pyproject.workflows.set_workflow_models(workflow_name, current_models)
+        except Exception:
+            logger.exception("Failed to write workflow model choices for '%s'", workflow_name)
+
+    changes["models_marked_optional"] = list(dict.fromkeys(changes["models_marked_optional"]))
+    changes["model_download_intents_changed"] = list(dict.fromkeys(changes["model_download_intents_changed"]))
+    return changes
 
 
 @routes.get("/v2/comfygit/workflows")
@@ -1379,6 +1563,9 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
         and not has_uninstallable
     )
 
+    saved_optional_model_choices = _saved_optional_model_choice_map(env, name)
+    saved_optional_models = _reconstruct_saved_optional_models(env, name, result)
+
     # Transform to frontend format
     response = {
         "workflow": name,
@@ -1428,9 +1615,23 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
         },
         "models": {
             "resolved": [_serialize_resolved_model(m) for m in result.models_resolved],
-            "unresolved": [_serialize_unresolved_model(m, name) for m in result.models_unresolved],
+            "unresolved": [
+                _serialize_unresolved_model(
+                    m,
+                    name,
+                    saved_optional_model_choices.get(_model_ref_key(m)),
+                )
+                for m in result.models_unresolved
+            ],
+            "saved_optional": saved_optional_models,
             "ambiguous": [
-                amb for amb in [_serialize_ambiguous_model(opts) for opts in result.models_ambiguous]
+                amb for amb in [
+                    _serialize_ambiguous_model(
+                        opts,
+                        saved_optional_model_choices.get(_model_ref_key(opts[0].reference)) if opts else None,
+                    )
+                    for opts in result.models_ambiguous
+                ]
                 if amb is not None
             ]
         },
@@ -1444,7 +1645,12 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
                 + len(version_gated_nodes)
                 + len(uninstallable_nodes)
             ),
-            "total_models": len(result.models_resolved) + len(result.models_unresolved) + len(result.models_ambiguous),
+            "total_models": (
+                len(result.models_resolved)
+                + len(result.models_unresolved)
+                + len(result.models_ambiguous)
+                + len(saved_optional_models)
+            ),
             "download_intents": download_intents_count,
             "nodes_needing_installation": nodes_needing_installation,  # Node types count
             "packages_needing_installation": packages_needing_installation,  # Unique packages count
@@ -1836,45 +2042,7 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
     )
     nodes_to_install = list(dict.fromkeys(nodes_to_install))
 
-    # Handle user overrides for existing download intents
-    # Get current workflow models from pyproject to check for download intents
-    try:
-        current_models = env.pyproject.workflows.get_workflow_models(name)
-        updated_models = False
-
-        for model in current_models:
-            if model.status == "unresolved" and model.sources:
-                # This is a download intent - check if user wants to change it
-                choice = model_choices.get(model.filename)
-                if choice:
-                    action = choice.get("action")
-                    if action in ("skip", "cancel_download"):
-                        # Cancel the download intent - clear sources and mark unresolved
-                        model.sources = []
-                        model.relative_path = None
-                        updated_models = True
-                    elif action == "optional":
-                        # Mark as optional and clear download intent
-                        # Status remains 'unresolved' - model has no hash (never downloaded)
-                        model.status = "unresolved"
-                        model.criticality = "optional"
-                        model.sources = []
-                        model.relative_path = None
-                        updated_models = True
-                    elif action == "download":
-                        # Update download intent with new URL/path
-                        new_url = choice.get("url")
-                        new_path = choice.get("target_path")
-                        if new_url:
-                            model.sources = [new_url]
-                            if new_path:
-                                model.relative_path = new_path
-                            updated_models = True
-
-        if updated_models:
-            env.pyproject.workflows.set_workflow_models(name, current_models)
-    except Exception:
-        pass  # Continue even if update fails
+    model_manifest_changes = _apply_explicit_model_choices_to_manifest(env, name, model_choices)
 
     # Write property_download_intent models to pyproject (they're in models_resolved, not processed by fix_resolution)
     try:
@@ -1994,6 +2162,8 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
         "nodes_marked_optional": nodes_marked_optional,
         "nodes_optional_cleared": mapping_changes["nodes_optional_cleared"],
         "nodes_mapped": mapping_changes["nodes_mapped"],
+        "models_marked_optional": model_manifest_changes["models_marked_optional"],
+        "model_download_intents_changed": model_manifest_changes["model_download_intents_changed"],
         "model_paths_synced": model_paths_synced,
         "models_to_download": models_to_download,
         "estimated_time_seconds": estimated_time
@@ -2096,6 +2266,7 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
             )
 
             nodes_marked_optional = mapping_changes["nodes_marked_optional"]
+            model_manifest_changes = _apply_explicit_model_choices_to_manifest(env, name, model_choices)
 
             # Collect nodes to install
             nodes_to_install = []
@@ -2144,6 +2315,8 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
                 "nodes_marked_optional": nodes_marked_optional,
                 "nodes_optional_cleared": mapping_changes["nodes_optional_cleared"],
                 "nodes_mapped": mapping_changes["nodes_mapped"],
+                "models_marked_optional": model_manifest_changes["models_marked_optional"],
+                "model_download_intents_changed": model_manifest_changes["model_download_intents_changed"],
                 "model_paths_synced": model_paths_synced,
                 "download_results": download_results
             })

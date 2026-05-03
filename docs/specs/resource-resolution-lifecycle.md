@@ -78,36 +78,45 @@ still requires manual action.
 This is especially important for model download intents, because a queued
 download is not the same as a model already being available on disk.
 
-Apply-resolution results should also report durable workflow node-decision
+Apply-resolution results should also report durable workflow resource-decision
 changes such as:
 
 - node types mapped to an already installed node package
 - node types marked optional for the workflow
 - saved workflow node decisions cleared by an explicit skip
+- models marked optional for the workflow
+- saved workflow model download intents changed or cleared by an explicit user
+  action
 
 Those outcomes are manifest mutations even when no package install or model
 download occurs, so the applying summary should not report them as "no changes
 applied."
 
-### CGM-RRL-06A [LIVE]: Saved workflow node decisions should be explicit durable choices
+### CGM-RRL-06A [LIVE]: Saved workflow resource decisions should be explicit durable choices
 Validation: TEST
 
 When a user resolves a workflow node by mapping it to an installed package,
 marking it optional, or skipping a previous saved decision, the manager should
 persist that choice in the workflow's durable node mapping state.
 
-These saved decisions should remain available when the user reopens workflow
-resolution from Workflow Details, even if the workflow is currently considered
-resolved.
+When a user resolves a missing workflow model by marking it optional or by
+recording a download intent, the manager should persist that choice in the
+workflow's durable model state.
 
-Applying a saved workflow node decision should invalidate stale workflow
+Saved node and model decisions should remain available when the user reopens
+workflow resolution from Workflow Details, even if the workflow is currently
+considered resolved. Reopening resolution should not require the user to first
+make the resource required again from Workflow Details just to change the prior
+choice.
+
+Applying a saved workflow resource decision should invalidate stale workflow
 resolution cache state before re-analysis, because the cache may otherwise
 reflect the previous manifest decision.
 
 Current implementation note: the Manager API performs these manifest mutations
 directly. This is acceptable for the current local panel slice, but the
 manifest mutation policy should move into ComfyGit core once CLI or other
-adapters need the same workflow node-decision behavior.
+adapters need the same workflow resource-decision behavior.
 
 ### CGM-RRL-06B [LIVE]: Risky node dependency changes require explicit review before apply
 Validation: TEST
