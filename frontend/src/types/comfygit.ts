@@ -175,6 +175,7 @@ export interface ModelWithoutSource {
   hash: string | null
   criticality?: 'required' | 'flexible' | 'optional'
   workflows: string[]
+  source_candidates?: Array<{ type: string; url: string }>
 }
 
 export interface NodeWithoutProvenance {
@@ -566,6 +567,30 @@ export interface ModelSourceCandidatesResponse {
 
 export interface WorkflowSourceCandidatesResponse {
   candidates: ModelSourceCandidate[]
+}
+
+export interface EnvironmentModelSourceApplyRequest {
+  sources: Array<{
+    identifier: string
+    source_url: string
+  }>
+}
+
+export interface EnvironmentModelSourceApplyResult {
+  status: 'success' | 'partial' | 'error'
+  applied: Array<{
+    identifier: string
+    model_hash: string
+    source_url: string
+    source_type: string
+  }>
+  errors: Array<{
+    index?: number
+    identifier?: string
+    source_url?: string
+    error: string
+    message: string
+  }>
 }
 
 export interface DownloadModelRequest {

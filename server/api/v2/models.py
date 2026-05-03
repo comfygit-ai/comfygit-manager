@@ -499,6 +499,84 @@ async def add_model_source(request: web.Request, env) -> web.Response:
         return web.json_response({"error": str(e)}, status=500)
 
 
+@routes.post("/v2/comfygit/models/sources/apply")
+@logged_operation("apply environment model sources")
+async def apply_environment_model_sources(request: web.Request, env) -> web.Response:
+    """Apply staged model source URLs to the current environment manifest."""
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    sources = body.get("sources")
+    if not isinstance(sources, list):
+        return web.json_response({"error": "Missing 'sources' list"}, status=400)
+
+    applied = []
+    errors = []
+    for index, item in enumerate(sources):
+        if not isinstance(item, dict):
+            errors.append({
+                "index": index,
+                "error": "invalid_source",
+                "message": "Source entry must be an object",
+            })
+            continue
+
+        identifier = item.get("identifier") or item.get("hash")
+        source_url = item.get("source_url") or item.get("url")
+        if not identifier or not source_url:
+            errors.append({
+                "index": index,
+                "identifier": identifier,
+                "error": "missing_fields",
+                "message": "Source entry requires identifier and source_url",
+            })
+            continue
+
+        try:
+            result = await run_sync(env.add_model_source, identifier, source_url)
+        except Exception as exc:
+            errors.append({
+                "index": index,
+                "identifier": identifier,
+                "source_url": source_url,
+                "error": "apply_failed",
+                "message": str(exc),
+            })
+            continue
+
+        if result.success:
+            applied.append({
+                "identifier": identifier,
+                "model_hash": result.model_hash or identifier,
+                "source_url": result.url or source_url,
+                "source_type": result.source_type or "custom",
+            })
+            continue
+
+        errors.append({
+            "index": index,
+            "identifier": identifier,
+            "source_url": source_url,
+            "error": result.error or "apply_failed",
+            "message": result.error or "Failed to apply model source",
+        })
+
+    if errors and applied:
+        status = "partial"
+    elif errors:
+        status = "error"
+    else:
+        status = "success"
+
+    return web.json_response({
+        "status": status,
+        "applied": applied,
+        "errors": errors,
+    })
+
+
 @routes.delete("/v2/workspace/models/{identifier}/source")
 @logged_operation("remove model source")
 async def remove_model_source(request: web.Request, env) -> web.Response:

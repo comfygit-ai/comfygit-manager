@@ -443,7 +443,7 @@ class TestExportValidateEndpoint:
         dev_node.registry_id = None
         dev_node.repository = None
         dev_node.pinned_commit = None
-        dev_node.criticality = "optional"
+        dev_node.criticality = "required"
 
         registry_node = Mock()
         registry_node.name = "registry-node"
@@ -471,16 +471,16 @@ class TestExportValidateEndpoint:
         assert len(data["warnings"]["nodes_without_provenance"]) == 1
         node_warning = data["warnings"]["nodes_without_provenance"][0]
         assert node_warning["name"] == "local-dev-node"
-        assert node_warning["criticality"] == "optional"
+        assert node_warning["criticality"] == "required"
         assert "Development node" in node_warning["reason"]
 
-    async def test_model_source_in_workspace_index_clears_warning(
+    async def test_model_source_in_workspace_index_is_repair_candidate(
         self,
         client,
         mock_environment,
         mock_env_status
     ):
-        """Should accept model sources stored in the workspace model index."""
+        """Should surface workspace index sources without clearing manifest warning."""
         mock_env_status.workflow.sync_status.has_changes = False
         mock_env_status.workflow.sync_status.new = []
         mock_env_status.workflow.sync_status.modified = []
@@ -512,7 +512,12 @@ class TestExportValidateEndpoint:
 
         assert resp.status == 200
         data = await resp.json()
-        assert data["warnings"]["models_without_sources"] == []
+        model_warnings = data["warnings"]["models_without_sources"]
+        assert len(model_warnings) == 1
+        assert model_warnings[0]["hash"] == "abc123"
+        assert model_warnings[0]["source_candidates"] == [
+            {"type": "huggingface", "url": "https://huggingface.co/example/model"}
+        ]
 
     async def test_error_no_environment(self, client, monkeypatch):
         """Should return 500 when no environment detected."""

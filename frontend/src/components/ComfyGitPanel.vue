@@ -192,6 +192,7 @@
             @start-setup="showSetupWizard = true"
             @view-environments="selectView('environments', 'workspace')"
             @create-environment="handleCreateEnvironmentFromStatus"
+            @refresh-status="refresh"
           />
 
           <!-- Workflows View -->

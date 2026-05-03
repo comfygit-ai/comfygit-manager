@@ -33,14 +33,26 @@
                     <span v-if="model.workflows.length">used by {{ model.workflows.join(', ') }}</span>
                     <span>{{ model.criticality || 'required' }}</span>
                   </div>
+                  <p
+                    v-if="model.hash && stagedModelSources[model.hash]"
+                    class="issue-staged-source"
+                  >
+                    Will add source: {{ stagedModelSources[model.hash] }}
+                  </p>
+                  <p
+                    v-else-if="model.source_candidates?.length"
+                    class="issue-candidate-note"
+                  >
+                    Source candidate found in model index.
+                  </p>
                 </div>
                 <button
                   v-if="model.hash"
                   class="issue-action"
-                  :disabled="loadingModelHash === model.hash"
+                  :disabled="loadingModelHash === model.hash || applyingSources"
                   @click="openModelSource(model.hash)"
                 >
-                  {{ loadingModelHash === model.hash ? 'Loading...' : 'Add Source' }}
+                  {{ modelSourceActionLabel(model.hash) }}
                 </button>
                 <span v-else class="issue-note">Missing hash</span>
               </article>
@@ -88,7 +100,18 @@
     </template>
 
     <template #footer>
-      <button class="primary-action" @click="emit('close')">
+      <button class="secondary-action" @click="emit('close')">
+        Close
+      </button>
+      <button
+        v-if="stagedSourceCount > 0"
+        class="primary-action"
+        :disabled="applyingSources"
+        @click="applyStagedModelSources"
+      >
+        {{ applyingSources ? 'Applying...' : `Apply Source Changes (${stagedSourceCount})` }}
+      </button>
+      <button v-else class="primary-action" @click="emit('close')">
         Done
       </button>
     </template>
@@ -98,14 +121,16 @@
     v-if="selectedModel"
     :model="selectedModel"
     :overlay-z-index="10008"
-    @close="selectedModel = null"
-    @saved="handleModelSourceSaved"
+    defer-save
+    action-label="Stage Source"
+    @close="closeModelSource"
+    @selected="handleModelSourceSelected"
     @hashes-computed="handleModelHashesComputed"
   />
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import BaseModal from '@/components/base/BaseModal.vue'
 import ModelSourceModal from '@/components/ModelSourceModal.vue'
@@ -118,17 +143,57 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   revalidate: []
+  applied: []
 }>()
 
-const { getModelDetails, updateNodeCriticality } = useComfyGitService()
+const {
+  getModelDetails,
+  updateNodeCriticality,
+  applyEnvironmentModelSources
+} = useComfyGitService()
 
 const selectedModel = ref<ModelDetails | null>(null)
+const selectedModelHash = ref<string | null>(null)
 const loadingModelHash = ref<string | null>(null)
 const updatingNode = ref<string | null>(null)
+const applyingSources = ref(false)
 const error = ref<string | null>(null)
+const stagedModelSources = ref<Record<string, string>>({})
 
 const models = computed(() => props.warnings.models_without_sources)
 const nodes = computed(() => props.warnings.nodes_without_provenance)
+const stagedSourceCount = computed(() => Object.keys(stagedModelSources.value).length)
+
+watch(
+  models,
+  (nextModels) => {
+    const validHashes = new Set(
+      nextModels
+        .map((model) => model.hash)
+        .filter((hash): hash is string => Boolean(hash))
+    )
+    const nextStaged: Record<string, string> = {}
+
+    for (const model of nextModels) {
+      if (!model.hash) continue
+      const existing = stagedModelSources.value[model.hash]
+      const candidate = model.source_candidates?.find((source) => source.url)
+      const sourceUrl = existing || candidate?.url
+      if (sourceUrl) {
+        nextStaged[model.hash] = sourceUrl
+      }
+    }
+
+    for (const [hash, sourceUrl] of Object.entries(stagedModelSources.value)) {
+      if (validHashes.has(hash) && sourceUrl) {
+        nextStaged[hash] = sourceUrl
+      }
+    }
+
+    stagedModelSources.value = nextStaged
+  },
+  { immediate: true }
+)
 
 async function openModelSource(modelHash: string) {
   loadingModelHash.value = modelHash
@@ -136,6 +201,7 @@ async function openModelSource(modelHash: string) {
 
   try {
     selectedModel.value = await getModelDetails(modelHash)
+    selectedModelHash.value = modelHash
   } catch (err) {
     error.value = err instanceof Error ? err.message : `Failed to load ${modelHash}`
   } finally {
@@ -161,13 +227,64 @@ async function markNodeOptional(nodeName: string) {
   }
 }
 
-function handleModelSourceSaved() {
+function closeModelSource() {
   selectedModel.value = null
-  emit('revalidate')
+  selectedModelHash.value = null
+}
+
+function handleModelSourceSelected(url: string) {
+  if (selectedModelHash.value) {
+    stagedModelSources.value = {
+      ...stagedModelSources.value,
+      [selectedModelHash.value]: url
+    }
+  }
+}
+
+function modelSourceActionLabel(modelHash: string) {
+  if (loadingModelHash.value === modelHash) return 'Loading...'
+  return stagedModelSources.value[modelHash] ? 'Change Source' : 'Add Source'
 }
 
 function handleModelHashesComputed() {
   emit('revalidate')
+}
+
+async function applyStagedModelSources() {
+  const sources = Object.entries(stagedModelSources.value).map(([identifier, source_url]) => ({
+    identifier,
+    source_url
+  }))
+  if (!sources.length) return
+
+  applyingSources.value = true
+  error.value = null
+
+  try {
+    const result = await applyEnvironmentModelSources({ sources })
+    if (result.status === 'error') {
+      error.value = result.errors[0]?.message || 'Failed to apply model sources'
+      return
+    }
+
+    const appliedHashes = new Set(
+      result.applied.map((item) => item.identifier || item.model_hash)
+    )
+    stagedModelSources.value = Object.fromEntries(
+      Object.entries(stagedModelSources.value).filter(([hash]) => !appliedHashes.has(hash))
+    )
+
+    if (result.status === 'partial') {
+      error.value = result.errors[0]?.message || 'Some model sources failed to apply'
+    }
+
+    emit('revalidate')
+    emit('applied')
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to apply model sources'
+  } finally {
+    applyingSources.value = false
+  }
 }
 </script>
 
@@ -268,6 +385,22 @@ function handleModelHashesComputed() {
   line-height: 1.4;
 }
 
+.issue-staged-source,
+.issue-candidate-note {
+  margin: var(--cg-space-2) 0 0 0;
+  font-size: var(--cg-font-size-xs);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.issue-staged-source {
+  color: var(--cg-color-success);
+}
+
+.issue-candidate-note {
+  color: var(--cg-color-text-secondary);
+}
+
 .issue-action,
 .secondary-action,
 .primary-action {
@@ -296,6 +429,11 @@ function handleModelHashesComputed() {
   background: var(--cg-color-accent);
   border-color: var(--cg-color-accent);
   color: var(--cg-color-bg-primary);
+}
+
+.primary-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .issue-note {

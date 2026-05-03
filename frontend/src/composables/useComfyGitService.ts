@@ -34,6 +34,8 @@ import type {
   ModelDetails,
   ModelSourceCandidatesResponse,
   WorkflowSourceCandidatesResponse,
+  EnvironmentModelSourceApplyRequest,
+  EnvironmentModelSourceApplyResult,
   DownloadModelRequest,
   ConfigSettings,
   LogEntry,
@@ -1014,6 +1016,29 @@ export function useComfyGitService() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ source_url: sourceUrl })
+    })
+  }
+
+  async function applyEnvironmentModelSources(
+    request: EnvironmentModelSourceApplyRequest
+  ): Promise<EnvironmentModelSourceApplyResult> {
+    if (USE_MOCK) {
+      return {
+        status: 'success',
+        applied: request.sources.map((source) => ({
+          identifier: source.identifier,
+          model_hash: source.identifier,
+          source_url: source.source_url,
+          source_type: 'custom'
+        })),
+        errors: []
+      }
+    }
+
+    return fetchApi<EnvironmentModelSourceApplyResult>('/v2/comfygit/models/sources/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request)
     })
   }
 
@@ -2241,6 +2266,7 @@ export function useComfyGitService() {
     getWorkflowSourceCandidates,
     openFileLocation,
     addModelSource,
+    applyEnvironmentModelSources,
     removeModelSource,
     deleteModel,
     downloadModel,

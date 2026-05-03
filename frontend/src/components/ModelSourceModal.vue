@@ -11,7 +11,7 @@
         :model="currentModel"
         :loading-url="savingUrl"
         :overlay-z-index="overlayZIndex"
-        action-label="Use as Source"
+        :action-label="actionLabel"
         @select-source="useSource"
         @hashes-computed="handleHashesComputed"
       />
@@ -38,13 +38,18 @@ import type { ModelDetails } from '@/types/comfygit'
 const props = withDefaults(defineProps<{
   model: ModelDetails
   overlayZIndex?: number
+  deferSave?: boolean
+  actionLabel?: string
 }>(), {
-  overlayZIndex: 10011
+  overlayZIndex: 10011,
+  deferSave: false,
+  actionLabel: 'Use as Source'
 })
 
 const emit = defineEmits<{
   close: []
   saved: []
+  selected: [url: string]
   hashesComputed: []
 }>()
 
@@ -60,6 +65,12 @@ watch(() => props.model, (model) => {
 
 async function useSource(url: string) {
   if (!url || !props.model.hash) return
+
+  if (props.deferSave) {
+    emit('selected', url)
+    emit('close')
+    return
+  }
 
   savingUrl.value = url
   saveError.value = null

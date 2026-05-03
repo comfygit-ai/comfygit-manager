@@ -10,6 +10,7 @@ These endpoints operate at workspace scope (shared across all environments):
 import pytest
 from unittest.mock import Mock
 from pathlib import Path
+from types import SimpleNamespace
 import sys
 
 # Add helpers to path
@@ -186,6 +187,94 @@ class TestWorkspaceModelSourceEndpoint:
         )
 
         assert resp.status == 500
+
+
+@pytest.mark.integration
+class TestEnvironmentModelSourceApplyEndpoint:
+    """POST /v2/comfygit/models/sources/apply - Apply sources to current environment."""
+
+    async def test_success_apply_environment_model_source(self, client, mock_environment):
+        mock_environment.add_model_source.return_value = SimpleNamespace(
+            success=True,
+            model_hash="abc12345",
+            source_type="huggingface",
+            url="https://huggingface.co/example/model/resolve/main/model.safetensors",
+        )
+
+        resp = await client.post(
+            "/v2/comfygit/models/sources/apply",
+            json={
+                "sources": [
+                    {
+                        "identifier": "abc12345",
+                        "source_url": "https://huggingface.co/example/model/resolve/main/model.safetensors",
+                    }
+                ]
+            },
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "success"
+        assert data["errors"] == []
+        assert data["applied"] == [
+            {
+                "identifier": "abc12345",
+                "model_hash": "abc12345",
+                "source_url": "https://huggingface.co/example/model/resolve/main/model.safetensors",
+                "source_type": "huggingface",
+            }
+        ]
+        mock_environment.add_model_source.assert_called_once_with(
+            "abc12345",
+            "https://huggingface.co/example/model/resolve/main/model.safetensors",
+        )
+
+    async def test_partial_apply_reports_errors(self, client, mock_environment):
+        def add_model_source(identifier, source_url):
+            if identifier == "good":
+                return SimpleNamespace(
+                    success=True,
+                    model_hash="good",
+                    source_type="custom",
+                    url=source_url,
+                )
+            return SimpleNamespace(
+                success=False,
+                error="model_not_found",
+                model_hash=None,
+                source_type=None,
+                url=None,
+            )
+
+        mock_environment.add_model_source.side_effect = add_model_source
+
+        resp = await client.post(
+            "/v2/comfygit/models/sources/apply",
+            json={
+                "sources": [
+                    {"identifier": "good", "source_url": "https://example.test/good.safetensors"},
+                    {"identifier": "missing", "source_url": "https://example.test/missing.safetensors"},
+                ]
+            },
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "partial"
+        assert len(data["applied"]) == 1
+        assert data["errors"][0]["identifier"] == "missing"
+        assert data["errors"][0]["error"] == "model_not_found"
+
+    async def test_error_missing_sources_list(self, client, mock_environment):
+        resp = await client.post(
+            "/v2/comfygit/models/sources/apply",
+            json={},
+        )
+
+        assert resp.status == 400
+        data = await resp.json()
+        assert "error" in data
 
 
 @pytest.mark.integration

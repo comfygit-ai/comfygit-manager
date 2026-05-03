@@ -328,6 +328,7 @@
     :warnings="readinessResult.warnings"
     @close="showReadinessIssuesModal = false"
     @revalidate="handleReadinessRevalidate"
+    @applied="handleReadinessApplied"
   />
 </template>
 
@@ -390,6 +391,7 @@ const emit = defineEmits<{
   'start-setup': []
   'view-environments': []
   'create-environment': []
+  'refresh-status': []
 }>()
 
 const isRepairing = ref(false)
@@ -518,6 +520,10 @@ async function validateReadiness() {
 
 async function handleReadinessRevalidate() {
   await validateReadiness()
+}
+
+function handleReadinessApplied() {
+  emit('refresh-status')
 }
 
 watch(
