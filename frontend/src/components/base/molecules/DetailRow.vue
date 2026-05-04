@@ -4,7 +4,9 @@
     <Value v-if="value" :mono="mono" :variant="valueVariant" :truncate="truncate">
       {{ value }}
     </Value>
-    <slot v-else name="value"></slot>
+    <slot v-else name="value">
+      <slot />
+    </slot>
   </div>
 </template>
 

@@ -15,6 +15,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { copyToClipboard as copyTextToClipboard } from '@/utils/copyToClipboard'
 
 const props = withDefaults(defineProps<{
   path: string
@@ -27,7 +28,7 @@ const copied = ref(false)
 
 async function copyToClipboard() {
   try {
-    await navigator.clipboard.writeText(props.path)
+    await copyTextToClipboard(props.path)
     copied.value = true
     setTimeout(() => {
       copied.value = false

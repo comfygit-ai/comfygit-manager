@@ -78,7 +78,7 @@
               Download
             </ActionButton>
             <ActionButton variant="secondary" size="sm" @click="copyExportPath">
-              Copy Path
+              {{ copyPathLabel }}
             </ActionButton>
             <ActionButton variant="ghost" size="sm" @click="exportResult = null">
               Dismiss
@@ -176,6 +176,7 @@ import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import ExportBlockedModal from '@/components/ExportBlockedModal.vue'
 import ReadinessIssuesModal from '@/components/ReadinessIssuesModal.vue'
 import ReproducibilityWarningBanner from '@/components/base/molecules/ReproducibilityWarningBanner.vue'
+import { copyToClipboard } from '@/utils/copyToClipboard'
 
 const props = defineProps<{
   environmentName?: string | null
@@ -194,6 +195,8 @@ const isExporting = ref(false)
 const isDownloading = ref(false)
 const exportResult = ref<ExportResult | null>(null)
 const showInfo = ref(false)
+const copyPathLabel = ref('Copy Path')
+let copyPathTimeout: ReturnType<typeof setTimeout> | null = null
 
 // Validation state
 const validationResult = ref<ExportValidationResult | null>(null)
@@ -313,13 +316,25 @@ async function executeExport() {
 }
 
 async function copyExportPath() {
-  if (exportResult.value?.path) {
-    try {
-      await navigator.clipboard.writeText(exportResult.value.path)
-    } catch (err) {
-      console.error('Failed to copy path:', err)
-    }
+  if (!exportResult.value?.path) return
+
+  if (copyPathTimeout) {
+    clearTimeout(copyPathTimeout)
+    copyPathTimeout = null
   }
+
+  try {
+    await copyToClipboard(exportResult.value.path)
+    copyPathLabel.value = 'Copied'
+  } catch (err) {
+    console.error('Failed to copy path:', err)
+    copyPathLabel.value = 'Copy Failed'
+  }
+
+  copyPathTimeout = setTimeout(() => {
+    copyPathLabel.value = 'Copy Path'
+    copyPathTimeout = null
+  }, 2000)
 }
 
 async function handleDownload() {
