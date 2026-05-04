@@ -250,6 +250,24 @@ At minimum, the API contract should support:
 The detailed lifecycle semantics are specified by `CGM-ENV-07` through
 `CGM-ENV-11` in `docs/specs/environment-lifecycle-and-orchestrator.md`.
 
+### CGM-API-13A [PLANNED]: Switch initiation should return a restart-stable observer endpoint
+Validation: TEST
+
+When an environment switch is accepted, the response should include enough
+information for the frontend to poll the active lifecycle authority while
+ComfyUI is restarting.
+
+The observer payload should identify direct status and log URLs when available.
+Those URLs may point at the manager-spawned orchestrator or the `cg run`
+supervisor, but they should expose compatible JSON:
+
+- status: `state`, `progress`, `message`, `target_env`, and `source_env`
+- logs: recent ordered log lines with timestamp and message
+
+The frontend may still fall back to ComfyUI-hosted status endpoints after the
+new process is healthy, but normal switch progress should not depend on a
+ComfyUI route being reachable during the handoff window.
+
 ### CGM-API-14 [LIVE]: Node criticality updates must flow through manager API and core
 Validation: TEST
 

@@ -9,6 +9,8 @@ EXTRA_DEV_NODE_PATHS="${EXTRA_DEV_NODE_PATHS:-}"
 COMFYGIT_DEV_REPO_PATH="${COMFYGIT_DEV_REPO_PATH:-/home/akatzfey/dev/projects/comfygit-ai/comfygit}"
 COMFYGIT_MANAGER_DEV_PATH="${COMFYGIT_MANAGER_DEV_PATH:-/home/akatzfey/dev/projects/comfygit-ai/comfygit-manager}"
 COMFYUI_PORT="${COMFYUI_PORT:-8188}"
+COMFYGIT_SUPERVISOR_CONTROL_HOST="${COMFYGIT_SUPERVISOR_CONTROL_HOST:-0.0.0.0}"
+COMFYGIT_SUPERVISOR_CONTROL_PORT="${COMFYGIT_SUPERVISOR_CONTROL_PORT:-9188}"
 TORCH_BACKEND="${COMFYGIT_TORCH_BACKEND:-cu126}"
 COMFYGIT_CREATE_ARGS="${COMFYGIT_CREATE_ARGS:-}"
 COMFYUI_EXTRA_ARGS="${COMFYUI_EXTRA_ARGS:---disable-auto-launch --disable-metadata}"
@@ -22,6 +24,8 @@ COMFYGIT_CREATE_ARGS_ARRAY=()
 EXTRA_DEV_NODE_PATHS_ARRAY=()
 
 export COMFYGIT_HOME="$WORKSPACE"
+export COMFYGIT_SUPERVISOR_CONTROL_HOST
+export COMFYGIT_SUPERVISOR_CONTROL_PORT
 
 log() {
   printf '[manager-dev-stack] %s\n' "$*"
@@ -280,6 +284,7 @@ if [ -n "$EXTRA_DEV_NODE_PATHS" ]; then
 fi
 
 log "Starting ComfyUI on port $COMFYUI_PORT"
+log "Supervisor control endpoint on $COMFYGIT_SUPERVISOR_CONTROL_HOST:$COMFYGIT_SUPERVISOR_CONTROL_PORT"
 log "ComfyGit run will perform a preserve-workflows sync before launch"
 log "Applying local development overlay during run sync"
 if [ -n "$COMFYUI_EXTRA_ARGS" ]; then

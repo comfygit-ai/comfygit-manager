@@ -145,3 +145,35 @@ should filter unsupported release tags from the creation selector and reject
 explicit create requests for unsupported release tags. The selector should fetch
 enough release history to expose supported older releases down to this floor,
 not just the newest release page.
+
+### CGM-ENV-13 [LIVE]: `cg run` supervision may consume local switch requests
+Validation: TEST
+
+When ComfyUI is launched by `cg run` as the long-lived process, especially in
+Docker dev containers where PID 1 is a fixed `cg -e <env> run` command, the
+manager should not spawn a separate temporary orchestrator for environment
+switching.
+
+In that runtime shape, the ComfyUI child may exit with the switch code and the
+existing `cg run` process should consume the workspace switch request, sync the
+target environment with the same launch options, release the switch lock, and
+start ComfyUI for the target environment. This prevents Docker restart policy
+from relaunching the original fixed environment and killing the temporary
+orchestrator before the switch can complete.
+
+### CGM-ENV-14 [PARTIAL]: Switch progress should be observable outside ComfyUI
+Validation: MIXED
+
+Environment switch progress should not depend only on endpoints served by the
+ComfyUI process that is being stopped and replaced.
+
+The active lifecycle authority, either the manager-spawned orchestrator or the
+`cg run` supervisor, should expose a small switch-observation surface that
+survives ComfyUI restarts. That surface should provide the current switch
+status and recent supervisor log lines through a stable JSON shape so the
+frontend can show real progress and debugging context instead of relying only
+on simulated progress.
+
+This remains partial until both supervisor modes expose the same observation
+shape and the switch modal consumes it without falling back to noisy failed
+polling during normal handoff.

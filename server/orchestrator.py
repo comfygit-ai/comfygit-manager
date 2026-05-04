@@ -12,6 +12,7 @@ import ctypes
 import json
 import os
 import signal
+import shutil
 import socket
 import subprocess
 import sys
@@ -165,6 +166,12 @@ def should_spawn_orchestrator_for_switch() -> bool:
     """
     # Check if orchestrator is already supervising us
     if os.environ.get("COMFYGIT_SUPERVISED") == "1":
+        return False
+
+    # `cg run` is the long-lived supervisor in Docker dev containers. Let it
+    # consume the switch request so Docker does not restart the original
+    # fixed-environment command and kill a temporary child orchestrator.
+    if os.environ.get("COMFYGIT_CG_RUN_SUPERVISOR") == "1":
         return False
 
     # Check if we can find running orchestrator process
@@ -603,6 +610,10 @@ def ensure_orchestrator_venv(venv_path: Path) -> None:
 
     if venv_path.exists() and python_exe.exists():
         return  # Already set up
+
+    if venv_path.exists():
+        print(f"[ComfyGit] Removing stale orchestrator environment at {venv_path}")
+        shutil.rmtree(venv_path)
 
     print("[ComfyGit] Setting up orchestrator environment...")
 

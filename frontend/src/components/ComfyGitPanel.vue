@@ -358,6 +358,8 @@
       :state="switchProgress.state"
       :progress="switchProgress.progress"
       :message="switchProgress.message"
+      :logs="switchLogs"
+      @refresh="reloadAfterEnvironmentSwitch"
     />
 
     <!-- Environment Selector Modal -->
@@ -469,7 +471,10 @@ import type {
   RuntimeCapabilities,
   SetupStatus,
   SetupState,
-  UpdateCheckResponse
+  UpdateCheckResponse,
+  SwitchEnvironmentObserver,
+  SwitchEnvironmentProgress,
+  SwitchLogEntry
 } from '@/types/comfygit'
 import { dismissVersion, shouldShowUpdateNotice } from '@/utils/updateNotice'
 import { fetchComfyApi } from '@/utils/comfyApi'
@@ -509,6 +514,11 @@ type ViewName = 'status' | 'workflows' | 'models-env' | 'nodes' | 'version-contr
                 'environments' | 'model-index' | 'settings' | 'diagnostics'
 
 type SectionName = 'this-env' | 'version-control' | 'workspace' | 'diagnostics'
+type SwitchProgressLike = Partial<SwitchEnvironmentProgress> & {
+  state?: string
+  progress?: number
+  message?: string
+}
 
 const status = ref<ComfyGitStatus | null>(null)
 const commits = ref<CommitInfo[]>([])
@@ -577,6 +587,8 @@ const showSwitchProgress = ref(false)
 const targetEnvironment = ref<string>('')
 const switchWorkspacePath = ref<string | null>(null)  // For first-time setup
 const switchProgress = ref({ state: 'idle', progress: 0, message: '' })
+const switchObserver = ref<SwitchEnvironmentObserver | null>(null)
+const switchLogs = ref<SwitchLogEntry[]>([])
 let switchPollInterval: number | null = null
 let progressSimulationInterval: number | null = null
 
@@ -1216,18 +1228,23 @@ async function confirmEnvironmentSwitch() {
   showConfirmSwitch.value = false
   showSwitchProgress.value = true
 
-  // Set flag to prompt for refresh after server restart
-  setRefreshFlag()
+  // Switch completion is handled by the switch modal itself. Do not reuse the
+  // restart/git pending-refresh flag, because that auto-reloads before users
+  // can read or copy handoff logs.
+  sessionStorage.removeItem('ComfyGit.PendingRefresh')
 
   switchProgress.value = {
     progress: 10,
     state: getStateFromProgress(10),
     message: getMessageFromProgress(10)
   }
+  switchObserver.value = null
+  switchLogs.value = []
 
   try {
     // Initiate the switch (pass workspace path for first-time setup)
-    await switchEnvironment(targetEnvironment.value, switchWorkspacePath.value || undefined)
+    const result = await switchEnvironment(targetEnvironment.value, switchWorkspacePath.value || undefined)
+    switchObserver.value = result?.observer || null
 
     // Start smooth progress simulation (10% → 60% over 5 seconds)
     startProgressSimulation()
@@ -1239,6 +1256,8 @@ async function confirmEnvironmentSwitch() {
     showSwitchProgress.value = false
     showToast(`Failed to initiate switch: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
     switchProgress.value = { state: 'idle', progress: 0, message: '' }
+    switchObserver.value = null
+    switchLogs.value = []
     switchWorkspacePath.value = null  // Clean up
   }
 }
@@ -1298,13 +1317,48 @@ function stopProgressSimulation() {
   }
 }
 
+async function fetchSwitchObserverProgress(): Promise<SwitchProgressLike | null> {
+  const observer = switchObserver.value
+  if (!observer?.status_url) return null
+
+  try {
+    const response = await fetch(observer.status_url, { cache: 'no-store' })
+    if (!response.ok) return null
+    return await response.json() as SwitchProgressLike
+  } catch {
+    return null
+  }
+}
+
+async function refreshSwitchObserverLogs() {
+  const observer = switchObserver.value
+  if (!observer?.logs_url) return
+
+  try {
+    const response = await fetch(observer.logs_url, { cache: 'no-store' })
+    if (!response.ok) return
+    const payload = await response.json() as { logs?: SwitchLogEntry[] }
+    switchLogs.value = payload.logs || []
+  } catch {
+    // Expected while a container or supervisor is not yet reachable.
+  }
+}
+
 function startSwitchPolling() {
   if (switchPollInterval) return
 
   switchPollInterval = window.setInterval(async () => {
     try {
-      // Try orchestrator first (survives ComfyUI restarts)
-      let progress = await orchestratorService.getStatus()
+      await refreshSwitchObserverLogs()
+
+      // Try direct supervisor observer first. It survives the ComfyUI restart
+      // that breaks the normal /api proxy path during handoff.
+      let progress = await fetchSwitchObserverProgress()
+
+      if (!progress) {
+        // Try orchestrator proxy for non-cg-run environments.
+        progress = await orchestratorService.getStatus()
+      }
 
       // Fallback to ComfyUI server if orchestrator unavailable
       if (!progress || progress.state === 'idle') {
@@ -1349,28 +1403,51 @@ function startSwitchPolling() {
       if (progress.state === 'complete') {
         stopProgressSimulation()
         stopSwitchPolling()
-        showSwitchProgress.value = false
-        showToast(`✓ Switched to ${targetEnvironment.value}`, 'success')
-        await refresh()
-        targetEnvironment.value = ''
+        switchProgress.value = {
+          state: 'complete',
+          progress: 100,
+          message: progress.message || `Successfully switched to ${targetEnvironment.value}`
+        }
+        showToast(`✓ Switched to ${targetEnvironment.value}. Refresh the page to load it.`, 'success')
       } else if (progress.state === 'rolled_back') {
         stopProgressSimulation()
         stopSwitchPolling()
         showSwitchProgress.value = false
         showToast('Switch failed, restored previous environment', 'warning')
         targetEnvironment.value = ''
+        switchObserver.value = null
       } else if (progress.state === 'critical_failure') {
         stopProgressSimulation()
         stopSwitchPolling()
         showSwitchProgress.value = false
         showToast(`Critical error during switch: ${progress.message}`, 'error')
         targetEnvironment.value = ''
+        switchObserver.value = null
       }
     } catch (err) {
-      console.error('Failed to poll switch progress:', err)
       // Continue polling - server might be restarting
     }
   }, 1000) // Poll every 1 second
+}
+
+function reloadAfterEnvironmentSwitch() {
+  sessionStorage.removeItem('ComfyGit.PendingRefresh')
+  localStorage.removeItem('workflow')
+  localStorage.removeItem('Comfy.PreviousWorkflow')
+  localStorage.removeItem('Comfy.OpenWorkflowsPaths')
+  localStorage.removeItem('Comfy.ActiveWorkflowIndex')
+
+  Object.keys(sessionStorage).forEach(key => {
+    if (
+      key.startsWith('workflow:') ||
+      key.startsWith('Comfy.OpenWorkflowsPaths:') ||
+      key.startsWith('Comfy.ActiveWorkflowIndex:')
+    ) {
+      sessionStorage.removeItem(key)
+    }
+  })
+
+  window.location.reload()
 }
 
 function stopSwitchPolling() {

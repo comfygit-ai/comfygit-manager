@@ -28,9 +28,38 @@
             </div>
           </div>
 
-          <p class="progress-warning">
-            Please wait, do not close this window.
+          <div v-if="logEntries.length" class="switch-log">
+            <div class="switch-log-title">Supervisor Log</div>
+            <div
+              ref="logLinesRef"
+              class="switch-log-lines"
+              @scroll="handleLogScroll"
+            >
+              <div
+                v-for="(entry, index) in logEntries"
+                :key="`${entry.timestamp || 'log'}-${index}`"
+                class="switch-log-line"
+              >
+                <span class="log-level">{{ (entry.level || 'info').toUpperCase() }}</span>
+                <span class="log-message">{{ entry.message }}</span>
+              </div>
+            </div>
+          </div>
+
+          <p :class="['progress-warning', { complete: state === 'complete' }]">
+            <template v-if="state === 'complete'">
+              Environment switched. Copy logs if needed, then refresh the page.
+            </template>
+            <template v-else>
+              Please wait, do not close this window.
+            </template>
           </p>
+
+          <div v-if="state === 'complete'" class="completion-actions">
+            <button class="refresh-btn" @click="emit('refresh')">
+              Refresh Page
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -38,15 +67,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import ProgressBar from '@/components/base/atoms/ProgressBar.vue'
+import type { SwitchLogEntry } from '@/types/comfygit'
 
 const props = defineProps<{
   show: boolean
   state: string        // e.g., 'preparing', 'syncing', 'starting', 'validating', 'complete'
   progress: number     // 0-100
   message?: string
+  logs?: SwitchLogEntry[]
 }>()
+
+const emit = defineEmits<{
+  refresh: []
+}>()
+
+const logLinesRef = ref<HTMLElement | null>(null)
+const shouldFollowLogs = ref(true)
 
 // Map states to human-readable labels
 const stateLabel = computed(() => {
@@ -79,7 +117,9 @@ const steps = computed(() => {
     { state: 'validating', label: 'Waiting for server to be ready', icon: '●' }
   ]
 
-  const currentStateIndex = allSteps.findIndex(s => s.state === props.state)
+  const currentStateIndex = props.state === 'complete'
+    ? allSteps.length
+    : allSteps.findIndex(s => s.state === props.state)
 
   return allSteps.map((step, index) => {
     let status = 'pending'
@@ -100,6 +140,27 @@ const steps = computed(() => {
     }
   })
 })
+
+const logEntries = computed(() => props.logs || [])
+
+function handleLogScroll() {
+  const el = logLinesRef.value
+  if (!el) return
+  const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+  shouldFollowLogs.value = distanceFromBottom < 24
+}
+
+watch(
+  () => props.logs?.length || 0,
+  async () => {
+    if (!shouldFollowLogs.value) return
+    await nextTick()
+    const el = logLinesRef.value
+    if (el) {
+      el.scrollTop = el.scrollHeight
+    }
+  }
+)
 </script>
 
 <style scoped>
@@ -122,7 +183,7 @@ const steps = computed(() => {
   border: 1px solid var(--cg-color-accent);
   border-radius: var(--cg-radius-lg);
   box-shadow: var(--cg-shadow-xl), 0 0 20px var(--cg-color-accent-muted);
-  max-width: 500px;
+  max-width: 620px;
   width: 90%;
   animation: modalSlideIn 0.3s ease;
 }
@@ -242,6 +303,53 @@ const steps = computed(() => {
   flex: 1;
 }
 
+.switch-log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-2);
+  padding: var(--cg-space-3);
+  background: var(--cg-color-bg-secondary);
+  border: 1px solid var(--cg-color-border);
+  border-radius: var(--cg-radius-sm);
+  height: 188px;
+  min-height: 188px;
+}
+
+.switch-log-title {
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  color: var(--cg-color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+}
+
+.switch-log-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+}
+
+.switch-log-line {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: var(--cg-space-2);
+  color: var(--cg-color-text-secondary);
+}
+
+.log-level {
+  color: var(--cg-color-accent);
+}
+
+.log-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .progress-warning {
   margin: 0;
   padding: var(--cg-space-2) var(--cg-space-3);
@@ -251,5 +359,34 @@ const steps = computed(() => {
   font-size: var(--cg-font-size-sm);
   color: var(--cg-color-info);
   text-align: center;
+}
+
+.progress-warning.complete {
+  background: var(--cg-color-success-muted);
+  border-color: var(--cg-color-success);
+  color: var(--cg-color-success);
+}
+
+.completion-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.refresh-btn {
+  padding: var(--cg-space-2) var(--cg-space-4);
+  background: var(--cg-color-accent);
+  border: 1px solid var(--cg-color-accent);
+  border-radius: var(--cg-radius-sm);
+  color: var(--cg-color-bg-primary);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+  cursor: pointer;
+}
+
+.refresh-btn:hover {
+  background: var(--cg-color-accent-hover);
+  border-color: var(--cg-color-accent-hover);
 }
 </style>

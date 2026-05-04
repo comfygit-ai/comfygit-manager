@@ -89,6 +89,40 @@ def _unsupported_comfyui_version_response(version: str) -> web.Response:
     }, status=400)
 
 
+def _request_public_origin(request: web.Request, port: int) -> str:
+    """Build a browser-reachable origin using the current request host."""
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+    host_header = request.headers.get("X-Forwarded-Host", request.host)
+    host = host_header
+    if host.startswith("["):
+        end = host.find("]")
+        if end != -1:
+            host = host[: end + 1]
+    else:
+        host = host.split(":", 1)[0]
+    return f"{scheme}://{host}:{port}"
+
+
+def _read_supervisor_observer(workspace, request: web.Request) -> dict | None:
+    """Return direct supervisor observer URLs if cg-run advertised them."""
+    info_file = workspace.path / ".metadata" / ".supervisor_control.json"
+    if not info_file.exists():
+        return None
+
+    try:
+        info = json.loads(info_file.read_text(encoding="utf-8"))
+        port = int(info["port"])
+    except Exception:
+        return None
+
+    origin = _request_public_origin(request, port)
+    return {
+        "kind": "cg_run_supervisor",
+        "status_url": f"{origin}/v2/comfygit/switch_status",
+        "logs_url": f"{origin}/v2/comfygit/switch_logs",
+    }
+
+
 def spawn_orchestrator(environment, target_env: str) -> None:
     """
     Spawn orchestrator daemon for first switch.
@@ -97,6 +131,7 @@ def spawn_orchestrator(environment, target_env: str) -> None:
     """
     # From server/api/v2/environments.py → go up 4 levels to comfygit-manager/
     custom_node_root = Path(__file__).parent.parent.parent.parent
+    orchestrator.ensure_orchestrator_venv(custom_node_root / "server" / ".orchestrator_venv")
     orchestrator_python = orchestrator.get_orchestrator_python(custom_node_root)
     orchestrator_script = custom_node_root / "server" / "orchestrator.py"
 
@@ -479,7 +514,8 @@ async def switch_environment(request: web.Request) -> web.Response:
 
         return web.json_response({
             "status": "switching",
-            "message": f"Switching to {target_env}..."
+            "message": f"Switching to {target_env}...",
+            "observer": _read_supervisor_observer(workspace, request),
         })
 
     except Exception:

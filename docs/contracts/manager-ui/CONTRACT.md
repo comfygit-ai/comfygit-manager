@@ -309,6 +309,30 @@ user has chosen not to include that node in the portable dependency set for
 export, build-plan, or deployment readiness checks when the node lacks portable
 provenance.
 
+### CGM-UI-19A [PLANNED]: Switch progress should show supervisor logs when available
+Validation: MIXED
+
+The environment switch progress modal should consume restart-stable observer
+URLs returned by switch initiation when available.
+
+While a switch is in progress, the modal should show both the progress state
+and a compact terminal-style log area with recent lifecycle authority messages.
+The log area should help users distinguish a slow sync or startup from a
+stalled or crashed handoff.
+
+The log area should remain layout-stable as new lines arrive. It should keep a
+fixed visual height, auto-follow new output while the user is already at the
+bottom, and preserve manual scrolling when the user scrolls back to inspect or
+copy earlier lines.
+
+When a switch reaches a terminal success state, the modal should stay open long
+enough for the user to read or copy logs and should offer an explicit page
+refresh action instead of closing immediately before the new environment loads.
+
+When no restart-stable observer is available, the UI may retain simulated
+progress as a fallback, but normal `cg run` and local orchestrator paths should
+prefer real status and log data.
+
 Optional development nodes should remain tracked locally so sync and rollback
 do not treat their directories as unmanaged drift, but they should not appear
 as reproducibility issues once the user has marked them optional.

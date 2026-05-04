@@ -328,6 +328,24 @@ export interface SwitchEnvironmentProgress {
   recovery_command?: string
 }
 
+export interface SwitchEnvironmentObserver {
+  kind: 'cg_run_supervisor'
+  status_url: string
+  logs_url: string
+}
+
+export interface SwitchEnvironmentResult {
+  status: 'switching'
+  message: string
+  observer?: SwitchEnvironmentObserver | null
+}
+
+export interface SwitchLogEntry {
+  timestamp?: string | null
+  level?: string
+  message: string
+}
+
 export interface CreateEnvironmentRequest {
   name: string
   python_version?: string
