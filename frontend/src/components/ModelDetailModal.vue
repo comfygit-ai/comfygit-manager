@@ -102,7 +102,16 @@
     </template>
 
     <template #footer>
-      <button class="btn-secondary" @click="$emit('close')">Close</button>
+      <BaseButton
+        v-if="details"
+        variant="danger"
+        :disabled="deletingModel"
+        @click="showDeleteConfirm = true"
+      >
+        Delete Model
+      </BaseButton>
+      <div class="footer-spacer"></div>
+      <BaseButton variant="secondary" @click="$emit('close')">Close</BaseButton>
     </template>
   </BaseModal>
 
@@ -121,11 +130,54 @@
     @saved="handleSourceSaved"
     @hashes-computed="handleHashesComputed"
   />
+
+  <BaseModal
+    v-if="details && showDeleteConfirm"
+    title="Delete Model"
+    size="md"
+    :overlay-z-index="(overlayZIndex || 10003) + 4"
+    :close-on-overlay-click="!deletingModel"
+    :show-close-button="!deletingModel"
+    @close="showDeleteConfirm = false"
+  >
+    <template #body>
+      <div class="delete-confirm">
+        <p>
+          This will permanently delete all indexed file locations for
+          <strong>{{ details.filename }}</strong>.
+        </p>
+        <div class="delete-meta">
+          <span>Hash</span>
+          <code>{{ details.hash }}</code>
+        </div>
+        <div class="delete-paths">
+          <h4>Files to delete ({{ deletionPaths.length }})</h4>
+          <code v-for="path in deletionPaths" :key="path" class="delete-path">
+            {{ path }}
+          </code>
+        </div>
+        <p v-if="deleteError" class="delete-error">{{ deleteError }}</p>
+        <p class="delete-warning">
+          This removes the files from disk and removes the model from the workspace index when no locations remain.
+        </p>
+      </div>
+    </template>
+
+    <template #footer>
+      <BaseButton variant="secondary" :disabled="deletingModel" @click="showDeleteConfirm = false">
+        Cancel
+      </BaseButton>
+      <BaseButton variant="danger" :loading="deletingModel" :disabled="deletingModel" @click="confirmDeleteModel">
+        {{ deletingModel ? 'Deleting...' : 'Delete Model' }}
+      </BaseButton>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import BaseModal from '@/components/base/BaseModal.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 import ModelSourceModal from '@/components/ModelSourceModal.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import { copyToClipboard as copyTextToClipboard } from '@/utils/copyToClipboard'
@@ -139,9 +191,10 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   sourceSaved: []
+  deleted: []
 }>()
 
-const { getModelDetails, removeModelSource, computeModelHashes } = useComfyGitService()
+const { getModelDetails, removeModelSource, computeModelHashes, deleteModel } = useComfyGitService()
 
 const details = ref<ModelDetails | null>(null)
 const loading = ref(true)
@@ -153,8 +206,12 @@ const sourceSuccess = ref<string | null>(null)
 const showSourceModal = ref(false)
 const computingHashes = ref(false)
 const hashError = ref<string | null>(null)
+const showDeleteConfirm = ref(false)
+const deletingModel = ref(false)
+const deleteError = ref<string | null>(null)
 
 const missingFullHashes = computed(() => Boolean(details.value?.hash && (!details.value.blake3 || !details.value.sha256)))
+const deletionPaths = computed(() => details.value?.locations?.map(location => location.path).filter(Boolean) || [])
 
 // Toast notifications
 const toast = ref<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
@@ -230,6 +287,34 @@ async function computeHashes() {
     hashError.value = err instanceof Error ? err.message : 'Failed to compute hashes'
   } finally {
     computingHashes.value = false
+  }
+}
+
+async function confirmDeleteModel() {
+  if (!details.value?.hash) return
+
+  deletingModel.value = true
+  deleteError.value = null
+
+  try {
+    const result = await deleteModel(details.value.hash)
+    if (result.status === 'partial' || result.errors.length > 0) {
+      const failedCount = result.errors.length
+      deleteError.value = `Deleted ${result.deleted_paths.length} file(s), but ${failedCount} location(s) failed.`
+      showToast(deleteError.value, 'error', 4000)
+      await loadDetails()
+      return
+    }
+
+    showToast(`Deleted ${result.deleted_paths.length} model file(s)`)
+    showDeleteConfirm.value = false
+    emit('deleted')
+    emit('close')
+  } catch (err) {
+    deleteError.value = err instanceof Error ? err.message : 'Failed to delete model'
+    showToast(deleteError.value, 'error', 4000)
+  } finally {
+    deletingModel.value = false
   }
 }
 
@@ -469,6 +554,10 @@ onMounted(loadDetails)
   border-color: var(--cg-color-accent);
 }
 
+.footer-spacer {
+  flex: 1;
+}
+
 .open-location-btn {
   margin-top: var(--cg-space-2);
   background: var(--cg-color-bg-tertiary);
@@ -511,6 +600,64 @@ onMounted(loadDetails)
 
 .toast.info {
   border-color: var(--cg-color-accent);
+}
+
+.delete-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-3);
+}
+
+.delete-confirm p {
+  margin: 0;
+  color: var(--cg-color-text-primary);
+  line-height: var(--cg-line-height-normal);
+}
+
+.delete-meta {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: var(--cg-space-2);
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-sm);
+}
+
+.delete-meta code {
+  color: var(--cg-color-text-primary);
+  font-family: var(--cg-font-mono);
+  word-break: break-all;
+}
+
+.delete-paths {
+  background: var(--cg-color-bg-tertiary);
+  border: 1px solid var(--cg-color-border);
+  padding: var(--cg-space-3);
+}
+
+.delete-paths h4 {
+  margin: 0 0 var(--cg-space-2) 0;
+  color: var(--cg-color-error);
+  font-size: var(--cg-font-size-sm);
+}
+
+.delete-path {
+  display: block;
+  color: var(--cg-color-text-primary);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  word-break: break-all;
+  padding: 4px 0;
+}
+
+.delete-warning {
+  color: var(--cg-color-warning) !important;
+  border: 1px solid var(--cg-color-warning);
+  background: var(--cg-color-warning-muted);
+  padding: var(--cg-space-2);
+}
+
+.delete-error {
+  color: var(--cg-color-error) !important;
 }
 
 @keyframes toastSlideIn {

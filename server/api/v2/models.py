@@ -344,6 +344,10 @@ def _model_details_payload(env, details) -> dict:
             path = primary_path
 
         loc_info = {"path": path}
+        if loc.get("base_directory"):
+            loc_info["base_directory"] = loc.get("base_directory")
+        if loc.get("relative_path"):
+            loc_info["relative_path"] = loc.get("relative_path")
         if "mtime" in loc:
             try:
                 loc_info["modified"] = datetime.fromtimestamp(loc["mtime"]).strftime("%Y-%m-%d %H:%M:%S")
@@ -406,6 +410,25 @@ def _compute_missing_model_hashes(env, identifier: str) -> dict:
 
     refreshed = env.workspace.get_model_details(model.hash)
     return _model_details_payload(env, refreshed)
+
+
+def _path_for_model_location(location: dict) -> Path:
+    base_directory = location.get("base_directory")
+    relative_path = location.get("relative_path")
+    if not base_directory or not relative_path:
+        raise ValueError("Model location is missing base directory or relative path")
+
+    base_path = Path(base_directory).expanduser()
+    target_path = base_path / str(relative_path).replace("\\", "/")
+    base_resolved = base_path.resolve(strict=False)
+    parent_resolved = target_path.parent.resolve(strict=False)
+
+    try:
+        parent_resolved.relative_to(base_resolved)
+    except ValueError as exc:
+        raise ValueError(f"Refusing to delete model outside indexed base directory: {target_path}") from exc
+
+    return target_path
 
 
 @routes.get("/v2/comfygit/models/environment")
@@ -668,11 +691,10 @@ async def remove_model_source(request: web.Request, env) -> web.Response:
 @routes.delete("/v2/workspace/models/{identifier}")
 @requires_environment
 async def delete_workspace_model(request: web.Request, env) -> web.Response:
-    """Delete a model from the workspace."""
+    """Delete all indexed file locations for a model from the workspace."""
     identifier = request.match_info["identifier"]
 
     try:
-        # Get model details to find file path
         details = await run_sync(env.workspace.get_model_details, identifier)
     except ValueError as e:
         return web.json_response({"error": str(e)}, status=400)
@@ -682,19 +704,63 @@ async def delete_workspace_model(request: web.Request, env) -> web.Response:
         return web.json_response({"error": str(e)}, status=500)
 
     try:
-        # Get model file path and delete
-        models_dir = env.workspace.workspace_config_manager.get_models_directory()
-        model_path = models_dir / details.model.relative_path
+        model_repo = env.workspace.model_repository
+        deleted_paths = []
+        missing_paths = []
+        errors = []
 
-        if model_path.exists():
-            model_path.unlink()
+        for location in details.all_locations:
+            try:
+                model_path = _path_for_model_location(location)
+            except ValueError as exc:
+                errors.append({
+                    "path": location.get("path") or location.get("relative_path") or "",
+                    "error": str(exc),
+                })
+                continue
 
-        # Sync model directory to update index
-        await run_sync(env.workspace.sync_model_directory)
+            path_str = str(model_path)
+            try:
+                if model_path.exists() or model_path.is_symlink():
+                    if not model_path.is_file() and not model_path.is_symlink():
+                        errors.append({
+                            "path": path_str,
+                            "error": "Indexed model location is not a file",
+                        })
+                        continue
+                    model_path.unlink()
+                    deleted_paths.append(path_str)
+                else:
+                    missing_paths.append(path_str)
 
+                location_id = location.get("id")
+                if location_id is not None:
+                    await run_sync(model_repo.remove_location_by_id, int(location_id))
+                else:
+                    await run_sync(
+                        model_repo.remove_location_for_directory,
+                        Path(location["base_directory"]),
+                        location["relative_path"],
+                    )
+            except Exception as exc:
+                errors.append({
+                    "path": path_str,
+                    "error": str(exc),
+                })
+
+        await run_sync(model_repo.clear_orphaned_models)
+        await run_sync(model_repo.clear_orphaned_model_sources)
+
+        remaining_locations = await run_sync(model_repo.get_locations, details.model.hash)
+        status = "partial" if errors else "success"
         return web.json_response({
-            "status": "success",
+            "status": status,
             "deleted": details.model.filename,
+            "model_hash": details.model.hash,
+            "deleted_paths": deleted_paths,
+            "missing_paths": missing_paths,
+            "errors": errors,
+            "remaining_locations": len(remaining_locations),
         })
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)

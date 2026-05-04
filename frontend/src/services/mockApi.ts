@@ -888,9 +888,18 @@ export const mockApi = {
     console.log(`[MOCK] Added source for ${hash}: ${sourceUrl}`)
   },
 
-  deleteModel: async (sha256: string): Promise<void> => {
+  deleteModel: async (sha256: string): Promise<any> => {
     await delay(500)
     console.log(`[MOCK] Deleting model: ${sha256}`)
+    return {
+      status: 'success',
+      deleted: sha256,
+      model_hash: sha256,
+      deleted_paths: [`/workspace/models/checkpoints/${sha256}`],
+      missing_paths: [],
+      errors: [],
+      remaining_locations: 0
+    }
   },
 
   downloadModel: async (request: any): Promise<void> => {

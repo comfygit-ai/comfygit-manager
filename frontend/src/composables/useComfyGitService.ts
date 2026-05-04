@@ -32,6 +32,7 @@ import type {
   WorkflowResolutionPlan,
   ModelInfo,
   ModelDetails,
+  ModelDeleteResult,
   ModelSourceCandidatesResponse,
   WorkflowSourceCandidatesResponse,
   EnvironmentModelSourceApplyRequest,
@@ -1098,10 +1099,10 @@ export function useComfyGitService() {
     })
   }
 
-  async function deleteModel(sha256: string): Promise<void> {
-    if (USE_MOCK) return mockApi.deleteModel(sha256)
+  async function deleteModel(identifier: string): Promise<ModelDeleteResult> {
+    if (USE_MOCK) return mockApi.deleteModel(identifier)
 
-    return fetchApi(`/v2/workspace/models/${sha256}`, {
+    return fetchApi<ModelDeleteResult>(`/v2/workspace/models/${encodeURIComponent(identifier)}`, {
       method: 'DELETE'
     })
   }

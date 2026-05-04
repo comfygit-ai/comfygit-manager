@@ -127,6 +127,7 @@
     v-if="selectedModelId"
     :identifier="selectedModelId"
     @close="selectedModelId = null"
+    @deleted="handleModelDeleted"
   />
 
   <!-- Model Download Modal -->
@@ -235,6 +236,11 @@ function formatSize(bytes: number | undefined): string {
 function viewDetails(model: ModelInfo) {
   // Use hash as identifier for the detail lookup
   selectedModelId.value = model.hash || model.filename
+}
+
+async function handleModelDeleted() {
+  selectedModelId.value = null
+  await loadModels()
 }
 
 function searchInWorkspace(_filename: string) {

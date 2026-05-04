@@ -99,6 +99,20 @@ same source, destination, and portability concepts as the guided download flow.
 Manual model management should not create a second incompatible model metadata
 shape.
 
+### CGM-MDL-06A [LIVE]: Deleting a model should delete all indexed locations for that model identity
+Validation: MIXED
+
+The Model Details delete action is model-identity scoped. When a user confirms
+model deletion, the manager should delete every indexed file location for the
+resolved model hash and then remove stale model index rows. If no locations
+remain, the workspace model record and orphaned source metadata should also be
+removed.
+
+The confirmation should show the exact file paths that will be deleted. The
+backend must derive those paths from trusted model index locations and validate
+that each target remains inside its indexed base model directory before
+unlinking it. The frontend should not provide arbitrary delete paths.
+
 ### CGM-MDL-07 [PARTIAL]: Source discovery should be a shared picker primitive
 Validation: LLM_REVIEW
 

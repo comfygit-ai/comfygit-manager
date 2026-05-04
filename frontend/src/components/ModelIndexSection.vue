@@ -127,6 +127,7 @@
     v-if="selectedModelId"
     :identifier="selectedModelId"
     @close="selectedModelId = null"
+    @deleted="handleModelDeleted"
   />
 
   <!-- Change Directory Modal -->
@@ -289,6 +290,12 @@ function formatSize(bytes: number | undefined): string {
 
 function viewDetails(model: ModelInfo) {
   selectedModelId.value = model.hash || model.filename
+}
+
+async function handleModelDeleted() {
+  selectedModelId.value = null
+  await loadModels()
+  emit('refresh')
 }
 
 async function scanForModels() {

@@ -539,8 +539,18 @@ export interface ModelDetails {
   category: string
   relative_path: string
   last_seen: string | null
-  locations: Array<{ path: string; modified?: string }>
+  locations: Array<{ path: string; base_directory?: string; relative_path?: string; modified?: string }>
   sources: Array<{ type: string; url: string }>
+}
+
+export interface ModelDeleteResult {
+  status: 'success' | 'partial'
+  deleted: string
+  model_hash: string
+  deleted_paths: string[]
+  missing_paths: string[]
+  errors: Array<{ path: string; error: string }>
+  remaining_locations: number
 }
 
 export interface ModelSourceCandidate {
