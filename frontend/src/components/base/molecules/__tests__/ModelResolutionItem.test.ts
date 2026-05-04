@@ -53,8 +53,10 @@ describe('ModelResolutionItem', () => {
     })
 
     // Check buttons are present by text content
-    expect(wrapper.text()).toContain('Search')
-    expect(wrapper.text()).toContain('Download URL')
+    expect(wrapper.text()).toContain('Find Source')
+    expect(wrapper.text()).toContain('Search Index')
+    expect(wrapper.text()).toContain('Mark Optional')
+    expect(wrapper.text()).not.toContain('Download URL')
   })
 
   it('emits mark-optional when optional button clicked', async () => {
@@ -216,7 +218,7 @@ describe('ModelResolutionItem', () => {
     }
   })
 
-  it('emits download-url event when download URL button clicked', async () => {
+  it('emits find-source event when find source button clicked', async () => {
     const wrapper = mount(ModelResolutionItem, {
       props: {
         filename: 'model.safetensors',
@@ -225,11 +227,11 @@ describe('ModelResolutionItem', () => {
     })
 
     const buttons = wrapper.findAll('button')
-    const downloadBtn = buttons.find(btn => btn.text().includes('Download URL') || btn.text().includes('Manual'))
+    const findSourceBtn = buttons.find(btn => btn.text().includes('Find Source'))
 
-    if (downloadBtn) {
-      await downloadBtn.trigger('click')
-      expect(wrapper.emitted('download-url')).toBeTruthy()
+    if (findSourceBtn) {
+      await findSourceBtn.trigger('click')
+      expect(wrapper.emitted('find-source')).toBeTruthy()
     }
   })
 

@@ -2,7 +2,7 @@
   <div class="source-picker">
     <div v-if="showModelSummary" class="model-summary">
       <div class="model-heading">
-        <div class="summary-label">Local model</div>
+        <div class="summary-label">{{ model.hash ? 'Local model' : 'Missing model' }}</div>
         <div class="summary-name">{{ model.filename }}</div>
       </div>
       <div class="summary-meta">
@@ -63,7 +63,10 @@
           :candidate="candidate"
           :action-label="actionLabel"
           :loading="loadingUrl === candidate.url"
-          @select="emit('selectSource', $event)"
+          :requires-target-confirmation="usesDownloadTarget"
+          :suggested-directory="suggestedDirectory"
+          :target-filename="targetFilename"
+          @select="handleCandidateSource"
         />
       </div>
       <div v-else class="state-message">
@@ -80,6 +83,15 @@
       />
     </section>
 
+    <section v-else-if="activeTab === 'civitai'" class="tab-content source-browser-content">
+      <CivitaiTab
+        mode-kind="source"
+        :action-label="actionLabel"
+        :overlay-z-index="overlayZIndex"
+        @select-source="emit('selectSource', $event)"
+      />
+    </section>
+
     <section v-else-if="activeTab === 'direct'" class="tab-content">
       <div class="section-header-row">
         <div>
@@ -88,7 +100,20 @@
         </div>
       </div>
 
+      <DirectModelUrlForm
+        v-if="usesDownloadTarget"
+        :initial-url="directUrl"
+        label=""
+        :placeholder="directPlaceholder"
+        :action-label="actionLabel"
+        :loading="loadingUrl === directUrl.trim()"
+        :suggested-directory="suggestedDirectory"
+        :target-filename="targetFilename"
+        @submit="handleDirectSource"
+      />
+
       <SourceUrlActionForm
+        v-else
         v-model="directUrl"
         label=""
         :placeholder="directPlaceholder"
@@ -105,6 +130,8 @@
 import { computed, onMounted, ref } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import HuggingFaceTab from '@/components/download/HuggingFaceTab.vue'
+import CivitaiTab from '@/components/download/CivitaiTab.vue'
+import DirectModelUrlForm from '@/components/download/DirectModelUrlForm.vue'
 import ModelSourceCandidateCard from '@/components/model-source/ModelSourceCandidateCard.vue'
 import SourceUrlActionForm from '@/components/model-source/SourceUrlActionForm.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
@@ -118,25 +145,30 @@ const props = withDefaults(defineProps<{
   showModelSummary?: boolean
   directDescription?: string
   directPlaceholder?: string
+  workflowName?: string | null
+  nodeType?: string | null
 }>(), {
   actionLabel: 'Use as Source',
   loadingUrl: null,
   overlayZIndex: 10011,
   showModelSummary: true,
   directDescription: 'Paste the download URL that another machine should use for this exact model file.',
-  directPlaceholder: 'https://huggingface.co/org/repo/resolve/main/model.safetensors'
+  directPlaceholder: 'https://huggingface.co/org/repo/resolve/main/model.safetensors',
+  workflowName: null,
+  nodeType: null
 })
 
 const emit = defineEmits<{
-  selectSource: [url: string]
+  selectSource: [url: string, targetPath?: string]
   hashesComputed: [model: ModelDetails]
 }>()
 
-const { getModelSourceCandidates, computeModelHashes } = useComfyGitService()
+const { getModelSourceCandidates, getWorkflowModelSourceCandidates, computeModelHashes } = useComfyGitService()
 
 const tabs = [
   { id: 'workflow', label: 'Workflow Links' },
   { id: 'huggingface', label: 'Hugging Face' },
+  { id: 'civitai', label: 'Civitai' },
   { id: 'direct', label: 'Direct URL' }
 ] as const
 
@@ -150,13 +182,27 @@ const hashError = ref<string | null>(null)
 
 const workflowCandidates = computed(() => candidates.value.filter(candidate => candidate.source === 'workflow'))
 const missingFullHashes = computed(() => Boolean(props.model.hash && (!props.model.blake3 || !props.model.sha256)))
+const usesDownloadTarget = computed(() => Boolean(props.workflowName || !props.model.hash))
+const suggestedDirectory = computed(() => {
+  const category = props.model.category?.trim()
+  return category && category !== 'unknown' ? category : null
+})
+const targetFilename = computed(() => {
+  return filenameFromPath(props.model.filename || props.model.relative_path || '')
+})
 
 async function loadCandidates() {
   loadingCandidates.value = true
   candidateError.value = null
 
   try {
-    const response = await getModelSourceCandidates(props.model.hash)
+    const response = props.workflowName
+      ? await getWorkflowModelSourceCandidates(props.workflowName, {
+        filename: props.model.filename,
+        category: props.model.category,
+        nodeType: props.nodeType
+      })
+      : await getModelSourceCandidates(props.model.hash)
     candidates.value = response.candidates
   } catch (err) {
     candidateError.value = err instanceof Error ? err.message : 'Failed to scan workflows'
@@ -179,6 +225,23 @@ async function computeHashes() {
   } finally {
     computingHashes.value = false
   }
+}
+
+function handleDirectSource(payload: { url: string; targetPath: string }) {
+  directUrl.value = payload.url
+  emit('selectSource', payload.url, payload.targetPath)
+}
+
+function handleCandidateSource(url: string, targetPath?: string) {
+  emit('selectSource', url, targetPath)
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/^\/+/, '')
+}
+
+function filenameFromPath(path: string): string {
+  return normalizePath(path).split('/').filter(Boolean).pop() || normalizePath(path)
 }
 
 onMounted(loadCandidates)

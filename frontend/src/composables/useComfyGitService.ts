@@ -84,7 +84,11 @@ import type {
   DeployToWorkerRequest,
   HuggingFaceRepoInfoResponse,
   HuggingFaceSearchResponse,
-  ModelsSubdirectoriesResponse
+  ModelsSubdirectoriesResponse,
+  CivitaiModel,
+  CivitaiModelResponse,
+  CivitaiModelVersionResponse,
+  CivitaiSearchResponse
 } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
 import { useMockControls } from '@/composables/useMockControls'
@@ -957,6 +961,46 @@ export function useComfyGitService() {
     return fetchApi<ModelSourceCandidatesResponse>(`/v2/workspace/models/${encodeURIComponent(identifier)}/source-candidates`)
   }
 
+  async function getWorkflowModelSourceCandidates(
+    workflowName: string,
+    model: { filename: string; category?: string | null; nodeType?: string | null }
+  ): Promise<ModelSourceCandidatesResponse> {
+    if (USE_MOCK) {
+      return {
+        model: {
+          filename: model.filename,
+          hash: null,
+          blake3: null,
+          sha256: null,
+          category: model.category || 'unknown',
+          node_type: model.nodeType || null
+        },
+        candidates: [
+          {
+            source: 'workflow',
+            source_type: 'huggingface',
+            url: 'https://huggingface.co/example/model/resolve/main/mock-model.safetensors',
+            workflow: workflowName,
+            confidence: 80,
+            reasons: ['known model host', 'workflow link'],
+            context: `Workflow note near ${model.filename} references https://huggingface.co/example/model/resolve/main/mock-model.safetensors`,
+            validation_status: 'not_checked'
+          }
+        ]
+      }
+    }
+
+    const params = new URLSearchParams({
+      filename: model.filename
+    })
+    if (model.category) params.set('category', model.category)
+    if (model.nodeType) params.set('node_type', model.nodeType)
+
+    return fetchApi<ModelSourceCandidatesResponse>(
+      `/v2/comfygit/workflow/${encodeURIComponent(workflowName)}/model-source-candidates?${params.toString()}`
+    )
+  }
+
   async function computeModelHashes(identifier: string): Promise<ModelDetails> {
     if (USE_MOCK) {
       const details = await mockApi.getModelDetails(identifier)
@@ -1142,6 +1186,112 @@ export function useComfyGitService() {
     }
     const params = new URLSearchParams({ query, limit: String(limit) })
     return fetchApi(`/v2/workspace/huggingface/search?${params}`)
+  }
+
+  async function searchCivitaiModels(
+    query: string,
+    options: {
+      username?: string
+      type?: string
+      sort?: string
+      period?: string
+      limit?: number
+      page?: number
+    } = {}
+  ): Promise<CivitaiSearchResponse> {
+    if (USE_MOCK) {
+      const version = {
+        id: 256668,
+        model_id: 81458,
+        name: 'LCM',
+        description: 'Fast LCM variant.',
+        created_at: '2023-12-09T14:29:40.234Z',
+        updated_at: '2025-03-22T12:39:42.338Z',
+        base_model: 'SD 1.5 LCM',
+        download_url: 'https://civitai.com/api/download/models/256668',
+        trained_words: [],
+        download_count: 7370,
+        rating_count: 0,
+        rating: 0,
+        model: { name: 'AbsoluteReality', type: 'Checkpoint', nsfw: false, poi: false },
+        files: [{
+          id: 199166,
+          name: 'absolutereality_lcm.safetensors',
+          size_kb: 2083793,
+          type: 'Model',
+          primary: true,
+          download_url: 'https://civitai.com/api/download/models/256668',
+          pickle_scan_result: 'Success',
+          pickle_scan_message: 'No Pickle imports',
+          virus_scan_result: 'Success',
+          scanned_at: '2025-03-22T12:37:30.551Z',
+          hashes: null,
+          metadata: { fp: 'fp16', size: 'pruned', format: 'SafeTensor' }
+        }],
+        images: [{
+          id: 1,
+          url: 'https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/0d49eae2-c100-4683-83bf-59e4120747f6/original=true/4352035.jpeg',
+          nsfw: false,
+          width: 1024,
+          height: 1664,
+          hash: null
+        }]
+      }
+      const model: CivitaiModel = {
+        id: 81458,
+        name: 'AbsoluteReality',
+        description: 'Photorealistic checkpoint with multiple published versions.',
+        type: 'Checkpoint',
+        nsfw: false,
+        tags: ['realistic', 'photography', 'portrait'],
+        mode: null,
+        creator: {
+          username: 'Lykon',
+          image: 'https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/3b119431-445f-4b21-aba6-87a5ee9518ef/width=96/Lykon.jpeg'
+        },
+        download_count: 332249,
+        favorite_count: 0,
+        comment_count: 136,
+        rating_count: 0,
+        rating: 0,
+        matched_version_id: 256668,
+        versions: [version]
+      }
+      return {
+        query,
+        mode: 'search',
+        metadata: { total_items: 1, current_page: 1, page_size: 1, total_pages: 1 },
+        results: [model]
+      }
+    }
+
+    const params = new URLSearchParams()
+    if (query.trim()) params.set('query', query.trim())
+    if (options.username) params.set('username', options.username)
+    if (options.type) params.set('type', options.type)
+    if (options.sort) params.set('sort', options.sort)
+    if (options.period) params.set('period', options.period)
+    if (options.limit) params.set('limit', String(options.limit))
+    if (options.page) params.set('page', String(options.page))
+
+    return fetchApi<CivitaiSearchResponse>(`/v2/workspace/civitai/search?${params}`)
+  }
+
+  async function getCivitaiModel(modelId: number): Promise<CivitaiModelResponse> {
+    if (USE_MOCK) {
+      const search = await searchCivitaiModels(String(modelId))
+      return { model: search.results[0] }
+    }
+    return fetchApi<CivitaiModelResponse>(`/v2/workspace/civitai/model/${modelId}`)
+  }
+
+  async function getCivitaiModelVersion(versionId: number): Promise<CivitaiModelVersionResponse> {
+    if (USE_MOCK) {
+      const search = await searchCivitaiModels(String(versionId))
+      const version = search.results[0].versions[0]
+      return { version, download_url: version.download_url || '' }
+    }
+    return fetchApi<CivitaiModelVersionResponse>(`/v2/workspace/civitai/model-version/${versionId}`)
   }
 
   // Settings
@@ -2262,6 +2412,7 @@ export function useComfyGitService() {
     getWorkspaceModels,
     getModelDetails,
     getModelSourceCandidates,
+    getWorkflowModelSourceCandidates,
     computeModelHashes,
     getWorkflowSourceCandidates,
     openFileLocation,
@@ -2276,6 +2427,9 @@ export function useComfyGitService() {
     getHuggingFaceRepoInfo,
     getModelsSubdirectories,
     searchHuggingFaceRepos,
+    searchCivitaiModels,
+    getCivitaiModel,
+    getCivitaiModelVersion,
     // Settings
     getConfig,
     updateConfig,

@@ -42,6 +42,38 @@ The intended precedence is:
 The current implementation primarily relies on server environment
 configuration, so richer user-scoped token handling remains partial.
 
+### CGM-MDL-03A [LIVE]: Provider credentials must not be persisted in source URLs
+Validation: LLM_REVIEW
+
+Provider API keys and bearer tokens are runtime credentials, not provenance.
+Model source URLs stored in the workspace index, manifest, pending download
+intents, or frontend provider-search responses must omit credential query
+parameters such as `token`.
+
+Download execution may attach provider credentials from workspace settings or
+environment variables at request time. For Civitai, the preferred runtime
+behavior is a clean `https://civitai.com/api/download/models/{versionId}` URL
+plus an `Authorization: Bearer ...` request header when a workspace API key is
+available.
+
+### CGM-MDL-03B [LIVE]: Civitai browsing should expose model, version, and file selection
+Validation: TEST
+
+Civitai is model/version/file oriented, not repository-tree oriented. The
+manager API should support Civitai text search, username search, model-page
+lookup, model-version lookup, and clean download URL extraction so the frontend
+can let users choose a version/file and local target before downloading.
+
+The Civitai UI should present search results as model cards with preview
+imagery, creator identity, model type, tags, and usage metadata. Selecting a
+model should move into a model-detail view where the user can inspect model
+description, images, versions, files, scan status, base model, and download
+metadata before choosing the local target.
+
+Civitai download URLs returned to the UI must remain clean provenance URLs.
+Workspace credentials are attached only by the backend during request
+execution.
+
 ### CGM-MDL-04 [LIVE]: Destination inference should be visible and overridable
 Validation: LLM_REVIEW
 
@@ -74,8 +106,8 @@ The manager should treat "find a model source" as a reusable primitive rather
 than a behavior owned only by the download modal.
 
 The shared source picker currently supports workflow-link discovery, Hugging
-Face search/file selection, and direct URL entry across model download and
-existing-model source repair flows.
+Face search/file selection, Civitai model/version/file selection, and direct
+URL entry across model download and existing-model source repair flows.
 
 The shared source picker should support provider/search surfaces such as:
 
@@ -92,8 +124,8 @@ candidate means:
 - future cloud/build-plan checks use the same source facts as dependency
   availability evidence
 
-This remains partial until Civitai and any future provider-specific source
-selection flows share the same primitive.
+This remains partial until the shared source-selection primitive has direct
+behavioral test coverage across every supported provider surface.
 
 ### CGM-MDL-08 [LIVE]: Download and provenance repair should be separate outcomes of the same source selection
 Validation: LLM_REVIEW
@@ -136,6 +168,37 @@ The scanner may rank candidates by proximity to filename, model stem, category,
 or known hashes, but it must not silently attach or download a candidate. The
 user should review the candidate and explicitly choose `Download` or `Use as
 source`.
+
+When a workflow-link candidate is used to acquire a missing model, selecting
+the candidate should first expose the planned local download target. The user
+must be able to review and override the top-level model directory and
+subfolder before the source becomes a pending download intent.
+
+The standalone `Download New Model` workflow-link tab should use the same
+target-confirmation interaction. In that context, match confidence is internal
+ranking evidence and may be hidden to avoid implying that the candidate is a
+verified match for a specific unresolved model string.
+
+Provider-side folders such as Hugging Face repository paths are source
+organization, not local ComfyUI model-category truth. Missing-model target
+defaults should come from workflow context and loader category mappings when
+available. If the inferred provider folder does not match a known local model
+directory, the UI should default to an existing/local standard directory rather
+than silently creating a new top-level directory.
+
+Workflow-authored path fragments such as Windows subfolders may help suggest
+context, but they should not be forced into the local target filename. By
+default the target filename should be normalized to its basename, and any
+subfolder should remain an explicit editable destination choice.
+
+When source discovery is opened from a missing workflow model, workflow-link
+results should be scoped to that workflow and should include all plausible
+model-source URLs found in that workflow, even when the URL does not contain the
+missing loader filename. Name, category, folder, provider, and nearby text
+matches should improve ranking, but they must not be required for a candidate
+to appear. This matters for Civitai IDs, Hugging Face repositories with
+different artifact names, and author notes that describe the intended model in
+nearby prose rather than in the URL itself.
 
 Provider or URL validation may be shown as advisory evidence. Validation should
 not be treated as a perfect guarantee because some providers require auth,

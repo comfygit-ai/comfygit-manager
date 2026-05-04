@@ -7,6 +7,7 @@
           <span class="size">{{ formatSize(item.size) }}</span>
           <span v-if="item.type" class="type">{{ item.type }}</span>
         </div>
+        <div v-if="item.targetPath" class="target-path">{{ item.targetPath }}</div>
       </div>
 
       <div class="item-actions">
@@ -54,11 +55,11 @@
 
     <!-- Progress (downloading) -->
     <div v-if="item.status === 'downloading'" class="progress-section">
-      <div class="progress-bar">
+      <div :class="['progress-bar', { indeterminate: isIndeterminate }]">
         <div class="progress-fill" :style="{ width: `${item.progress}%` }"></div>
       </div>
       <div class="progress-stats">
-        <span class="downloaded">{{ formatSize(item.downloaded) }} / {{ formatSize(item.size) }}</span>
+        <span class="downloaded">{{ progressLabel }}</span>
         <span class="speed">{{ formatSpeed(item.speed) }}</span>
         <span v-if="item.eta > 0" class="eta">{{ formatETA(item.eta) }}</span>
       </div>
@@ -85,9 +86,10 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { DownloadQueueItem } from '@/types/comfygit'
 
-defineProps<{
+const props = defineProps<{
   item: DownloadQueueItem
 }>()
 
@@ -97,6 +99,15 @@ const emit = defineEmits<{
   resume: []
   remove: []
 }>()
+
+const isIndeterminate = computed(() => {
+  return props.item.status === 'downloading' && (!props.item.size || !props.item.downloaded)
+})
+
+const progressLabel = computed(() => {
+  if (isIndeterminate.value) return 'Downloading...'
+  return `${formatSize(props.item.downloaded)} / ${formatSize(props.item.size)}`
+})
 
 function formatSize(bytes: number): string {
   if (bytes === 0) return '?'
@@ -171,6 +182,16 @@ function formatETA(seconds: number): string {
   gap: var(--cg-space-2);
 }
 
+.target-path {
+  margin-top: 2px;
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  font-family: var(--cg-font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .item-actions {
   display: flex;
   gap: 4px;
@@ -224,12 +245,27 @@ function formatETA(seconds: number): string {
   background: var(--cg-color-bg-tertiary);
   border-radius: 2px;
   overflow: hidden;
+  position: relative;
 }
 
 .progress-fill {
   height: 100%;
   background: var(--cg-color-accent);
   transition: width 0.2s ease;
+}
+
+.progress-bar.indeterminate .progress-fill {
+  width: 35% !important;
+  animation: indeterminate-progress 1.2s ease-in-out infinite;
+}
+
+@keyframes indeterminate-progress {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
 }
 
 .progress-stats {

@@ -488,9 +488,9 @@ export function useWorkflowResolution() {
       .filter(m => m.url && m.target_path)
       .map(m => ({
         workflow: workflowName,
-        filename: m.filename,
+        filename: displayFilenameForTarget(m.target_path!, m.filename),
         url: m.url,
-        targetPath: m.target_path!,
+        targetPath: normalizeModelTargetPath(m.target_path!),
         size: m.size || 0,
         type: 'model'
       }))
@@ -500,6 +500,15 @@ export function useWorkflowResolution() {
     }
 
     return items.length
+  }
+
+  function normalizeModelTargetPath(path: string): string {
+    return path.replace(/\\/g, '/').replace(/^\/+/, '')
+  }
+
+  function displayFilenameForTarget(targetPath: string, fallback: string): string {
+    const normalized = normalizeModelTargetPath(targetPath || fallback)
+    return normalized.split('/').filter(Boolean).pop() || fallback.replace(/\\/g, '/')
   }
 
   return {

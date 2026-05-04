@@ -2381,11 +2381,18 @@ async def get_pending_downloads(request: web.Request, env) -> web.Response:
                 if model.get("status") == "unresolved" and model.get("sources"):
                     sources = model.get("sources", [])
                     if sources:
+                        target_path = model.get("relative_path")
+                        if target_path:
+                            models_dir = env.workspace.workspace_config_manager.get_models_directory()
+                            normalized_target = str(target_path).replace("\\", "/").lstrip("/")
+                            if models_dir and (models_dir / normalized_target).exists():
+                                continue
+
                         pending_downloads.append({
                             "workflow": workflow_name,
                             "filename": model.get("filename", "unknown"),
                             "url": sources[0],  # Use first source URL
-                            "target_path": model.get("relative_path"),
+                            "target_path": target_path,
                             "size": 0  # Unknown until download starts
                         })
 
@@ -2446,7 +2453,7 @@ async def download_model_stream(request: web.Request, env) -> web.StreamResponse
         workflow: Workflow name (for updating pyproject.toml)
     """
     url = request.query.get("url")
-    target_path = request.query.get("target_path")
+    target_path = (request.query.get("target_path") or "").replace("\\", "/").lstrip("/")
     filename = request.query.get("filename", "model.safetensors")
     workflow_name = request.query.get("workflow")
 

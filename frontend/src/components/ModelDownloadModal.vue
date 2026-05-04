@@ -3,7 +3,7 @@
     v-if="show"
     title="DOWNLOAD NEW MODEL"
     size="xl"
-    fixed-height
+    :fixed-height="activeTab !== 'civitai'"
     @close="handleClose"
   >
     <template #body>
@@ -24,16 +24,18 @@
         <div class="tab-content">
           <WorkflowLinksTab
             v-if="activeTab === 'workflow'"
-            @select-url="handleWorkflowUrl"
+            @queue="handleDirectQueue"
           />
           <HuggingFaceTab
             v-else-if="activeTab === 'huggingface'"
             @queue="handleQueue"
           />
-          <CivitaiTab v-else-if="activeTab === 'civitai'" />
+          <CivitaiTab
+            v-else-if="activeTab === 'civitai'"
+            @queue="handleDirectQueue"
+          />
           <DirectUrlTab
             v-else-if="activeTab === 'direct'"
-            :initial-url="selectedWorkflowUrl"
             @queue="handleDirectQueue"
           />
         </div>
@@ -76,7 +78,6 @@ const tabs = [
 ] as const
 
 const activeTab = ref<(typeof tabs)[number]['id']>('workflow')
-const selectedWorkflowUrl = ref('')
 
 function handleQueue(items: Array<{ url: string; destination: string; filename: string }>) {
   addToQueue(items.map(item => ({
@@ -96,11 +97,6 @@ function handleDirectQueue(items: Array<{ url: string; targetPath: string; filen
     targetPath: item.targetPath
   })))
   emit('close')
-}
-
-function handleWorkflowUrl(url: string) {
-  selectedWorkflowUrl.value = url
-  activeTab.value = 'direct'
 }
 
 function handleClose() {

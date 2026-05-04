@@ -218,7 +218,7 @@ onUnmounted(() => {
 .dropdown-overlay {
   position: fixed;
   inset: 0;
-  z-index: 10010;
+  z-index: 10050;
 }
 
 .dropdown-menu {
@@ -229,7 +229,7 @@ onUnmounted(() => {
   box-shadow: var(--cg-shadow-lg);
   overflow-y: auto;
   overflow-x: hidden;
-  z-index: 10011;
+  z-index: 10051;
   padding: 4px 0;
 }
 

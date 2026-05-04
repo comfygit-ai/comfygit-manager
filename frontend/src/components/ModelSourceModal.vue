@@ -9,6 +9,8 @@
     <template #body>
       <ModelSourcePicker
         :model="currentModel"
+        :workflow-name="workflowName"
+        :node-type="nodeType"
         :loading-url="savingUrl"
         :overlay-z-index="overlayZIndex"
         :action-label="actionLabel"
@@ -40,16 +42,20 @@ const props = withDefaults(defineProps<{
   overlayZIndex?: number
   deferSave?: boolean
   actionLabel?: string
+  workflowName?: string | null
+  nodeType?: string | null
 }>(), {
   overlayZIndex: 10011,
   deferSave: false,
-  actionLabel: 'Use as Source'
+  actionLabel: 'Use as Source',
+  workflowName: null,
+  nodeType: null
 })
 
 const emit = defineEmits<{
   close: []
   saved: []
-  selected: [url: string]
+  selected: [url: string, targetPath?: string]
   hashesComputed: []
 }>()
 
@@ -63,14 +69,16 @@ watch(() => props.model, (model) => {
   currentModel.value = model
 })
 
-async function useSource(url: string) {
-  if (!url || !props.model.hash) return
+async function useSource(url: string, targetPath?: string) {
+  if (!url) return
 
   if (props.deferSave) {
-    emit('selected', url)
+    emit('selected', url, targetPath)
     emit('close')
     return
   }
+
+  if (!props.model.hash) return
 
   savingUrl.value = url
   saveError.value = null

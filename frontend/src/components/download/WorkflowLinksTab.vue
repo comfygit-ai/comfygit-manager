@@ -18,7 +18,13 @@
         :key="`${candidate.workflow}:${candidate.url}`"
         :candidate="candidate"
         action-label="Use URL"
-        @select="emit('selectUrl', $event)"
+        confirm-action-label="Download"
+        requires-target-confirmation
+        :show-match-chip="false"
+        :suggested-directory="suggestedDirectory(candidate)"
+        :target-filename="targetFilename(candidate)"
+        :target-warning="targetWarning(candidate)"
+        @select="(url, targetPath) => handleSourceSelected(candidate, url, targetPath)"
       />
     </div>
     <div v-else class="state-message">
@@ -36,7 +42,7 @@ import { useComfyGitService } from '@/composables/useComfyGitService'
 import type { ModelSourceCandidate } from '@/types/comfygit'
 
 const emit = defineEmits<{
-  selectUrl: [url: string]
+  queue: [items: Array<{ url: string; targetPath: string; filename: string }>]
 }>()
 
 const { getWorkflowSourceCandidates } = useComfyGitService()
@@ -62,6 +68,99 @@ async function loadCandidates() {
 }
 
 onMounted(loadCandidates)
+
+function handleSourceSelected(candidate: ModelSourceCandidate, url: string, targetPath?: string) {
+  if (!targetPath) return
+  const selectedFilename = targetFilename(candidate)
+  emit('queue', [{
+    url,
+    targetPath,
+    filename: selectedFilename || 'model download'
+  }])
+}
+
+function targetFilename(candidate: ModelSourceCandidate): string | null {
+  const urlFilename = filenameFromUrl(candidate.url)
+  if (hasModelExtension(urlFilename)) return urlFilename
+
+  const contextFilename = filenameFromText(candidate.context || '')
+  if (contextFilename) return contextFilename
+
+  return null
+}
+
+function targetWarning(candidate: ModelSourceCandidate): string {
+  if (isHuggingFaceRepoLink(candidate.url)) {
+    return 'This Hugging Face link points to a repository, not a single file. Enter the exact filename here, or use the Hugging Face tab to choose the file directly.'
+  }
+  if (!targetFilename(candidate)) {
+    return 'Enter the filename to save. This workflow link does not include a concrete model filename.'
+  }
+  return ''
+}
+
+function suggestedDirectory(candidate: ModelSourceCandidate): string | null {
+  const context = normalizePath(candidate.context || '')
+  const modelDirMatch = context.match(/(?:ComfyUI\/)?models\/([^/\s"')]+)/i)
+  if (modelDirMatch?.[1]) return modelDirMatch[1]
+
+  const combined = `${normalizePath(candidate.url)} ${context}`.toLowerCase()
+  const knownDirs = [
+    'checkpoints',
+    'loras',
+    'vae',
+    'diffusion_models',
+    'text_encoders',
+    'controlnet',
+    'clip',
+    'clip_vision',
+    'upscale_models',
+    'embeddings'
+  ]
+  return knownDirs.find(dir => combined.includes(dir.toLowerCase())) || null
+}
+
+function filenameFromUrl(url: string): string {
+  try {
+    const parsed = new URL(url)
+    return filenameFromPath(decodeURIComponent(parsed.pathname))
+  } catch {
+    return filenameFromPath(url.split('?', 1)[0])
+  }
+}
+
+function filenameFromText(text: string): string {
+  const match = normalizePath(text).match(/[A-Za-z0-9][A-Za-z0-9._+() -]*\.(?:safetensors|ckpt|pt|pth|bin|gguf|onnx)/i)
+  return sanitizeFilename(match?.[0] || '')
+}
+
+function filenameFromPath(path: string): string {
+  return sanitizeFilename(normalizePath(path).split('/').filter(Boolean).pop() || '')
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/^\/+/, '')
+}
+
+function sanitizeFilename(filename: string): string {
+  return filename.trim().replace(/^[\s[\]('"`]+/, '').replace(/[\s[\])'"`,.]+$/, '')
+}
+
+function hasModelExtension(filename: string): boolean {
+  return /\.(?:safetensors|ckpt|pt|pth|bin|gguf|onnx)$/i.test(filename)
+}
+
+function isHuggingFaceRepoLink(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    if (!/(^|\.)huggingface\.co$/i.test(parsed.hostname) && parsed.hostname.toLowerCase() !== 'hf.co') {
+      return false
+    }
+    return !parsed.pathname.includes('/resolve/') && !parsed.pathname.includes('/blob/')
+  } catch {
+    return false
+  }
+}
 </script>
 
 <style scoped>

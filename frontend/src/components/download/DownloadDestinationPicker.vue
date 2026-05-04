@@ -15,12 +15,27 @@
         placeholder="subfolder (optional)"
         class="dest-subfolder"
       />
+      <template v-if="destBase !== '__custom__' && showFilename">
+        <span class="path-separator">/</span>
+        <BaseInput
+          v-model="filename"
+          :placeholder="filenamePlaceholder"
+          class="dest-filename"
+        />
+      </template>
     </div>
     <BaseInput
       v-if="destBase === '__custom__'"
       v-model="destCustom"
       placeholder="Enter directory relative to models folder..."
       class="dest-custom"
+      full-width
+    />
+    <BaseInput
+      v-if="destBase === '__custom__' && showFilename"
+      v-model="filename"
+      :placeholder="filenamePlaceholder"
+      class="dest-custom filename-custom"
       full-width
     />
   </div>
@@ -37,13 +52,20 @@ const props = withDefaults(defineProps<{
   modelValue: string
   label?: string
   suggestedDirectory?: string | null
+  showFilename?: boolean
+  filenameValue?: string
+  filenamePlaceholder?: string
 }>(), {
   label: 'Download Destination',
-  suggestedDirectory: null
+  suggestedDirectory: null,
+  showFilename: false,
+  filenameValue: '',
+  filenamePlaceholder: 'model.safetensors'
 })
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
+  'update:filenameValue': [value: string]
 }>()
 
 const { getModelsSubdirectories } = useComfyGitService()
@@ -51,6 +73,7 @@ const { getModelsSubdirectories } = useComfyGitService()
 const destBase = ref('')
 const destSubfolder = ref('')
 const destCustom = ref('')
+const filename = ref('')
 const directories = ref<string[]>([])
 const userOverrodeDestination = ref(false)
 let autoDetectInProgress = false
@@ -112,11 +135,21 @@ watch(destination, (value) => {
 
 watch(() => props.suggestedDirectory, applySuggestedDirectory)
 
+watch(() => props.filenameValue, (value) => {
+  if ((value || '') !== filename.value) {
+    filename.value = value || ''
+  }
+}, { immediate: true })
+
 watch(directories, applySuggestedDirectory)
 
 watch(destBase, (_newVal, oldVal) => {
   if (autoDetectInProgress || oldVal === '') return
   userOverrodeDestination.value = true
+})
+
+watch(filename, (value) => {
+  emit('update:filenameValue', value)
 })
 
 onMounted(loadDirectories)
@@ -156,7 +189,15 @@ onMounted(loadDirectories)
   flex: 1;
 }
 
+.dest-filename {
+  flex: 1;
+}
+
 .dest-custom {
+  margin-top: var(--cg-space-2);
+}
+
+.filename-custom {
   margin-top: var(--cg-space-2);
 }
 </style>

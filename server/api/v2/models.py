@@ -9,13 +9,15 @@ import platform
 import re
 import subprocess
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, urlencode, unquote, urlparse
 
 from aiohttp import web
 from huggingface_hub import HfApi
 
 from cgm_core.decorators import requires_environment, logged_operation
 from cgm_utils.async_helpers import run_sync
+from comfygit_core.caching.api_cache import APICacheManager
+from comfygit_core.clients.civitai_client import CivitAIClient, CivitAIError
 from comfygit_core.configs.model_config import ModelConfig
 from comfygit_core.services.huggingface_url import parse_huggingface_url
 
@@ -67,6 +69,29 @@ def _classify_source_url(url: str) -> str:
     return "custom"
 
 
+def _normalize_source_download_url(url: str) -> str:
+    """Convert known provider page URLs into direct download URLs when possible."""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return url
+
+    host = (parsed.hostname or "").lower()
+    if host not in {"civitai.com", "www.civitai.com"}:
+        return url
+
+    path_parts = [part for part in parsed.path.split("/") if part]
+    if len(path_parts) >= 3 and path_parts[:3] == ["api", "download", "models"]:
+        return url
+
+    if len(path_parts) >= 2 and path_parts[0] == "models":
+        version_id = (parse_qs(parsed.query).get("modelVersionId") or [None])[0]
+        if version_id and version_id.isdigit():
+            return f"https://civitai.com/api/download/models/{version_id}"
+
+    return url
+
+
 def _candidate_context(text: str, start: int, end: int, radius: int = 180) -> str:
     context_start = max(0, start - radius)
     context_end = min(len(text), end + radius)
@@ -74,12 +99,18 @@ def _candidate_context(text: str, start: int, end: int, radius: int = 180) -> st
     return re.sub(r"\s+", " ", context).strip()
 
 
+def _model_filename_terms(filename: str | None) -> tuple[str, str, str, str]:
+    normalized = (filename or "").replace("\\", "/")
+    basename = normalized.rsplit("/", 1)[-1]
+    stem = Path(basename).stem if basename else ""
+    return normalized.lower(), Path(normalized).stem.lower(), basename.lower(), stem.lower()
+
+
 def _score_source_candidate(url: str, context: str, model_info: dict) -> tuple[int, list[str]]:
     score = 0
     reasons = []
     haystacks = [context.lower(), url.lower()]
-    filename = (model_info.get("filename") or "").lower()
-    stem = Path(filename).stem.lower() if filename else ""
+    filename, stem, basename, basename_stem = _model_filename_terms(model_info.get("filename"))
     category = (model_info.get("category") or "").lower()
     hashes = [
         str(model_info.get("hash") or "").lower(),
@@ -90,7 +121,13 @@ def _score_source_candidate(url: str, context: str, model_info: dict) -> tuple[i
     if filename and any(filename in haystack for haystack in haystacks):
         score += 60
         reasons.append("filename match")
+    elif basename and any(basename in haystack for haystack in haystacks):
+        score += 55
+        reasons.append("filename match")
     elif stem and any(stem in haystack for haystack in haystacks):
+        score += 35
+        reasons.append("model name match")
+    elif basename_stem and any(basename_stem in haystack for haystack in haystacks):
         score += 35
         reasons.append("model name match")
 
@@ -120,8 +157,7 @@ def _score_source_candidate(url: str, context: str, model_info: dict) -> tuple[i
 
 def _url_looks_like_model_source(url: str, model_info: dict) -> bool:
     lower_url = url.lower()
-    filename = (model_info.get("filename") or "").lower()
-    stem = Path(filename).stem.lower() if filename else ""
+    filename, stem, basename, basename_stem = _model_filename_terms(model_info.get("filename"))
 
     if _classify_source_url(url) in {"huggingface", "civitai"}:
         return True
@@ -129,17 +165,34 @@ def _url_looks_like_model_source(url: str, model_info: dict) -> bool:
         return True
     if filename and filename in lower_url:
         return True
+    if basename and basename in lower_url:
+        return True
     if stem and stem in lower_url:
+        return True
+    if basename_stem and basename_stem in lower_url:
         return True
     return False
 
 
-def _scan_workflow_source_candidates(env, model_info: dict) -> list[dict]:
+def _workflow_names_for_source_scan(env, workflow_name: str | None = None) -> list[str]:
+    if workflow_name:
+        return [workflow_name]
     try:
         status = env.status()
-        workflow_names = [wf.name for wf in status.workflow.analyzed_workflows]
+        return [wf.name for wf in status.workflow.analyzed_workflows]
     except Exception:
-        workflow_names = []
+        return []
+
+
+def _scan_workflow_source_candidates(
+    env,
+    model_info: dict,
+    *,
+    workflow_name: str | None = None,
+    require_identity_match: bool = True,
+    limit: int = 25,
+) -> list[dict]:
+    workflow_names = _workflow_names_for_source_scan(env, workflow_name)
 
     candidates_by_key = {}
     for workflow_name in workflow_names:
@@ -154,7 +207,7 @@ def _scan_workflow_source_candidates(env, model_info: dict) -> list[dict]:
             continue
 
         for match in MODEL_SOURCE_URL_RE.finditer(text):
-            url = _strip_url_punctuation(match.group(0))
+            url = _normalize_source_download_url(_strip_url_punctuation(match.group(0)))
             if not _url_looks_like_model_source(url, model_info):
                 continue
             context = _candidate_context(text, match.start(), match.end())
@@ -163,9 +216,9 @@ def _scan_workflow_source_candidates(env, model_info: dict) -> list[dict]:
                 reason in {"filename match", "model name match", "hash match"}
                 for reason in reasons
             )
-            if not has_identity_match:
+            if require_identity_match and not has_identity_match:
                 continue
-            if score < 20:
+            if require_identity_match and score < 20:
                 continue
 
             key = (url, workflow_name)
@@ -186,7 +239,7 @@ def _scan_workflow_source_candidates(env, model_info: dict) -> list[dict]:
     return sorted(
         candidates_by_key.values(),
         key=lambda item: (-item["confidence"], item["workflow"], item["url"]),
-    )[:25]
+    )[:limit]
 
 
 def _scan_workflow_download_candidates(env) -> list[dict]:
@@ -215,7 +268,7 @@ def _scan_workflow_download_candidates(env) -> list[dict]:
             continue
 
         for match in MODEL_SOURCE_URL_RE.finditer(text):
-            url = _strip_url_punctuation(match.group(0))
+            url = _normalize_source_download_url(_strip_url_punctuation(match.group(0)))
             if not _url_looks_like_model_source(url, {}):
                 continue
             if model_repo.find_by_source_url(url):
@@ -787,6 +840,47 @@ async def get_model_source_candidates(request: web.Request, env) -> web.Response
     })
 
 
+@routes.get("/v2/comfygit/workflow/{workflow_name}/model-source-candidates")
+@requires_environment
+async def get_missing_workflow_model_source_candidates(request: web.Request, env) -> web.Response:
+    """Find source URLs for a missing model reference in one workflow.
+
+    Unlike existing-model provenance repair, this keeps weak workflow-scoped
+    candidates because author-provided Civitai or Hugging Face links may not
+    contain the loader filename.
+    """
+    workflow_name = request.match_info["workflow_name"]
+    filename = (request.query.get("filename") or "").strip()
+    if not filename:
+        return web.json_response({"error": "filename is required"}, status=400)
+
+    model_info = {
+        "filename": filename,
+        "hash": None,
+        "blake3": None,
+        "sha256": None,
+        "category": (request.query.get("category") or "").strip() or "unknown",
+        "node_type": (request.query.get("node_type") or "").strip() or None,
+    }
+
+    try:
+        workflow_candidates = await run_sync(
+            _scan_workflow_source_candidates,
+            env,
+            model_info,
+            workflow_name=workflow_name,
+            require_identity_match=False,
+            limit=50,
+        )
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+    return web.json_response({
+        "model": model_info,
+        "candidates": workflow_candidates,
+    })
+
+
 @routes.get("/v2/workspace/models/workflow-source-candidates")
 @requires_environment
 async def get_workflow_model_source_candidates(request: web.Request, env) -> web.Response:
@@ -929,12 +1023,320 @@ async def open_file(request: web.Request, env) -> web.Response:
 HF_MODEL_EXTS_EXTRA = [".gguf"]
 
 
+def _clean_civitai_url(url: str) -> str:
+    """Remove credential query params before returning or persisting CivitAI URLs."""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return url
+
+    query = parse_qs(parsed.query, keep_blank_values=True)
+    query.pop("token", None)
+    clean_query = urlencode(query, doseq=True)
+    return parsed._replace(query=clean_query).geturl()
+
+
+def _parse_civitai_url(value: str) -> dict:
+    """Extract CivitAI lookup intent from a public/API URL."""
+    parsed = urlparse(value)
+    host = (parsed.hostname or "").lower()
+    if host not in {"civitai.com", "www.civitai.com"}:
+        return {"kind": "unknown"}
+
+    parts = [part for part in parsed.path.split("/") if part]
+    query = parse_qs(parsed.query)
+
+    if len(parts) >= 4 and parts[:3] == ["api", "download", "models"] and parts[3].isdigit():
+        return {
+            "kind": "model_version",
+            "version_id": int(parts[3]),
+            "download_url": _clean_civitai_url(value),
+            "download_params": {
+                key: vals[0]
+                for key, vals in query.items()
+                if vals and key.lower() != "token"
+            },
+        }
+
+    if len(parts) >= 3 and parts[:2] == ["api", "v1"] and parts[2] == "models":
+        if len(parts) >= 4 and parts[3].isdigit():
+            return {"kind": "model", "model_id": int(parts[3])}
+
+    if len(parts) >= 3 and parts[:2] == ["api", "v1"] and parts[2] == "model-versions":
+        if len(parts) >= 4 and parts[3].isdigit():
+            return {"kind": "model_version", "version_id": int(parts[3])}
+
+    if len(parts) >= 2 and parts[0] == "models" and parts[1].isdigit():
+        version_id = (query.get("modelVersionId") or [None])[0]
+        if version_id and version_id.isdigit():
+            return {"kind": "model_version", "version_id": int(version_id)}
+        return {"kind": "model", "model_id": int(parts[1])}
+
+    if len(parts) >= 2 and parts[0] in {"user", "users"} and parts[1]:
+        return {"kind": "user", "username": unquote(parts[1])}
+
+    return {"kind": "unknown"}
+
+
+def _enum_value(value):
+    return getattr(value, "value", value)
+
+
+def _civitai_hashes_to_dict(hashes) -> dict | None:
+    if not hashes:
+        return None
+    return {
+        "auto_v1": hashes.auto_v1,
+        "auto_v2": hashes.auto_v2,
+        "sha256": hashes.sha256,
+        "crc32": hashes.crc32,
+        "blake3": hashes.blake3,
+    }
+
+
+def _civitai_file_to_dict(file) -> dict:
+    return {
+        "id": file.id,
+        "name": file.name,
+        "size_kb": file.size_kb,
+        "type": file.type,
+        "primary": file.primary,
+        "download_url": _clean_civitai_url(file.download_url) if file.download_url else None,
+        "pickle_scan_result": file.pickle_scan_result,
+        "pickle_scan_message": file.pickle_scan_message,
+        "virus_scan_result": file.virus_scan_result,
+        "scanned_at": file.scanned_at,
+        "hashes": _civitai_hashes_to_dict(file.hashes),
+        "metadata": {
+            "fp": _enum_value(file.fp),
+            "size": _enum_value(file.size),
+            "format": _enum_value(file.format),
+        },
+    }
+
+
+def _civitai_image_to_dict(image) -> dict:
+    return {
+        "id": image.id,
+        "url": image.url,
+        "nsfw": image.nsfw,
+        "width": image.width,
+        "height": image.height,
+        "hash": image.hash,
+    }
+
+
+def _civitai_version_to_dict(version) -> dict:
+    return {
+        "id": version.id,
+        "model_id": version.model_id,
+        "name": version.name,
+        "description": version.description,
+        "created_at": version.created_at,
+        "updated_at": version.updated_at,
+        "base_model": version.base_model,
+        "download_url": _clean_civitai_url(version.download_url) if version.download_url else None,
+        "trained_words": version.trained_words or [],
+        "download_count": version.download_count,
+        "rating_count": version.rating_count,
+        "rating": version.rating,
+        "model": {
+            "name": version.model.name,
+            "type": version.model.type,
+            "nsfw": version.model.nsfw,
+            "poi": version.model.poi,
+        } if version.model else None,
+        "files": [_civitai_file_to_dict(file) for file in (version.files or [])],
+        "images": [_civitai_image_to_dict(image) for image in (version.images or [])],
+    }
+
+
+def _civitai_model_to_dict(model, *, matched_version_id: int | None = None) -> dict:
+    return {
+        "id": model.id,
+        "name": model.name,
+        "description": model.description,
+        "type": _enum_value(model.type),
+        "nsfw": model.nsfw,
+        "tags": model.tags or [],
+        "mode": model.mode,
+        "creator": {
+            "username": model.creator.username,
+            "image": model.creator.image,
+        } if model.creator else None,
+        "download_count": model.download_count,
+        "favorite_count": model.favorite_count,
+        "comment_count": model.comment_count,
+        "rating_count": model.rating_count,
+        "rating": model.rating,
+        "matched_version_id": matched_version_id,
+        "versions": [
+            _civitai_version_to_dict(version)
+            for version in (model.model_versions or [])
+        ],
+    }
+
+
+def _civitai_client(env) -> CivitAIClient:
+    cache_manager = APICacheManager(cache_base_path=env.workspace.paths.cache)
+    return CivitAIClient(
+        cache_manager=cache_manager,
+        workspace_config=env.workspace.workspace_config_manager,
+    )
+
+
 def _shard_group(path: str) -> str | None:
     """Detect sharded model files like model-00001-of-00003.safetensors"""
     m = re.match(r"^(.*)-(\d{4,5})-of-(\d{4,5})(\.[^.]+)$", path, flags=re.IGNORECASE)
     if not m:
         return None
     return f"{m.group(1)}{m.group(4)}"
+
+
+@routes.get("/v2/workspace/civitai/search")
+@requires_environment
+async def workspace_civitai_search(request: web.Request, env) -> web.Response:
+    """Search or resolve CivitAI models for the model download UI.
+
+    The query may be plain text, a creator page, a model page, a model-version
+    API URL, or an api/download URL. Responses intentionally return clean URLs;
+    stored workspace credentials are used only by server-side requests.
+    """
+    query = (request.query.get("query") or request.query.get("q") or "").strip()
+    username = (request.query.get("username") or "").strip()
+    model_type = (request.query.get("type") or request.query.get("types") or "").strip()
+    sort = (request.query.get("sort") or "Most Downloaded").strip()
+    period = (request.query.get("period") or "AllTime").strip()
+
+    try:
+        limit = min(max(int(request.query.get("limit", 12)), 1), 50)
+    except (ValueError, TypeError):
+        return web.json_response({"error": "Limit must be a valid integer"}, status=400)
+
+    try:
+        page = max(int(request.query.get("page", 1)), 1)
+    except (ValueError, TypeError):
+        return web.json_response({"error": "Page must be a valid integer"}, status=400)
+
+    client = _civitai_client(env)
+
+    try:
+        parsed = _parse_civitai_url(query) if query else {"kind": "unknown"}
+
+        if parsed["kind"] == "model_version":
+            version = await run_sync(client.get_model_version, parsed["version_id"])
+            if not version:
+                return web.json_response({"error": "CivitAI model version not found"}, status=404)
+
+            model = None
+            if version.model_id:
+                model = await run_sync(client.get_model, version.model_id)
+
+            result = _civitai_model_to_dict(model, matched_version_id=version.id) if model else None
+            return web.json_response({
+                "query": query,
+                "mode": "model_version",
+                "version": _civitai_version_to_dict(version),
+                "download_url": parsed.get("download_url") or _clean_civitai_url(version.download_url or ""),
+                "download_params": parsed.get("download_params") or {},
+                "results": [result] if result else [],
+            })
+
+        if parsed["kind"] == "model":
+            model = await run_sync(client.get_model, parsed["model_id"])
+            if not model:
+                return web.json_response({"error": "CivitAI model not found"}, status=404)
+            return web.json_response({
+                "query": query,
+                "mode": "model",
+                "results": [_civitai_model_to_dict(model)],
+            })
+
+        if parsed["kind"] == "user":
+            username = parsed["username"]
+            query = ""
+
+        if not query and not username:
+            return web.json_response({"error": "Query must be at least 2 characters"}, status=400)
+        if query and len(query) < 2:
+            return web.json_response({"error": "Query must be at least 2 characters"}, status=400)
+
+        search_kwargs = {
+            "query": query or None,
+            "username": username or None,
+            "limit": limit,
+            "page": page,
+            "sort": sort or None,
+            "period": period or None,
+        }
+        if query:
+            # The public CivitAI API has historically rejected page+query combos.
+            search_kwargs.pop("page", None)
+        if model_type:
+            search_kwargs["types"] = model_type
+
+        search_result = await run_sync(client.search_models, **search_kwargs)
+        return web.json_response({
+            "query": query,
+            "username": username or None,
+            "mode": "user" if username else "search",
+            "metadata": {
+                "total_items": search_result.total_items,
+                "current_page": search_result.current_page,
+                "page_size": search_result.page_size,
+                "total_pages": search_result.total_pages,
+                "next_page": search_result.next_page,
+                "prev_page": search_result.prev_page,
+            },
+            "results": [_civitai_model_to_dict(model) for model in search_result.items],
+        })
+    except CivitAIError as e:
+        return web.json_response({"error": str(e)}, status=502)
+    except Exception as e:
+        return web.json_response({"error": f"CivitAI search failed: {e}"}, status=500)
+
+
+@routes.get("/v2/workspace/civitai/model/{model_id}")
+@requires_environment
+async def workspace_civitai_model(request: web.Request, env) -> web.Response:
+    """Fetch one CivitAI model with versions and files."""
+    try:
+        model_id = int(request.match_info["model_id"])
+    except (KeyError, ValueError):
+        return web.json_response({"error": "Invalid model ID"}, status=400)
+
+    client = _civitai_client(env)
+    try:
+        model = await run_sync(client.get_model, model_id)
+    except CivitAIError as e:
+        return web.json_response({"error": str(e)}, status=502)
+
+    if not model:
+        return web.json_response({"error": "CivitAI model not found"}, status=404)
+    return web.json_response({"model": _civitai_model_to_dict(model)})
+
+
+@routes.get("/v2/workspace/civitai/model-version/{version_id}")
+@requires_environment
+async def workspace_civitai_model_version(request: web.Request, env) -> web.Response:
+    """Fetch one CivitAI model version with files."""
+    try:
+        version_id = int(request.match_info["version_id"])
+    except (KeyError, ValueError):
+        return web.json_response({"error": "Invalid model version ID"}, status=400)
+
+    client = _civitai_client(env)
+    try:
+        version = await run_sync(client.get_model_version, version_id)
+    except CivitAIError as e:
+        return web.json_response({"error": str(e)}, status=502)
+
+    if not version:
+        return web.json_response({"error": "CivitAI model version not found"}, status=404)
+    return web.json_response({
+        "version": _civitai_version_to_dict(version),
+        "download_url": _clean_civitai_url(version.download_url or ""),
+    })
 
 
 @routes.get("/v2/workspace/huggingface/repo-info")

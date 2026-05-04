@@ -194,10 +194,10 @@ but the visible outcome should match the user's intent:
 - existing local model: attach the selected source as provenance for the
   current model
 
-The current UI shares workflow-link, Hugging Face, and direct-URL source
-selection between the download and provenance-repair flows. This remains
-partial until all supported provider surfaces, including Civitai where
-available, use the same shared picker primitive.
+The current UI shares workflow-link, Hugging Face, Civitai, and direct-URL
+source selection between the download and provenance-repair flows. This remains
+partial until provider source-selection coverage is backed by direct behavioral
+tests.
 
 ### CGM-UI-15B [LIVE]: Model details should launch provenance repair without becoming the repair workspace
 Validation: HUMAN_REVIEW

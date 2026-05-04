@@ -11,7 +11,7 @@
           <span class="chip-label">Workflow</span>
           <span>{{ candidate.workflow }}</span>
         </span>
-        <span v-if="candidate.confidence" ref="matchPopoverRoot" class="match-chip-wrap">
+        <span v-if="showMatchChip && candidate.confidence" ref="matchPopoverRoot" class="match-chip-wrap">
           <button
             v-if="candidate.reasons?.length"
             class="meta-chip meta-chip-button"
@@ -48,6 +48,17 @@
         <div v-else></div>
 
         <BaseButton
+          v-if="requiresTargetConfirmation"
+          variant="secondary"
+          size="sm"
+          :loading="loading"
+          @click="showTargetPicker = !showTargetPicker"
+        >
+          {{ showTargetPicker ? 'Hide Target' : actionLabel }}
+        </BaseButton>
+
+        <BaseButton
+          v-else
           variant="primary"
           size="sm"
           :loading="loading"
@@ -56,6 +67,36 @@
           {{ actionLabel }}
         </BaseButton>
       </div>
+
+      <div v-if="showTargetPicker" class="target-panel">
+        <div class="target-panel-header">
+          <h5>Download Target</h5>
+          <p>Choose where this model should be saved before using this source.</p>
+        </div>
+
+        <ModelDownloadTargetPicker
+          v-model="destination"
+          :suggested-directory="suggestedDirectory"
+          :target-filename="targetFilename"
+          :warning="targetWarning"
+          @update:target-path="targetPath = $event"
+        />
+
+        <div class="target-actions">
+          <BaseButton variant="secondary" size="sm" @click="showTargetPicker = false">
+            Cancel
+          </BaseButton>
+          <BaseButton
+            variant="primary"
+            size="sm"
+            :loading="loading"
+            :disabled="!targetPath"
+            @click="confirmTarget"
+          >
+            {{ confirmActionLabel || actionLabel }}
+          </BaseButton>
+        </div>
+      </div>
     </div>
   </article>
 </template>
@@ -63,23 +104,39 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import ModelDownloadTargetPicker from '@/components/download/ModelDownloadTargetPicker.vue'
 import type { ModelSourceCandidate } from '@/types/comfygit'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   candidate: ModelSourceCandidate
   actionLabel?: string
+  confirmActionLabel?: string | null
   loading?: boolean
+  requiresTargetConfirmation?: boolean
+  showMatchChip?: boolean
+  suggestedDirectory?: string | null
+  targetFilename?: string | null
+  targetWarning?: string
 }>(), {
   actionLabel: 'Use as Source',
-  loading: false
+  confirmActionLabel: null,
+  loading: false,
+  requiresTargetConfirmation: false,
+  showMatchChip: true,
+  suggestedDirectory: null,
+  targetFilename: null,
+  targetWarning: ''
 })
 
 const emit = defineEmits<{
-  select: [url: string]
+  select: [url: string, targetPath?: string]
 }>()
 
 const showMatchReasons = ref(false)
 const matchPopoverRoot = ref<HTMLElement | null>(null)
+const showTargetPicker = ref(false)
+const destination = ref('')
+const targetPath = ref('')
 
 function closeMatchPopover() {
   showMatchReasons.value = false
@@ -123,6 +180,11 @@ function formatConfidence(confidence: number): string {
   if (confidence >= 75) return 'Strong'
   if (confidence >= 45) return 'Possible'
   return 'Weak'
+}
+
+function confirmTarget() {
+  if (!targetPath.value) return
+  emit('select', props.candidate.url, targetPath.value)
 }
 </script>
 
@@ -260,6 +322,33 @@ function formatConfidence(confidence: number): string {
   border: 1px solid var(--cg-color-border-subtle);
   font-family: var(--cg-font-mono);
   overflow-wrap: anywhere;
+}
+
+.target-panel {
+  margin-top: var(--cg-space-3);
+  padding-top: var(--cg-space-3);
+  border-top: 1px solid var(--cg-color-border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-3);
+}
+
+.target-panel-header h5 {
+  margin: 0;
+  color: var(--cg-color-text-primary);
+  font-size: var(--cg-font-size-sm);
+}
+
+.target-panel-header p {
+  margin: var(--cg-space-1) 0 0;
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-sm);
+}
+
+.target-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--cg-space-2);
 }
 
 </style>

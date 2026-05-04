@@ -47,11 +47,11 @@
 
         <!-- Action buttons for ambiguous -->
         <div class="action-buttons">
-          <BaseButton variant="ghost" size="sm" @click="emit('search')">
-            Search Workspace
+          <BaseButton variant="secondary" size="sm" @click="emit('find-source')">
+            Find Source
           </BaseButton>
-          <BaseButton variant="ghost" size="sm" @click="emit('download-url')">
-            Download URL
+          <BaseButton variant="secondary" size="sm" @click="emit('search')">
+            Search Index
           </BaseButton>
           <BaseButton variant="secondary" size="sm" @click="emit('mark-optional')">
             Mark Optional
@@ -67,11 +67,11 @@
         </div>
 
         <div class="action-buttons">
-          <BaseButton variant="primary" size="sm" @click="emit('search')">
-            Search Workspace
+          <BaseButton variant="secondary" size="sm" @click="emit('find-source')">
+            Find Source
           </BaseButton>
-          <BaseButton variant="secondary" size="sm" @click="emit('download-url')">
-            Download URL
+          <BaseButton variant="secondary" size="sm" @click="emit('search')">
+            Search Index
           </BaseButton>
           <BaseButton variant="secondary" size="sm" @click="emit('mark-optional')">
             Mark Optional
@@ -139,7 +139,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'mark-optional'): void
   (e: 'skip'): void
-  (e: 'download-url'): void
+  (e: 'find-source'): void
   (e: 'search'): void
   (e: 'option-selected', index: number): void
   (e: 'clear-choice'): void

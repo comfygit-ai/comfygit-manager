@@ -557,10 +557,11 @@ export interface ModelSourceCandidate {
 export interface ModelSourceCandidatesResponse {
   model: {
     filename: string
-    hash: string
+    hash: string | null
     blake3: string | null
     sha256: string | null
     category: string
+    node_type?: string | null
   }
   candidates: ModelSourceCandidate[]
 }
@@ -1611,4 +1612,117 @@ export interface HuggingFaceSearchResult {
 export interface HuggingFaceSearchResponse {
   results: HuggingFaceSearchResult[]
   query: string
+}
+
+// =============================================================================
+// Civitai Integration Types
+// =============================================================================
+
+export interface CivitaiCreator {
+  username: string
+  image: string | null
+}
+
+export interface CivitaiHashes {
+  auto_v1?: string | null
+  auto_v2?: string | null
+  sha256?: string | null
+  crc32?: string | null
+  blake3?: string | null
+}
+
+export interface CivitaiFile {
+  id: number | string
+  name: string
+  size_kb: number
+  type: string | null
+  primary: boolean
+  download_url: string | null
+  pickle_scan_result: string | null
+  pickle_scan_message: string | null
+  virus_scan_result: string | null
+  scanned_at: string | null
+  hashes: CivitaiHashes | null
+  metadata: {
+    fp?: string | null
+    size?: string | null
+    format?: string | null
+  }
+}
+
+export interface CivitaiImage {
+  id: number | string
+  url: string
+  nsfw: boolean
+  width?: number | null
+  height?: number | null
+  hash?: string | null
+}
+
+export interface CivitaiVersion {
+  id: number
+  model_id: number
+  name: string
+  description: string | null
+  created_at: string | null
+  updated_at: string | null
+  base_model: string | null
+  download_url: string | null
+  trained_words: string[]
+  download_count: number
+  rating_count: number
+  rating: number
+  model: {
+    name: string
+    type: string | null
+    nsfw: boolean
+    poi: boolean
+  } | null
+  files: CivitaiFile[]
+  images: CivitaiImage[]
+}
+
+export interface CivitaiModel {
+  id: number
+  name: string
+  description: string | null
+  type: string | null
+  nsfw: boolean
+  tags: string[]
+  mode: string | null
+  creator: CivitaiCreator | null
+  download_count: number
+  favorite_count: number
+  comment_count: number
+  rating_count: number
+  rating: number
+  matched_version_id?: number | null
+  versions: CivitaiVersion[]
+}
+
+export interface CivitaiSearchResponse {
+  query?: string
+  username?: string | null
+  mode: 'search' | 'user' | 'model' | 'model_version'
+  metadata?: {
+    total_items?: number | null
+    current_page?: number | null
+    page_size?: number | null
+    total_pages?: number | null
+    next_page?: string | null
+    prev_page?: string | null
+  }
+  results: CivitaiModel[]
+  version?: CivitaiVersion
+  download_url?: string
+  download_params?: Record<string, string>
+}
+
+export interface CivitaiModelResponse {
+  model: CivitaiModel
+}
+
+export interface CivitaiModelVersionResponse {
+  version: CivitaiVersion
+  download_url: string
 }
