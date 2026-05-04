@@ -264,6 +264,10 @@ supervisor, but they should expose compatible JSON:
 - status: `state`, `progress`, `message`, `target_env`, and `source_env`
 - logs: recent ordered log lines with timestamp and message
 
+The API should derive observer filenames, route paths, and payload shape from
+ComfyGit core lifecycle primitives rather than duplicating those constants in
+manager-only code.
+
 The frontend may still fall back to ComfyUI-hosted status endpoints after the
 new process is healthy, but normal switch progress should not depend on a
 ComfyUI route being reachable during the handoff window.

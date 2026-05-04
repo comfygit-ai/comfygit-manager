@@ -24,6 +24,12 @@ from typing import Optional
 from comfygit_core.core.environment import Environment
 from comfygit_core.core.workspace import Workspace
 from comfygit_core.factories.workspace_factory import WorkspaceFactory
+from comfygit_core.lifecycle.switch_observer import (
+    SWITCH_STATUS_FILE,
+    cleanup_switch_status as core_cleanup_switch_status,
+    read_switch_status as core_read_switch_status,
+    write_switch_status as core_write_switch_status,
+)
 from comfygit_core.models.exceptions import CDEnvironmentNotFoundError, CDWorkspaceNotFoundError
 
 
@@ -243,7 +249,7 @@ def force_cleanup_orchestrator_state(metadata_dir: Path) -> None:
 
     files_to_remove = [
         ".switch.lock",
-        ".switch_status.json",
+        SWITCH_STATUS_FILE,
         ".switch_request.json",
     ]
 
@@ -312,38 +318,23 @@ def read_switch_request(metadata_dir: Path) -> Optional[dict]:
 def write_switch_status(metadata_dir: Path, state: str, progress: int = 0,
                        message: str = "", **kwargs) -> None:
     """Write switch status for browser to poll."""
-    status_file = metadata_dir / ".switch_status.json"
-
-    status = {
-        "state": state,
-        "progress": progress,
-        "message": message,
-        "updated_at": time.time(),
-        **kwargs
-    }
-
-    with open(status_file, 'w') as f:
-        json.dump(status, f, indent=2)
+    core_write_switch_status(
+        metadata_dir,
+        state=state,
+        progress=progress,
+        message=message,
+        **kwargs,
+    )
 
 
 def read_switch_status(metadata_dir: Path) -> Optional[dict]:
     """Read switch status."""
-    status_file = metadata_dir / ".switch_status.json"
-    if not status_file.exists():
-        return None
-
-    try:
-        with open(status_file) as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return None
+    return core_read_switch_status(metadata_dir)
 
 
 def cleanup_switch_status(metadata_dir: Path) -> None:
     """Remove switch status file."""
-    status_file = metadata_dir / ".switch_status.json"
-    if status_file.exists():
-        status_file.unlink()
+    core_cleanup_switch_status(metadata_dir)
 
 
 def write_orchestrator_pid(metadata_dir: Path) -> None:
@@ -1194,17 +1185,13 @@ class Orchestrator:
     def _update_switch_status(self, state: str, progress: int = 0,
                              message: str = "", **kwargs) -> None:
         """Write switch status for browser to poll."""
-        status = {
-            "state": state,
-            "progress": progress,
-            "message": message,
-            "updated_at": time.time(),
-            **kwargs
-        }
-
-        status_file = self.metadata_dir / ".switch_status.json"
-        with open(status_file, 'w') as f:
-            json.dump(status, f, indent=2)
+        write_switch_status(
+            self.metadata_dir,
+            state=state,
+            progress=progress,
+            message=message,
+            **kwargs,
+        )
 
     def _cleanup_switch_status(self) -> None:
         """Remove switch status file."""

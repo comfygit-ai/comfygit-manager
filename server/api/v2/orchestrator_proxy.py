@@ -4,9 +4,10 @@ These routes proxy requests to the orchestrator's control server,
 allowing the frontend to communicate with the orchestrator through
 ComfyUI's same-origin API (works with cloud proxies like RunPod).
 """
-import json
 import aiohttp
 from aiohttp import web, ClientTimeout
+
+from comfygit_core.lifecycle.switch_observer import read_switch_status
 
 import orchestrator
 
@@ -63,7 +64,7 @@ async def orchestrator_status(request: web.Request) -> web.Response:
     """Get orchestrator status with file-based fallback.
 
     Tries orchestrator control server first, falls back to reading
-    .switch_status.json if orchestrator is unreachable.
+    the shared switch status file if orchestrator is unreachable.
     """
     response = await _proxy_request("GET", "/status", timeout=2.0)
 
@@ -78,13 +79,9 @@ async def orchestrator_status(request: web.Request) -> web.Response:
             "message": "Not in managed environment"
         })
 
-    status_file = workspace.path / ".metadata" / ".switch_status.json"
-    if status_file.exists():
-        try:
-            data = json.loads(status_file.read_text())
-            return web.json_response(data)
-        except Exception:
-            pass
+    data = read_switch_status(workspace.path / ".metadata")
+    if data:
+        return web.json_response(data)
 
     return web.json_response({
         "state": "idle",

@@ -12,6 +12,12 @@ from cgm_core.runtime_context import build_runtime_context, ensure_capability
 from cgm_utils.async_helpers import run_sync
 from cgm_utils.environment_name_validation import validate_environment_name
 from comfygit_core.factories.workspace_factory import WorkspaceFactory
+from comfygit_core.lifecycle.switch_observer import (
+    SWITCH_STATUS_ROUTE,
+    build_switch_observer_payload,
+    read_supervisor_advertisement,
+    read_switch_status,
+)
 from comfygit_core.models.exceptions import CDWorkspaceNotFoundError, CDEnvironmentNotFoundError
 import orchestrator
 from .operations import build_export_validation, execute_environment_export
@@ -105,22 +111,11 @@ def _request_public_origin(request: web.Request, port: int) -> str:
 
 def _read_supervisor_observer(workspace, request: web.Request) -> dict | None:
     """Return direct supervisor observer URLs if cg-run advertised them."""
-    info_file = workspace.path / ".metadata" / ".supervisor_control.json"
-    if not info_file.exists():
+    info = read_supervisor_advertisement(workspace.path)
+    if not info:
         return None
 
-    try:
-        info = json.loads(info_file.read_text(encoding="utf-8"))
-        port = int(info["port"])
-    except Exception:
-        return None
-
-    origin = _request_public_origin(request, port)
-    return {
-        "kind": "cg_run_supervisor",
-        "status_url": f"{origin}/v2/comfygit/switch_status",
-        "logs_url": f"{origin}/v2/comfygit/switch_logs",
-    }
+    return build_switch_observer_payload(_request_public_origin(request, info["port"]))
 
 
 def spawn_orchestrator(environment, target_env: str) -> None:
@@ -545,7 +540,7 @@ async def get_orchestrator_port(request: web.Request) -> web.Response:
         return web.json_response({"error": "Invalid port file"}, status=500)
 
 
-@routes.get("/v2/comfygit/switch_status")
+@routes.get(SWITCH_STATUS_ROUTE)
 async def get_switch_status(request: web.Request) -> web.Response:
     """
     Get environment switch status.
@@ -569,31 +564,14 @@ async def get_switch_status(request: web.Request) -> web.Response:
             "message": "Server restarting or environment not detected"
         })
 
-    # Check for switch status file in workspace metadata
-    metadata_dir = workspace.path / ".metadata"
-    status_file = metadata_dir / ".switch_status.json"
-
-    if status_file.exists():
-        try:
-            status_data = json.loads(status_file.read_text())
-
-            # Validate required fields
-            if not status_data.get("target_env"):
-                # Invalid file - clean it up
-                status_file.unlink(missing_ok=True)
-                return web.json_response({
-                    "state": "idle",
-                    "message": "No switch in progress"
-                })
-
-            # Return the full status data (includes state, progress, message, etc.)
-            return web.json_response(status_data)
-
-        except Exception as e:
+    status_data = read_switch_status(workspace.path / ".metadata")
+    if status_data:
+        if not status_data.get("target_env"):
             return web.json_response({
-                "error": "invalid_status_file",
-                "message": f"Could not read switch status: {e}"
-            }, status=500)
+                "state": "idle",
+                "message": "No switch in progress"
+            })
+        return web.json_response(status_data)
 
     # No switch in progress
     return web.json_response({

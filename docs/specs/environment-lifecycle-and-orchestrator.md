@@ -174,6 +174,12 @@ status and recent supervisor log lines through a stable JSON shape so the
 frontend can show real progress and debugging context instead of relying only
 on simulated progress.
 
+The shared schema, metadata filenames, status/log file helpers, observer URL
+payload shape, and HTTP observer server belong to ComfyGit core so CLI and
+manager lifecycle authorities do not drift. The CLI and manager may still own
+their process-specific handoff decisions, but they should call the same core
+observer primitives for status and log publication.
+
 This remains partial until both supervisor modes expose the same observation
 shape and the switch modal consumes it without falling back to noisy failed
 polling during normal handoff.
