@@ -1,7 +1,7 @@
 <template>
   <BaseModal
     :title="`Find Source: ${model.filename}`"
-    size="lg"
+    size="xl"
     fixed-height
     :overlay-z-index="overlayZIndex"
     @close="emit('close')"

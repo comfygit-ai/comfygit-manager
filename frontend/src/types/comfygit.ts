@@ -532,6 +532,7 @@ export interface ModelInfo {
   relative_path?: string
   status: 'available' | 'missing' | 'downloadable' | 'path_mismatch'
   source_url?: string
+  has_download_source?: boolean
   used_in_environments?: Array<{ env_name: string; workflow_count: number }>
   used_in_workflows?: string[]
 }

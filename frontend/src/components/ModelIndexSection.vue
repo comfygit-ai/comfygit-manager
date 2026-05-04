@@ -45,10 +45,17 @@
         </div>
       </div>
 
-      <SearchBar
-        v-model="searchQuery"
-        placeholder="🔍 Search all indexed models..."
-      />
+      <div class="model-search-row">
+        <SearchBar
+          v-model="searchQuery"
+          placeholder="🔍 Search all indexed models..."
+        />
+        <ModelListFilterButton
+          v-model:model-type="modelTypeFilter"
+          v-model:missing-source-only="missingSourceOnly"
+          :model-types="availableModelTypes"
+        />
+      </div>
     </template>
 
     <template #content>
@@ -82,6 +89,7 @@
             <template #title>{{ model.filename }}</template>
             <template #subtitle>{{ formatSize(model.size) }}</template>
             <template #details>
+              <div v-if="!hasModelSource(model)" class="source-chip">No source URL</div>
               <DetailRow
                 label="Hash:"
                 :value="model.hash ? model.hash.substring(0, 16) : 'N/A'"
@@ -127,6 +135,8 @@
     v-if="selectedModelId"
     :identifier="selectedModelId"
     @close="selectedModelId = null"
+    @source-saved="handleModelSourcesChanged"
+    @source-removed="handleModelSourcesChanged"
     @deleted="handleModelDeleted"
   />
 
@@ -198,6 +208,7 @@ import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import ModelDetailModal from '@/components/ModelDetailModal.vue'
 import ModelDownloadModal from '@/components/ModelDownloadModal.vue'
+import ModelListFilterButton from '@/components/models/ModelListFilterButton.vue'
 import BaseModal from '@/components/base/BaseModal.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -219,6 +230,8 @@ const loading = ref(false)
 const scanning = ref(false)
 const error = ref<string | null>(null)
 const searchQuery = ref('')
+const modelTypeFilter = ref('all')
+const missingSourceOnly = ref(false)
 const showPopover = ref(false)
 const selectedModelId = ref<string | null>(null)
 
@@ -238,13 +251,17 @@ const totalSize = computed(() =>
   models.value.reduce((sum, m) => sum + (m.size || 0), 0)
 )
 
+const availableModelTypes = computed(() => uniqueModelTypes(models.value))
+
 // Search filtering
 const filteredModels = computed(() => {
-  if (!searchQuery.value.trim()) return models.value
   const query = searchQuery.value.toLowerCase()
   return models.value.filter(m => {
     const modelAny = m as any
     const sha256 = m.sha256 || modelAny.sha256_hash || ''
+    if (modelTypeFilter.value !== 'all' && normalizedModelType(m) !== modelTypeFilter.value) return false
+    if (missingSourceOnly.value && hasModelSource(m)) return false
+    if (!query.trim()) return true
     return (
       m.filename.toLowerCase().includes(query) ||
       sha256.toLowerCase().includes(query)
@@ -288,12 +305,32 @@ function formatSize(bytes: number | undefined): string {
   return `${(bytes / 1024).toFixed(0)} KB`
 }
 
+function normalizedModelType(model: ModelInfo): string {
+  return model.type || 'other'
+}
+
+function uniqueModelTypes(modelList: ModelInfo[]): string[] {
+  return Array.from(new Set(modelList.map(normalizedModelType))).sort((a, b) => a.localeCompare(b))
+}
+
+function hasModelSource(model: ModelInfo): boolean {
+  const modelAny = model as ModelInfo & { sources?: unknown[] }
+  if (typeof model.has_download_source === 'boolean') return model.has_download_source
+  if (Array.isArray(modelAny.sources) && modelAny.sources.length > 0) return true
+  return Boolean(model.source_url)
+}
+
 function viewDetails(model: ModelInfo) {
   selectedModelId.value = model.hash || model.filename
 }
 
 async function handleModelDeleted() {
   selectedModelId.value = null
+  await loadModels()
+  emit('refresh')
+}
+
+async function handleModelSourcesChanged() {
   await loadModels()
   emit('refresh')
 }
@@ -362,9 +399,36 @@ onMounted(() => {
   loadModels()
   loadCurrentDirectory()
 })
+
+defineExpose({
+  loadModels
+})
 </script>
 
 <style scoped>
+.model-search-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cg-space-2);
+}
+
+.model-search-row :deep(.search-bar) {
+  flex: 1;
+  min-width: 0;
+}
+
+.source-chip {
+  align-self: flex-start;
+  width: fit-content;
+  padding: 2px 7px;
+  border: 1px solid var(--cg-color-warning);
+  background: var(--cg-color-warning-muted);
+  color: var(--cg-color-warning);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+}
+
 /* Progress bar styles */
 .indexing-progress {
   background: var(--cg-color-bg-tertiary);

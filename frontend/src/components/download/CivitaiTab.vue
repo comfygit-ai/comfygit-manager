@@ -271,20 +271,32 @@
                 :class="['file-row', { active: selectedFile?.id === file.id }]"
                 @click="selectFile(file)"
               >
-                <div class="file-main">
-                  <span class="file-name">{{ file.name }}</span>
-                  <span class="file-meta">
-                    {{ file.type || 'File' }}
-                    <template v-if="file.metadata.format"> · {{ file.metadata.format }}</template>
-                    <template v-if="file.metadata.size"> · {{ file.metadata.size }}</template>
-                    <template v-if="file.metadata.fp"> · {{ file.metadata.fp }}</template>
-                  </span>
+                <div class="file-summary">
+                  <div class="file-main">
+                    <span class="file-name">{{ file.name }}</span>
+                    <span class="file-meta">
+                      {{ file.type || 'File' }}
+                      <template v-if="file.metadata.format"> · {{ file.metadata.format }}</template>
+                      <template v-if="file.metadata.size"> · {{ file.metadata.size }}</template>
+                      <template v-if="file.metadata.fp"> · {{ file.metadata.fp }}</template>
+                    </span>
+                  </div>
+                  <div class="file-side">
+                    <span>{{ formatSizeKb(file.size_kb) }}</span>
+                    <span :class="['scan-chip', scanStatusClass(file)]">
+                      {{ scanSummary(file) }}
+                    </span>
+                  </div>
                 </div>
-                <div class="file-side">
-                  <span>{{ formatSizeKb(file.size_kb) }}</span>
-                  <span :class="['scan-chip', scanStatusClass(file)]">
-                    {{ scanSummary(file) }}
-                  </span>
+                <div v-if="file.hashes?.blake3 || file.hashes?.sha256" class="file-hashes">
+                  <div v-if="file.hashes?.blake3" class="file-hash-row">
+                    <span>BLAKE3</span>
+                    <code>{{ file.hashes.blake3 }}</code>
+                  </div>
+                  <div v-if="file.hashes?.sha256" class="file-hash-row">
+                    <span>SHA256</span>
+                    <code>{{ file.hashes.sha256 }}</code>
+                  </div>
                 </div>
               </button>
             </div>
@@ -306,6 +318,7 @@
               <code>{{ selectedDownloadUrl }}</code>
             </div>
             <BaseButton
+              class="source-action-btn"
               variant="primary"
               :disabled="!targetPath"
               @click="queueSelectedFile"
@@ -321,7 +334,7 @@
               <span>Source</span>
               <code>{{ selectedDownloadUrl }}</code>
             </div>
-            <BaseButton variant="primary" @click="useSelectedSource">
+            <BaseButton class="source-action-btn" variant="primary" @click="useSelectedSource">
               {{ actionLabel }}
             </BaseButton>
           </div>
@@ -786,6 +799,7 @@ onMounted(loadTokenStatus)
 
 .detail-view {
   overflow: visible;
+  padding-bottom: var(--cg-space-6);
 }
 
 .state-message,
@@ -1146,8 +1160,8 @@ onMounted(loadTokenStatus)
 
 .version-file-layout {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
-  gap: var(--cg-space-3);
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: var(--cg-space-2);
   margin-bottom: var(--cg-space-3);
 }
 
@@ -1240,6 +1254,13 @@ onMounted(loadTokenStatus)
 
 .file-row {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--cg-space-2);
+}
+
+.file-summary {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--cg-space-2);
@@ -1250,6 +1271,30 @@ onMounted(loadTokenStatus)
   display: flex;
   flex-direction: column;
   gap: 3px;
+}
+
+.file-hashes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding-top: var(--cg-space-1);
+}
+
+.file-hash-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  column-gap: var(--cg-space-2);
+  align-items: start;
+  color: var(--cg-color-text-muted);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+}
+
+.file-hash-row code {
+  color: var(--cg-color-text-secondary);
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .file-side {
@@ -1282,6 +1327,7 @@ onMounted(loadTokenStatus)
 }
 
 .selected-source {
+  flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -1293,6 +1339,12 @@ onMounted(loadTokenStatus)
 .selected-source code {
   color: var(--cg-color-text-secondary);
   overflow-wrap: anywhere;
+}
+
+.source-action-btn {
+  flex: 0 0 158px;
+  min-width: 158px;
+  white-space: nowrap;
 }
 
 .search-results::-webkit-scrollbar {

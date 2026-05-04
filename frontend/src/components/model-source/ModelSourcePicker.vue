@@ -13,10 +13,16 @@
         <div v-if="model.blake3" class="hash-row">
           <span class="hash-label">blake3</span>
           <span class="hash-value">{{ model.blake3 }}</span>
+          <button type="button" class="copy-hash-btn" @click="copyHash('blake3', model.blake3)">
+            {{ copiedHash === 'blake3' ? 'Copied' : 'Copy' }}
+          </button>
         </div>
         <div v-if="model.sha256" class="hash-row">
           <span class="hash-label">sha256</span>
           <span class="hash-value">{{ model.sha256 }}</span>
+          <button type="button" class="copy-hash-btn" @click="copyHash('sha256', model.sha256)">
+            {{ copiedHash === 'sha256' ? 'Copied' : 'Copy' }}
+          </button>
         </div>
         <BaseButton
           v-if="missingFullHashes"
@@ -44,34 +50,22 @@
     </div>
 
     <section v-if="activeTab === 'workflow'" class="tab-content">
-      <div class="section-header-row">
-        <div>
-          <h4>Workflow Links</h4>
-          <p>Candidate model links found in saved workflow notes or metadata.</p>
-        </div>
-        <BaseButton variant="secondary" size="sm" :loading="loadingCandidates" @click="loadCandidates">
-          Scan
-        </BaseButton>
-      </div>
-
-      <div v-if="loadingCandidates" class="state-message">Scanning workflows...</div>
-      <div v-else-if="candidateError" class="error-message">{{ candidateError }}</div>
-      <div v-else-if="workflowCandidates.length" class="candidate-list">
-        <ModelSourceCandidateCard
-          v-for="candidate in workflowCandidates"
-          :key="`${candidate.workflow}:${candidate.url}`"
-          :candidate="candidate"
-          :action-label="actionLabel"
-          :loading="loadingUrl === candidate.url"
-          :requires-target-confirmation="usesDownloadTarget"
-          :suggested-directory="suggestedDirectory"
-          :target-filename="targetFilename"
-          @select="handleCandidateSource"
-        />
-      </div>
-      <div v-else class="state-message">
-        No likely workflow links found. Try direct URL for now.
-      </div>
+      <WorkflowLinksTab
+        mode-kind="source"
+        :action-label="actionLabel"
+        :confirm-action-label="actionLabel"
+        :loading-url="loadingUrl"
+        show-match-chip
+        :requires-target-confirmation="usesDownloadTarget"
+        :model-hash="model.hash"
+        :workflow-name="workflowName"
+        :filename="model.filename"
+        :category="model.category"
+        :node-type="nodeType"
+        :suggested-directory="suggestedDirectory"
+        :target-filename="targetFilename"
+        @select-source="handleCandidateSource"
+      />
     </section>
 
     <section v-else-if="activeTab === 'huggingface'" class="tab-content source-browser-content">
@@ -93,33 +87,19 @@
     </section>
 
     <section v-else-if="activeTab === 'direct'" class="tab-content">
-      <div class="section-header-row">
-        <div>
-          <h4>Direct URL</h4>
-          <p>{{ directDescription }}</p>
-        </div>
-      </div>
-
-      <DirectModelUrlForm
-        v-if="usesDownloadTarget"
+      <DirectUrlTab
+        mode-kind="source"
         :initial-url="directUrl"
         label=""
         :placeholder="directPlaceholder"
+        :description="directDescription"
         :action-label="actionLabel"
         :loading="loadingUrl === directUrl.trim()"
         :suggested-directory="suggestedDirectory"
         :target-filename="targetFilename"
-        @submit="handleDirectSource"
-      />
-
-      <SourceUrlActionForm
-        v-else
-        v-model="directUrl"
-        label=""
-        :placeholder="directPlaceholder"
-        :action-label="actionLabel"
-        :loading="loadingUrl === directUrl.trim()"
-        @submit="emit('selectSource', $event)"
+        :requires-target="usesDownloadTarget"
+        note=""
+        @select-source="handleDirectSource"
       />
     </section>
 
@@ -127,15 +107,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import HuggingFaceTab from '@/components/download/HuggingFaceTab.vue'
 import CivitaiTab from '@/components/download/CivitaiTab.vue'
-import DirectModelUrlForm from '@/components/download/DirectModelUrlForm.vue'
-import ModelSourceCandidateCard from '@/components/model-source/ModelSourceCandidateCard.vue'
-import SourceUrlActionForm from '@/components/model-source/SourceUrlActionForm.vue'
+import DirectUrlTab from '@/components/download/DirectUrlTab.vue'
+import WorkflowLinksTab from '@/components/download/WorkflowLinksTab.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
-import type { ModelDetails, ModelSourceCandidate } from '@/types/comfygit'
+import { copyToClipboard } from '@/utils/copyToClipboard'
+import type { ModelDetails } from '@/types/comfygit'
 
 const props = withDefaults(defineProps<{
   model: ModelDetails
@@ -163,7 +143,7 @@ const emit = defineEmits<{
   hashesComputed: [model: ModelDetails]
 }>()
 
-const { getModelSourceCandidates, getWorkflowModelSourceCandidates, computeModelHashes } = useComfyGitService()
+const { computeModelHashes } = useComfyGitService()
 
 const tabs = [
   { id: 'workflow', label: 'Workflow Links' },
@@ -173,14 +153,12 @@ const tabs = [
 ] as const
 
 const activeTab = ref<(typeof tabs)[number]['id']>('workflow')
-const candidates = ref<ModelSourceCandidate[]>([])
-const loadingCandidates = ref(false)
-const candidateError = ref<string | null>(null)
 const directUrl = ref('')
 const computingHashes = ref(false)
 const hashError = ref<string | null>(null)
+const copiedHash = ref<'blake3' | 'sha256' | null>(null)
+let copiedHashTimeout: ReturnType<typeof setTimeout> | null = null
 
-const workflowCandidates = computed(() => candidates.value.filter(candidate => candidate.source === 'workflow'))
 const missingFullHashes = computed(() => Boolean(props.model.hash && (!props.model.blake3 || !props.model.sha256)))
 const usesDownloadTarget = computed(() => Boolean(props.workflowName || !props.model.hash))
 const suggestedDirectory = computed(() => {
@@ -190,26 +168,6 @@ const suggestedDirectory = computed(() => {
 const targetFilename = computed(() => {
   return filenameFromPath(props.model.filename || props.model.relative_path || '')
 })
-
-async function loadCandidates() {
-  loadingCandidates.value = true
-  candidateError.value = null
-
-  try {
-    const response = props.workflowName
-      ? await getWorkflowModelSourceCandidates(props.workflowName, {
-        filename: props.model.filename,
-        category: props.model.category,
-        nodeType: props.nodeType
-      })
-      : await getModelSourceCandidates(props.model.hash)
-    candidates.value = response.candidates
-  } catch (err) {
-    candidateError.value = err instanceof Error ? err.message : 'Failed to scan workflows'
-  } finally {
-    loadingCandidates.value = false
-  }
-}
 
 async function computeHashes() {
   if (!props.model.hash) return
@@ -227,9 +185,24 @@ async function computeHashes() {
   }
 }
 
-function handleDirectSource(payload: { url: string; targetPath: string }) {
-  directUrl.value = payload.url
-  emit('selectSource', payload.url, payload.targetPath)
+async function copyHash(kind: 'blake3' | 'sha256', value: string | null) {
+  if (!value) return
+
+  try {
+    await copyToClipboard(value)
+    copiedHash.value = kind
+    if (copiedHashTimeout) clearTimeout(copiedHashTimeout)
+    copiedHashTimeout = setTimeout(() => {
+      copiedHash.value = null
+    }, 1600)
+  } catch (err) {
+    console.error(`Failed to copy ${kind}:`, err)
+  }
+}
+
+function handleDirectSource(url: string, targetPath?: string) {
+  directUrl.value = url
+  emit('selectSource', url, targetPath)
 }
 
 function handleCandidateSource(url: string, targetPath?: string) {
@@ -244,7 +217,6 @@ function filenameFromPath(path: string): string {
   return normalizePath(path).split('/').filter(Boolean).pop() || normalizePath(path)
 }
 
-onMounted(loadCandidates)
 </script>
 
 <style scoped>
@@ -291,7 +263,8 @@ onMounted(loadCandidates)
 }
 
 .hash-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr) auto;
   align-items: flex-start;
   gap: var(--cg-space-2);
 }
@@ -299,13 +272,28 @@ onMounted(loadCandidates)
 .hash-label {
   color: var(--cg-color-text-muted);
   white-space: nowrap;
-  min-width: 70px;
 }
 
 .hash-value {
   color: var(--cg-color-text-secondary);
   font-family: var(--cg-font-mono);
   overflow-wrap: anywhere;
+}
+
+.copy-hash-btn {
+  align-self: start;
+  background: var(--cg-color-bg-tertiary);
+  border: 1px solid var(--cg-color-border);
+  color: var(--cg-color-text-secondary);
+  cursor: pointer;
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  padding: 2px 7px;
+}
+
+.copy-hash-btn:hover {
+  border-color: var(--cg-color-accent);
+  color: var(--cg-color-accent);
 }
 
 .hash-error {
@@ -347,7 +335,7 @@ onMounted(loadCandidates)
 }
 
 .source-browser-content {
-  height: 430px;
+  min-height: 430px;
 }
 
 .section-header-row {

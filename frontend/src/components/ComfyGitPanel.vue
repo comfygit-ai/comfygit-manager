@@ -205,6 +205,7 @@
           <!-- Models (Environment) View -->
           <ModelsEnvSection
             v-else-if="currentView === 'models-env'"
+            ref="modelsEnvSectionRef"
             @navigate="handleNavigate"
           />
 
@@ -258,7 +259,7 @@
           />
 
           <!-- Model Index View -->
-          <ModelIndexSection v-else-if="currentView === 'model-index'" @refresh="refresh" />
+          <ModelIndexSection v-else-if="currentView === 'model-index'" ref="modelIndexSectionRef" @refresh="refresh" />
 
           <!-- Settings View -->
           <WorkspaceSettingsSection v-else-if="currentView === 'settings'" />
@@ -565,6 +566,8 @@ const updateNoticeVisible = computed(() => !updateNoticeHidden.value && shouldSh
 
 // Ref to child components for triggering reloads
 const workflowsSectionRef = ref<{ loadWorkflows: (forceRefresh?: boolean) => Promise<void> } | null>(null)
+const modelsEnvSectionRef = ref<{ loadModels: () => Promise<void> } | null>(null)
+const modelIndexSectionRef = ref<{ loadModels: () => Promise<void> } | null>(null)
 const environmentsSectionRef = ref<{ loadEnvironments: () => Promise<void>; openCreateModal: () => void } | null>(null)
 const statusSectionRef = ref<{ resetRepairingState: () => void } | null>(null)
 
@@ -897,6 +900,12 @@ async function refresh(options: { refreshWorkflows?: boolean } = {}) {
     // for explicit parent-level refreshes to avoid a mount-time double fetch.
     if (refreshWorkflows && workflowsSectionRef.value) {
       await workflowsSectionRef.value.loadWorkflows(true)
+    }
+    if (currentView.value === 'models-env' && modelsEnvSectionRef.value) {
+      await modelsEnvSectionRef.value.loadModels()
+    }
+    if (currentView.value === 'model-index' && modelIndexSectionRef.value) {
+      await modelIndexSectionRef.value.loadModels()
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load status'

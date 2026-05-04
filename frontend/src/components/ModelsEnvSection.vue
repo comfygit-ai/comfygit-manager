@@ -19,10 +19,17 @@
     </template>
 
     <template #search>
-      <SearchBar
-        v-model="searchQuery"
-        placeholder="🔍 Search models used in this environment..."
-      />
+      <div class="model-search-row">
+        <SearchBar
+          v-model="searchQuery"
+          placeholder="🔍 Search models used in this environment..."
+        />
+        <ModelListFilterButton
+          v-model:model-type="modelTypeFilter"
+          v-model:missing-source-only="missingSourceOnly"
+          :model-types="availableModelTypes"
+        />
+      </div>
     </template>
 
     <template #content>
@@ -56,6 +63,7 @@
             <template #title>{{ model.filename }}</template>
             <template #subtitle>{{ formatSize(model.size) }}</template>
             <template #details>
+              <div v-if="!hasModelSource(model)" class="source-chip">No source URL</div>
               <DetailRow label="Used by:" :value="(model.used_in_workflows || []).join(', ') || 'Not used'" />
               <DetailRow label="Path:" :value="model.relative_path || 'Unknown'" :mono="true" />
             </template>
@@ -127,6 +135,8 @@
     v-if="selectedModelId"
     :identifier="selectedModelId"
     @close="selectedModelId = null"
+    @source-saved="handleModelSourcesChanged"
+    @source-removed="handleModelSourcesChanged"
     @deleted="handleModelDeleted"
   />
 
@@ -155,6 +165,7 @@ import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import ModelDetailModal from '@/components/ModelDetailModal.vue'
 import ModelDownloadModal from '@/components/ModelDownloadModal.vue'
+import ModelListFilterButton from '@/components/models/ModelListFilterButton.vue'
 
 // No extended interface needed - use ModelInfo directly
 
@@ -175,6 +186,8 @@ const environmentName = ref('production')
 const loading = ref(false)
 const error = ref<string | null>(null)
 const searchQuery = ref('')
+const modelTypeFilter = ref('all')
+const missingSourceOnly = ref(false)
 const showPopover = ref(false)
 const selectedModelId = ref<string | null>(null)
 const showDownloadModal = ref(false)
@@ -188,15 +201,22 @@ const totalSize = computed(() =>
   models.value.reduce((sum, m) => sum + (m.size || 0), 0)
 )
 
+const availableModelTypes = computed(() => uniqueModelTypes(models.value))
+
 // Search filtering for models
 const filteredModels = computed(() => {
-  if (!searchQuery.value.trim()) return models.value
   const query = searchQuery.value.toLowerCase()
-  return models.value.filter(m => m.filename.toLowerCase().includes(query))
+  return models.value.filter(m => {
+    if (query.trim() && !m.filename.toLowerCase().includes(query)) return false
+    if (modelTypeFilter.value !== 'all' && normalizedModelType(m) !== modelTypeFilter.value) return false
+    if (missingSourceOnly.value && hasModelSource(m)) return false
+    return true
+  })
 })
 
 // Search filtering for missing models
 const filteredMissing = computed(() => {
+  if (modelTypeFilter.value !== 'all' || missingSourceOnly.value) return []
   if (!searchQuery.value.trim()) return missingModels.value
   const query = searchQuery.value.toLowerCase()
   return missingModels.value.filter(m => m.filename.toLowerCase().includes(query))
@@ -233,6 +253,21 @@ function formatSize(bytes: number | undefined): string {
   return `${mb.toFixed(0)} MB`
 }
 
+function normalizedModelType(model: ModelInfo): string {
+  return model.type || 'other'
+}
+
+function uniqueModelTypes(modelList: ModelInfo[]): string[] {
+  return Array.from(new Set(modelList.map(normalizedModelType))).sort((a, b) => a.localeCompare(b))
+}
+
+function hasModelSource(model: ModelInfo): boolean {
+  const modelAny = model as ModelInfo & { sources?: unknown[] }
+  if (typeof model.has_download_source === 'boolean') return model.has_download_source
+  if (Array.isArray(modelAny.sources) && modelAny.sources.length > 0) return true
+  return Boolean(model.source_url)
+}
+
 function viewDetails(model: ModelInfo) {
   // Use hash as identifier for the detail lookup
   selectedModelId.value = model.hash || model.filename
@@ -240,6 +275,10 @@ function viewDetails(model: ModelInfo) {
 
 async function handleModelDeleted() {
   selectedModelId.value = null
+  await loadModels()
+}
+
+async function handleModelSourcesChanged() {
   await loadModels()
 }
 
@@ -274,8 +313,33 @@ async function loadModels() {
 }
 
 onMounted(loadModels)
+
+defineExpose({
+  loadModels
+})
 </script>
 
 <style scoped>
-/* Minimal to no custom CSS! Everything is in components */
+.model-search-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cg-space-2);
+}
+
+.model-search-row :deep(.search-bar) {
+  flex: 1;
+  min-width: 0;
+}
+
+.source-chip {
+  align-self: flex-start;
+  width: fit-content;
+  padding: 2px 7px;
+  border: 1px solid var(--cg-color-warning);
+  background: var(--cg-color-warning-muted);
+  color: var(--cg-color-warning);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+}
 </style>

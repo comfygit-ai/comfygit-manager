@@ -191,6 +191,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   sourceSaved: []
+  sourceRemoved: []
   deleted: []
 }>()
 
@@ -256,6 +257,7 @@ async function removeSource(url: string) {
     showToast('Source removed')
     // Reload details to show updated sources
     await loadDetails()
+    emit('sourceRemoved')
   } catch (err) {
     sourceError.value = err instanceof Error ? err.message : 'Failed to remove source'
   } finally {

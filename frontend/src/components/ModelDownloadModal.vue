@@ -36,6 +36,7 @@
           />
           <DirectUrlTab
             v-else-if="activeTab === 'direct'"
+            clear-on-submit
             @queue="handleDirectQueue"
           />
         </div>

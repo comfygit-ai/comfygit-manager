@@ -385,6 +385,15 @@ def _model_details_payload(env, details) -> dict:
     }
 
 
+def _model_has_download_source(env, model_hash: str | None) -> bool:
+    if not model_hash:
+        return False
+    try:
+        return bool(env.workspace.model_repository.get_sources(model_hash))
+    except Exception:
+        return False
+
+
 def _primary_model_path(env, details) -> Path:
     payload = _model_details_payload(env, details)
     for location in payload["locations"]:
@@ -464,6 +473,7 @@ async def get_environment_models(request: web.Request, env) -> web.Response:
                         "size": model_ref.file_size,
                         "status": model_status,
                         "relative_path": relative_path,
+                        "has_download_source": _model_has_download_source(env, model_hash),
                         "used_in_workflows": []
                     }
 
@@ -483,6 +493,7 @@ async def get_environment_models(request: web.Request, env) -> web.Response:
                     "type": "unknown",
                     "size": 0,
                     "status": "missing",
+                    "has_download_source": False,
                     "used_in_workflows": missing_model.required_by.copy()
                 }
 
@@ -517,6 +528,7 @@ async def get_workspace_models(request: web.Request, env) -> web.Response:
                 "type": model.category,
                 "size": model.file_size,
                 "relative_path": model.relative_path,
+                "has_download_source": _model_has_download_source(env, model.hash),
                 "status": "available",  # All indexed models are available
             })
 

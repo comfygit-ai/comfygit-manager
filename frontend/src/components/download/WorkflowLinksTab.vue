@@ -17,10 +17,11 @@
         v-for="candidate in workflowCandidates"
         :key="`${candidate.workflow}:${candidate.url}`"
         :candidate="candidate"
-        action-label="Use URL"
-        confirm-action-label="Download"
-        requires-target-confirmation
-        :show-match-chip="false"
+        :action-label="actionLabel"
+        :confirm-action-label="confirmActionLabel"
+        :loading="loadingUrl === candidate.url"
+        :requires-target-confirmation="requiresTargetConfirmation"
+        :show-match-chip="showMatchChip"
         :suggested-directory="suggestedDirectory(candidate)"
         :target-filename="targetFilename(candidate)"
         :target-warning="targetWarning(candidate)"
@@ -41,11 +42,42 @@ import ModelSourceCandidateCard from '@/components/model-source/ModelSourceCandi
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import type { ModelSourceCandidate } from '@/types/comfygit'
 
+const props = withDefaults(defineProps<{
+  modeKind?: 'download' | 'source'
+  actionLabel?: string
+  confirmActionLabel?: string
+  loadingUrl?: string | null
+  showMatchChip?: boolean
+  requiresTargetConfirmation?: boolean
+  modelHash?: string | null
+  workflowName?: string | null
+  filename?: string | null
+  category?: string | null
+  nodeType?: string | null
+  suggestedDirectory?: string | null
+  targetFilename?: string | null
+}>(), {
+  modeKind: 'download',
+  actionLabel: 'Use URL',
+  confirmActionLabel: 'Download',
+  loadingUrl: null,
+  showMatchChip: false,
+  requiresTargetConfirmation: true,
+  modelHash: null,
+  workflowName: null,
+  filename: null,
+  category: null,
+  nodeType: null,
+  suggestedDirectory: null,
+  targetFilename: null
+})
+
 const emit = defineEmits<{
   queue: [items: Array<{ url: string; targetPath: string; filename: string }>]
+  selectSource: [url: string, targetPath?: string]
 }>()
 
-const { getWorkflowSourceCandidates } = useComfyGitService()
+const { getWorkflowSourceCandidates, getWorkflowModelSourceCandidates, getModelSourceCandidates } = useComfyGitService()
 
 const candidates = ref<ModelSourceCandidate[]>([])
 const loadingCandidates = ref(false)
@@ -58,7 +90,7 @@ async function loadCandidates() {
   candidateError.value = null
 
   try {
-    const response = await getWorkflowSourceCandidates()
+    const response = await loadCandidateResponse()
     candidates.value = response.candidates
   } catch (err) {
     candidateError.value = err instanceof Error ? err.message : 'Failed to scan workflows'
@@ -67,9 +99,30 @@ async function loadCandidates() {
   }
 }
 
+async function loadCandidateResponse() {
+  if (props.modeKind === 'source' && props.workflowName) {
+    return getWorkflowModelSourceCandidates(props.workflowName, {
+      filename: props.filename || undefined,
+      category: props.category || undefined,
+      nodeType: props.nodeType || undefined
+    })
+  }
+
+  if (props.modeKind === 'source' && props.modelHash) {
+    return getModelSourceCandidates(props.modelHash)
+  }
+
+  return getWorkflowSourceCandidates()
+}
+
 onMounted(loadCandidates)
 
 function handleSourceSelected(candidate: ModelSourceCandidate, url: string, targetPath?: string) {
+  if (props.modeKind === 'source') {
+    emit('selectSource', url, targetPath)
+    return
+  }
+
   if (!targetPath) return
   const selectedFilename = targetFilename(candidate)
   emit('queue', [{
@@ -80,6 +133,8 @@ function handleSourceSelected(candidate: ModelSourceCandidate, url: string, targ
 }
 
 function targetFilename(candidate: ModelSourceCandidate): string | null {
+  if (props.targetFilename) return filenameFromPath(props.targetFilename)
+
   const urlFilename = filenameFromUrl(candidate.url)
   if (hasModelExtension(urlFilename)) return urlFilename
 
@@ -93,13 +148,15 @@ function targetWarning(candidate: ModelSourceCandidate): string {
   if (isHuggingFaceRepoLink(candidate.url)) {
     return 'This Hugging Face link points to a repository, not a single file. Enter the exact filename here, or use the Hugging Face tab to choose the file directly.'
   }
-  if (!targetFilename(candidate)) {
+  if (props.requiresTargetConfirmation && !targetFilename(candidate)) {
     return 'Enter the filename to save. This workflow link does not include a concrete model filename.'
   }
   return ''
 }
 
 function suggestedDirectory(candidate: ModelSourceCandidate): string | null {
+  if (props.suggestedDirectory) return props.suggestedDirectory
+
   const context = normalizePath(candidate.context || '')
   const modelDirMatch = context.match(/(?:ComfyUI\/)?models\/([^/\s"')]+)/i)
   if (modelDirMatch?.[1]) return modelDirMatch[1]
