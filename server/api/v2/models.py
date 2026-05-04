@@ -1138,6 +1138,7 @@ def _civitai_version_to_dict(version) -> dict:
         "download_url": _clean_civitai_url(version.download_url) if version.download_url else None,
         "trained_words": version.trained_words or [],
         "download_count": version.download_count,
+        "thumbs_up_count": getattr(version, "thumbs_up_count", 0),
         "rating_count": version.rating_count,
         "rating": version.rating,
         "model": {
@@ -1165,6 +1166,7 @@ def _civitai_model_to_dict(model, *, matched_version_id: int | None = None) -> d
             "image": model.creator.image,
         } if model.creator else None,
         "download_count": model.download_count,
+        "thumbs_up_count": getattr(model, "thumbs_up_count", 0),
         "favorite_count": model.favorite_count,
         "comment_count": model.comment_count,
         "rating_count": model.rating_count,
@@ -1205,11 +1207,16 @@ async def workspace_civitai_search(request: web.Request, env) -> web.Response:
     query = (request.query.get("query") or request.query.get("q") or "").strip()
     username = (request.query.get("username") or "").strip()
     model_type = (request.query.get("type") or request.query.get("types") or "").strip()
-    sort = (request.query.get("sort") or "Most Downloaded").strip()
+    sort = (request.query.get("sort") or "Relevance").strip()
     period = (request.query.get("period") or "AllTime").strip()
+    try:
+        nsfw_level = int(request.query.get("nsfw_level", 8))
+    except (ValueError, TypeError):
+        return web.json_response({"error": "NSFW level must be a valid integer"}, status=400)
+    nsfw_level = max(1, min(nsfw_level, 32))
 
     try:
-        limit = min(max(int(request.query.get("limit", 12)), 1), 50)
+        limit = min(max(int(request.query.get("limit", 9)), 1), 9)
     except (ValueError, TypeError):
         return web.json_response({"error": "Limit must be a valid integer"}, status=400)
 
@@ -1222,6 +1229,7 @@ async def workspace_civitai_search(request: web.Request, env) -> web.Response:
 
     try:
         parsed = _parse_civitai_url(query) if query else {"kind": "unknown"}
+        api_sort = None if sort.lower() == "relevance" else sort
 
         if parsed["kind"] == "model_version":
             version = await run_sync(client.get_model_version, parsed["version_id"])
@@ -1266,8 +1274,9 @@ async def workspace_civitai_search(request: web.Request, env) -> web.Response:
             "username": username or None,
             "limit": limit,
             "page": page,
-            "sort": sort or None,
+            "sort": api_sort,
             "period": period or None,
+            "nsfw": "true" if nsfw_level > 2 else "false",
         }
         if query:
             # The public CivitAI API has historically rejected page+query combos.
@@ -1282,6 +1291,8 @@ async def workspace_civitai_search(request: web.Request, env) -> web.Response:
                 limit=limit,
                 types=model_type or None,
                 username=username or None,
+                sort=api_sort,
+                nsfw_level=nsfw_level,
             )
         else:
             search_result = await run_sync(client.search_models, **search_kwargs)

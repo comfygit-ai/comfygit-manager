@@ -3,6 +3,44 @@
     <div v-if="mode === 'search'" class="search-section">
       <div class="search-header">
         <div class="search-bar">
+          <div class="filter-anchor">
+            <BaseButton
+              variant="secondary"
+              :class="['filter-button', { active: activeFilterCount > 0 }]"
+              @click="showFilters = !showFilters"
+            >
+              Filters<span v-if="activeFilterCount"> {{ activeFilterCount }}</span>
+            </BaseButton>
+            <div v-if="showFilters" class="filter-popover">
+              <label class="filter-field">
+                <span>Content rating</span>
+                <select v-model.number="selectedNsfwLevel">
+                  <option v-for="option in nsfwLevelOptions" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
+
+              <label class="filter-field">
+                <span>Model type</span>
+                <select v-model="selectedType">
+                  <option value="">Any type</option>
+                  <option v-for="option in modelTypeOptions" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
+
+              <label class="filter-field">
+                <span>Sort</span>
+                <select v-model="selectedSort">
+                  <option v-for="option in sortOptions" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
+            </div>
+          </div>
           <BaseInput
             v-model="searchInput"
             placeholder="Search models, creators, or paste a Civitai URL..."
@@ -74,7 +112,7 @@
 
             <div class="model-stats">
               <span>Downloads {{ formatNumber(model.download_count) }}</span>
-              <span>Rating {{ formatRating(model.rating) }}</span>
+              <span>Likes {{ formatNumber(model.thumbs_up_count) }}</span>
               <span>{{ model.versions.length }} variant{{ model.versions.length === 1 ? '' : 's' }}</span>
             </div>
 
@@ -150,8 +188,8 @@
                 <span class="stat-label">Downloads</span>
               </div>
               <div>
-                <span class="stat-value">{{ formatRating(selectedModel.rating) }}</span>
-                <span class="stat-label">Rating</span>
+                <span class="stat-value">{{ formatNumber(selectedModel.thumbs_up_count) }}</span>
+                <span class="stat-label">Likes</span>
               </div>
               <div>
                 <span class="stat-value">{{ selectedModel.versions.length }}</span>
@@ -335,6 +373,10 @@ const searchResults = ref<CivitaiModel[]>([])
 const searching = ref(false)
 const searchError = ref<string | null>(null)
 const hasSearched = ref(false)
+const showFilters = ref(false)
+const selectedNsfwLevel = ref(8)
+const selectedType = ref('')
+const selectedSort = ref('Relevance')
 
 const selectedModel = ref<CivitaiModel | null>(null)
 const selectedVersionId = ref<number | null>(null)
@@ -348,6 +390,43 @@ const destination = ref('')
 const targetPath = ref('')
 const showTokenModal = ref(false)
 const tokenMask = ref<string | null>(null)
+
+const modelTypeOptions = [
+  { value: 'Checkpoint', label: 'Checkpoint' },
+  { value: 'LORA', label: 'LoRA' },
+  { value: 'LoCon', label: 'LoCon' },
+  { value: 'DoRA', label: 'DoRA' },
+  { value: 'VAE', label: 'VAE' },
+  { value: 'Controlnet', label: 'ControlNet' },
+  { value: 'Upscaler', label: 'Upscaler' },
+  { value: 'MotionModule', label: 'Motion module' },
+  { value: 'TextualInversion', label: 'Embedding' },
+  { value: 'UNet', label: 'UNet' },
+  { value: 'TextEncoder', label: 'Text encoder' },
+  { value: 'CLIPVision', label: 'CLIP vision' },
+]
+
+const sortOptions = [
+  { value: 'Relevance', label: 'Relevance' },
+  { value: 'Most Downloaded', label: 'Most downloaded' },
+  { value: 'Most Liked', label: 'Most liked' },
+  { value: 'Newest', label: 'Newest' },
+]
+
+const nsfwLevelOptions = [
+  { value: 2, label: 'SFW only' },
+  { value: 4, label: 'Up to R' },
+  { value: 8, label: 'Up to X' },
+  { value: 32, label: 'All ratings' },
+]
+
+const activeFilterCount = computed(() => {
+  let count = 0
+  if (selectedNsfwLevel.value !== 8) count += 1
+  if (selectedType.value) count += 1
+  if (selectedSort.value !== 'Relevance') count += 1
+  return count
+})
 
 const isAuthError = computed(() => {
   const error = searchError.value || detailError.value || ''
@@ -402,8 +481,14 @@ async function handleSearch() {
   detailError.value = null
 
   try {
-    const response = await searchCivitaiModels(query, { limit: 18 })
+    const response = await searchCivitaiModels(query, {
+      limit: 9,
+      type: selectedType.value || undefined,
+      sort: selectedSort.value,
+      nsfwLevel: selectedNsfwLevel.value,
+    })
     hasSearched.value = true
+    showFilters.value = false
 
     if ((response.mode === 'model' || response.mode === 'model_version') && response.results.length === 1) {
       const versionId = response.version?.id || response.results[0].matched_version_id || null
@@ -589,11 +674,6 @@ function formatNumber(num: number | null | undefined): string {
   return String(value)
 }
 
-function formatRating(value: number | null | undefined): string {
-  if (!value) return 'n/a'
-  return value.toFixed(1)
-}
-
 function formatSizeKb(sizeKb: number | null | undefined): string {
   const bytes = (sizeKb || 0) * 1024
   const gb = 1024 * 1024 * 1024
@@ -642,6 +722,52 @@ onMounted(loadTokenStatus)
   display: flex;
   gap: var(--cg-space-2);
   flex: 1;
+}
+
+.filter-anchor {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.filter-button.active {
+  border-color: var(--cg-color-accent);
+  color: var(--cg-color-accent);
+}
+
+.filter-popover {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + var(--cg-space-1));
+  left: 0;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-3);
+  padding: var(--cg-space-3);
+  background: var(--cg-color-bg-secondary);
+  border: 1px solid var(--cg-color-border-strong);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-field span {
+  font-size: var(--cg-font-size-sm);
+  color: var(--cg-color-text-primary);
+}
+
+.filter-field select {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--cg-color-bg-primary);
+  border: 1px solid var(--cg-color-border);
+  color: var(--cg-color-text-primary);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-sm);
 }
 
 .search-bar :deep(.base-input-wrapper) {

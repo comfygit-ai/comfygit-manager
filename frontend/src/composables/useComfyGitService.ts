@@ -1195,6 +1195,7 @@ export function useComfyGitService() {
       type?: string
       sort?: string
       period?: string
+      nsfwLevel?: number
       limit?: number
       page?: number
     } = {}
@@ -1211,6 +1212,7 @@ export function useComfyGitService() {
         download_url: 'https://civitai.com/api/download/models/256668',
         trained_words: [],
         download_count: 7370,
+        thumbs_up_count: 2206,
         rating_count: 0,
         rating: 0,
         model: { name: 'AbsoluteReality', type: 'Checkpoint', nsfw: false, poi: false },
@@ -1250,6 +1252,7 @@ export function useComfyGitService() {
           image: 'https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/3b119431-445f-4b21-aba6-87a5ee9518ef/width=96/Lykon.jpeg'
         },
         download_count: 332249,
+        thumbs_up_count: 17295,
         favorite_count: 0,
         comment_count: 136,
         rating_count: 0,
@@ -1271,6 +1274,7 @@ export function useComfyGitService() {
     if (options.type) params.set('type', options.type)
     if (options.sort) params.set('sort', options.sort)
     if (options.period) params.set('period', options.period)
+    if (typeof options.nsfwLevel === 'number') params.set('nsfw_level', String(options.nsfwLevel))
     if (options.limit) params.set('limit', String(options.limit))
     if (options.page) params.set('page', String(options.page))
 

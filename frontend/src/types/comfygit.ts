@@ -1670,6 +1670,7 @@ export interface CivitaiVersion {
   download_url: string | null
   trained_words: string[]
   download_count: number
+  thumbs_up_count: number
   rating_count: number
   rating: number
   model: {
@@ -1692,6 +1693,7 @@ export interface CivitaiModel {
   mode: string | null
   creator: CivitaiCreator | null
   download_count: number
+  thumbs_up_count: number
   favorite_count: number
   comment_count: number
   rating_count: number
