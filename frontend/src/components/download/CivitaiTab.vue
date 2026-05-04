@@ -163,9 +163,24 @@
               </div>
             </div>
 
-            <p v-if="plainText(selectedModel.description)" class="detail-description">
-              {{ plainText(selectedModel.description) }}
-            </p>
+            <div
+              v-if="selectedModelDescription"
+              :class="['detail-description-shell', { expanded: descriptionExpanded }]"
+            >
+              <p class="detail-description">
+                {{ selectedModelDescription }}
+              </p>
+              <template v-if="descriptionExpandable">
+                <div v-if="!descriptionExpanded" class="description-fade"></div>
+                <button
+                  type="button"
+                  class="description-toggle"
+                  @click="descriptionExpanded = !descriptionExpanded"
+                >
+                  {{ descriptionExpanded ? 'Collapse description' : 'Expand description' }}
+                </button>
+              </template>
+            </div>
 
             <div v-if="selectedModel.tags.length" class="tag-row">
               <span v-for="tag in selectedModel.tags.slice(0, 8)" :key="tag" class="tag">{{ tag }}</span>
@@ -176,19 +191,21 @@
         <section class="version-file-layout">
           <div class="version-list">
             <h4>Variants</h4>
-            <button
-              v-for="version in selectedModel.versions"
-              :key="version.id"
-              type="button"
-              :class="['version-card', { active: selectedVersion?.id === version.id }]"
-              @click="selectVersion(version)"
-            >
-              <span class="version-name">{{ version.name }}</span>
-              <span class="version-meta">
-                {{ version.base_model || 'Unknown base' }} · {{ formatDate(version.created_at) }}
-              </span>
-              <span class="version-downloads">Downloads {{ formatNumber(version.download_count) }}</span>
-            </button>
+            <div class="version-scroll">
+              <button
+                v-for="version in selectedModel.versions"
+                :key="version.id"
+                type="button"
+                :class="['version-card', { active: selectedVersion?.id === version.id }]"
+                @click="selectVersion(version)"
+              >
+                <span class="version-name">{{ version.name }}</span>
+                <span class="version-meta">
+                  {{ version.base_model || 'Unknown base' }} · {{ formatDate(version.created_at) }}
+                </span>
+                <span class="version-downloads">Downloads {{ formatNumber(version.download_count) }}</span>
+              </button>
+            </div>
           </div>
 
           <div class="file-panel">
@@ -325,6 +342,7 @@ const selectedFileId = ref<number | string | null>(null)
 const selectedImageUrl = ref<string | null>(null)
 const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
+const descriptionExpanded = ref(false)
 
 const destination = ref('')
 const targetPath = ref('')
@@ -352,11 +370,16 @@ const selectedFile = computed(() => {
 const versionImages = computed(() => {
   const version = selectedVersion.value
   if (!version) return []
-  const safeImages = version.images.filter(image => !image.nsfw)
-  return safeImages.length ? safeImages : version.images
+  const renderableImages = version.images.filter(image => isRenderableImageUrl(image.url))
+  const safeImages = renderableImages.filter(image => !image.nsfw)
+  return safeImages.length ? safeImages : renderableImages
 })
 
 const mainImage = computed(() => selectedImageUrl.value || versionImages.value[0]?.url || null)
+
+const selectedModelDescription = computed(() => plainText(selectedModel.value?.description || ''))
+
+const descriptionExpandable = computed(() => selectedModelDescription.value.length > 650)
 
 const selectedVersionDescription = computed(() => {
   const text = plainText(selectedVersion.value?.description || '')
@@ -400,6 +423,7 @@ async function openModel(model: CivitaiModel, preferredVersionId?: number | null
   mode.value = 'detail'
   detailLoading.value = true
   detailError.value = null
+  descriptionExpanded.value = false
   selectedModel.value = model
   selectedVersionId.value = preferredVersionId || model.matched_version_id || model.versions[0]?.id || null
   selectDefaultFileAndImage()
@@ -476,8 +500,21 @@ function previewImage(model: CivitaiModel): string | null {
   const matchedVersion = model.versions.find(version => version.id === model.matched_version_id)
   const version = matchedVersion || model.versions[0]
   if (!version) return null
-  const safeImage = version.images.find(image => !image.nsfw)
-  return safeImage?.url || version.images[0]?.url || null
+  const renderableImages = version.images.filter(image => isRenderableImageUrl(image.url))
+  const safeImage = renderableImages.find(image => !image.nsfw)
+  return civitaiPreviewUrl(safeImage?.url || renderableImages[0]?.url || null)
+}
+
+function isRenderableImageUrl(url: string | null | undefined): boolean {
+  if (!url) return false
+  const cleanUrl = url.split('?')[0].toLowerCase()
+  return !/\.(mp4|webm|mov|m4v)$/.test(cleanUrl)
+}
+
+function civitaiPreviewUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  if (!url.includes('image.civitai.com')) return url
+  return url.replace('/original=true/', '/width=450/')
 }
 
 function buildFileDownloadUrl(version: CivitaiVersion, file: CivitaiFile): string {
@@ -522,12 +559,15 @@ function scanStatusClass(file: CivitaiFile): string {
 
 function plainText(html: string | null | undefined): string {
   if (!html) return ''
+  const spacedHtml = html
+    .replace(/<\s*br\s*\/?>/gi, ' ')
+    .replace(/<\/\s*(p|div|h[1-6]|li|ul|ol|blockquote|section|article)\s*>/gi, ' ')
   if (typeof document !== 'undefined') {
     const container = document.createElement('div')
-    container.innerHTML = html
+    container.innerHTML = spacedHtml
     return normalizeWhitespace(container.textContent || container.innerText || '')
   }
-  return normalizeWhitespace(html.replace(/<[^>]+>/g, ' '))
+  return normalizeWhitespace(spacedHtml.replace(/<[^>]+>/g, ' '))
 }
 
 function normalizeWhitespace(value: string): string {
@@ -658,6 +698,7 @@ onMounted(loadTokenStatus)
 
 .model-card {
   display: flex;
+  flex-direction: column;
   min-width: 0;
   background: var(--cg-color-bg-secondary);
   border: 1px solid var(--cg-color-border);
@@ -674,11 +715,11 @@ onMounted(loadTokenStatus)
 
 .model-thumb {
   position: relative;
-  width: 96px;
-  flex: 0 0 96px;
-  min-height: 132px;
+  width: 100%;
+  height: 128px;
+  flex: 0 0 128px;
   background: var(--cg-color-bg-tertiary);
-  border-right: 1px solid var(--cg-color-border);
+  border-bottom: 1px solid var(--cg-color-border);
 }
 
 .model-thumb img,
@@ -693,7 +734,7 @@ onMounted(loadTokenStatus)
 .thumb-placeholder {
   width: 100%;
   height: 100%;
-  min-height: 132px;
+  min-height: 128px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -931,10 +972,50 @@ onMounted(loadTokenStatus)
   line-height: 1.5;
 }
 
-.detail-description {
-  max-height: 130px;
-  overflow-y: auto;
-  padding-right: var(--cg-space-1);
+.detail-description-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-2);
+  border-bottom: 1px solid var(--cg-color-border-subtle);
+  padding-bottom: var(--cg-space-2);
+}
+
+.detail-description-shell:not(.expanded) .detail-description {
+  max-height: 12em;
+  overflow: hidden;
+}
+
+.description-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 36px;
+  height: 42px;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--cg-color-bg-primary)
+  );
+}
+
+.description-toggle {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid var(--cg-color-border);
+  color: var(--cg-color-text-secondary);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.description-toggle:hover {
+  border-color: var(--cg-color-accent);
+  color: var(--cg-color-accent);
 }
 
 .version-file-layout {
@@ -970,6 +1051,36 @@ onMounted(loadTokenStatus)
   display: flex;
   flex-direction: column;
   gap: 3px;
+  min-height: 72px;
+}
+
+.version-scroll {
+  --version-card-height: 72px;
+  --version-card-gap: var(--cg-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--version-card-gap);
+  min-height: calc((var(--version-card-height) * 4.5) + (var(--version-card-gap) * 4));
+  max-height: calc((var(--version-card-height) * 4.5) + (var(--version-card-gap) * 4));
+  overflow-y: auto;
+  padding-right: var(--cg-space-1);
+}
+
+.version-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.version-scroll::-webkit-scrollbar-track {
+  background: var(--cg-color-bg-tertiary);
+}
+
+.version-scroll::-webkit-scrollbar-thumb {
+  background: var(--cg-color-border-subtle);
+  border: 1px solid var(--cg-color-bg-tertiary);
+}
+
+.version-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--cg-color-accent);
 }
 
 .version-card:hover,

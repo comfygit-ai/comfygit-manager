@@ -3,7 +3,7 @@
     v-if="show"
     title="DOWNLOAD NEW MODEL"
     size="xl"
-    :fixed-height="activeTab !== 'civitai'"
+    fixed-height
     @close="handleClose"
   >
     <template #body>

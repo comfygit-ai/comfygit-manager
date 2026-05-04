@@ -1275,7 +1275,16 @@ async def workspace_civitai_search(request: web.Request, env) -> web.Response:
         if model_type:
             search_kwargs["types"] = model_type
 
-        search_result = await run_sync(client.search_models, **search_kwargs)
+        if query:
+            search_result = await run_sync(
+                client.search_models_ranked,
+                query,
+                limit=limit,
+                types=model_type or None,
+                username=username or None,
+            )
+        else:
+            search_result = await run_sync(client.search_models, **search_kwargs)
         return web.json_response({
             "query": query,
             "username": username or None,
