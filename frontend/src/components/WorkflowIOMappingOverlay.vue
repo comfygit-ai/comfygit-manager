@@ -353,6 +353,53 @@ function cloneContract(contract: WorkflowExecutionContract | null | undefined): 
   return JSON.parse(JSON.stringify(contract))
 }
 
+function extractApiPromptPayload(graphToPromptResult: unknown): Record<string, unknown> {
+  if (!graphToPromptResult || typeof graphToPromptResult !== 'object') {
+    throw new Error('ComfyUI API export returned an invalid payload')
+  }
+
+  const payload = graphToPromptResult as Record<string, unknown>
+  const output = payload.output
+  if (output && typeof output === 'object' && !Array.isArray(output)) {
+    return output as Record<string, unknown>
+  }
+
+  const prompt = payload.prompt
+  if (prompt && typeof prompt === 'object' && !Array.isArray(prompt)) {
+    return prompt as Record<string, unknown>
+  }
+
+  return payload
+}
+
+async function captureCurrentApiPrompt(): Promise<Record<string, unknown>> {
+  const comfyApp = props.comfyApp
+  if (typeof comfyApp?.graphToPrompt !== 'function') {
+    throw new Error('ComfyUI graphToPrompt is not available')
+  }
+
+  const graph = comfyApp.rootGraph ?? comfyApp.graph
+  const result = await comfyApp.graphToPrompt(graph)
+  return extractApiPromptPayload(result)
+}
+
+function hydrateMissingApiFieldKeys(contract: WorkflowExecutionContract) {
+  const graph = props.comfyApp?.rootGraph ?? props.comfyApp?.graph
+  for (const namedContract of Object.values(contract.contracts)) {
+    for (const input of namedContract.inputs) {
+      if (input.field_key || input.widget_idx == null) continue
+      const node = graph?.getNodeById?.(String(input.node_id))
+      const widget = Array.isArray(node?.widgets) ? node.widgets[input.widget_idx] : null
+      const fieldKey = typeof widget?.options?.property === 'string'
+        ? widget.options.property
+        : (typeof widget?.name === 'string' ? widget.name : undefined)
+      if (fieldKey) {
+        input.field_key = fieldKey
+      }
+    }
+  }
+}
+
 function isNumericType(type: string | undefined): boolean {
   return type === 'integer' || type === 'number'
 }
@@ -623,7 +670,9 @@ function addOrSelectInput(node: any, widget: any) {
     return
   }
 
-  const fieldKey = typeof widget?.options?.property === 'string' ? widget.options.property : undefined
+  const fieldKey = typeof widget?.options?.property === 'string'
+    ? widget.options.property
+    : (typeof widget?.name === 'string' ? widget.name : undefined)
   const nameSource = widget?.name || fieldKey || 'input'
 
   const nextInput: WorkflowContractInput = {
@@ -791,7 +840,9 @@ async function handleSave() {
   saving.value = true
   error.value = null
   try {
-    response.value = await saveWorkflowContract(workflowName.value, form.value)
+    hydrateMissingApiFieldKeys(form.value)
+    const apiPrompt = await captureCurrentApiPrompt()
+    response.value = await saveWorkflowContract(workflowName.value, form.value, apiPrompt)
     form.value = cloneContract(response.value.execution_contract)
     window.dispatchEvent(new CustomEvent('comfygit:workflow-contract-saved', {
       detail: { workflowName: workflowName.value }

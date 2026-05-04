@@ -84,7 +84,7 @@ Saving a contract should update the manager backend and the underlying
 ComfyGit-managed manifest state so the contract survives reloads, restarts,
 commits, and later cloud ingestion from pushed repository commits.
 
-### CGM-WCA-05A [PLANNED]: Contract save must capture the ComfyUI-native API prompt
+### CGM-WCA-05A [LIVE]: Contract save must capture the ComfyUI-native API prompt
 Validation: TEST
 
 Saving a contract should also capture the API-format prompt produced from the
@@ -97,7 +97,10 @@ JSON. If the frontend cannot capture an API prompt, the contract save should
 fail or remain incomplete rather than silently saving a contract that runtime
 paths cannot execute.
 
-### CGM-WCA-05B [PLANNED]: Contract API prompt capture should be explicit save-time state
+The current implementation captures `graphToPrompt` output from the loaded
+ComfyUI graph and sends the API prompt with the contract save request.
+
+### CGM-WCA-05B [LIVE]: Contract API prompt capture should be explicit save-time state
 Validation: HUMAN_REVIEW
 
 The captured API prompt should update when the user saves or updates the

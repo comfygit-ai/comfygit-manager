@@ -844,7 +844,11 @@ export function useComfyGitService() {
     return fetchApi<WorkflowContractResponse>(`/v2/comfygit/workflow/${encodeURIComponent(name)}/contract`)
   }
 
-  async function saveWorkflowContract(name: string, contract: WorkflowExecutionContract): Promise<WorkflowContractResponse> {
+  async function saveWorkflowContract(
+    name: string,
+    contract: WorkflowExecutionContract,
+    apiPrompt?: Record<string, unknown>,
+  ): Promise<WorkflowContractResponse> {
     if (USE_MOCK) {
       return {
         workflow: name,
@@ -862,7 +866,10 @@ export function useComfyGitService() {
     return fetchApi<WorkflowContractResponse>(`/v2/comfygit/workflow/${encodeURIComponent(name)}/contract`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(contract),
+      body: JSON.stringify({
+        ...contract,
+        api_prompt: apiPrompt,
+      }),
     })
   }
 

@@ -96,7 +96,7 @@ Deleting a saved workflow execution contract should require an explicit
 destructive confirmation. The confirmation should make clear that the saved
 contract is removed, not the workflow itself.
 
-### CGM-UI-09C [PLANNED]: Saving a contract should capture the frontend-native API prompt
+### CGM-UI-09C [LIVE]: Saving a contract should capture the frontend-native API prompt
 Validation: TEST
 
 The graph-aware mapping surface should save both the selected I/O mapping and

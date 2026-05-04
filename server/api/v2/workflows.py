@@ -525,6 +525,12 @@ def _parse_execution_contract_payload(data: dict) -> WorkflowExecutionContract:
         version=_safe_int(data.get("version")) or 1,
         default_contract=_safe_str(data.get("default_contract")) or "default",
         contracts=parsed_contracts,
+        api_prompt_file=_safe_str(data.get("api_prompt_file")),
+        api_prompt_source=_safe_str(data.get("api_prompt_source")),
+        api_prompt_generated_by=_safe_str(data.get("api_prompt_generated_by")),
+        api_prompt_generated_at=_safe_str(data.get("api_prompt_generated_at")),
+        comfyui_version=_safe_str(data.get("comfyui_version")),
+        manager_version=_safe_str(data.get("manager_version")),
     )
 
 
@@ -1252,6 +1258,15 @@ async def put_workflow_contract(request: web.Request, env) -> web.Response:
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400)
 
+    api_prompt = body.get("api_prompt")
+    if not isinstance(api_prompt, dict) or not api_prompt:
+        return web.json_response({
+            "error": (
+                "Contract save requires a captured ComfyUI API prompt. "
+                "Refresh ComfyUI and try saving the contract again."
+            )
+        }, status=400)
+
     try:
         contract = _parse_execution_contract_payload(body)
     except KeyError as e:
@@ -1259,7 +1274,7 @@ async def put_workflow_contract(request: web.Request, env) -> web.Response:
     except Exception as e:
         return web.json_response({"error": f"Invalid execution contract payload: {e}"}, status=400)
 
-    await run_sync(env.set_workflow_execution_contract, name, contract)
+    await run_sync(env.set_workflow_execution_contract, name, contract, api_prompt)
 
     return web.json_response({
         "status": "success",

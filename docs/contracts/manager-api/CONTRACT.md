@@ -41,7 +41,7 @@ captured by the frontend for the currently loaded graph. The backend should
 persist that prompt as a tracked artifact and store its path/provenance in the
 workflow execution contract metadata.
 
-### CGM-API-03A [PLANNED]: Contract writes must not rely on backend API-format regeneration
+### CGM-API-03A [LIVE]: Contract writes must not rely on backend API-format regeneration
 Validation: TEST
 
 The manager backend should reject or mark incomplete contract writes that lack a

@@ -138,7 +138,7 @@ must not be stored in the durable contract payload. Manager and cloud may
 derive and expose those values in summary payloads, but they should not be part
 of the committed contract object.
 
-### CGM-WCDM-03A [PLANNED]: Contract execution requires a captured API prompt artifact
+### CGM-WCDM-03A [PARTIAL]: Contract execution requires a captured API prompt artifact
 Validation: TEST
 
 A saved workflow execution contract should reference a tracked API-format prompt
@@ -149,6 +149,10 @@ signal to regenerate API format in core.
 The API prompt artifact is authoritative for execution of the saved mapping.
 The UI-format workflow remains the editable source workflow and may drift after
 the contract is saved.
+
+Manager and core now persist `api_prompt_file`, `api_prompt_source`, generation
+metadata, and the referenced JSON artifact. Runtime validation and richer
+provenance remain follow-on work.
 
 ### CGM-WCDM-04 [PLANNED]: The first implementation may support one named contract while preserving room for multiple later
 Validation: HUMAN_REVIEW

@@ -433,6 +433,12 @@ export interface WorkflowExecutionContract {
   version: number
   default_contract: string
   contracts: Record<string, NamedWorkflowContract>
+  api_prompt_file?: string
+  api_prompt_source?: string
+  api_prompt_generated_by?: string
+  api_prompt_generated_at?: string
+  comfyui_version?: string
+  manager_version?: string
 }
 
 export interface WorkflowContractContextNode {

@@ -51,6 +51,8 @@ def _derive_contract_status(contract) -> str:
     outputs = _safe_sequence(getattr(default_contract, "outputs", None))
     if not outputs:
         return "incomplete"
+    if not _safe_str(getattr(contract, "api_prompt_file", None)):
+        return "incomplete"
 
     return "valid"
 
@@ -130,11 +132,23 @@ def serialize_workflow_execution_contract(contract) -> dict | None:
             contract_payload["description"] = named_contract.description
         contracts_payload[name] = contract_payload
 
-    return {
+    payload = {
         "version": int(getattr(contract, "version", 1)),
         "default_contract": getattr(contract, "default_contract", "default"),
         "contracts": contracts_payload,
     }
+    for key in (
+        "api_prompt_file",
+        "api_prompt_source",
+        "api_prompt_generated_by",
+        "api_prompt_generated_at",
+        "comfyui_version",
+        "manager_version",
+    ):
+        value = _safe_str(getattr(contract, key, None))
+        if value is not None:
+            payload[key] = value
+    return payload
 
 
 def _extract_node_type(node) -> str | None:
