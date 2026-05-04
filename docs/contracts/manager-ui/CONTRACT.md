@@ -293,6 +293,17 @@ authority belongs to the cloud dashboard.
 The corresponding API and lifecycle semantics are specified by `CGM-API-13`
 and `CGM-ENV-07` through `CGM-ENV-11`.
 
+### CGM-UI-18A [LIVE]: Git import should let users choose the source ref before analysis
+Validation: TEST
+
+The import environment modal should treat Git repository imports as a two-step
+selection flow: first load repository refs, then analyze the selected branch or
+tag. The selected ref should remain visible in the preview state so users know
+which repository state they are about to materialize.
+
+The UI should send the same selected ref to import execution that it used for
+preview.
+
 ### CGM-UI-19 [LIVE]: Installed node criticality should be explicitly user-editable
 Validation: MIXED
 

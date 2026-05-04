@@ -56,6 +56,7 @@ import type {
   PushPreview,
   PushResult,
   ImportAnalysis,
+  GitRemoteRefs,
   ValidateNameResult,
   ImportResult,
   ImportProgress,
@@ -1976,7 +1977,30 @@ export function useComfyGitService() {
     return fetchApi<ImportProgress>('/v2/workspace/import/status')
   }
 
-  async function previewGitImport(gitUrl: string): Promise<ImportAnalysis> {
+  async function getGitImportRefs(gitUrl: string): Promise<GitRemoteRefs> {
+    if (USE_MOCK) {
+      await new Promise(resolve => setTimeout(resolve, 350))
+      return {
+        default_branch: 'main',
+        head_commit: 'a'.repeat(40),
+        branches: [
+          { name: 'main', commit: 'a'.repeat(40), is_default: true },
+          { name: 'test1', commit: 'b'.repeat(40), is_default: false }
+        ],
+        tags: [
+          { name: 'v1.0.0', commit: 'c'.repeat(40) }
+        ]
+      }
+    }
+
+    return fetchApi<GitRemoteRefs>('/v2/workspace/import/git/refs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ git_url: gitUrl })
+    })
+  }
+
+  async function previewGitImport(gitUrl: string, branch?: string): Promise<ImportAnalysis> {
     if (USE_MOCK) {
       // Return mock data for development
       await new Promise(resolve => setTimeout(resolve, 800))
@@ -2004,7 +2028,7 @@ export function useComfyGitService() {
     return fetchApi<ImportAnalysis>('/v2/workspace/import/preview/git', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ git_url: gitUrl })
+      body: JSON.stringify({ git_url: gitUrl, branch })
     })
   }
 
@@ -2012,7 +2036,8 @@ export function useComfyGitService() {
     gitUrl: string,
     name: string,
     modelStrategy: 'all' | 'required' | 'skip',
-    torchBackend: string
+    torchBackend: string,
+    branch?: string
   ): Promise<ImportResult> {
     if (USE_MOCK) {
       await new Promise(resolve => setTimeout(resolve, 300))
@@ -2033,7 +2058,8 @@ export function useComfyGitService() {
         git_url: gitUrl,
         name,
         model_strategy: modelStrategy,
-        torch_backend: torchBackend
+        torch_backend: torchBackend,
+        branch
       })
     })
   }
@@ -2493,6 +2519,7 @@ export function useComfyGitService() {
     repairWorkflowModels,
     // Import Operations
     previewTarballImport,
+    getGitImportRefs,
     previewGitImport,
     validateEnvironmentName,
     executeImport,

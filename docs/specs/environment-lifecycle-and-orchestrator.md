@@ -132,6 +132,22 @@ The cloud-bound restrictions in `CGM-ENV-10` should not remove local desktop
 bootstrap behavior. They should make lifecycle authority explicit so local and
 cloud contexts can diverge safely.
 
+### CGM-ENV-11A [LIVE]: Git environment import should be ref-aware
+Validation: TEST
+
+When importing an environment from a Git repository, the manager should not
+implicitly assume the remote default branch is the desired source.
+
+The import flow should discover remote branches and tags, select the remote
+default branch when available, and let the user choose the ref before preview.
+The selected ref should be sent to both preview and execute so the environment
+that gets materialized is the same repository state the user reviewed.
+
+Commit-level selection is useful for reproducibility, but it may be layered on
+after branch and tag selection. Until commit selection exists, the flow should
+still surface the selected branch or tag and the tip commit returned by remote
+ref discovery when available.
+
 ### CGM-ENV-12 [LIVE]: Manager-created environments should use supported ComfyUI releases
 Validation: TEST
 

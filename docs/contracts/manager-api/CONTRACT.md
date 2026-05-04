@@ -272,6 +272,18 @@ The frontend may still fall back to ComfyUI-hosted status endpoints after the
 new process is healthy, but normal switch progress should not depend on a
 ComfyUI route being reachable during the handoff window.
 
+### CGM-API-13B [LIVE]: Git environment imports should expose and preserve selected refs
+Validation: TEST
+
+The manager API should expose a remote-ref discovery endpoint for Git
+environment imports. Given a repository URL, the endpoint should return the
+remote default branch when available plus branch and tag options with their tip
+commit SHAs.
+
+Git import preview and Git import execution should both accept the selected ref
+and pass it through to ComfyGit core. The backend must not preview one ref and
+then execute against the remote default branch by omission.
+
 ### CGM-API-14 [LIVE]: Node criticality updates must flow through manager API and core
 Validation: TEST
 

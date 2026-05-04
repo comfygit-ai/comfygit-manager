@@ -1251,6 +1251,21 @@ export interface ImportAnalysis {
   needs_node_installs: boolean
 }
 
+/** Remote Git ref option for import source selection */
+export interface GitRemoteRef {
+  name: string
+  commit: string
+  is_default?: boolean
+}
+
+/** Remote Git refs returned before previewing a Git import */
+export interface GitRemoteRefs {
+  default_branch: string | null
+  head_commit: string | null
+  branches: GitRemoteRef[]
+  tags: GitRemoteRef[]
+}
+
 /** Environment name validation result */
 export interface ValidateNameResult {
   valid: boolean
