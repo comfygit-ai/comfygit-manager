@@ -32,7 +32,22 @@ The manager backend should provide a workflow-scoped endpoint to read the saved 
 ### CGM-API-03 [PLANNED]: The manager API must expose a workflow execution contract write endpoint
 Validation: TEST
 
-The manager backend should provide a workflow-scoped endpoint to create or replace the saved execution contract for a workflow. Writes should produce a portable contract owned by ComfyGit core persistence.
+The manager backend should provide a workflow-scoped endpoint to create or
+replace the saved execution contract for a workflow. Writes should produce a
+portable contract owned by ComfyGit core persistence.
+
+The contract write payload should include the ComfyUI-native API-format prompt
+captured by the frontend for the currently loaded graph. The backend should
+persist that prompt as a tracked artifact and store its path/provenance in the
+workflow execution contract metadata.
+
+### CGM-API-03A [PLANNED]: Contract writes must not rely on backend API-format regeneration
+Validation: TEST
+
+The manager backend should reject or mark incomplete contract writes that lack a
+captured API prompt artifact. It should not call a core-side UI-workflow-to-API
+converter as a fallback, because ComfyUI frontend export behavior is the
+supported source for contract execution prompts.
 
 ### CGM-API-04 [PLANNED]: Workflow summary payloads should expose contract presence and compact health
 Validation: TEST

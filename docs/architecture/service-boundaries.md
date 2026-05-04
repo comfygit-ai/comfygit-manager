@@ -9,6 +9,7 @@ ComfyUI owns:
 - graph editing primitives
 - workflow load/save lifecycle
 - widget and slot behavior
+- native API-format prompt export for the currently loaded graph
 
 ComfyUI does not own:
 - portable ComfyGit workflow execution contract persistence
@@ -21,6 +22,7 @@ The manager owns:
 - manager-specific workflow actions
 - workflow contract authoring UX
 - graph-aware overlay behavior used for contract selection
+- capture of ComfyUI-native API-format prompts during contract save
 - local panel information architecture
 - local bootstrap and local orchestrator lifecycle UX
 - runtime context normalization for the local panel
@@ -28,6 +30,9 @@ The manager owns:
 - API endpoints consumed by the manager frontend
 
 The manager should not become the durable source of truth for portable workflow contracts. It should read/write that state through core persistence.
+The manager may capture frontend-derived API prompt artifacts, but those
+artifacts become durable environment state only after being written through the
+manager API/core persistence boundary.
 The manager should also not become the deployment control plane for cloud
 targets, provider runtimes, or cloud-bound session lifecycle.
 
@@ -36,6 +41,7 @@ targets, provider runtimes, or cloud-bound session lifecycle.
 Core owns:
 - durable environment and manifest persistence
 - workflow-scoped portable execution contract representation
+- persistence and lookup of captured contract API prompt artifacts
 - environment-local contract read/write helpers
 - revision portability of saved contract state
 - durable workflow node-decision policy for mapping node types to packages,
@@ -45,6 +51,7 @@ Core owns:
 Core should not own:
 - manager modal layout
 - ComfyUI overlay behavior
+- UI-workflow-to-API-prompt conversion
 - cloud deployment semantics
 
 ## Cloud Dashboard
@@ -71,8 +78,17 @@ second full control-plane dashboard.
 ### CGM-SB-01 [PLANNED]: The manager should own local contract authoring UX while core owns durable contract persistence
 Validation: HUMAN_REVIEW
 
+Manager-owned contract authoring includes capturing the ComfyUI-native
+API-format prompt from the loaded frontend graph at contract save time. Core owns
+the durable persisted contract and artifact references after the manager submits
+them.
+
 ### CGM-SB-02 [PLANNED]: The manager should use ComfyUI graph state as an integration surface rather than duplicating graph ownership
 Validation: HUMAN_REVIEW
+
+The manager should use ComfyUI's loaded graph and native export behavior for API
+prompt capture instead of asking core to reconstruct API format from saved
+UI-workflow JSON.
 
 ### CGM-SB-03 [PLANNED]: The manager API should be the frontend's write path for contract mutations
 Validation: HUMAN_REVIEW

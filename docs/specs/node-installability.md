@@ -55,6 +55,12 @@ git acquisition. If a registry candidate has no installable registry artifact,
 the user-facing flow should say that plainly and offer GitHub installation only
 as a distinct explicit choice when a repository URL is known.
 
+Registry package version labels that explicitly mean repository acquisition,
+such as `nightly`, may be treated as Git installation intent when the live
+registry package exposes a repository URL. That path must still persist as a
+git-sourced install with pinned git identity, not as a registry artifact
+install.
+
 When git installation is chosen, the resulting manifest should honestly persist
 the node as git-sourced and pin the resolved commit or equivalent immutable git
 identity.

@@ -691,6 +691,11 @@ async def process_install(env, params: dict) -> dict:
                 pack_id,
                 repository,
             )
+        elif version == "nightly":
+            logger.info(
+                "process_install selecting registry nightly/git source for '%s'",
+                pack_id,
+            )
         elif version and version != "latest":
             logger.info(
                 "process_install selecting registry source for '%s' at version '%s'",

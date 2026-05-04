@@ -28,6 +28,9 @@ path = "workflows/z-image.json"
 [tool.comfygit.workflows.z-image.execution_contract]
 version = 1
 default_contract = "default"
+api_prompt_file = "workflow_api/z-image.api.json"
+api_prompt_source = "comfyui_frontend"
+api_prompt_generated_by = "comfygit-manager"
 
 [tool.comfygit.workflows.z-image.execution_contract.contracts.default]
 display_name = "Default"
@@ -68,9 +71,21 @@ required = true
 enum_values = ["normal", "karras", "exponential"]
 ```
 
+The referenced API prompt should be stored as a tracked JSON artifact, not as an
+inline TOML blob. Recommended layout:
+
+```text
+.cec/
+  workflows/
+    z-image.json
+  workflow_api/
+    z-image.api.json
+  pyproject.toml
+```
+
 Contract health such as `valid`, `stale`, or `incomplete` should be derived by
-manager or cloud projection logic and must not be stored as part of the durable
-contract payload.
+manager or runtime projection logic and must not be stored as part of the
+durable contract payload.
 
 ## Workflow Identity Assumption
 
@@ -101,8 +116,14 @@ The top-level execution contract object should store at least:
 - `version`
 - `default_contract`
 - `contracts`
+- `api_prompt_file`
+- `api_prompt_source`
 
 The initial version should be `1`.
+
+`api_prompt_source` should distinguish Manager-captured ComfyUI frontend export
+artifacts from any future migration tooling. The local-first supported source is
+`comfyui_frontend`.
 
 ### CGM-WCDM-03 [PLANNED]: Contract health must be derived rather than persisted
 Validation: HUMAN_REVIEW
@@ -116,6 +137,18 @@ Fields such as:
 must not be stored in the durable contract payload. Manager and cloud may
 derive and expose those values in summary payloads, but they should not be part
 of the committed contract object.
+
+### CGM-WCDM-03A [PLANNED]: Contract execution requires a captured API prompt artifact
+Validation: TEST
+
+A saved workflow execution contract should reference a tracked API-format prompt
+artifact captured by Manager during contract save. Runtime paths should treat a
+missing artifact as an incomplete contract requiring re-save in Manager, not as a
+signal to regenerate API format in core.
+
+The API prompt artifact is authoritative for execution of the saved mapping.
+The UI-format workflow remains the editable source workflow and may drift after
+the contract is saved.
 
 ### CGM-WCDM-04 [PLANNED]: The first implementation may support one named contract while preserving room for multiple later
 Validation: HUMAN_REVIEW

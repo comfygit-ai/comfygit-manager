@@ -21,8 +21,12 @@ That contract is portable environment state and should travel with revisions ins
 3. The manager loads existing saved contract state, if any.
 4. The manager inspects the currently loaded workflow graph and derives candidate inputs/outputs.
 5. The user selects, edits, removes, or reorders contract items.
-6. The manager saves the resulting contract through the manager API.
-7. The portable contract is written into ComfyGit-managed workflow manifest state.
+6. The manager captures the ComfyUI-native API-format prompt for the current
+   loaded graph.
+7. The manager saves the resulting contract and captured API prompt through the
+   manager API.
+8. The portable contract is written into ComfyGit-managed workflow manifest
+   state and the API prompt is written as a tracked environment artifact.
 
 ## Workflow Identity Assumption
 
@@ -79,6 +83,27 @@ Validation: TEST
 Saving a contract should update the manager backend and the underlying
 ComfyGit-managed manifest state so the contract survives reloads, restarts,
 commits, and later cloud ingestion from pushed repository commits.
+
+### CGM-WCA-05A [PLANNED]: Contract save must capture the ComfyUI-native API prompt
+Validation: TEST
+
+Saving a contract should also capture the API-format prompt produced from the
+currently loaded ComfyUI graph using ComfyUI frontend/native export behavior.
+That captured API prompt should be saved as the executable artifact for the
+contract's mapped workflow state.
+
+The manager should not ask core to regenerate API format from UI-format workflow
+JSON. If the frontend cannot capture an API prompt, the contract save should
+fail or remain incomplete rather than silently saving a contract that runtime
+paths cannot execute.
+
+### CGM-WCA-05B [PLANNED]: Contract API prompt capture should be explicit save-time state
+Validation: HUMAN_REVIEW
+
+The captured API prompt should update when the user saves or updates the
+contract. Later edits to the UI workflow do not automatically mutate the saved
+contract's API prompt, because the saved contract represents the workflow state
+that was mapped at authoring time.
 
 ### CGM-WCA-06 [LIVE]: A workflow without a valid contract should remain editable but not contract-ready
 Validation: HUMAN_REVIEW
