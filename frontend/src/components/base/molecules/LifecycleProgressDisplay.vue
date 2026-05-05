@@ -65,6 +65,8 @@ import type { SwitchLogEntry } from '@/types/comfygit'
 interface LifecycleStep {
   state: string
   label: string
+  aliases?: string[]
+  progressThreshold?: number
 }
 
 const props = withDefaults(defineProps<{
@@ -106,9 +108,22 @@ const progressVariant = computed(() => {
 })
 
 const renderedSteps = computed(() => {
-  const currentStateIndex = isComplete.value
-    ? props.steps.length
-    : props.steps.findIndex(step => step.state === props.state)
+  const currentStateIndex = (() => {
+    if (isComplete.value) return props.steps.length
+
+    const exactIndex = props.steps.findIndex(step => {
+      return step.state === props.state || (step.aliases || []).includes(props.state)
+    })
+    if (exactIndex >= 0) return exactIndex
+
+    const hasThresholds = props.steps.some(step => typeof step.progressThreshold === 'number')
+    if (!hasThresholds) return -1
+
+    const thresholdIndex = props.steps.findIndex(step => {
+      return typeof step.progressThreshold === 'number' && boundedProgress.value < step.progressThreshold
+    })
+    return thresholdIndex >= 0 ? thresholdIndex : props.steps.length
+  })()
 
   return props.steps.map((step, index) => {
     let status = 'pending'

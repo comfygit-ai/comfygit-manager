@@ -15,6 +15,7 @@ import signal
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import venv
 from pathlib import Path
@@ -25,6 +26,8 @@ from comfygit_core.core.workspace import Workspace
 from comfygit_core.factories.workspace_factory import WorkspaceFactory
 from comfygit_core.lifecycle.switch_observer import (
     SWITCH_STATUS_FILE,
+    SwitchObserverServer,
+    append_switch_log,
     cleanup_switch_status as core_cleanup_switch_status,
     read_switch_status as core_read_switch_status,
     write_switch_status as core_write_switch_status,
@@ -328,6 +331,8 @@ def write_switch_status(metadata_dir: Path, state: str, progress: int = 0,
         message=message,
         **kwargs,
     )
+    if message:
+        append_switch_log(metadata_dir, message)
 
 
 def read_switch_status(metadata_dir: Path) -> Optional[dict]:
@@ -465,6 +470,7 @@ def cleanup_stale_temp_files(metadata_dir: Path) -> None:
 DEFAULT_CONFIG = {
     "version": "1.0",
     "orchestrator": {
+        "control_host": "0.0.0.0",
         "control_port": 5050,
         "control_port_range": [5050, 5100],
         "enable_control_server": True,
@@ -1004,8 +1010,10 @@ class Orchestrator:
         popen_kwargs = {
             "cwd": env.comfyui_path,
             "env": env_vars,
-            "stdout": sys.stdout,
-            "stderr": sys.stderr,
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.STDOUT,
+            "text": True,
+            "bufsize": 1,
         }
 
         if sys.platform != "win32":
@@ -1020,8 +1028,26 @@ class Orchestrator:
         # Track current process and start time (Phase 1 - Control Endpoints)
         self.current_process = proc
         self._process_start_time = time.time()
+        threading.Thread(
+            target=self._tee_comfyui_output,
+            args=(proc,),
+            daemon=True,
+            name=f"ComfyGitOrchestratorOutput-{env.name}",
+        ).start()
 
         return proc
+
+    def _tee_comfyui_output(self, proc: subprocess.Popen) -> None:
+        """Forward child ComfyUI output to both orchestrator stdout and observer logs."""
+        if not proc.stdout:
+            return
+
+        for line in proc.stdout:
+            clean = line.rstrip()
+            if not clean:
+                continue
+            print(clean, flush=True)
+            append_switch_log(self.metadata_dir, clean)
 
     def _handle_crash_for_recovery(self, exit_code: int) -> bool:
         """
@@ -1154,13 +1180,17 @@ class Orchestrator:
             default_port=int(comfyui_config.get("default_port", 8188)),
         )
         print(f"[Orchestrator] Waiting for ComfyUI readiness at {endpoint.base_url}")
+        append_switch_log(self.metadata_dir, f"Waiting for ComfyUI readiness at {endpoint.base_url}")
         return wait_for_comfyui_ready(
             proc,
             endpoint,
             timeout=timeout,
             interval=2,
             stable_successes=3,
-            log=lambda message, level="info": print(f"[Orchestrator] {message}"),
+            log=lambda message, level="info": (
+                print(f"[Orchestrator] {message}"),
+                append_switch_log(self.metadata_dir, message, level=level),
+            ),
         )
 
     def _update_switch_status(self, state: str, progress: int = 0,
@@ -1190,6 +1220,8 @@ class Orchestrator:
     def _cleanup(self):
         """Clean up orchestrator state."""
         self._kill_supervised_process()
+        if getattr(self, "control_server", None):
+            self.control_server.stop()
         cleanup_orchestrator_pid(self.metadata_dir)
 
     def _emergency_cleanup(self):
@@ -1201,6 +1233,8 @@ class Orchestrator:
                 self.current_process.wait(timeout=2)
             except Exception:
                 pass
+        if getattr(self, "control_server", None):
+            self.control_server.stop()
         cleanup_orchestrator_pid(self.metadata_dir)
 
     # ========================================================================
@@ -1352,170 +1386,60 @@ class Orchestrator:
     # ========================================================================
 
     def _start_control_server(self):
-        """Start HTTP control server with automatic port selection."""
-        from http.server import HTTPServer, BaseHTTPRequestHandler
-        import threading
-
-        # Get port range from config
+        """Start restart-stable switch observer with automatic port selection."""
+        bind_host = self.config["orchestrator"].get("control_host", "0.0.0.0")
         start_port, end_port = self.config["orchestrator"]["control_port_range"]
+        workspace_path = getattr(getattr(self, "workspace", None), "path", self.metadata_dir.parent)
 
-        orchestrator = self  # Closure reference
+        def request_restart() -> dict:
+            safe_write_command(self.metadata_dir, {
+                "command": "restart",
+                "timestamp": time.time(),
+            })
+            return {
+                "status": "restart_requested",
+                "message": "Restart command queued (will process within 500ms)",
+            }
 
-        class ControlHandler(BaseHTTPRequestHandler):
-            ALLOWED_ORIGINS = [
-                'http://127.0.0.1:8188',
-                'http://localhost:8188',
-            ]
+        def request_shutdown() -> dict:
+            safe_write_command(self.metadata_dir, {
+                "command": "shutdown",
+                "timestamp": time.time(),
+            })
+            return {
+                "status": "shutting_down",
+                "message": "Shutdown command queued (will process within 500ms)",
+            }
 
-            def log_message(self, format, *args):
-                """Add timestamps to logs."""
-                from datetime import datetime
-                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                message = format % args
-                print(f"[{timestamp}] [ControlServer] {message}")
-
-            def _check_origin(self) -> bool:
-                """Check if request origin is allowed (CORS protection)."""
-                origin = self.headers.get('Origin')
-                if not origin:
-                    return True  # Non-browser requests (curl) allowed
-                return origin in self.ALLOWED_ORIGINS
-
-            def do_OPTIONS(self):
-                """Handle CORS preflight."""
-                origin = self.headers.get('Origin')
-
-                if origin in self.ALLOWED_ORIGINS:
-                    self.send_response(200)
-                    self.send_header('Access-Control-Allow-Origin', origin)
-                    self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-                    self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-                    self.send_header('Access-Control-Max-Age', '86400')
-                    self.end_headers()
-                else:
-                    self.send_error(403, "Origin not allowed")
-
-            def do_GET(self):
-                """Handle GET requests."""
-                if not self._check_origin():
-                    self.send_error(403, "Origin not allowed")
-                    return
-
-                if self.path == '/health':
-                    current_proc = orchestrator.current_process
-
-                    health_data = {
-                        "status": "alive",
-                        "pid": os.getpid(),
-                        "current_env": orchestrator.current_env_name,
-                        "supervised": current_proc is not None,
-                    }
-
-                    # Add ComfyUI process state
-                    if current_proc:
-                        health_data["comfyui"] = {
-                            "pid": current_proc.pid,
-                            "running": current_proc.poll() is None,
-                            "uptime_seconds": int(time.time() - orchestrator._process_start_time),
-                        }
-
-                    self._send_json_with_cors(health_data)
-
-                elif self.path == '/status':
-                    # Read status from file
-                    status = read_switch_status(orchestrator.metadata_dir)
-                    if status:
-                        self._send_json_with_cors(status)
-                    else:
-                        self._send_json_with_cors({
-                            "state": "idle",
-                            "current_env": orchestrator.current_env_name,
-                            "message": "No switch in progress"
-                        })
-
-                else:
-                    self.send_error(404, "Not Found")
-
-            def do_POST(self):
-                """Handle POST requests."""
-                if not self._check_origin():
-                    self.send_error(403, "Origin not allowed")
-                    return
-
-                if self.path == '/restart':
-                    # Write restart command (atomic)
-                    safe_write_command(orchestrator.metadata_dir, {
-                        "command": "restart",
-                        "timestamp": time.time()
-                    })
-
-                    self._send_json_with_cors({
-                        "status": "restart_requested",
-                        "message": "Restart command queued (will process within 500ms)"
-                    })
-
-                elif self.path == '/kill':
-                    # Write shutdown command (atomic)
-                    safe_write_command(orchestrator.metadata_dir, {
-                        "command": "shutdown",
-                        "timestamp": time.time()
-                    })
-
-                    self._send_json_with_cors({
-                        "status": "shutting_down",
-                        "message": "Shutdown command queued (will process within 500ms)"
-                    })
-
-                else:
-                    self.send_error(404, "Not Found")
-
-            def _send_json_with_cors(self, data: dict):
-                """Send JSON response with appropriate CORS headers."""
-                origin = self.headers.get('Origin')
-
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-
-                if origin in self.ALLOWED_ORIGINS:
-                    self.send_header('Access-Control-Allow-Origin', origin)
-                    self.send_header('Access-Control-Allow-Credentials', 'true')
-
-                self.end_headers()
-                self.wfile.write(json.dumps(data).encode())
-
-        # Try ports in configured range
         for port in range(start_port, end_port + 1):
             try:
-                server = HTTPServer(('127.0.0.1', port), ControlHandler)
+                server = SwitchObserverServer(
+                    workspace_path,
+                    bind_host,
+                    port,
+                    kind="manager_orchestrator",
+                    post_handlers={
+                        "/restart": request_restart,
+                        "/kill": request_shutdown,
+                    },
+                )
+                server.start()
 
-                # Success! Write port to file for frontend discovery
                 port_file = self.metadata_dir / ".control_port"
                 port_file.write_text(str(port))
 
-                # Start server thread
-                thread = threading.Thread(
-                    target=server.serve_forever,
-                    daemon=True,
-                    name="OrchestratorControlServer"
-                )
-                thread.start()
-
-                # Store for cleanup
                 self.control_server = server
                 self.control_port = port
 
-                print(f"[Orchestrator] Control server listening on http://127.0.0.1:{port}")
+                print(f"[Orchestrator] Control server listening on http://{bind_host}:{port}")
                 return
 
             except OSError as e:
-                # Port already in use - try next
                 if e.errno in (48, 98, 10048):  # EADDRINUSE on macOS/Linux/Windows
                     continue
-                else:
-                    print(f"[Orchestrator] Port {port} failed: {e}")
-                    continue
+                print(f"[Orchestrator] Port {port} failed: {e}")
+                continue
 
-        # All ports exhausted
         print(f"[Orchestrator] WARNING: Could not bind control server (ports {start_port}-{end_port} all in use)")
         print("[Orchestrator] Emergency controls will not be available via UI")
 

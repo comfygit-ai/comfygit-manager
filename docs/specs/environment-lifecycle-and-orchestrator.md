@@ -211,6 +211,12 @@ status and recent supervisor log lines through a stable JSON shape so the
 frontend can show real progress and debugging context instead of relying only
 on simulated progress.
 
+For local desktop and containerized development, that observer must be
+reachable from the user's browser, not only from inside the ComfyUI process.
+Manager-spawned orchestrators should therefore advertise a direct observer URL
+before the source ComfyUI process exits, using the same public request host as
+the panel and the selected control-server port.
+
 The shared schema, metadata filenames, status/log file helpers, observer URL
 payload shape, and HTTP observer server belong to ComfyGit core so CLI and
 manager lifecycle authorities do not drift. The CLI and manager may still own
@@ -229,6 +235,6 @@ configured defaults. Wildcard bind addresses may be probed through a local
 loopback address by the same supervisor, but explicit listen hosts should be
 preserved.
 
-This remains partial until both supervisor modes expose the same observation
-shape and the switch modal consumes it without falling back to noisy failed
-polling during normal handoff.
+This remains partial until both supervisor modes are covered by automated
+handoff tests and the switch modal consumes them without falling back to noisy
+failed polling during normal handoff.

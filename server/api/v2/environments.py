@@ -4,6 +4,7 @@ import sys
 import json
 import subprocess
 import threading
+import time
 import uuid
 from aiohttp import web
 from pathlib import Path
@@ -110,12 +111,26 @@ def _request_public_origin(request: web.Request, port: int) -> str:
 
 
 def _read_supervisor_observer(workspace, request: web.Request) -> dict | None:
-    """Return direct supervisor observer URLs if cg-run advertised them."""
+    """Return direct lifecycle observer URLs if a supervisor advertised them."""
     info = read_supervisor_advertisement(workspace.path)
     if not info:
         return None
 
-    return build_switch_observer_payload(_request_public_origin(request, info["port"]))
+    return build_switch_observer_payload(
+        _request_public_origin(request, info["port"]),
+        kind=info.get("kind") or "cg_run_supervisor",
+    )
+
+
+def _wait_for_supervisor_observer(workspace, request: web.Request, timeout_s: float = 2.0) -> dict | None:
+    """Wait briefly for a just-spawned lifecycle authority to advertise itself."""
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        observer = _read_supervisor_observer(workspace, request)
+        if observer:
+            return observer
+        time.sleep(0.05)
+    return _read_supervisor_observer(workspace, request)
 
 
 def spawn_orchestrator(environment, target_env: str) -> None:
@@ -490,13 +505,17 @@ async def switch_environment(request: web.Request) -> web.Response:
                 )
             }, status=409)
 
-        # Spawn orchestrator - always needed when switching from unmanaged
-        if orchestrator.should_spawn_orchestrator_for_switch():
-            spawn_orchestrator(target_env_obj, target_env)
-
         # Write switch request (source_env may be None for first-time setup)
         source_env_name = environment.name if environment else None
         orchestrator.write_switch_request(metadata_dir, target_env, source_env=source_env_name)
+
+        # Spawn orchestrator when this ComfyUI process is not already running
+        # under a lifecycle authority. The request must exist before spawn so
+        # the new process cannot miss the initial handoff state.
+        if orchestrator.should_spawn_orchestrator_for_switch():
+            spawn_orchestrator(target_env_obj, target_env)
+
+        observer = _wait_for_supervisor_observer(workspace, request)
 
         # Schedule exit with code 43 (after response sent)
         import asyncio
@@ -510,7 +529,7 @@ async def switch_environment(request: web.Request) -> web.Response:
         return web.json_response({
             "status": "switching",
             "message": f"Switching to {target_env}...",
-            "observer": _read_supervisor_observer(workspace, request),
+            "observer": observer,
         })
 
     except Exception:

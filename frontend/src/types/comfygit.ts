@@ -329,7 +329,7 @@ export interface SwitchEnvironmentProgress {
 }
 
 export interface SwitchEnvironmentObserver {
-  kind: 'cg_run_supervisor'
+  kind: 'cg_run_supervisor' | 'manager_orchestrator' | string
   status_url: string
   logs_url: string
 }

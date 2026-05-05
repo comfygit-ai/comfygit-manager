@@ -320,15 +320,14 @@ const importLogs = ref<SwitchLogEntry[]>([])
 
 // Import steps (matches core library phases)
 const importSteps = [
-  { state: 'clone_comfyui', label: 'Clone/restore ComfyUI' },
-  { state: 'extract_builtins', label: 'Extract builtin nodes' },
-  { state: 'configure_pytorch', label: 'Configure PyTorch' },
-  { state: 'install_dependencies', label: 'Install dependencies' },
-  { state: 'sync_nodes', label: 'Sync custom nodes' },
-  { state: 'copy_workflows', label: 'Copy workflows' },
-  { state: 'resolve_models', label: 'Resolve models' },
-  { state: 'download_models', label: 'Download models' },
-  { state: 'finalize', label: 'Finalize environment' },
+  { state: 'clone_comfyui', label: 'Clone/restore ComfyUI', aliases: ['restore_comfyui'], progressThreshold: 10 },
+  { state: 'extract_builtins', label: 'Extract builtin nodes', progressThreshold: 20 },
+  { state: 'probe_pytorch', label: 'Configure PyTorch', aliases: ['configure_pytorch'], progressThreshold: 30 },
+  { state: 'copy_workflows', label: 'Copy workflows', aliases: ['init_git'], progressThreshold: 45 },
+  { state: 'sync_environment', label: 'Sync dependencies and custom nodes', aliases: ['install_dependencies', 'sync_nodes', 'detect_overlays', 'add_requirements'], progressThreshold: 75 },
+  { state: 'resolve_models', label: 'Resolve models', progressThreshold: 85 },
+  { state: 'download_models', label: 'Download models', progressThreshold: 95 },
+  { state: 'finalize', label: 'Finalize environment', progressThreshold: 100 },
 ]
 
 const importDisplayState = computed(() => {

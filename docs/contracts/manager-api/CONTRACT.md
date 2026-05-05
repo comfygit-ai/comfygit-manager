@@ -250,7 +250,7 @@ At minimum, the API contract should support:
 The detailed lifecycle semantics are specified by `CGM-ENV-07` through
 `CGM-ENV-11` in `docs/specs/environment-lifecycle-and-orchestrator.md`.
 
-### CGM-API-13A [PLANNED]: Switch initiation should return a restart-stable observer endpoint
+### CGM-API-13A [PARTIAL]: Switch initiation should return a restart-stable observer endpoint
 Validation: TEST
 
 When an environment switch is accepted, the response should include enough
@@ -267,6 +267,12 @@ supervisor, but they should expose compatible JSON:
 The API should derive observer filenames, route paths, and payload shape from
 ComfyGit core lifecycle primitives rather than duplicating those constants in
 manager-only code.
+
+Local manager-spawned orchestrators should bind their observer on a
+browser-reachable interface and advertise that observer before the source
+ComfyUI process exits. Otherwise the frontend is forced to poll routes served
+by the process being stopped, which creates a normal handoff window full of
+connection-refused errors.
 
 The frontend may still fall back to ComfyUI-hosted status endpoints after the
 new process is healthy, but normal switch progress should not depend on a

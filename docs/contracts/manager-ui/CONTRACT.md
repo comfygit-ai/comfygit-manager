@@ -358,7 +358,7 @@ user has chosen not to include that node in the portable dependency set for
 export, build-plan, or deployment readiness checks when the node lacks portable
 provenance.
 
-### CGM-UI-19A [PLANNED]: Switch progress should show supervisor logs when available
+### CGM-UI-19A [PARTIAL]: Switch progress should show supervisor logs when available
 Validation: MIXED
 
 The environment switch progress modal should consume restart-stable observer
