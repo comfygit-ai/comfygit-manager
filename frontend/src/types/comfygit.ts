@@ -1200,6 +1200,7 @@ export function hasWorkflowConflicts(preview: PullPreview): preview is PullPrevi
 export interface ModelAnalysis {
   filename: string
   hash: string | null
+  size?: number | null
   sources: string[]
   relative_path: string
   locally_available: boolean
@@ -1212,6 +1213,12 @@ export interface NodeAnalysis {
   name: string
   source: string  // "registry" | "development" | "git"
   install_spec: string | null
+  registry_id?: string | null
+  repository?: string | null
+  version?: string | null
+  branch?: string | null
+  pinned_commit?: string | null
+  dependency_sources?: string[] | null
   is_dev_node: boolean
 }
 
@@ -1224,6 +1231,9 @@ export interface WorkflowAnalysis {
 
 /** Import analysis result from preview endpoint (matches core library ImportAnalysis dataclass) */
 export interface ImportAnalysis {
+  // Raw manifest preview
+  manifest_toml?: string
+
   // ComfyUI version
   comfyui_version: string | null
   comfyui_version_type: string | null
@@ -1245,6 +1255,10 @@ export interface ImportAnalysis {
   // Workflows
   workflows: WorkflowAnalysis[]
   total_workflows: number
+
+  // Shared overlays
+  overlays?: string[]
+  total_overlays?: number
 
   // Summary flags
   needs_model_downloads: boolean
@@ -1287,6 +1301,7 @@ export interface ImportProgress {
   message: string
   environment_name?: string | null
   error?: string | null
+  logs?: SwitchLogEntry[]
 }
 
 // =============================================================================

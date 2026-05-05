@@ -272,6 +272,18 @@ The frontend may still fall back to ComfyUI-hosted status endpoints after the
 new process is healthy, but normal switch progress should not depend on a
 ComfyUI route being reachable during the handoff window.
 
+The observer must not publish a terminal success state merely because the
+handoff authority accepted a switch or launched the target process. `complete`
+means the target ComfyUI process has passed the authority's readiness check.
+While the target process is booting, the observer should remain in a startup or
+validation state and may include target ComfyUI boot output in the same recent
+log stream.
+
+Readiness endpoint parsing and probing should also come from ComfyGit core
+lifecycle primitives. Lifecycle authorities must derive the probe host and port
+from the actual ComfyUI launch arguments and configured defaults instead of
+assuming a fixed `127.0.0.1:8188` target.
+
 ### CGM-API-13B [LIVE]: Git environment imports should expose and preserve selected refs
 Validation: TEST
 
@@ -283,6 +295,37 @@ commit SHAs.
 Git import preview and Git import execution should both accept the selected ref
 and pass it through to ComfyGit core. The backend must not preview one ref and
 then execute against the remote default branch by omission.
+
+### CGM-API-13C [LIVE]: Import preview should include trust-relevant provenance
+Validation: TEST
+
+The manager import preview payload should include the source metadata already
+tracked by the imported manifest so the frontend can show users what will be
+materialized before they accept an import.
+
+For models, preview rows should include filename, relative path, saved size when
+available, manifest hash, source URLs, local availability, and workflow usage.
+For custom nodes, preview rows should include source type plus available
+registry, repository, version, branch, pinned commit, dependency source, and
+install spec fields.
+
+The preview payload should also include the raw imported `pyproject.toml`
+manifest text so the UI can expose a source-level manifest inspection tab
+without re-fetching or re-extracting the import source.
+
+### CGM-API-13D [LIVE]: Import status should expose recent creation logs
+Validation: TEST
+
+The manager import status endpoint should include recent ordered log entries
+alongside state, phase, progress, message, environment name, and error fields.
+
+Those log entries should be bounded in size and should report user-relevant
+import lifecycle events such as dependency group installs, node sync,
+workflow copy, model resolution, model downloads, completion, and failures.
+
+When import reaches a terminal state, the status response should remain
+available long enough for the UI to keep the progress/log view open with a
+visible completion action.
 
 ### CGM-API-14 [LIVE]: Node criticality updates must flow through manager API and core
 Validation: TEST

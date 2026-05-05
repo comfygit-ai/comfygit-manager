@@ -304,6 +304,41 @@ which repository state they are about to materialize.
 The UI should send the same selected ref to import execution that it used for
 preview.
 
+### CGM-UI-18B [LIVE]: Import preview should be tabbed and provenance-oriented
+Validation: TEST
+
+The import environment modal should summarize workflows, models, custom nodes,
+and Git source information in a scannable preview layout. The preview should
+use a fixed-height tabbed inspector with an overview tab, drill-down tabs for
+workflows, models, custom nodes, Git information, and a raw manifest tab.
+
+The overview tab should show high-level counts and trust signals, including
+local versus downloadable models, trusted versus unknown model sources, and
+registry versus Git or development custom nodes. Drill-down rows should expose
+trust-relevant details before users accept an import, including model hashes,
+download source URLs, node registry or Git provenance, versions, branches, and
+pinned commits when those fields are available in the import preview payload.
+
+### CGM-UI-18C [LIVE]: Environment import progress should show creation logs
+Validation: TEST
+
+After a user starts environment import, the import modal should show a stable
+progress display with recent import logs so users can tell whether dependency
+installation, node sync, workflow copy, model resolution, and downloads are
+still moving.
+
+The import progress log display should share the same reusable progress/log
+component used by environment switching. Its log area should have fixed height,
+auto-follow new output while the user is at the bottom, and preserve manual
+scrolling when the user scrolls back.
+
+When import reaches a terminal success state, the modal should stay open at
+100 percent with an explicit completion action instead of closing immediately.
+That completion action should live in the progress modal footer and remain
+visible during the import run; it should be disabled until the import reaches a
+terminal state. If the user requested switch-after-import, the normal switch
+confirmation may appear above the completed import modal.
+
 ### CGM-UI-19 [LIVE]: Installed node criticality should be explicitly user-editable
 Validation: MIXED
 
@@ -339,6 +374,13 @@ copy earlier lines.
 When a switch reaches a terminal success state, the modal should stay open long
 enough for the user to read or copy logs and should offer an explicit page
 refresh action instead of closing immediately before the new environment loads.
+The refresh action should only be enabled after the target ComfyUI process has
+passed the lifecycle authority's readiness check. Supervisor handoff completion
+or target process launch is not enough to mark the switch complete.
+
+When the lifecycle authority can access target ComfyUI stdout or stderr while
+the process boots, those boot lines should appear in the same fixed-height log
+area as supervisor lifecycle messages.
 
 When no restart-stable observer is available, the UI may retain simulated
 progress as a fallback, but normal `cg run` and local orchestrator paths should

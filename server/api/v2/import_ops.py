@@ -4,6 +4,7 @@ import tempfile
 import threading
 import traceback
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 from aiohttp import web
@@ -24,8 +25,19 @@ _import_task_state = {
     "progress": 0,  # 0-100 percentage
     "message": "",
     "environment_name": None,
-    "error": None
+    "error": None,
+    "logs": []
 }
+
+
+def _append_import_log_locked(message: str, level: str = "info") -> None:
+    logs = _import_task_state.setdefault("logs", [])
+    logs.append({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "level": level,
+        "message": message,
+    })
+    del logs[:-300]
 
 
 class ServerImportProgress:
@@ -53,34 +65,46 @@ class ServerImportProgress:
             _import_task_state["phase"] = phase
             _import_task_state["progress"] = self.PHASE_PROGRESS.get(phase, 50)
             _import_task_state["message"] = description
+            _append_import_log_locked(description)
 
     def on_dependency_group_start(self, group_name: str, is_optional: bool) -> None:
         with _import_task_lock:
             _import_task_state["message"] = f"Installing {group_name}..."
+            _append_import_log_locked(f"Installing dependency group: {group_name}")
 
     def on_dependency_group_complete(self, group_name: str, success: bool, error: str | None = None) -> None:
-        if not success:
-            with _import_task_lock:
+        with _import_task_lock:
+            if success:
+                _append_import_log_locked(f"Installed dependency group: {group_name}")
+            else:
                 _import_task_state["error"] = error
+                _append_import_log_locked(f"Dependency group failed: {group_name} - {error}", "error")
 
     def on_workflow_copied(self, workflow_name: str) -> None:
         with _import_task_lock:
             _import_task_state["message"] = f"Copying workflow: {workflow_name}"
+            _append_import_log_locked(f"Copied workflow: {workflow_name}")
 
     def on_node_installed(self, node_name: str) -> None:
         with _import_task_lock:
             _import_task_state["message"] = f"Installing node: {node_name}"
+            _append_import_log_locked(f"Installed node: {node_name}")
 
     def on_workflow_resolved(self, workflow_name: str, downloads: int) -> None:
         with _import_task_lock:
             _import_task_state["message"] = f"Resolved {workflow_name} ({downloads} models)"
+            _append_import_log_locked(f"Resolved workflow: {workflow_name} ({downloads} model downloads)")
 
     def on_error(self, error: str) -> None:
         # Non-fatal errors - just log
+        with _import_task_lock:
+            _append_import_log_locked(error, "warning")
         print(f"[ComfyGit] Import warning: {error}")
 
     def on_download_failures(self, failures: list[tuple[str, str]]) -> None:
         # Track but don't fail
+        with _import_task_lock:
+            _append_import_log_locked(f"Model download failures: {len(failures)}", "warning")
         print(f"[ComfyGit] Model download failures: {len(failures)}")
 
     def on_download_batch_start(self, count: int) -> None:
@@ -88,22 +112,29 @@ class ServerImportProgress:
             _import_task_state["phase"] = "download_models"
             _import_task_state["progress"] = 90
             _import_task_state["message"] = f"Downloading {count} model(s)..."
+            _append_import_log_locked(f"Downloading {count} model(s)")
 
     def on_download_file_start(self, name: str, idx: int, total: int) -> None:
         with _import_task_lock:
             _import_task_state["message"] = f"Downloading {name} ({idx}/{total})"
+            _append_import_log_locked(f"Downloading model {idx}/{total}: {name}")
 
     def on_download_file_progress(self, downloaded: int, total: int | None) -> None:
         # Could add more granular progress here if needed
         pass
 
     def on_download_file_complete(self, name: str, success: bool, error: str | None) -> None:
-        if not success:
-            print(f"[ComfyGit] Model download failed: {name} - {error}")
+        with _import_task_lock:
+            if success:
+                _append_import_log_locked(f"Downloaded model: {name}")
+            else:
+                _append_import_log_locked(f"Model download failed: {name} - {error}", "error")
+                print(f"[ComfyGit] Model download failed: {name} - {error}")
 
     def on_download_batch_complete(self, success: int, total: int) -> None:
         with _import_task_lock:
             _import_task_state["message"] = f"Downloaded {success}/{total} models"
+            _append_import_log_locked(f"Downloaded {success}/{total} models")
 
 
 def _validate_env_name(name: str) -> tuple[bool, str | None]:
@@ -126,6 +157,8 @@ def _run_import_environment(workspace, tarball_path: Path, name: str, model_stra
             _import_task_state["message"] = f"Importing environment '{name}'..."
             _import_task_state["environment_name"] = None
             _import_task_state["error"] = None
+            _import_task_state["logs"] = []
+            _append_import_log_locked(f"Importing environment '{name}' from tarball")
 
         # Create progress callbacks
         progress = ServerImportProgress()
@@ -146,12 +179,14 @@ def _run_import_environment(workspace, tarball_path: Path, name: str, model_stra
             _import_task_state["message"] = f"Environment '{name}' imported successfully"
             _import_task_state["environment_name"] = env.name
             _import_task_state["error"] = None
+            _append_import_log_locked(f"Environment '{name}' imported successfully")
 
     except Exception as e:
         with _import_task_lock:
             _import_task_state["state"] = "error"
             _import_task_state["message"] = "Failed to import environment"
             _import_task_state["error"] = str(e)
+            _append_import_log_locked(f"Failed to import environment: {e}", "error")
         print(f"[ComfyGit] Environment import failed: {e}")
     finally:
         # Clean up temp file
@@ -178,6 +213,8 @@ def _run_import_from_git(
             _import_task_state["message"] = f"Importing environment '{name}' from git{ref_suffix}..."
             _import_task_state["environment_name"] = None
             _import_task_state["error"] = None
+            _import_task_state["logs"] = []
+            _append_import_log_locked(f"Importing environment '{name}' from git{ref_suffix}")
 
         # Create progress callbacks
         progress = ServerImportProgress()
@@ -199,12 +236,14 @@ def _run_import_from_git(
             _import_task_state["message"] = f"Environment '{name}' imported successfully"
             _import_task_state["environment_name"] = env.name
             _import_task_state["error"] = None
+            _append_import_log_locked(f"Environment '{name}' imported successfully")
 
     except Exception as e:
         with _import_task_lock:
             _import_task_state["state"] = "error"
             _import_task_state["message"] = "Failed to import environment"
             _import_task_state["error"] = str(e)
+            _append_import_log_locked(f"Failed to import git environment: {e}", "error")
         print(f"[ComfyGit] Git environment import failed: {e}")
 
 
@@ -474,7 +513,8 @@ async def get_import_status(request: web.Request) -> web.Response:
             "progress": _import_task_state["progress"],
             "message": _import_task_state["message"],
             "environment_name": _import_task_state["environment_name"],
-            "error": _import_task_state["error"]
+            "error": _import_task_state["error"],
+            "logs": list(_import_task_state.get("logs", []))
         })
 
 

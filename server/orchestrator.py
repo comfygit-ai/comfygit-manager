@@ -13,7 +13,6 @@ import json
 import os
 import signal
 import shutil
-import socket
 import subprocess
 import sys
 import time
@@ -29,6 +28,10 @@ from comfygit_core.lifecycle.switch_observer import (
     cleanup_switch_status as core_cleanup_switch_status,
     read_switch_status as core_read_switch_status,
     write_switch_status as core_write_switch_status,
+)
+from comfygit_core.lifecycle.comfyui_readiness import (
+    resolve_comfyui_endpoint,
+    wait_for_comfyui_ready,
 )
 from comfygit_core.models.exceptions import CDEnvironmentNotFoundError, CDWorkspaceNotFoundError
 
@@ -692,6 +695,7 @@ class Orchestrator:
         # Track current process and start time
         self.current_process = None
         self._process_start_time = 0
+        self._current_comfyui_launch_args = args
 
         # Write PID file
         write_orchestrator_pid(self.metadata_dir)
@@ -980,7 +984,9 @@ class Orchestrator:
 
         # Build command: backend_flags → extra_args → original comfyui_args
         # This order allows user args to override if needed
-        cmd = [str(python_exe), str(main_py)] + backend_flags + extra_args + self.comfyui_args
+        launch_args = backend_flags + extra_args + self.comfyui_args
+        self._current_comfyui_launch_args = launch_args
+        cmd = [str(python_exe), str(main_py)] + launch_args
 
         # Set environment variables
         env_vars = os.environ.copy()
@@ -1141,46 +1147,21 @@ class Orchestrator:
         Returns:
             True if healthy, False if timeout or crash
         """
-        start = time.time()
-        consecutive_successes = 0
-
-        # Extract port from args
-        port = 8188  # Default
-        if "--port" in self.comfyui_args:
-            idx = self.comfyui_args.index("--port")
-            if idx + 1 < len(self.comfyui_args):
-                port = int(self.comfyui_args[idx + 1])
-
-        while time.time() - start < timeout:
-            # Check if process died
-            if proc.poll() is not None:
-                print(f"[Orchestrator] Process died (exit {proc.returncode})")
-                return False
-
-            # Try to connect to port
-            if self._check_port_connection(port):
-                consecutive_successes += 1
-
-                # Require 3 successful connections for stability
-                if consecutive_successes >= 3:
-                    return True
-            else:
-                consecutive_successes = 0
-
-            time.sleep(2)
-
-        print(f"[Orchestrator] Health check timeout after {timeout}s")
-        return False
-
-    def _check_port_connection(self, port: int) -> bool:
-        """Check if port is accepting connections."""
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.settimeout(1)
-                s.connect(("127.0.0.1", port))
-                return True
-        except (socket.timeout, ConnectionRefusedError, OSError):
-            return False
+        comfyui_config = self.config.get("comfyui", {})
+        endpoint = resolve_comfyui_endpoint(
+            self._current_comfyui_launch_args,
+            default_host=comfyui_config.get("default_host", "127.0.0.1"),
+            default_port=int(comfyui_config.get("default_port", 8188)),
+        )
+        print(f"[Orchestrator] Waiting for ComfyUI readiness at {endpoint.base_url}")
+        return wait_for_comfyui_ready(
+            proc,
+            endpoint,
+            timeout=timeout,
+            interval=2,
+            stable_successes=3,
+            log=lambda message, level="info": print(f"[Orchestrator] {message}"),
+        )
 
     def _update_switch_status(self, state: str, progress: int = 0,
                              message: str = "", **kwargs) -> None:

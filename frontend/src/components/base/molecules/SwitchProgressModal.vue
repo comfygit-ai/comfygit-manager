@@ -7,59 +7,21 @@
         </div>
 
         <div class="modal-body">
-          <ProgressBar
+          <LifecycleProgressDisplay
+            :state="state"
             :progress="progress"
-            :variant="progressVariant"
-          />
-
-          <div class="progress-info">
-            <div class="progress-percentage">{{ progress }}%</div>
-            <div class="progress-state">{{ stateLabel }}</div>
-          </div>
-
-          <div class="switch-steps">
-            <div
-              v-for="step in steps"
-              :key="step.state"
-              :class="['switch-step', step.status]"
-            >
-              <span class="step-icon">{{ step.icon }}</span>
-              <span class="step-label">{{ step.label }}</span>
-            </div>
-          </div>
-
-          <div v-if="logEntries.length" class="switch-log">
-            <div class="switch-log-title">Supervisor Log</div>
-            <div
-              ref="logLinesRef"
-              class="switch-log-lines"
-              @scroll="handleLogScroll"
-            >
-              <div
-                v-for="(entry, index) in logEntries"
-                :key="`${entry.timestamp || 'log'}-${index}`"
-                class="switch-log-line"
-              >
-                <span class="log-level">{{ (entry.level || 'info').toUpperCase() }}</span>
-                <span class="log-message">{{ entry.message }}</span>
-              </div>
-            </div>
-          </div>
-
-          <p :class="['progress-warning', { complete: state === 'complete' }]">
-            <template v-if="state === 'complete'">
-              Environment switched. Copy logs if needed, then refresh the page.
+            :state-label="stateLabel"
+            :steps="steps"
+            :logs="logs"
+            log-title="Supervisor Log"
+            complete-message="Environment switched. Copy logs if needed, then refresh the page."
+          >
+            <template v-if="state === 'complete'" #actions>
+              <button class="refresh-btn" @click="emit('refresh')">
+                Refresh Page
+              </button>
             </template>
-            <template v-else>
-              Please wait, do not close this window.
-            </template>
-          </p>
-
-          <div v-if="state === 'complete'" class="completion-actions">
-            <button class="refresh-btn" @click="emit('refresh')">
-              Refresh Page
-            </button>
-          </div>
+          </LifecycleProgressDisplay>
         </div>
       </div>
     </div>
@@ -67,8 +29,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
-import ProgressBar from '@/components/base/atoms/ProgressBar.vue'
+import { computed } from 'vue'
+import LifecycleProgressDisplay from '@/components/base/molecules/LifecycleProgressDisplay.vue'
 import type { SwitchLogEntry } from '@/types/comfygit'
 
 const props = defineProps<{
@@ -82,9 +44,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   refresh: []
 }>()
-
-const logLinesRef = ref<HTMLElement | null>(null)
-const shouldFollowLogs = ref(true)
 
 // Map states to human-readable labels
 const stateLabel = computed(() => {
@@ -101,66 +60,15 @@ const stateLabel = computed(() => {
   return props.message || labels[props.state] || props.state
 })
 
-// Progress bar variant based on state
-const progressVariant = computed(() => {
-  if (props.state === 'complete') return 'success'
-  if (props.state === 'critical_failure' || props.state === 'rolled_back') return 'error'
-  return 'default'
-})
-
 // Steps with status
 const steps = computed(() => {
-  const allSteps = [
+  return [
     { state: 'preparing', label: 'Stopping current environment', icon: '●' },
     { state: 'syncing', label: 'Preparing target environment', icon: '●' },
     { state: 'starting', label: 'Starting new environment', icon: '●' },
     { state: 'validating', label: 'Waiting for server to be ready', icon: '●' }
   ]
-
-  const currentStateIndex = props.state === 'complete'
-    ? allSteps.length
-    : allSteps.findIndex(s => s.state === props.state)
-
-  return allSteps.map((step, index) => {
-    let status = 'pending'
-    let icon = '○'
-
-    if (index < currentStateIndex) {
-      status = 'completed'
-      icon = '✓'
-    } else if (index === currentStateIndex) {
-      status = 'active'
-      icon = '⟳'
-    }
-
-    return {
-      ...step,
-      status,
-      icon
-    }
-  })
 })
-
-const logEntries = computed(() => props.logs || [])
-
-function handleLogScroll() {
-  const el = logLinesRef.value
-  if (!el) return
-  const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-  shouldFollowLogs.value = distanceFromBottom < 24
-}
-
-watch(
-  () => props.logs?.length || 0,
-  async () => {
-    if (!shouldFollowLogs.value) return
-    await nextTick()
-    const el = logLinesRef.value
-    if (el) {
-      el.scrollTop = el.scrollHeight
-    }
-  }
-)
 </script>
 
 <style scoped>
@@ -219,157 +127,6 @@ watch(
   display: flex;
   flex-direction: column;
   gap: var(--cg-space-4);
-}
-
-.progress-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--cg-space-2);
-}
-
-.progress-percentage {
-  font-size: var(--cg-font-size-xl);
-  font-weight: var(--cg-font-weight-bold);
-  color: var(--cg-color-accent);
-  font-family: var(--cg-font-mono);
-}
-
-.progress-state {
-  font-size: var(--cg-font-size-sm);
-  color: var(--cg-color-text-secondary);
-  text-align: right;
-  flex: 1;
-}
-
-.switch-steps {
-  display: flex;
-  flex-direction: column;
-  gap: var(--cg-space-2);
-  padding: var(--cg-space-3);
-  background: var(--cg-color-bg-tertiary);
-  border: 1px solid var(--cg-color-border-subtle);
-  border-radius: var(--cg-radius-sm);
-}
-
-.switch-step {
-  display: flex;
-  align-items: center;
-  gap: var(--cg-space-2);
-  font-size: var(--cg-font-size-sm);
-  transition: all var(--cg-transition-fast);
-}
-
-.switch-step.pending {
-  color: var(--cg-color-text-muted);
-}
-
-.switch-step.pending .step-icon {
-  color: var(--cg-color-text-muted);
-}
-
-.switch-step.active {
-  color: var(--cg-color-accent);
-  font-weight: var(--cg-font-weight-medium);
-}
-
-.switch-step.active .step-icon {
-  color: var(--cg-color-accent);
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.switch-step.completed {
-  color: var(--cg-color-success);
-}
-
-.switch-step.completed .step-icon {
-  color: var(--cg-color-success);
-}
-
-.step-icon {
-  flex-shrink: 0;
-  font-size: var(--cg-font-size-base);
-  width: 16px;
-  display: inline-block;
-  text-align: center;
-}
-
-.step-label {
-  flex: 1;
-}
-
-.switch-log {
-  display: flex;
-  flex-direction: column;
-  gap: var(--cg-space-2);
-  padding: var(--cg-space-3);
-  background: var(--cg-color-bg-secondary);
-  border: 1px solid var(--cg-color-border);
-  border-radius: var(--cg-radius-sm);
-  height: 188px;
-  min-height: 188px;
-}
-
-.switch-log-title {
-  font-family: var(--cg-font-mono);
-  font-size: var(--cg-font-size-xs);
-  color: var(--cg-color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: var(--cg-letter-spacing-wide);
-}
-
-.switch-log-lines {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  font-family: var(--cg-font-mono);
-  font-size: var(--cg-font-size-xs);
-}
-
-.switch-log-line {
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr);
-  gap: var(--cg-space-2);
-  color: var(--cg-color-text-secondary);
-}
-
-.log-level {
-  color: var(--cg-color-accent);
-}
-
-.log-message {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.progress-warning {
-  margin: 0;
-  padding: var(--cg-space-2) var(--cg-space-3);
-  background: var(--cg-color-info-muted);
-  border: 1px solid var(--cg-color-info);
-  border-radius: var(--cg-radius-sm);
-  font-size: var(--cg-font-size-sm);
-  color: var(--cg-color-info);
-  text-align: center;
-}
-
-.progress-warning.complete {
-  background: var(--cg-color-success-muted);
-  border-color: var(--cg-color-success);
-  color: var(--cg-color-success);
-}
-
-.completion-actions {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .refresh-btn {

@@ -148,6 +148,23 @@ after branch and tag selection. Until commit selection exists, the flow should
 still surface the selected branch or tag and the tip commit returned by remote
 ref discovery when available.
 
+### CGM-ENV-11B [LIVE]: Import progress should remain inspectable at completion
+Validation: TEST
+
+Environment import is a workspace-level lifecycle operation that may install
+Python packages, sync custom nodes, copy workflows, resolve model references,
+and download models. The manager should expose progress and recent lifecycle
+logs while this operation runs.
+
+The import progress surface should stay available after terminal success so
+users can verify or copy logs. If switch-after-import is enabled, the switch
+confirmation may be layered on top of the completed import surface instead of
+closing the import context first.
+
+The completion action should be part of the progress surface footer rather than
+inline body content, so users can always close the completed import without
+scrolling through logs or lifecycle details.
+
 ### CGM-ENV-12 [LIVE]: Manager-created environments should use supported ComfyUI releases
 Validation: TEST
 
@@ -195,6 +212,18 @@ payload shape, and HTTP observer server belong to ComfyGit core so CLI and
 manager lifecycle authorities do not drift. The CLI and manager may still own
 their process-specific handoff decisions, but they should call the same core
 observer primitives for status and log publication.
+
+The observer's terminal success state means the target ComfyUI process is
+actually reachable, not just that the old environment stopped or the new child
+process was launched. During target boot, the authority should stay in a
+validation state and stream target startup output into the same lifecycle log
+when it owns the child process.
+
+Readiness checks should use shared core lifecycle helpers that parse the same
+ComfyUI arguments used for launch, including `--listen` and `--port`, plus
+configured defaults. Wildcard bind addresses may be probed through a local
+loopback address by the same supervisor, but explicit listen hosts should be
+preserved.
 
 This remains partial until both supervisor modes expose the same observation
 shape and the switch modal consumes it without falling back to noisy failed

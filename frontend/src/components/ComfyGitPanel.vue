@@ -1643,7 +1643,6 @@ async function handleEnvironmentSwitchFromWizard(envName: string, workspacePath:
 }
 
 async function handleImportCompleteSwitch(environmentName: string) {
-  showImportModal.value = false
   // Refresh environments list first
   await refresh()
 
