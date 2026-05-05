@@ -304,6 +304,7 @@
         <ImportSection
           embedded
           @import-complete-switch="handleImportCompleteSwitch"
+          @import-dismissed="handleImportDismissed"
         />
       </template>
     </BaseModal>
@@ -925,6 +926,22 @@ async function refresh(options: { refreshWorkflows?: boolean } = {}) {
     commits.value = []
     historyHasMore.value = false
     branches.value = []
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function refreshEnvironments() {
+  isLoading.value = true
+  error.value = null
+
+  try {
+    environments.value = await getEnvironments()
+    if (environmentsSectionRef.value) {
+      await environmentsSectionRef.value.loadEnvironments()
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to load environments'
   } finally {
     isLoading.value = false
   }
@@ -1648,6 +1665,11 @@ async function handleImportCompleteSwitch(environmentName: string) {
 
   // Trigger the standard environment switch flow
   await handleEnvironmentSwitch(environmentName)
+}
+
+async function handleImportDismissed() {
+  showImportModal.value = false
+  await refreshEnvironments()
 }
 
 function handleOpenImportFromEnvironments() {

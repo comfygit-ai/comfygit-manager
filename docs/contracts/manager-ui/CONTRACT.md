@@ -336,8 +336,11 @@ When import reaches a terminal success state, the modal should stay open at
 100 percent with an explicit completion action instead of closing immediately.
 That completion action should live in the progress modal footer and remain
 visible during the import run; it should be disabled until the import reaches a
-terminal state. If the user requested switch-after-import, the normal switch
-confirmation may appear above the completed import modal.
+terminal state. Activating it should dismiss the import modal and refresh the
+environment-specific data sources used by the shell and environments section so
+the newly imported environment is visible immediately. If the user requested
+switch-after-import, the normal switch confirmation may appear above the
+completed import modal.
 
 ### CGM-UI-19 [LIVE]: Installed node criticality should be explicitly user-editable
 Validation: MIXED

@@ -199,7 +199,7 @@
           variant="secondary"
           size="md"
           :disabled="!importComplete"
-          @click="handleReset"
+          @click="handleDone"
         >
           All Done
         </ActionButton>
@@ -260,6 +260,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'import-complete': [environmentName: string, switchRequested: boolean]
+  'import-dismissed': [environmentName: string | null]
   'import-started': []
   'source-cleared': []
 }>()
@@ -283,6 +284,7 @@ const isImporting = ref(props.resumeImport ?? false)
 const importComplete = ref(false)
 const importSuccess = ref(false)
 const importResultMessage = ref('')
+const completedEnvironmentName = ref<string | null>(null)
 const isLoadingPreview = ref(false)
 const previewError = ref<string | null>(null)
 
@@ -413,6 +415,7 @@ function handleClearSource() {
   importComplete.value = false
   importSuccess.value = false
   importResultMessage.value = ''
+  completedEnvironmentName.value = null
   importAnalysis.value = null
   previewError.value = null
   importConfig.value = { name: '', modelStrategy: 'required', torchBackend: 'auto', switchAfterImport: true }
@@ -433,6 +436,12 @@ function handleReset() {
     error: null
   }
   importLogs.value = []
+}
+
+function handleDone() {
+  const envName = completedEnvironmentName.value
+  handleReset()
+  emit('import-dismissed', envName)
 }
 
 async function handleAnalyzeGitUrl() {
@@ -603,6 +612,7 @@ async function startImportPolling() {
           error: null
         }
         importComplete.value = true
+        completedEnvironmentName.value = progress.environment_name || importConfig.value.name || null
 
         // Notify parent
         if (progress.environment_name) {

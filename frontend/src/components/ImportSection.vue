@@ -9,7 +9,10 @@
     </template>
 
     <template #content>
-      <ImportFlow @import-complete="handleImportComplete" />
+      <ImportFlow
+        @import-complete="handleImportComplete"
+        @import-dismissed="handleImportDismissed"
+      />
     </template>
   </PanelLayout>
 
@@ -67,6 +70,7 @@ defineProps<{
 
 const emit = defineEmits<{
   'import-complete-switch': [environmentName: string]
+  'import-dismissed': [environmentName: string | null]
 }>()
 
 const showInfoPopover = ref(false)
@@ -75,6 +79,10 @@ function handleImportComplete(envName: string, switchRequested: boolean) {
   if (switchRequested) {
     emit('import-complete-switch', envName)
   }
+}
+
+function handleImportDismissed(envName: string | null) {
+  emit('import-dismissed', envName)
 }
 </script>
 

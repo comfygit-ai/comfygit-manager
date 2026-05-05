@@ -163,7 +163,11 @@ closing the import context first.
 
 The completion action should be part of the progress surface footer rather than
 inline body content, so users can always close the completed import without
-scrolling through logs or lifecycle details.
+scrolling through logs or lifecycle details. When the user activates that
+completion action, the manager should close the import surface and refresh the
+environment-specific data sources used by the panel shell and the environments
+section so the imported environment is reflected in navigation without relying
+on unrelated status refreshes.
 
 ### CGM-ENV-12 [LIVE]: Manager-created environments should use supported ComfyUI releases
 Validation: TEST
