@@ -42,6 +42,9 @@ type = "string"
 display_name = "Prompt"
 node_id = 6
 widget_idx = 0
+field_key = "text"
+api_node_id = "6"
+api_field_key = "text"
 required = true
 default = ""
 
@@ -188,6 +191,8 @@ Optional fields may include:
 - `display_name`
 - `widget_idx`
 - `field_key`
+- `api_node_id`
+- `api_field_key`
 - `default`
 - `min`
 - `max`
@@ -196,6 +201,14 @@ Optional fields may include:
 
 The durable input item should represent portable mapping state, not transient
 frontend selection state.
+
+`node_id`, `widget_idx`, and `field_key` identify the UI/provenance element
+the contract author selected. `api_node_id` and `api_field_key`, when present,
+identify the concrete captured API prompt node/input that runtime should patch.
+For ordinary nodes these may match the UI binding. For ComfyUI subgraph
+promoted widgets they may differ; for example a visible subgraph node `170`
+with promoted widget `prompt` can map to API prompt node `170:151` input
+`prompt`.
 
 ### CGM-WCDM-06A [PLANNED]: Numeric input constraints may be stored as optional durable bounds
 Validation: TEST
@@ -219,13 +232,32 @@ Inputs with normalized type `enum` may store:
 field should be treated as the durable source of truth for enum options when
 present.
 
-### CGM-WCDM-07 [PLANNED]: The first implementation may target widget-backed inputs before broader graph source kinds
+### CGM-WCDM-07 [PARTIAL]: The first implementation may target widget-backed inputs before broader graph source kinds
 Validation: HUMAN_REVIEW
 
 The first implementation may limit durable input mapping to widget-backed
 workflow inputs identified by `node_id` plus `widget_idx` or equivalent field
 reference. Broader source kinds such as slot-backed inputs or uploads may be
 added later without invalidating the core contract shape.
+
+The Manager also treats ComfyUI `LoadImage` nodes as a special upload-backed
+image input binding. Selecting a `LoadImage` node stores an input with
+`type = "image"`, `field_key = "image"`, and the node's image widget index when
+available, so runtime adapters can upload image bytes and patch the captured API
+prompt with the resulting ComfyUI input filename.
+
+### CGM-WCDM-07A [PLANNED]: Manager-authored subgraph inputs must store concrete API bindings
+Validation: TEST
+
+When a user selects a promoted widget on a ComfyUI subgraph node, Manager should
+resolve the promoted widget to its concrete inner source widget during contract
+save. The saved input should retain the visible UI binding for authoring
+provenance and also store the concrete API binding that exists in the captured
+API prompt artifact.
+
+Core runtime should patch `api_node_id` plus `api_field_key` when those fields
+are present. It should not guess inner subgraph node IDs from captured prompt
+shape.
 
 ## Output Item Shape
 
@@ -243,6 +275,13 @@ Optional fields may include:
 - `display_name`
 - `selector`
 - `description`
+
+The first Manager authoring surface should only allow artifact-producing output
+nodes, such as `SaveImage` or `PreviewImage`, to be selected as contract
+outputs. Arbitrary graph output slots, including virtual subgraph output slots,
+are not durable contract outputs for the first release because ComfyUI history
+returns artifacts from output nodes rather than arbitrary intermediate graph
+values.
 
 ### CGM-WCDM-09 [PLANNED]: The first implementation may support a simplified output selector model
 Validation: HUMAN_REVIEW

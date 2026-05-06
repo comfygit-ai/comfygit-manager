@@ -437,19 +437,74 @@ async function captureCurrentApiPrompt(): Promise<Record<string, unknown>> {
   return extractApiPromptPayload(result)
 }
 
-function hydrateMissingApiFieldKeys(contract: WorkflowExecutionContract) {
+function isSubgraphNode(node: any): boolean {
+  return typeof node?.isSubgraphNode === 'function' && node.isSubgraphNode()
+}
+
+function getSubgraphApiNodeId(subgraphNode: any, sourceNodeId: string | number): string {
+  if (typeof subgraphNode?.getInnerNodes === 'function') {
+    try {
+      const nodesByExecutionId = new Map<string, any>()
+      const innerNodes = subgraphNode.getInnerNodes(nodesByExecutionId, [])
+      for (const entry of innerNodes ?? []) {
+        if (String(entry?.node?.id) === String(sourceNodeId) && entry?.id != null) {
+          return String(entry.id)
+        }
+      }
+      for (const [executionId, entry] of nodesByExecutionId.entries()) {
+        if (String(entry?.node?.id) === String(sourceNodeId)) {
+          return String(executionId)
+        }
+      }
+    } catch (err) {
+      console.warn('[ComfyGit] Failed to resolve subgraph API node id', err)
+    }
+  }
+
+  return `${subgraphNode.id}:${sourceNodeId}`
+}
+
+function resolveInputApiBinding(node: any, widget: any | null, fieldKey: string | undefined) {
+  if (!node || !fieldKey) return {}
+
+  const sourceNodeId = widget?.sourceNodeId
+  const sourceWidgetName = widget?.sourceWidgetName
+  if (
+    isSubgraphNode(node) &&
+    sourceNodeId != null &&
+    typeof sourceWidgetName === 'string' &&
+    sourceWidgetName.length > 0
+  ) {
+    return {
+      api_node_id: getSubgraphApiNodeId(node, sourceNodeId),
+      api_field_key: sourceWidgetName,
+    }
+  }
+
+  return {
+    api_node_id: String(node.id),
+    api_field_key: fieldKey,
+  }
+}
+
+function hydrateApiBindings(contract: WorkflowExecutionContract) {
   const graph = props.comfyApp?.rootGraph ?? props.comfyApp?.graph
   for (const namedContract of Object.values(contract.contracts)) {
     for (const input of namedContract.inputs) {
-      if (input.field_key || input.widget_idx == null) continue
+      if (input.widget_idx == null) continue
       const node = graph?.getNodeById?.(String(input.node_id))
       const widget = Array.isArray(node?.widgets) ? node.widgets[input.widget_idx] : null
-      const fieldKey = typeof widget?.options?.property === 'string'
-        ? widget.options.property
-        : (typeof widget?.name === 'string' ? widget.name : undefined)
+      const fieldKey = input.field_key || (
+        typeof widget?.options?.property === 'string'
+          ? widget.options.property
+          : (typeof widget?.name === 'string' ? widget.name : undefined)
+      )
       if (fieldKey) {
         input.field_key = fieldKey
       }
+      const apiBinding = resolveInputApiBinding(node, widget, fieldKey)
+      if (apiBinding.api_node_id) input.api_node_id = apiBinding.api_node_id
+      if (apiBinding.api_field_key) input.api_field_key = apiBinding.api_field_key
     }
   }
 }
@@ -780,8 +835,45 @@ const outputOverlays = computed(() => {
 })
 
 type ResolvedHoverTarget =
-  | { kind: 'input'; node: any; widget: any; canvasX: number; canvasY: number }
+  | { kind: 'input'; node: any; widget: any | null; canvasX: number; canvasY: number; source?: 'widget' | 'load_image' }
   | { kind: 'output'; node: any; output: any; canvasX: number; canvasY: number }
+
+function isLoadImageNode(node: any): boolean {
+  const type = String(node?.type || node?.comfyClass || node?.constructor?.type || node?.constructor?.nodeData?.name || '')
+  const classType = String(node?.constructor?.nodeData?.name || node?.constructor?.nodeData?.display_name || '')
+  return type === 'LoadImage' || classType === 'LoadImage'
+}
+
+function isLoadImageWidget(widget: any): boolean {
+  const name = String(widget?.name || widget?.options?.property || '').toLowerCase()
+  return name === 'image'
+}
+
+function getLoadImageWidget(node: any): any | null {
+  if (!Array.isArray(node?.widgets)) return null
+  return node.widgets.find((widget: any) => isLoadImageWidget(widget)) ?? null
+}
+
+function isArtifactOutputNode(node: any): boolean {
+  if (node?.constructor?.nodeData?.output_node === true) return true
+  const type = String(node?.type || node?.comfyClass || node?.constructor?.nodeData?.name || '').toLowerCase()
+  return [
+    'saveimage',
+    'previewimage',
+    'saveanimatedwebp',
+    'saveaudio',
+    'savevideo',
+  ].includes(type)
+}
+
+function getArtifactOutputDescriptor(node: any) {
+  const type = String(node?.type || node?.constructor?.nodeData?.name || '').toLowerCase()
+  const displayName = String(node?.title || node?.type || 'output')
+  if (type.includes('audio')) return { name: displayName, type: 'audio' }
+  if (type.includes('video') || type.includes('webp')) return { name: displayName, type: 'video' }
+  if (type.includes('image')) return { name: displayName, type: 'image' }
+  return { name: displayName, type: 'file' }
+}
 
 function resolveGraphTarget(event: PointerEvent): ResolvedHoverTarget | null {
   if (eventTargetsOverlayChrome(event.target)) return null
@@ -800,25 +892,31 @@ function resolveGraphTarget(event: PointerEvent): ResolvedHoverTarget | null {
     getNodeFromEventTarget(event.target)
   if (!node) return null
 
+  if (isLoadImageNode(node)) {
+    return {
+      kind: 'input',
+      node,
+      widget: getLoadImageWidget(node),
+      canvasX,
+      canvasY,
+      source: 'load_image',
+    }
+  }
+
+  if (isArtifactOutputNode(node)) {
+    return { kind: 'output', node, output: getArtifactOutputDescriptor(node), canvasX, canvasY }
+  }
+
   const widget = node.getWidgetOnPos?.(canvasX, canvasY, true)
   if (widget) {
     return { kind: 'input', node, widget, canvasX, canvasY }
   }
 
-  const output =
-    node.getOutputOnPos?.([canvasX, canvasY]) ||
-    (node.constructor?.nodeData?.output_node
-      ? { name: node.title || node.type || 'output', type: 'image' }
-      : null)
-  if (output) {
-    return { kind: 'output', node, output, canvasX, canvasY }
-  }
-
   return null
 }
 
-function addOrSelectInput(node: any, widget: any) {
-  const widgetIndex = Array.isArray(node.widgets) ? node.widgets.indexOf(widget) : -1
+function addOrSelectInput(node: any, widget: any | null, source: 'widget' | 'load_image' = 'widget') {
+  const widgetIndex = widget && Array.isArray(node.widgets) ? node.widgets.indexOf(widget) : -1
   const index = activeContract.value.inputs.findIndex(input =>
     String(input.node_id) === String(node.id) &&
     input.widget_idx === widgetIndex,
@@ -829,18 +927,26 @@ function addOrSelectInput(node: any, widget: any) {
     return
   }
 
-  const fieldKey = typeof widget?.options?.property === 'string'
-    ? widget.options.property
-    : (typeof widget?.name === 'string' ? widget.name : undefined)
-  const nameSource = widget?.name || fieldKey || 'input'
+  const isLoadImageSource = source === 'load_image'
+  const fieldKey = isLoadImageSource
+    ? 'image'
+    : (
+        typeof widget?.options?.property === 'string'
+          ? widget.options.property
+          : (typeof widget?.name === 'string' ? widget.name : undefined)
+      )
+  const nameSource = isLoadImageSource ? 'image' : (widget?.name || fieldKey || 'input')
 
   const nextInput: WorkflowContractInput = {
     name: slugifyName(String(nameSource), `input_${activeContract.value.inputs.length + 1}`),
-    display_name: String(widget?.name || fieldKey || `Input ${activeContract.value.inputs.length + 1}`),
-    type: normalizeType(widget?.type),
+    display_name: isLoadImageSource
+      ? 'Image'
+      : String(widget?.name || fieldKey || `Input ${activeContract.value.inputs.length + 1}`),
+    type: isLoadImageSource ? 'image' : normalizeType(widget?.type),
     node_id: String(node.id),
     widget_idx: widgetIndex >= 0 ? widgetIndex : undefined,
     field_key: fieldKey,
+    ...resolveInputApiBinding(node, widget, fieldKey),
     required: true,
     default: widget?.value ?? '',
   }
@@ -860,8 +966,7 @@ function addOrSelectInput(node: any, widget: any) {
 }
 
 function addOrSelectOutput(node: any, output: any) {
-  const outputIndex = Array.isArray(node.outputs) ? node.outputs.indexOf(output) : -1
-  const selector = outputIndex >= 0 ? `slot:${outputIndex}` : 'primary'
+  const selector = 'primary'
   const index = activeContract.value.outputs.findIndex(existing =>
     String(existing.node_id) === String(node.id) &&
     (existing.selector || 'primary') === selector,
@@ -900,14 +1005,18 @@ function updateHoverState(event: PointerEvent) {
   }
 
   if (target.kind === 'input') {
-    const widgetIndex = Array.isArray(target.node.widgets) ? target.node.widgets.indexOf(target.widget) : -1
-    const rect = rectToStyle(getWidgetElement(target.node.id, widgetIndex)?.getBoundingClientRect() ?? getInputClientRect({
-      name: '',
-      type: 'string',
-      node_id: String(target.node.id),
-      widget_idx: widgetIndex >= 0 ? widgetIndex : undefined,
-      required: true,
-    }))
+    const widgetIndex = target.widget && Array.isArray(target.node.widgets)
+      ? target.node.widgets.indexOf(target.widget)
+      : -1
+    const rect = target.source === 'load_image'
+      ? rectToStyle(getNodeClientRect(target.node))
+      : rectToStyle(getWidgetElement(target.node.id, widgetIndex)?.getBoundingClientRect() ?? getInputClientRect({
+        name: '',
+        type: 'string',
+        node_id: String(target.node.id),
+        widget_idx: widgetIndex >= 0 ? widgetIndex : undefined,
+        required: true,
+      }))
     if (!rect) {
       hoverSummary.value = null
       hoverOverlay.value = null
@@ -915,7 +1024,9 @@ function updateHoverState(event: PointerEvent) {
     }
     hoverSummary.value = {
       kind: 'input',
-      label: `${target.widget?.name || 'widget'} · Node ${target.node.id}`,
+      label: target.source === 'load_image'
+        ? `image upload · Node ${target.node.id}`
+        : `${target.widget?.name || 'widget'} · Node ${target.node.id}`,
     }
     hoverOverlay.value = { kind: 'input', style: rect }
     return
@@ -954,7 +1065,7 @@ function handleCanvasPointerDown(event: PointerEvent) {
       canvas.graph_mouse[1] = target.canvasY
     }
     canvas.selectNode?.(target.node, false)
-    addOrSelectInput(target.node, target.widget)
+    addOrSelectInput(target.node, target.widget, target.source)
     return
   }
 
@@ -999,7 +1110,7 @@ async function handleSave() {
   saving.value = true
   error.value = null
   try {
-    hydrateMissingApiFieldKeys(form.value)
+    hydrateApiBindings(form.value)
     const apiPrompt = await captureCurrentApiPrompt()
     response.value = await saveWorkflowContract(workflowName.value, form.value, apiPrompt)
     form.value = cloneContract(response.value.execution_contract)

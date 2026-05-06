@@ -495,6 +495,8 @@ def _parse_execution_contract_payload(data: dict) -> WorkflowExecutionContract:
                 display_name=_safe_str(item_dict.get("display_name")),
                 widget_idx=item_dict.get("widget_idx"),
                 field_key=_safe_str(item_dict.get("field_key")),
+                api_node_id=item_dict.get("api_node_id"),
+                api_field_key=_safe_str(item_dict.get("api_field_key")),
                 default=item_dict.get("default"),
                 min=_safe_number(item_dict.get("min")),
                 max=_safe_number(item_dict.get("max")),

@@ -94,6 +94,10 @@ def serialize_workflow_execution_contract(contract) -> dict | None:
                 input_payload["widget_idx"] = item.widget_idx
             if getattr(item, "field_key", None) is not None:
                 input_payload["field_key"] = item.field_key
+            if getattr(item, "api_node_id", None) is not None:
+                input_payload["api_node_id"] = item.api_node_id
+            if getattr(item, "api_field_key", None) is not None:
+                input_payload["api_field_key"] = item.api_field_key
             if getattr(item, "default", None) is not None:
                 input_payload["default"] = item.default
             if getattr(item, "min", None) is not None:

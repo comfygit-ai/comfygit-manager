@@ -424,6 +424,8 @@ export interface WorkflowContractInput {
   display_name?: string
   widget_idx?: number
   field_key?: string
+  api_node_id?: string | number
+  api_field_key?: string
   default?: unknown
   min?: number
   max?: number
