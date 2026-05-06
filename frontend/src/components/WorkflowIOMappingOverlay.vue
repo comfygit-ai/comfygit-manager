@@ -102,11 +102,35 @@
 
             <div
               v-for="(input, index) in activeContract.inputs"
-              :key="`input-${index}`"
-              :class="['item-card', { selected: selectedInputIndex === index }]"
+              :key="getInputCardKey(input, index)"
+              :class="[
+                'item-card',
+                {
+                  selected: selectedInputIndex === index,
+                  dragging: isDraggingItem('input', index),
+                  'drop-before': isDropTarget('input', index, 'before'),
+                  'drop-after': isDropTarget('input', index, 'after'),
+                }
+              ]"
+              @dragenter.prevent="handleItemDragOver('input', index, $event)"
+              @dragover.prevent="handleItemDragOver('input', index, $event)"
+              @drop.prevent="handleItemDrop('input', index, $event)"
             >
               <div class="item-card-header item-card-header-toggle" @click="toggleSelectedInput(index)">
-                <div>
+                <button
+                  class="item-drag-handle"
+                  type="button"
+                  draggable="true"
+                  :aria-label="`Reorder input ${input.name || index + 1}`"
+                  title="Drag to reorder"
+                  @click.stop
+                  @dragstart.stop="startItemDrag('input', index, $event)"
+                  @dragend="endItemDrag"
+                >
+                  <span v-for="dot in 6" :key="dot" />
+                </button>
+
+                <div class="item-card-main">
                   <div class="item-card-title">{{ input.name || `Input ${index + 1}` }}</div>
                   <div class="item-card-meta">
                     Node {{ input.node_id || '?' }}<template v-if="input.widget_idx !== undefined"> · Widget {{ input.widget_idx }}</template>
@@ -192,11 +216,35 @@
 
             <div
               v-for="(output, index) in activeContract.outputs"
-              :key="`output-${index}`"
-              :class="['item-card', { selected: selectedOutputIndex === index }]"
+              :key="getOutputCardKey(output, index)"
+              :class="[
+                'item-card',
+                {
+                  selected: selectedOutputIndex === index,
+                  dragging: isDraggingItem('output', index),
+                  'drop-before': isDropTarget('output', index, 'before'),
+                  'drop-after': isDropTarget('output', index, 'after'),
+                }
+              ]"
+              @dragenter.prevent="handleItemDragOver('output', index, $event)"
+              @dragover.prevent="handleItemDragOver('output', index, $event)"
+              @drop.prevent="handleItemDrop('output', index, $event)"
             >
               <div class="item-card-header item-card-header-toggle" @click="toggleSelectedOutput(index)">
-                <div>
+                <button
+                  class="item-drag-handle"
+                  type="button"
+                  draggable="true"
+                  :aria-label="`Reorder output ${output.name || index + 1}`"
+                  title="Drag to reorder"
+                  @click.stop
+                  @dragstart.stop="startItemDrag('output', index, $event)"
+                  @dragend="endItemDrag"
+                >
+                  <span v-for="dot in 6" :key="dot" />
+                </button>
+
+                <div class="item-card-main">
                   <div class="item-card-title">{{ output.name || `Output ${index + 1}` }}</div>
                   <div class="item-card-meta">
                     Node {{ output.node_id || '?' }}<template v-if="output.selector"> · {{ output.selector }}</template>
@@ -301,6 +349,12 @@ const overlayTick = ref(0)
 const hoverSummary = ref<{ kind: 'input' | 'output'; label: string } | null>(null)
 const hoverOverlay = ref<{ kind: 'input' | 'output'; style: Record<string, string> } | null>(null)
 let overlayFrame: number | null = null
+
+type MappingItemKind = 'input' | 'output'
+type DropPosition = 'before' | 'after'
+
+const draggingItem = ref<{ kind: MappingItemKind; index: number } | null>(null)
+const dropTarget = ref<{ kind: MappingItemKind; index: number; position: DropPosition } | null>(null)
 
 const typeOptions = [
   'string',
@@ -484,10 +538,113 @@ function normalizeType(value: unknown): string {
   return 'file'
 }
 
+function getInputCardKey(input: WorkflowContractInput, index: number): string {
+  return `input-${input.node_id || index}-${input.widget_idx ?? 'na'}`
+}
+
+function getOutputCardKey(output: WorkflowContractOutput, index: number): string {
+  return `output-${output.node_id || index}-${output.selector || 'primary'}`
+}
+
+function clearDragState() {
+  draggingItem.value = null
+  dropTarget.value = null
+}
+
+function isDraggingItem(kind: MappingItemKind, index: number): boolean {
+  return draggingItem.value?.kind === kind && draggingItem.value.index === index
+}
+
+function isDropTarget(kind: MappingItemKind, index: number, position: DropPosition): boolean {
+  return dropTarget.value?.kind === kind &&
+    dropTarget.value.index === index &&
+    dropTarget.value.position === position
+}
+
+function startItemDrag(kind: MappingItemKind, index: number, event: DragEvent) {
+  draggingItem.value = { kind, index }
+  dropTarget.value = null
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.dropEffect = 'move'
+    event.dataTransfer.setData('text/plain', `${kind}:${index}`)
+  }
+}
+
+function getDropPosition(event: DragEvent): DropPosition {
+  const target = event.currentTarget
+  if (!(target instanceof HTMLElement)) return 'after'
+  const rect = target.getBoundingClientRect()
+  return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+}
+
+function handleItemDragOver(kind: MappingItemKind, index: number, event: DragEvent) {
+  if (!draggingItem.value || draggingItem.value.kind !== kind) return
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+  dropTarget.value = {
+    kind,
+    index,
+    position: getDropPosition(event),
+  }
+}
+
+function moveArrayItem<T>(items: T[], fromIndex: number, insertionIndex: number): number {
+  if (fromIndex < 0 || fromIndex >= items.length) return fromIndex
+  const boundedInsertionIndex = Math.max(0, Math.min(insertionIndex, items.length))
+  const adjustedInsertionIndex = fromIndex < boundedInsertionIndex
+    ? boundedInsertionIndex - 1
+    : boundedInsertionIndex
+  if (adjustedInsertionIndex === fromIndex) return fromIndex
+
+  const [item] = items.splice(fromIndex, 1)
+  items.splice(adjustedInsertionIndex, 0, item)
+  return adjustedInsertionIndex
+}
+
+function remapSelectedIndex(selectedIndex: number | null, fromIndex: number, toIndex: number): number | null {
+  if (selectedIndex == null || fromIndex === toIndex) return selectedIndex
+  if (selectedIndex === fromIndex) return toIndex
+  if (fromIndex < toIndex && selectedIndex > fromIndex && selectedIndex <= toIndex) {
+    return selectedIndex - 1
+  }
+  if (fromIndex > toIndex && selectedIndex >= toIndex && selectedIndex < fromIndex) {
+    return selectedIndex + 1
+  }
+  return selectedIndex
+}
+
+function handleItemDrop(kind: MappingItemKind, index: number, event: DragEvent) {
+  if (!draggingItem.value || draggingItem.value.kind !== kind) return
+
+  const position = dropTarget.value?.kind === kind && dropTarget.value.index === index
+    ? dropTarget.value.position
+    : getDropPosition(event)
+  const insertionIndex = position === 'after' ? index + 1 : index
+  const fromIndex = draggingItem.value.index
+
+  if (kind === 'input') {
+    const toIndex = moveArrayItem(activeContract.value.inputs, fromIndex, insertionIndex)
+    selectedInputIndex.value = remapSelectedIndex(selectedInputIndex.value, fromIndex, toIndex)
+  } else {
+    const toIndex = moveArrayItem(activeContract.value.outputs, fromIndex, insertionIndex)
+    selectedOutputIndex.value = remapSelectedIndex(selectedOutputIndex.value, fromIndex, toIndex)
+  }
+
+  clearDragState()
+}
+
+function endItemDrag() {
+  clearDragState()
+}
+
 function removeInput(index: number) {
   activeContract.value.inputs.splice(index, 1)
   if (selectedInputIndex.value === index) {
     selectedInputIndex.value = null
+  } else if (selectedInputIndex.value != null && selectedInputIndex.value > index) {
+    selectedInputIndex.value -= 1
   }
 }
 
@@ -495,6 +652,8 @@ function removeOutput(index: number) {
   activeContract.value.outputs.splice(index, 1)
   if (selectedOutputIndex.value === index) {
     selectedOutputIndex.value = null
+  } else if (selectedOutputIndex.value != null && selectedOutputIndex.value > index) {
+    selectedOutputIndex.value -= 1
   }
 }
 
@@ -888,6 +1047,7 @@ function closeOverlay(options?: { reopenPanel?: boolean }) {
   hoverSummary.value = null
   hoverOverlay.value = null
   showDeleteConfirm.value = false
+  clearDragState()
   if (options?.reopenPanel) {
     reopenWorkflowsPanel()
   }
@@ -1168,12 +1328,14 @@ onBeforeUnmount(() => {
 }
 
 .item-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--cg-space-3);
   padding: var(--cg-space-3);
   border: 1px solid var(--cg-color-border);
   background: var(--cg-color-bg-secondary);
+  transition: border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
 }
 
 .item-card.selected {
@@ -1181,10 +1343,33 @@ onBeforeUnmount(() => {
   box-shadow: inset 0 0 0 1px var(--cg-color-accent);
 }
 
+.item-card.dragging {
+  opacity: 0.55;
+}
+
+.item-card.drop-before::before,
+.item-card.drop-after::after {
+  content: '';
+  position: absolute;
+  left: var(--cg-space-2);
+  right: var(--cg-space-2);
+  height: 2px;
+  border-radius: 999px;
+  background: var(--cg-color-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--cg-color-accent) 35%, transparent);
+}
+
+.item-card.drop-before::before {
+  top: -2px;
+}
+
+.item-card.drop-after::after {
+  bottom: -2px;
+}
+
 .item-card-header {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   gap: var(--cg-space-2);
 }
 
@@ -1192,10 +1377,52 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+.item-card-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.item-drag-handle {
+  flex: 0 0 auto;
+  width: 20px;
+  min-height: 32px;
+  display: grid;
+  grid-template-columns: repeat(2, 4px);
+  align-content: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cg-color-text-muted);
+  cursor: grab;
+}
+
+.item-drag-handle:hover,
+.item-drag-handle:focus-visible {
+  border-color: var(--cg-color-border);
+  color: var(--cg-color-accent);
+  background: var(--cg-color-bg-tertiary);
+  outline: none;
+}
+
+.item-drag-handle:active {
+  cursor: grabbing;
+}
+
+.item-drag-handle span {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
 .item-card-title {
   color: var(--cg-color-text-primary);
   font-size: var(--cg-font-size-sm);
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .item-card-meta {

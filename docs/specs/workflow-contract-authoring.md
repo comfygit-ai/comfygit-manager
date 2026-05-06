@@ -77,6 +77,10 @@ The editor should clearly distinguish:
 
 These should not be conflated with dependency metadata.
 
+Input and output order is user-controlled inside the mapping surface. Reordering
+items changes the order of the saved contract arrays and therefore the order
+later contract-driven API/UI surfaces should present.
+
 ### CGM-WCA-05 [LIVE]: Contract save must replace the durable saved contract, not only transient UI state
 Validation: TEST
 
