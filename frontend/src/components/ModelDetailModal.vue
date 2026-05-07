@@ -63,9 +63,18 @@
             <div v-for="(loc, idx) in details.locations" :key="idx" class="location-item">
               <span class="location-path mono">{{ loc.path }}</span>
               <span v-if="loc.modified" class="location-modified">Modified: {{ loc.modified }}</span>
-              <button v-if="loc.path" class="open-location-btn" @click="copyToClipboard(loc.path)">
-                Copy File Path
-              </button>
+              <div v-if="loc.path" class="location-actions">
+                <button class="open-location-btn" @click="copyToClipboard(loc.path)">
+                  Copy File Path
+                </button>
+                <button
+                  class="delete-location-btn"
+                  :disabled="deletingLocation"
+                  @click="openLocationDeleteConfirm(loc)"
+                >
+                  Delete File
+                </button>
+              </div>
             </div>
           </div>
           <div v-else class="empty-state">No locations found</div>
@@ -172,6 +181,47 @@
       </BaseButton>
     </template>
   </BaseModal>
+
+  <BaseModal
+    v-if="details && locationDeleteTarget"
+    title="Delete Model Location"
+    size="md"
+    :overlay-z-index="(overlayZIndex || 10003) + 4"
+    :close-on-overlay-click="!deletingLocation"
+    :show-close-button="!deletingLocation"
+    @close="closeLocationDeleteConfirm"
+  >
+    <template #body>
+      <div class="delete-confirm">
+        <p>
+          This will permanently delete only this indexed file location for
+          <strong>{{ details.filename }}</strong>.
+        </p>
+        <div class="delete-paths">
+          <h4>File to delete</h4>
+          <code class="delete-path">{{ locationDeleteTarget.path }}</code>
+        </div>
+        <p v-if="locationDeleteError" class="delete-error">{{ locationDeleteError }}</p>
+        <p class="delete-warning">
+          Other indexed locations and source metadata for this model will be preserved if any locations remain.
+        </p>
+      </div>
+    </template>
+
+    <template #footer>
+      <BaseButton variant="secondary" :disabled="deletingLocation" @click="closeLocationDeleteConfirm">
+        Cancel
+      </BaseButton>
+      <BaseButton
+        variant="danger"
+        :loading="deletingLocation"
+        :disabled="deletingLocation"
+        @click="confirmDeleteLocation"
+      >
+        {{ deletingLocation ? 'Deleting...' : 'Delete File' }}
+      </BaseButton>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
@@ -181,7 +231,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import ModelSourceModal from '@/components/ModelSourceModal.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import { copyToClipboard as copyTextToClipboard } from '@/utils/copyToClipboard'
-import type { ModelDetails } from '@/types/comfygit'
+import type { ModelDetails, ModelLocation } from '@/types/comfygit'
 
 const props = defineProps<{
   identifier: string
@@ -195,7 +245,7 @@ const emit = defineEmits<{
   deleted: []
 }>()
 
-const { getModelDetails, removeModelSource, computeModelHashes, deleteModel } = useComfyGitService()
+const { getModelDetails, removeModelSource, computeModelHashes, deleteModel, deleteModelLocation } = useComfyGitService()
 
 const details = ref<ModelDetails | null>(null)
 const loading = ref(true)
@@ -210,6 +260,9 @@ const hashError = ref<string | null>(null)
 const showDeleteConfirm = ref(false)
 const deletingModel = ref(false)
 const deleteError = ref<string | null>(null)
+const locationDeleteTarget = ref<ModelLocation | null>(null)
+const deletingLocation = ref(false)
+const locationDeleteError = ref<string | null>(null)
 
 const missingFullHashes = computed(() => Boolean(details.value?.hash && (!details.value.blake3 || !details.value.sha256)))
 const deletionPaths = computed(() => details.value?.locations?.map(location => location.path).filter(Boolean) || [])
@@ -317,6 +370,51 @@ async function confirmDeleteModel() {
     showToast(deleteError.value, 'error', 4000)
   } finally {
     deletingModel.value = false
+  }
+}
+
+function openLocationDeleteConfirm(location: ModelLocation) {
+  locationDeleteTarget.value = location
+  locationDeleteError.value = null
+}
+
+function closeLocationDeleteConfirm() {
+  if (deletingLocation.value) return
+  locationDeleteTarget.value = null
+  locationDeleteError.value = null
+}
+
+async function confirmDeleteLocation() {
+  if (!details.value?.hash || !locationDeleteTarget.value) return
+
+  deletingLocation.value = true
+  locationDeleteError.value = null
+
+  try {
+    const result = await deleteModelLocation(details.value.hash, locationDeleteTarget.value)
+    if (result.status === 'partial' || result.errors.length > 0) {
+      const message = result.errors[0]?.error || 'Failed to delete model location'
+      locationDeleteError.value = message
+      showToast(message, 'error', 4000)
+      await loadDetails()
+      return
+    }
+
+    showToast('Deleted model file location')
+    locationDeleteTarget.value = null
+
+    if (result.remaining_locations <= 0) {
+      emit('deleted')
+      emit('close')
+      return
+    }
+
+    await loadDetails()
+  } catch (err) {
+    locationDeleteError.value = err instanceof Error ? err.message : 'Failed to delete model location'
+    showToast(locationDeleteError.value, 'error', 4000)
+  } finally {
+    deletingLocation.value = false
   }
 }
 
@@ -480,6 +578,13 @@ onMounted(loadDetails)
   font-size: var(--cg-font-size-xs);
 }
 
+.location-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cg-space-2);
+  margin-top: var(--cg-space-2);
+}
+
 .source-item {
   display: flex;
   gap: var(--cg-space-2);
@@ -561,7 +666,6 @@ onMounted(loadDetails)
 }
 
 .open-location-btn {
-  margin-top: var(--cg-space-2);
   background: var(--cg-color-bg-tertiary);
   border: 1px solid var(--cg-color-border);
   color: var(--cg-color-text-muted);
@@ -575,6 +679,26 @@ onMounted(loadDetails)
   background: var(--cg-color-bg-hover);
   color: var(--cg-color-accent);
   border-color: var(--cg-color-accent);
+}
+
+.delete-location-btn {
+  background: transparent;
+  border: 1px solid var(--cg-color-error);
+  color: var(--cg-color-error);
+  padding: 4px 12px;
+  font-size: var(--cg-font-size-xs);
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.delete-location-btn:hover:not(:disabled) {
+  background: var(--cg-color-error);
+  color: white;
+}
+
+.delete-location-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Toast styles */

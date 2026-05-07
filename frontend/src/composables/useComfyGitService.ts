@@ -33,6 +33,7 @@ import type {
   WorkflowResolutionPlan,
   ModelInfo,
   ModelDetails,
+  ModelLocation,
   ModelDeleteResult,
   ModelSourceCandidatesResponse,
   WorkflowSourceCandidatesResponse,
@@ -1113,6 +1114,21 @@ export function useComfyGitService() {
 
     return fetchApi<ModelDeleteResult>(`/v2/workspace/models/${encodeURIComponent(identifier)}`, {
       method: 'DELETE'
+    })
+  }
+
+  async function deleteModelLocation(identifier: string, location: ModelLocation): Promise<ModelDeleteResult> {
+    if (USE_MOCK) return mockApi.deleteModelLocation(identifier, location)
+
+    return fetchApi<ModelDeleteResult>(`/v2/workspace/models/${encodeURIComponent(identifier)}/locations`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location_id: location.id,
+        base_directory: location.base_directory,
+        relative_path: location.relative_path,
+        path: location.path
+      })
     })
   }
 
@@ -2459,6 +2475,7 @@ export function useComfyGitService() {
     applyEnvironmentModelSources,
     removeModelSource,
     deleteModel,
+    deleteModelLocation,
     downloadModel,
     scanWorkspaceModels,
     getModelsDirectory,

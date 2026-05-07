@@ -566,8 +566,16 @@ export interface ModelDetails {
   category: string
   relative_path: string
   last_seen: string | null
-  locations: Array<{ path: string; base_directory?: string; relative_path?: string; modified?: string }>
+  locations: ModelLocation[]
   sources: Array<{ type: string; url: string }>
+}
+
+export interface ModelLocation {
+  id?: number
+  path: string
+  base_directory?: string
+  relative_path?: string
+  modified?: string
 }
 
 export interface ModelDeleteResult {

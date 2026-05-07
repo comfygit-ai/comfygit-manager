@@ -67,6 +67,7 @@ import type {
   WorkflowInfo,
   WorkflowDetails,
   ModelInfo,
+  ModelLocation,
   ConfigSettings,
   LogEntry,
   EnvironmentStatus,
@@ -876,7 +877,13 @@ export const mockApi = {
       relative_path: `checkpoints/${identifier}`,
       last_seen: "2025-11-11 23:34:23",
       locations: [
-        { path: `/workspace/models/checkpoints/${identifier}`, modified: "2024-08-03 13:16:22" }
+        {
+          id: 1,
+          path: `/workspace/models/checkpoints/${identifier}`,
+          base_directory: "/workspace/models",
+          relative_path: `checkpoints/${identifier}`,
+          modified: "2024-08-03 13:16:22"
+        }
       ],
       sources: []
     }
@@ -899,6 +906,20 @@ export const mockApi = {
       missing_paths: [],
       errors: [],
       remaining_locations: 0
+    }
+  },
+
+  deleteModelLocation: async (sha256: string, location: ModelLocation): Promise<any> => {
+    await delay(350)
+    console.log(`[MOCK] Deleting model location: ${sha256}`, location)
+    return {
+      status: 'success',
+      deleted: sha256,
+      model_hash: sha256,
+      deleted_paths: [location.path],
+      missing_paths: [],
+      errors: [],
+      remaining_locations: 1
     }
   },
 

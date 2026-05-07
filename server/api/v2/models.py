@@ -344,6 +344,8 @@ def _model_details_payload(env, details) -> dict:
             path = primary_path
 
         loc_info = {"path": path}
+        if loc.get("id") is not None:
+            loc_info["id"] = loc.get("id")
         if loc.get("base_directory"):
             loc_info["base_directory"] = loc.get("base_directory")
         if loc.get("relative_path"):
@@ -438,6 +440,109 @@ def _path_for_model_location(location: dict) -> Path:
         raise ValueError(f"Refusing to delete model outside indexed base directory: {target_path}") from exc
 
     return target_path
+
+
+def _normalize_location_relative_path(value: object) -> str:
+    return str(value or "").replace("\\", "/").strip("/")
+
+
+def _same_model_location(location: dict, body: dict) -> bool:
+    requested_id = body.get("location_id", body.get("id"))
+    location_id = location.get("id")
+    if requested_id is not None and location_id is not None:
+        try:
+            return int(requested_id) == int(location_id)
+        except (TypeError, ValueError):
+            return False
+
+    requested_base = body.get("base_directory")
+    requested_relative = body.get("relative_path")
+    if requested_base and requested_relative and location.get("base_directory") and location.get("relative_path"):
+        return (
+            Path(str(requested_base)).expanduser() == Path(str(location["base_directory"])).expanduser()
+            and _normalize_location_relative_path(requested_relative)
+            == _normalize_location_relative_path(location["relative_path"])
+        )
+
+    requested_path = body.get("path")
+    if requested_path:
+        indexed_path = location.get("path") or location.get("full_path")
+        if indexed_path and Path(str(requested_path)).expanduser() == Path(str(indexed_path)).expanduser():
+            return True
+
+    return False
+
+
+def _find_indexed_model_location(locations: list[dict], body: dict) -> dict | None:
+    for location in locations:
+        if _same_model_location(location, body):
+            return location
+    return None
+
+
+async def _delete_indexed_model_location(model_repo, location: dict) -> tuple[str, bool, bool, str | None]:
+    model_path = _path_for_model_location(location)
+    path_str = str(model_path)
+
+    if model_path.exists() or model_path.is_symlink():
+        if not model_path.is_file() and not model_path.is_symlink():
+            return path_str, False, False, "Indexed model location is not a file"
+        model_path.unlink()
+        deleted = True
+        missing = False
+    else:
+        deleted = False
+        missing = True
+
+    try:
+        location_id = location.get("id")
+        if location_id is not None:
+            await run_sync(model_repo.remove_location_by_id, int(location_id))
+        else:
+            await run_sync(
+                model_repo.remove_location_for_directory,
+                Path(location["base_directory"]),
+                location["relative_path"],
+            )
+    except Exception as exc:
+        return path_str, deleted, missing, str(exc)
+
+    return path_str, deleted, missing, None
+
+
+async def _delete_model_locations(model_repo, locations: list[dict]) -> tuple[list[str], list[str], list[dict]]:
+    deleted_paths = []
+    missing_paths = []
+    errors = []
+
+    for location in locations:
+        try:
+            path_str, deleted, missing, location_error = await _delete_indexed_model_location(model_repo, location)
+        except ValueError as exc:
+            errors.append({
+                "path": location.get("path") or location.get("relative_path") or "",
+                "error": str(exc),
+            })
+            continue
+        except Exception as exc:
+            errors.append({
+                "path": location.get("path") or location.get("relative_path") or "",
+                "error": str(exc),
+            })
+            continue
+
+        if deleted:
+            deleted_paths.append(path_str)
+        elif missing:
+            missing_paths.append(path_str)
+
+        if location_error:
+            errors.append({
+                "path": path_str,
+                "error": location_error,
+            })
+
+    return deleted_paths, missing_paths, errors
 
 
 @routes.get("/v2/comfygit/models/environment")
@@ -717,48 +822,59 @@ async def delete_workspace_model(request: web.Request, env) -> web.Response:
 
     try:
         model_repo = env.workspace.model_repository
-        deleted_paths = []
-        missing_paths = []
-        errors = []
+        deleted_paths, missing_paths, errors = await _delete_model_locations(
+            model_repo,
+            list(details.all_locations),
+        )
 
-        for location in details.all_locations:
-            try:
-                model_path = _path_for_model_location(location)
-            except ValueError as exc:
-                errors.append({
-                    "path": location.get("path") or location.get("relative_path") or "",
-                    "error": str(exc),
-                })
-                continue
+        await run_sync(model_repo.clear_orphaned_models)
+        await run_sync(model_repo.clear_orphaned_model_sources)
 
-            path_str = str(model_path)
-            try:
-                if model_path.exists() or model_path.is_symlink():
-                    if not model_path.is_file() and not model_path.is_symlink():
-                        errors.append({
-                            "path": path_str,
-                            "error": "Indexed model location is not a file",
-                        })
-                        continue
-                    model_path.unlink()
-                    deleted_paths.append(path_str)
-                else:
-                    missing_paths.append(path_str)
+        remaining_locations = await run_sync(model_repo.get_locations, details.model.hash)
+        status = "partial" if errors else "success"
+        return web.json_response({
+            "status": status,
+            "deleted": details.model.filename,
+            "model_hash": details.model.hash,
+            "deleted_paths": deleted_paths,
+            "missing_paths": missing_paths,
+            "errors": errors,
+            "remaining_locations": len(remaining_locations),
+        })
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
 
-                location_id = location.get("id")
-                if location_id is not None:
-                    await run_sync(model_repo.remove_location_by_id, int(location_id))
-                else:
-                    await run_sync(
-                        model_repo.remove_location_for_directory,
-                        Path(location["base_directory"]),
-                        location["relative_path"],
-                    )
-            except Exception as exc:
-                errors.append({
-                    "path": path_str,
-                    "error": str(exc),
-                })
+
+@routes.delete("/v2/workspace/models/{identifier}/locations")
+@requires_environment
+async def delete_workspace_model_location(request: web.Request, env) -> web.Response:
+    """Delete one indexed file location for a model from the workspace."""
+    identifier = request.match_info["identifier"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    if not any(body.get(key) for key in ("location_id", "id", "base_directory", "relative_path", "path")):
+        return web.json_response({"error": "Missing model location identifier"}, status=400)
+
+    try:
+        details = await run_sync(env.workspace.get_model_details, identifier)
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=400)
+    except KeyError:
+        return web.json_response({"error": f"Model not found: {identifier}"}, status=404)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+    try:
+        model_repo = env.workspace.model_repository
+        location = _find_indexed_model_location(list(details.all_locations), body)
+        if location is None:
+            return web.json_response({"error": "Indexed model location not found"}, status=404)
+
+        deleted_paths, missing_paths, errors = await _delete_model_locations(model_repo, [location])
 
         await run_sync(model_repo.clear_orphaned_models)
         await run_sync(model_repo.clear_orphaned_model_sources)

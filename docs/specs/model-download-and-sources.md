@@ -113,6 +113,20 @@ backend must derive those paths from trusted model index locations and validate
 that each target remains inside its indexed base model directory before
 unlinking it. The frontend should not provide arbitrary delete paths.
 
+### CGM-MDL-06B [LIVE]: Deleting a model location should preserve sibling locations
+Validation: MIXED
+
+The Model Details locations list may expose a location-scoped delete action for
+duplicate or misplaced model files. When a user confirms location deletion, the
+manager should delete only the selected indexed file location and remove only
+that location row from the workspace model index.
+
+If other locations remain for the model hash, the model identity and source
+metadata should remain intact. If no locations remain, the same orphan cleanup
+rules as model-identity deletion apply. The backend must match the requested
+location against trusted indexed model locations before unlinking and must not
+accept arbitrary frontend-provided filesystem paths as delete authority.
+
 ### CGM-MDL-07 [PARTIAL]: Source discovery should be a shared picker primitive
 Validation: LLM_REVIEW
 

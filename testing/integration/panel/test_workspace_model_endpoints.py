@@ -5,6 +5,7 @@ These endpoints operate at workspace scope (shared across all environments):
 - GET /v2/workspace/models/details/{identifier} - Get full model details
 - POST /v2/workspace/models/{identifier}/source - Update model download source
 - DELETE /v2/workspace/models/{identifier} - Delete a model from workspace
+- DELETE /v2/workspace/models/{identifier}/locations - Delete one indexed model location
 - POST /v2/workspace/models/scan - Trigger model directory scan
 """
 import pytest
@@ -294,9 +295,17 @@ class TestWorkspaceModelDeleteEndpoint:
         # Mock get_model_details to return model with path
         mock_details = Mock()
         mock_details.model = mock_model
-        mock_details.all_locations = [{"path": str(model_file)}]
+        mock_details.all_locations = [{
+            "id": 10,
+            "path": str(model_file),
+            "base_directory": str(tmp_path),
+            "relative_path": "checkpoints/model.safetensors",
+        }]
         mock_environment.workspace.get_model_details.return_value = mock_details
         mock_environment.workspace.workspace_config_manager.get_models_directory.return_value = tmp_path
+        mock_model_repo = Mock()
+        mock_model_repo.get_locations.return_value = []
+        mock_environment.workspace.model_repository = mock_model_repo
 
         # Act
         resp = await client.delete("/v2/workspace/models/abc12345")
@@ -305,6 +314,83 @@ class TestWorkspaceModelDeleteEndpoint:
         assert resp.status == 200
         data = await resp.json()
         assert data["status"] == "success"
+        assert not model_file.exists()
+        mock_model_repo.remove_location_by_id.assert_called_once_with(10)
+
+    async def test_success_delete_single_model_location(self, client, mock_environment, tmp_path):
+        """Should delete only the selected indexed model location."""
+        keep_file = tmp_path / "text_encoders" / "model.safetensors"
+        delete_file = tmp_path / "split_files" / "text_encoders" / "model.safetensors"
+        keep_file.parent.mkdir(parents=True)
+        delete_file.parent.mkdir(parents=True)
+        keep_file.write_bytes(b"keep")
+        delete_file.write_bytes(b"delete")
+
+        mock_model = create_mock_model(
+            filename="model.safetensors",
+            hash_val="abc12345",
+            category="text_encoders",
+            relative_path="text_encoders/model.safetensors",
+        )
+        mock_details = Mock()
+        mock_details.model = mock_model
+        mock_details.all_locations = [
+            {
+                "id": 1,
+                "path": str(keep_file),
+                "base_directory": str(tmp_path),
+                "relative_path": "text_encoders/model.safetensors",
+            },
+            {
+                "id": 2,
+                "path": str(delete_file),
+                "base_directory": str(tmp_path),
+                "relative_path": "split_files/text_encoders/model.safetensors",
+            },
+        ]
+        mock_environment.workspace.get_model_details.return_value = mock_details
+        mock_model_repo = Mock()
+        mock_model_repo.get_locations.return_value = [mock_details.all_locations[0]]
+        mock_environment.workspace.model_repository = mock_model_repo
+
+        resp = await client.delete(
+            "/v2/workspace/models/abc12345/locations",
+            json={"location_id": 2},
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "success"
+        assert data["deleted_paths"] == [str(delete_file)]
+        assert data["remaining_locations"] == 1
+        assert keep_file.exists()
+        assert not delete_file.exists()
+        mock_model_repo.remove_location_by_id.assert_called_once_with(2)
+
+    async def test_error_delete_single_model_location_unknown(self, client, mock_environment, tmp_path):
+        """Should reject deleting a location that is not in the model index."""
+        model_file = tmp_path / "checkpoints" / "model.safetensors"
+        model_file.parent.mkdir(parents=True)
+        model_file.write_bytes(b"fake model data")
+
+        mock_model = create_mock_model(filename="model.safetensors", hash_val="abc12345")
+        mock_details = Mock()
+        mock_details.model = mock_model
+        mock_details.all_locations = [{
+            "id": 10,
+            "path": str(model_file),
+            "base_directory": str(tmp_path),
+            "relative_path": "checkpoints/model.safetensors",
+        }]
+        mock_environment.workspace.get_model_details.return_value = mock_details
+
+        resp = await client.delete(
+            "/v2/workspace/models/abc12345/locations",
+            json={"location_id": 999},
+        )
+
+        assert resp.status == 404
+        assert model_file.exists()
 
     async def test_error_model_not_found(self, client, mock_environment):
         """Should return 404 when model identifier not found."""

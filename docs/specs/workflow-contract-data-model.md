@@ -240,11 +240,11 @@ workflow inputs identified by `node_id` plus `widget_idx` or equivalent field
 reference. Broader source kinds such as slot-backed inputs or uploads may be
 added later without invalidating the core contract shape.
 
-The Manager also treats ComfyUI `LoadImage` nodes as a special upload-backed
-image input binding. Selecting a `LoadImage` node stores an input with
-`type = "image"`, `field_key = "image"`, and the node's image widget index when
-available, so runtime adapters can upload image bytes and patch the captured API
-prompt with the resulting ComfyUI input filename.
+The Manager also treats ComfyUI media loader nodes as special upload-backed
+input bindings. Selecting `LoadImage`, `LoadAudio`, or `LoadVideo` stores an
+input with the matching normalized media type, field key, and widget index when
+available, so runtime adapters can upload bytes and patch the captured API prompt
+with the resulting ComfyUI input filename.
 
 ### CGM-WCDM-07A [PLANNED]: Manager-authored subgraph inputs must store concrete API bindings
 Validation: TEST
@@ -277,11 +277,11 @@ Optional fields may include:
 - `description`
 
 The first Manager authoring surface should only allow artifact-producing output
-nodes, such as `SaveImage` or `PreviewImage`, to be selected as contract
-outputs. Arbitrary graph output slots, including virtual subgraph output slots,
-are not durable contract outputs for the first release because ComfyUI history
-returns artifacts from output nodes rather than arbitrary intermediate graph
-values.
+nodes, such as `SaveImage`, `PreviewImage`, `SaveVideo`, or `SaveAudio`, to be
+selected as contract outputs. Arbitrary graph output slots, including virtual
+subgraph output slots, are not durable contract outputs for the first release
+because ComfyUI history returns artifacts from output nodes rather than arbitrary
+intermediate graph values.
 
 ### CGM-WCDM-09 [PLANNED]: The first implementation may support a simplified output selector model
 Validation: HUMAN_REVIEW

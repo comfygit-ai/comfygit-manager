@@ -834,24 +834,43 @@ const outputOverlays = computed(() => {
     .filter((value): value is { key: string; style: Record<string, string>; active: boolean } => Boolean(value))
 })
 
+type MediaLoaderDescriptor = {
+  fieldKey: string
+  displayName: string
+  type: 'image' | 'audio' | 'video'
+  label: string
+}
+
 type ResolvedHoverTarget =
-  | { kind: 'input'; node: any; widget: any | null; canvasX: number; canvasY: number; source?: 'widget' | 'load_image' }
+  | { kind: 'input'; node: any; widget: any | null; canvasX: number; canvasY: number; source?: 'widget' | 'media_loader'; media?: MediaLoaderDescriptor }
   | { kind: 'output'; node: any; output: any; canvasX: number; canvasY: number }
 
-function isLoadImageNode(node: any): boolean {
+function getMediaLoaderDescriptor(node: any): MediaLoaderDescriptor | null {
   const type = String(node?.type || node?.comfyClass || node?.constructor?.type || node?.constructor?.nodeData?.name || '')
   const classType = String(node?.constructor?.nodeData?.name || node?.constructor?.nodeData?.display_name || '')
-  return type === 'LoadImage' || classType === 'LoadImage'
+  const normalizedType = type.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const normalizedClass = classType.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+  if (normalizedType === 'loadimage' || normalizedClass === 'loadimage') {
+    return { fieldKey: 'image', displayName: 'Image', type: 'image', label: 'image upload' }
+  }
+  if (normalizedType === 'loadaudio' || normalizedClass === 'loadaudio') {
+    return { fieldKey: 'audio', displayName: 'Audio', type: 'audio', label: 'audio upload' }
+  }
+  if (normalizedType === 'loadvideo' || normalizedClass === 'loadvideo') {
+    return { fieldKey: 'video', displayName: 'Video', type: 'video', label: 'video upload' }
+  }
+  return null
 }
 
-function isLoadImageWidget(widget: any): boolean {
+function isMediaLoaderWidget(widget: any, descriptor: MediaLoaderDescriptor): boolean {
   const name = String(widget?.name || widget?.options?.property || '').toLowerCase()
-  return name === 'image'
+  return name === descriptor.fieldKey
 }
 
-function getLoadImageWidget(node: any): any | null {
+function getMediaLoaderWidget(node: any, descriptor: MediaLoaderDescriptor): any | null {
   if (!Array.isArray(node?.widgets)) return null
-  return node.widgets.find((widget: any) => isLoadImageWidget(widget)) ?? null
+  return node.widgets.find((widget: any) => isMediaLoaderWidget(widget, descriptor)) ?? null
 }
 
 function isArtifactOutputNode(node: any): boolean {
@@ -867,7 +886,7 @@ function isArtifactOutputNode(node: any): boolean {
 }
 
 function getArtifactOutputDescriptor(node: any) {
-  const type = String(node?.type || node?.constructor?.nodeData?.name || '').toLowerCase()
+  const type = String(`${node?.type || ''} ${node?.constructor?.nodeData?.name || ''} ${node?.title || ''}`).toLowerCase()
   const displayName = String(node?.title || node?.type || 'output')
   if (type.includes('audio')) return { name: displayName, type: 'audio' }
   if (type.includes('video') || type.includes('webp')) return { name: displayName, type: 'video' }
@@ -892,14 +911,16 @@ function resolveGraphTarget(event: PointerEvent): ResolvedHoverTarget | null {
     getNodeFromEventTarget(event.target)
   if (!node) return null
 
-  if (isLoadImageNode(node)) {
+  const mediaLoader = getMediaLoaderDescriptor(node)
+  if (mediaLoader) {
     return {
       kind: 'input',
       node,
-      widget: getLoadImageWidget(node),
+      widget: getMediaLoaderWidget(node, mediaLoader),
       canvasX,
       canvasY,
-      source: 'load_image',
+      source: 'media_loader',
+      media: mediaLoader,
     }
   }
 
@@ -915,7 +936,7 @@ function resolveGraphTarget(event: PointerEvent): ResolvedHoverTarget | null {
   return null
 }
 
-function addOrSelectInput(node: any, widget: any | null, source: 'widget' | 'load_image' = 'widget') {
+function addOrSelectInput(node: any, widget: any | null, source: 'widget' | 'media_loader' = 'widget', media?: MediaLoaderDescriptor) {
   const widgetIndex = widget && Array.isArray(node.widgets) ? node.widgets.indexOf(widget) : -1
   const index = activeContract.value.inputs.findIndex(input =>
     String(input.node_id) === String(node.id) &&
@@ -927,28 +948,28 @@ function addOrSelectInput(node: any, widget: any | null, source: 'widget' | 'loa
     return
   }
 
-  const isLoadImageSource = source === 'load_image'
-  const fieldKey = isLoadImageSource
-    ? 'image'
+  const isMediaLoaderSource = source === 'media_loader' && media
+  const fieldKey = isMediaLoaderSource
+    ? media.fieldKey
     : (
         typeof widget?.options?.property === 'string'
           ? widget.options.property
           : (typeof widget?.name === 'string' ? widget.name : undefined)
       )
-  const nameSource = isLoadImageSource ? 'image' : (widget?.name || fieldKey || 'input')
+  const nameSource = isMediaLoaderSource ? media.fieldKey : (widget?.name || fieldKey || 'input')
 
   const nextInput: WorkflowContractInput = {
     name: slugifyName(String(nameSource), `input_${activeContract.value.inputs.length + 1}`),
-    display_name: isLoadImageSource
-      ? 'Image'
+    display_name: isMediaLoaderSource
+      ? media.displayName
       : String(widget?.name || fieldKey || `Input ${activeContract.value.inputs.length + 1}`),
-    type: isLoadImageSource ? 'image' : normalizeType(widget?.type),
+    type: isMediaLoaderSource ? media.type : normalizeType(widget?.type),
     node_id: String(node.id),
     widget_idx: widgetIndex >= 0 ? widgetIndex : undefined,
     field_key: fieldKey,
     ...resolveInputApiBinding(node, widget, fieldKey),
     required: true,
-    default: widget?.value ?? '',
+    default: isMediaLoaderSource ? '' : (widget?.value ?? ''),
   }
 
   if (isNumericType(nextInput.type)) {
@@ -1008,7 +1029,7 @@ function updateHoverState(event: PointerEvent) {
     const widgetIndex = target.widget && Array.isArray(target.node.widgets)
       ? target.node.widgets.indexOf(target.widget)
       : -1
-    const rect = target.source === 'load_image'
+    const rect = target.source === 'media_loader'
       ? rectToStyle(getNodeClientRect(target.node))
       : rectToStyle(getWidgetElement(target.node.id, widgetIndex)?.getBoundingClientRect() ?? getInputClientRect({
         name: '',
@@ -1024,8 +1045,8 @@ function updateHoverState(event: PointerEvent) {
     }
     hoverSummary.value = {
       kind: 'input',
-      label: target.source === 'load_image'
-        ? `image upload · Node ${target.node.id}`
+      label: target.source === 'media_loader'
+        ? `${target.media?.label || 'file upload'} · Node ${target.node.id}`
         : `${target.widget?.name || 'widget'} · Node ${target.node.id}`,
     }
     hoverOverlay.value = { kind: 'input', style: rect }
@@ -1065,7 +1086,7 @@ function handleCanvasPointerDown(event: PointerEvent) {
       canvas.graph_mouse[1] = target.canvasY
     }
     canvas.selectNode?.(target.node, false)
-    addOrSelectInput(target.node, target.widget, target.source)
+    addOrSelectInput(target.node, target.widget, target.source, target.media)
     return
   }
 
