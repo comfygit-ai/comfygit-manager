@@ -402,7 +402,7 @@ wheels = [
 [[package]]
 name = "comfygit-core"
 version = "0.4.0"
-source = { git = "https://github.com/comfygit-ai/comfygit.git?subdirectory=packages%2Fcore&rev=3ea24b79099ed5e6bc8ae0e0628c97eb5abadfda#3ea24b79099ed5e6bc8ae0e0628c97eb5abadfda" }
+source = { git = "https://github.com/comfygit-ai/comfygit.git?subdirectory=packages%2Fcore&branch=dev#4f382e8221473814cd5f5fdf8796305ee58a3aa3" }
 dependencies = [
     { name = "blake3" },
     { name = "huggingface-hub" },
@@ -437,7 +437,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "comfygit-core", git = "https://github.com/comfygit-ai/comfygit.git?subdirectory=packages%2Fcore&rev=3ea24b79099ed5e6bc8ae0e0628c97eb5abadfda" },
+    { name = "comfygit-core", git = "https://github.com/comfygit-ai/comfygit.git?subdirectory=packages%2Fcore&branch=dev" },
     { name = "watchdog", specifier = ">=6.0.0" },
     { name = "xxhash", specifier = ">=3.5.0" },
     { name = "zeroconf", specifier = ">=0.131.0" },
