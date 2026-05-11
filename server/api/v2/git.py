@@ -30,7 +30,7 @@ def _get_commit_detail(repo_path, commit_hash: str) -> dict:
         [
             "show",
             "--quiet",
-            f"--format=%H%n%h%n%s%n%cI%n%cr%n%D",
+            "--format=%H%n%h%n%s%n%cI%n%cr%n%D",
             commit_hash,
         ],
     )
