@@ -13,7 +13,7 @@
         v-if="hasCurrentReadinessWarnings"
         class="export-readiness-warning"
         :warnings="currentWarnings"
-        message="Missing provenance can prevent another machine, or ComfyGit Cloud, from rebuilding this environment exactly."
+        message="The issues below can prevent another machine from building this environment exactly."
         @review="showReadinessIssuesModal = true"
       />
 
@@ -225,7 +225,8 @@ const buttonLabel = computed(() => {
 
 const currentWarnings = computed(() => validationResult.value?.warnings || {
   models_without_sources: [],
-  nodes_without_provenance: []
+  nodes_without_provenance: [],
+  runtime_node_import_failures: []
 })
 
 const modelWarningCount = computed(() =>
@@ -236,8 +237,12 @@ const nodeWarningCount = computed(() =>
   currentWarnings.value.nodes_without_provenance?.length || 0
 )
 
+const runtimeImportWarningCount = computed(() =>
+  currentWarnings.value.runtime_node_import_failures?.length || 0
+)
+
 const readinessWarningCount = computed(() =>
-  modelWarningCount.value + nodeWarningCount.value
+  modelWarningCount.value + nodeWarningCount.value + runtimeImportWarningCount.value
 )
 
 const hasCurrentReadinessWarnings = computed(() =>

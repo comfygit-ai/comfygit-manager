@@ -9,6 +9,10 @@ from cgm_core.dependency_preview import (
     serialize_dependency_preview,
 )
 from cgm_core.decorators import requires_environment, logged_operation
+from cgm_core.runtime_imports import (
+    build_loaded_runtime_import_payload,
+    collect_runtime_import_report,
+)
 from cgm_utils.async_helpers import run_sync
 
 routes = web.RouteTableDef()
@@ -131,6 +135,7 @@ def _serialize_node(
     issue_type: str | None = None,
     issue_guidance: str | None = None,
     criticality: str | None = None,
+    runtime_import: dict | None = None,
 ):
     """Serialize a node to API response format."""
     return {
@@ -147,6 +152,7 @@ def _serialize_node(
         "criticality": _normalize_node_criticality(
             criticality or getattr(node, "criticality", None)
         ) if tracked else None,
+        "runtime_import": runtime_import,
     }
 
 
@@ -170,6 +176,14 @@ async def get_nodes(request: web.Request, env) -> web.Response:
         # Build workflow usage map
         usage_map = _build_workflow_usage_map(status.workflow.analyzed_workflows)
         blocked_node_map = _build_blocked_node_map(status.workflow.analyzed_workflows)
+        runtime_import_report = await run_sync(
+            collect_runtime_import_report,
+            env,
+            nodes=installed_nodes,
+            status=status,
+        )
+        runtime_import_failures = runtime_import_report.failures_by_name()
+        missing_node_names = set(_safe_sequence(status.comparison.missing_nodes))
 
         result_nodes = []
         seen_names = set()
@@ -179,12 +193,30 @@ async def get_nodes(request: web.Request, env) -> web.Response:
             identifier = node.registry_id or node.name
             tracked_node = tracked_nodes.get(identifier) or tracked_nodes.get(node.name)
             seen_names.add(node.name)
+            runtime_failure = (
+                runtime_import_failures.get(node.name)
+                or runtime_import_failures.get(identifier)
+            )
+            runtime_import = None
+            if runtime_failure is not None:
+                runtime_import = runtime_failure.to_runtime_import_dict()
+            elif (
+                runtime_import_report.available
+                and node.name not in missing_node_names
+                and identifier not in missing_node_names
+                and (env.custom_nodes_path / node.name).exists()
+            ):
+                runtime_import = build_loaded_runtime_import_payload(
+                    node,
+                    env.custom_nodes_path / node.name,
+                )
             result_nodes.append(_serialize_node(
                 node,
                 tracked=True,
                 installed=True,
-                used_in_workflows=usage_map.get(identifier, []),
+                used_in_workflows=usage_map.get(identifier, []) or usage_map.get(node.name, []),
                 criticality=getattr(tracked_node, "criticality", None) if tracked_node else None,
+                runtime_import=runtime_import,
             ))
 
         # 2. Add missing nodes (tracked in manifest but not installed)
@@ -207,6 +239,7 @@ async def get_nodes(request: web.Request, env) -> web.Response:
                     "criticality": _normalize_node_criticality(
                         getattr(missing_node, "criticality", None)
                     ),
+                    "runtime_import": None,
                 })
 
         # 2.5. Add blocked nodes from workflow resolution (version-gated/uninstallable)
@@ -225,6 +258,7 @@ async def get_nodes(request: web.Request, env) -> web.Response:
                     "issue_type": issue_data.get("issue_type"),
                     "issue_guidance": issue_data.get("issue_guidance"),
                     "criticality": None,
+                    "runtime_import": None,
                 })
 
         # 3. Add untracked nodes (on filesystem but not in manifest)
@@ -243,6 +277,7 @@ async def get_nodes(request: web.Request, env) -> web.Response:
                     "issue_type": None,
                     "issue_guidance": None,
                     "criticality": None,
+                    "runtime_import": None,
                 })
 
         # Calculate counts
@@ -250,6 +285,11 @@ async def get_nodes(request: web.Request, env) -> web.Response:
         missing_count = sum(1 for n in result_nodes if not n["installed"] and n["tracked"] and not n.get("issue_type"))
         untracked_count = sum(1 for n in result_nodes if not n["tracked"])
         blocked_count = sum(1 for n in result_nodes if n.get("issue_type") in ("version_gated", "uninstallable"))
+        runtime_import_failed_count = sum(
+            1
+            for n in result_nodes
+            if (n.get("runtime_import") or {}).get("status") == "failed"
+        )
 
         return web.json_response({
             "nodes": result_nodes,
@@ -258,6 +298,7 @@ async def get_nodes(request: web.Request, env) -> web.Response:
             "missing_count": missing_count,
             "untracked_count": untracked_count,
             "blocked_count": blocked_count,
+            "runtime_import_failed_count": runtime_import_failed_count,
         })
     except Exception as e:
         return web.json_response({

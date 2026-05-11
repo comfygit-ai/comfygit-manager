@@ -64,6 +64,7 @@ export interface ComfyGitStatus {
   comparison: ComparisonStatus
   missing_models_count: number
   has_legacy_manager: boolean
+  runtime_issues?: RuntimeIssues
 }
 
 export interface CommitInfo {
@@ -189,9 +190,28 @@ export interface NodeWithoutProvenance {
   reason: string
 }
 
+export interface RuntimeNodeImportFailure {
+  name: string
+  registry_id?: string | null
+  module_name?: string | null
+  module_path?: string | null
+  criticality?: NodeCriticality
+  used_in_workflows?: string[]
+  status: 'failed'
+  message: string
+  guidance: string
+}
+
+export interface RuntimeIssues {
+  available: boolean
+  custom_node_import_failures: RuntimeNodeImportFailure[]
+  custom_node_import_failure_count: number
+}
+
 export interface EnvironmentReadinessWarnings {
   models_without_sources: ModelWithoutSource[]
   nodes_without_provenance: NodeWithoutProvenance[]
+  runtime_node_import_failures?: RuntimeNodeImportFailure[]
 }
 
 export interface ExportBlockingIssue {
@@ -678,6 +698,13 @@ export interface NodeInfo {
   issue_type?: 'version_gated' | 'uninstallable' | null
   issue_guidance?: string | null
   criticality?: NodeCriticality | null
+  runtime_import?: {
+    status: 'loaded' | 'failed' | 'unknown'
+    message?: string | null
+    guidance?: string | null
+    module_name?: string | null
+    module_path?: string | null
+  } | null
 }
 
 export interface NodesResult {
@@ -687,6 +714,7 @@ export interface NodesResult {
   missing_count: number
   untracked_count: number
   blocked_count?: number
+  runtime_import_failed_count?: number
 }
 
 export interface TrackDevResult {

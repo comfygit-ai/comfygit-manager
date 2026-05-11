@@ -222,6 +222,51 @@ class TestGetNodesEndpoint:
         assert node is not None
         assert "my_workflow" in node["used_in_workflows"]
 
+    async def test_success_with_runtime_import_failure(
+        self,
+        client,
+        mock_environment,
+        mock_env_status,
+        tmp_path,
+        monkeypatch,
+    ):
+        """Should expose runtime import failure status for tracked installed nodes."""
+        custom_nodes_path = tmp_path / "custom_nodes"
+        custom_nodes_path.mkdir()
+        (custom_nodes_path / "ComfyUI-FL-VoxCPM").mkdir()
+        mock_environment.custom_nodes_path = custom_nodes_path
+
+        monkeypatch.setitem(
+            sys.modules,
+            "nodes",
+            Mock(LOADED_MODULE_DIRS={"ComfyGitManager": str(custom_nodes_path / "ComfyGitManager")}),
+        )
+
+        mock_node = create_mock_node_info("ComfyUI-FL-VoxCPM")
+        mock_environment.list_nodes.return_value = [mock_node]
+        mock_env_status.comparison.missing_nodes = set()
+        mock_env_status.comparison.extra_nodes = set()
+
+        mock_wf = Mock()
+        mock_wf.name = "VoxCPM V2 TTS"
+        mock_resolved_node = Mock()
+        mock_resolved_node.package_id = "ComfyUI-FL-VoxCPM"
+        mock_wf.resolution = Mock()
+        mock_wf.resolution.nodes_resolved = [mock_resolved_node]
+        mock_env_status.workflow.analyzed_workflows = [mock_wf]
+        mock_environment.status.return_value = mock_env_status
+
+        resp = await client.get("/v2/comfygit/nodes")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["runtime_import_failed_count"] == 1
+        node = next((n for n in data["nodes"] if n["name"] == "ComfyUI-FL-VoxCPM"), None)
+        assert node is not None
+        assert node["runtime_import"]["status"] == "failed"
+        assert "ComfyUI logs" in node["runtime_import"]["guidance"]
+        assert node["used_in_workflows"] == ["VoxCPM V2 TTS"]
+
     async def test_success_with_blocked_nodes(
         self,
         client,

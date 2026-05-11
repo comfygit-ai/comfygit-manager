@@ -113,3 +113,16 @@ This preserves the local safety property of tracking development nodes so
 sync/rollback does not treat them as random filesystem drift, while allowing
 the user to declare that a local development node is not part of the portable
 dependency set.
+
+### CGM-NODE-08 [LIVE]: Installed nodes can carry live import health
+Validation: MIXED
+
+An installed tracked node can still fail to import when ComfyUI starts because
+its Python dependencies, system dependencies, or package code are invalid for
+the current runtime. The Nodes surface should be able to represent this as
+`runtime_import.status = "failed"` without moving the node into the missing,
+blocked, or uninstallable categories.
+
+Runtime import failure is distinct from installability and portability. The
+first implementation should only report that import failed and direct the user
+to ComfyUI logs for the reason.

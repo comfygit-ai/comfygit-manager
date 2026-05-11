@@ -232,18 +232,31 @@
           <ItemCard
             v-for="node in filteredInstalled"
             :key="node.name"
-            status="synced"
+            :status="getInstalledNodeStatus(node)"
           >
-            <template #icon>{{ node.source === 'development' ? '🔧' : '📦' }}</template>
+            <template #icon>{{ getInstalledNodeIcon(node) }}</template>
             <template #title>{{ node.name }}</template>
             <template #subtitle>
-              <span v-if="node.version">{{ node.source === 'development' ? '' : 'v' }}{{ node.version }}</span>
-              <span v-else style="color: var(--cg-color-text-muted)">version unknown</span>
-              <span style="color: var(--cg-color-text-muted); margin-left: 8px;">
-                • {{ getSourceLabel(node.source) }}
-              </span>
+              <template v-if="hasRuntimeImportFailure(node)">
+                <span style="color: var(--cg-color-error)">Import failed</span>
+                <span style="color: var(--cg-color-text-muted); margin-left: 8px;">
+                  • {{ getSourceLabel(node.source) }}
+                </span>
+              </template>
+              <template v-else>
+                <span v-if="node.version">{{ node.source === 'development' ? '' : 'v' }}{{ node.version }}</span>
+                <span v-else style="color: var(--cg-color-text-muted)">version unknown</span>
+                <span style="color: var(--cg-color-text-muted); margin-left: 8px;">
+                  • {{ getSourceLabel(node.source) }}
+                </span>
+              </template>
             </template>
             <template #details>
+              <DetailRow
+                v-if="hasRuntimeImportFailure(node)"
+                label="Runtime:"
+                value="Import failed. Check ComfyUI logs for the error message."
+              />
               <DetailRow
                 label="Used by:"
                 :value="getUsageLabel(node)"
@@ -554,6 +567,19 @@ function getUsageLabel(node: NodeInfo): string {
 
 function getNodeCriticality(node: NodeInfo): NodeCriticality {
   return node.criticality === 'optional' ? 'optional' : 'required'
+}
+
+function hasRuntimeImportFailure(node: NodeInfo): boolean {
+  return node.runtime_import?.status === 'failed'
+}
+
+function getInstalledNodeStatus(node: NodeInfo): 'synced' | 'broken' {
+  return hasRuntimeImportFailure(node) ? 'broken' : 'synced'
+}
+
+function getInstalledNodeIcon(node: NodeInfo): string {
+  if (hasRuntimeImportFailure(node)) return '!'
+  return node.source === 'development' ? '🔧' : '📦'
 }
 
 function isCriticalityUpdating(node: NodeInfo): boolean {

@@ -165,10 +165,10 @@ workspace selection should live in the cloud dashboard.
 ### CGM-UI-13A [PLANNED]: Version-control surfaces should explain repo-backed cloud handoff
 Validation: HUMAN_REVIEW
 
-The local UI may provide cloud helper copy or links inside version-control and
-remote-management surfaces. That copy should explain that ComfyGit Cloud reads
+The local UI may provide remote-build helper copy or links inside version-control and
+remote-management surfaces. That copy should explain that the remote service reads
 from the GitHub repository linked in the dashboard, and that local users update
-cloud-visible state by pushing commits to that repository.
+remote-visible state by pushing commits to that repository.
 
 This helper UX should not require local cloud sign-in and should not recreate
 the cloud dashboard's GitHub App installation or repository-linking flow.
@@ -286,8 +286,8 @@ current process.
 In local bootstrap and local orchestrator contexts, this should preserve the
 friendly custom-node install path for non-technical users.
 
-In cloud-bound contexts, the UI should present the bound environment/session as
-managed by ComfyGit Cloud and hide or disable lifecycle controls whose
+In remote-bound contexts, the UI should present the bound environment/session as
+managed by the remote service and hide or disable lifecycle controls whose
 authority belongs to the cloud dashboard.
 
 The corresponding API and lifecycle semantics are specified by `CGM-API-13`
@@ -411,6 +411,17 @@ runtime/build-plan issue groups.
 
 Detailed readiness behavior is specified by `CGM-READY-01` through
 `CGM-READY-07` in `docs/specs/environment-readiness.md`.
+
+### CGM-UI-20A [LIVE]: Custom-node import failures should be visible but non-blocking
+Validation: HUMAN_REVIEW
+
+When the backend reports runtime custom-node import failures, Status should show
+a compact issue in the existing `Issues` area and route users to Nodes.
+
+The Nodes surface should mark each failed installed node with a visible runtime
+status and details text that tells the user to inspect ComfyUI logs for the
+underlying Python import error. This status should not block commits, exports,
+pushes, or environment switching in the first implementation.
 
 ### CGM-UI-21 [PARTIAL]: Export, push, and future deploy gates should use the shared readiness review surface
 Validation: MIXED

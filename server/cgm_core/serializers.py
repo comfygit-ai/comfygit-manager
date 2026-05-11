@@ -1,6 +1,7 @@
 """Convert core library types to JSON-serializable dicts."""
 
 from cgm_core.version_utils import get_latest_version
+from cgm_core.runtime_imports import collect_runtime_import_report
 
 
 def _safe_list(value) -> list:
@@ -416,6 +417,17 @@ def serialize_environment_status(status, env_name: str, env=None) -> dict:
         legacy_manager_path = env.custom_nodes_path / "ComfyUI-Manager"
         has_legacy_manager = legacy_manager_path.exists()
 
+    runtime_import_report = None
+    if env is not None:
+        try:
+            runtime_import_report = collect_runtime_import_report(
+                env,
+                nodes=env.list_nodes(),
+                status=status,
+            )
+        except Exception:
+            runtime_import_report = None
+
     # Serialize analyzed workflows with full resolution state
     analyzed = []
     for wf in status.workflow.analyzed_workflows:
@@ -500,4 +512,13 @@ def serialize_environment_status(status, env_name: str, env=None) -> dict:
         },
         "missing_models_count": len(status.missing_models),
         "has_legacy_manager": has_legacy_manager,
+        "runtime_issues": (
+            runtime_import_report.to_summary_dict()
+            if runtime_import_report is not None
+            else {
+                "available": False,
+                "custom_node_import_failures": [],
+                "custom_node_import_failure_count": 0,
+            }
+        ),
     }

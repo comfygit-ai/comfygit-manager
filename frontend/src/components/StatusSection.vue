@@ -267,6 +267,22 @@
             </template>
           </IssueCard>
 
+          <!-- WARNING: Runtime custom node import failures -->
+          <IssueCard
+            v-if="runtimeNodeImportFailures.length > 0"
+            severity="warning"
+            icon="!"
+            :title="`${runtimeNodeImportFailures.length} custom node${runtimeNodeImportFailures.length === 1 ? '' : 's'} failed to import`"
+            description="ComfyUI skipped these installed nodes during startup. Check ComfyUI logs for the import error."
+            :items="runtimeNodeImportItems"
+          >
+            <template #actions>
+              <ActionButton variant="primary" size="sm" @click="$emit('view-nodes')">
+                See Nodes
+              </ActionButton>
+            </template>
+          </IssueCard>
+
           <IssueCard
             v-if="hasReadinessRepairItems"
             severity="warning"
@@ -465,7 +481,8 @@ const hasUncommittedWork = computed(() => {
 
 const readinessWarnings = computed(() => readinessResult.value?.warnings || {
   models_without_sources: [],
-  nodes_without_provenance: []
+  nodes_without_provenance: [],
+  runtime_node_import_failures: []
 })
 
 const readinessModelWarningCount = computed(() =>
@@ -536,6 +553,7 @@ watch(
     props.status.missing_models_count,
     props.status.comparison.is_synced,
     props.status.has_legacy_manager,
+    props.status.runtime_issues?.custom_node_import_failure_count || 0,
   ],
   () => {
     if (props.setupState === 'managed') {
@@ -564,6 +582,23 @@ const pathSyncWorkflows = computed(() => {
     w.has_path_sync_issues && !w.has_issues
   ) || []
 })
+
+const runtimeNodeImportFailures = computed(() =>
+  props.status.runtime_issues?.custom_node_import_failures || []
+)
+
+const runtimeNodeImportItems = computed(() =>
+  runtimeNodeImportFailures.value.map((node) => {
+    const workflows = node.used_in_workflows || []
+    if (workflows.length === 0) {
+      return `${node.name} — check ComfyUI logs`
+    }
+    if (workflows.length === 1) {
+      return `${node.name} — used by ${workflows[0]}`
+    }
+    return `${node.name} — used by ${workflows.length} workflows`
+  })
+)
 
 const hasBrokenWorkflows = computed(() => {
   return allBrokenWorkflows.value.length > 0
@@ -666,7 +701,8 @@ const hasActualIssues = computed(() => {
          pathSyncWorkflows.value.length > 0 ||
          props.status.missing_models_count > 0 ||
          !props.status.comparison.is_synced ||
-         props.status.has_legacy_manager
+         props.status.has_legacy_manager ||
+         runtimeNodeImportFailures.value.length > 0
 })
 
 const hasDisplayedIssues = computed(() => {

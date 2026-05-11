@@ -185,3 +185,17 @@ checks.
 
 The local manager may later display cloud-provided summaries, but it should not
 pretend to prove runtime deployability from local package state alone.
+
+### CGM-READY-08 [LIVE]: Local custom-node import failures are runtime health warnings
+Validation: MIXED
+
+The local manager may report evidence from the active ComfyUI process when a
+tracked custom-node package is installed on disk but did not appear in
+ComfyUI's successfully loaded custom-node module registry.
+
+This local runtime signal should be surfaced in Status, Nodes, and shared
+readiness review surfaces as a warning. It should identify the affected package
+and workflows that reference it when workflow usage analysis has that mapping.
+It should not block commit, export, push, or cloud handoff by default, and it
+should not attempt to parse ComfyUI logs for the exact exception in the first
+implementation.

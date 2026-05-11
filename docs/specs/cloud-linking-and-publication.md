@@ -3,7 +3,7 @@
 ## Purpose
 
 This spec defines the intended local-panel behavior for preparing a ComfyGit
-environment for ComfyGit Cloud under the repo-backed MVP model.
+environment for a repo-backed remote build service under the MVP model.
 
 The local panel is an authoring and version-control surface. It should help
 users commit environment state and push it to the GitHub repository that the
@@ -173,7 +173,7 @@ complicate the first integrated local/cloud bridge.
 ### CGM-CLP-06 [PLANNED]: The local cloud handoff should be git remote and push oriented
 Validation: HUMAN_REVIEW
 
-The local manager should treat git as the handoff protocol to ComfyGit Cloud.
+The local manager should treat git as the handoff protocol to the remote service.
 For the MVP, the local panel should help users ensure that:
 
 - the environment is committed

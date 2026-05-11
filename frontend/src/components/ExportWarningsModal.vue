@@ -35,8 +35,8 @@
                 {{ warningCount }} reproducibility warning{{ warningCount !== 1 ? 's' : '' }}
               </h3>
               <p class="warning-description">
-                Missing provenance can prevent another machine, or ComfyGit Cloud, from rebuilding this environment exactly.
-                Review the missing details, or {{ mode }} anyway.
+                The issues below can prevent another machine from building this environment exactly.
+                Review the details, or {{ mode }} anyway.
               </p>
               <ul class="warning-list">
                 <li v-for="model in visibleModelWarnings" :key="model.hash || model.filename">

@@ -29,6 +29,18 @@
         </ul>
       </div>
 
+      <div v-if="runtimeImportWarningCount" class="warning-group">
+        <div class="warning-group-label">
+          Runtime Imports
+        </div>
+        <ul class="warning-list">
+          <li v-for="node in visibleRuntimeImportWarnings" :key="node.registry_id || node.name">
+            {{ node.name }}
+          </li>
+          <li v-if="hiddenRuntimeImportCount">+{{ hiddenRuntimeImportCount }} more import warning{{ hiddenRuntimeImportCount !== 1 ? 's' : '' }}</li>
+        </ul>
+      </div>
+
       <button class="review-issues-btn" @click="$emit('review')">
         Review Issues
       </button>
@@ -45,7 +57,7 @@ const props = withDefaults(defineProps<{
   message?: string
   maxItemsPerGroup?: number
 }>(), {
-  message: 'Missing provenance can prevent another machine, or ComfyGit Cloud, from rebuilding this environment exactly. Review the missing details, or continue anyway.',
+  message: 'The issues below can prevent another machine from building this environment exactly.',
   maxItemsPerGroup: 2,
 })
 
@@ -55,10 +67,14 @@ defineEmits<{
 
 const models = computed(() => props.warnings.models_without_sources || [])
 const nodes = computed(() => props.warnings.nodes_without_provenance || [])
+const runtimeImportFailures = computed(() => props.warnings.runtime_node_import_failures || [])
 
 const modelWarningCount = computed(() => models.value.length)
 const nodeWarningCount = computed(() => nodes.value.length)
-const warningCount = computed(() => modelWarningCount.value + nodeWarningCount.value)
+const runtimeImportWarningCount = computed(() => runtimeImportFailures.value.length)
+const warningCount = computed(() =>
+  modelWarningCount.value + nodeWarningCount.value + runtimeImportWarningCount.value
+)
 
 const visibleModelWarnings = computed(() =>
   models.value.slice(0, props.maxItemsPerGroup)
@@ -68,12 +84,20 @@ const visibleNodeWarnings = computed(() =>
   nodes.value.slice(0, props.maxItemsPerGroup)
 )
 
+const visibleRuntimeImportWarnings = computed(() =>
+  runtimeImportFailures.value.slice(0, props.maxItemsPerGroup)
+)
+
 const hiddenModelCount = computed(() =>
   Math.max(0, modelWarningCount.value - visibleModelWarnings.value.length)
 )
 
 const hiddenNodeCount = computed(() =>
   Math.max(0, nodeWarningCount.value - visibleNodeWarnings.value.length)
+)
+
+const hiddenRuntimeImportCount = computed(() =>
+  Math.max(0, runtimeImportWarningCount.value - visibleRuntimeImportWarnings.value.length)
 )
 </script>
 

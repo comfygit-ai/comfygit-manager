@@ -372,3 +372,21 @@ The current Manager API adapts the core readiness result for export validation
 and push preview flows, with grouped model and custom-node warnings plus
 source-state blockers where requested. This remains partial until source-state,
 workflow, and runtime issue groups are fully represented as repairable items.
+
+### CGM-API-16 [LIVE]: Runtime custom-node import failures are reported as non-blocking health
+Validation: MIXED
+
+When the Manager backend is running inside a live ComfyUI process, it should
+compare tracked installed custom-node packages against ComfyUI's successfully
+loaded custom-node module registry. Tracked packages that are present on disk but
+absent from that live registry should be reported as runtime import failures.
+
+The response should identify the package name, registry id when known,
+criticality, and workflows that reference the package when workflow analysis can
+provide that mapping. The response should not attempt to scrape ComfyUI logs for
+the exact Python exception in the first implementation; user-facing guidance
+should direct users to ComfyUI logs for the import error.
+
+Runtime import failures are warnings, not export, push, or commit blockers.
+They may be included in readiness warning payloads so shared review surfaces can
+mention them, but they must not be treated as portable provenance failures.

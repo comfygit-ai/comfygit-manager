@@ -48,7 +48,7 @@
             <ReproducibilityWarningBanner
               v-if="hasReadinessWarnings"
               :warnings="warnings"
-              message="Missing provenance can prevent another machine, or ComfyGit Cloud, from rebuilding this environment exactly."
+              :message="warningBannerMessage"
               @review="showReadinessIssuesModal = true"
             />
 
@@ -97,7 +97,7 @@
             <ReproducibilityWarningBanner
               v-if="hasReadinessWarnings"
               :warnings="warnings"
-              message="Missing provenance can prevent another machine, or ComfyGit Cloud, from rebuilding this environment exactly."
+              :message="warningBannerMessage"
               @review="showReadinessIssuesModal = true"
             />
 
@@ -188,7 +188,8 @@ const showReadinessIssuesModal = ref(false)
 
 const warnings = computed(() => props.preview?.warnings || {
   models_without_sources: [],
-  nodes_without_provenance: []
+  nodes_without_provenance: [],
+  runtime_node_import_failures: []
 })
 
 const modelWarningCount = computed(() =>
@@ -199,11 +200,19 @@ const nodeWarningCount = computed(() =>
   warnings.value.nodes_without_provenance.length
 )
 
+const runtimeImportWarningCount = computed(() =>
+  warnings.value.runtime_node_import_failures?.length || 0
+)
+
 const readinessWarningCount = computed(() =>
-  modelWarningCount.value + nodeWarningCount.value
+  modelWarningCount.value + nodeWarningCount.value + runtimeImportWarningCount.value
 )
 
 const hasReadinessWarnings = computed(() => readinessWarningCount.value > 0)
+
+const warningBannerMessage = computed(() => {
+  return 'The issues below can prevent another machine from building this environment exactly.'
+})
 
 function handlePush(force: boolean) {
   emit('push', { force })

@@ -17,6 +17,7 @@ from cgm_core.dependency_preview import (
     build_install_identifier,
     dependency_review_response,
 )
+from cgm_core.runtime_imports import collect_runtime_import_report
 from cgm_core.runtime_context import build_runtime_context, ensure_capability
 
 # Import panel logging infrastructure for operation logging
@@ -492,13 +493,68 @@ async def is_legacy(request):
 @routes.get("/v2/customnode/import_fail_info")
 async def import_fail_info(request):
     """Return import failure information."""
-    return web.json_response({})
+    env = get_environment_from_cwd()
+    if env is None:
+        return web.json_response({})
+
+    try:
+        status = env.status()
+        report = collect_runtime_import_report(
+            env,
+            nodes=env.list_nodes(),
+            status=status,
+        )
+    except Exception:
+        return web.json_response({})
+
+    payload = {}
+    for failure in report.failures:
+        failure_payload = failure.to_dict()
+        payload[failure.name] = failure_payload
+        if failure.registry_id and failure.registry_id != failure.name:
+            payload[failure.registry_id] = failure_payload
+    return web.json_response(payload)
 
 
 @routes.post("/v2/customnode/import_fail_info_bulk")
 async def import_fail_info_bulk(request):
     """Return bulk import failure information."""
-    return web.json_response({})
+    env = get_environment_from_cwd()
+    if env is None:
+        return web.json_response({})
+
+    try:
+        params = await request.json()
+    except Exception:
+        params = {}
+
+    requested_ids = {
+        str(item)
+        for item in params.get("cnr_ids", [])
+        if item
+    }
+
+    try:
+        status = env.status()
+        report = collect_runtime_import_report(
+            env,
+            nodes=env.list_nodes(),
+            status=status,
+        )
+    except Exception:
+        return web.json_response({})
+
+    payload = {}
+    for failure in report.failures:
+        keys = {failure.name}
+        if failure.registry_id:
+            keys.add(failure.registry_id)
+        if requested_ids and not keys.intersection(requested_ids):
+            continue
+        failure_payload = failure.to_dict()
+        for key in keys:
+            payload[key] = failure_payload
+    return web.json_response(payload)
 
 
 @routes.get("/v2/debug/comfyui_info")

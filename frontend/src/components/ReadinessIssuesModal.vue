@@ -91,7 +91,35 @@
             </div>
           </section>
 
-          <div v-if="!models.length && !nodes.length" class="empty-state">
+          <section v-if="runtimeImportFailures.length" class="issue-section">
+            <div class="section-heading">
+              <h4>Custom Nodes Failed To Import</h4>
+              <span>{{ runtimeImportFailures.length }}</span>
+            </div>
+            <div class="issue-list">
+              <article
+                v-for="node in runtimeImportFailures"
+                :key="node.registry_id || node.name"
+                class="issue-item"
+              >
+                <div class="issue-main">
+                  <div class="issue-name">{{ node.name }}</div>
+                  <div class="issue-meta">
+                    <span>{{ node.criticality || 'required' }}</span>
+                    <span v-if="node.used_in_workflows?.length">
+                      used by {{ node.used_in_workflows.join(', ') }}
+                    </span>
+                  </div>
+                  <p class="issue-reason">
+                    Import failed. Check ComfyUI logs for the error message.
+                  </p>
+                </div>
+                <span class="issue-note">Runtime warning</span>
+              </article>
+            </div>
+          </section>
+
+          <div v-if="!models.length && !nodes.length && !runtimeImportFailures.length" class="empty-state">
             No reproducibility issues remain.
           </div>
 
@@ -162,6 +190,7 @@ const stagedModelSources = ref<Record<string, string>>({})
 
 const models = computed(() => props.warnings.models_without_sources)
 const nodes = computed(() => props.warnings.nodes_without_provenance)
+const runtimeImportFailures = computed(() => props.warnings.runtime_node_import_failures || [])
 const stagedSourceCount = computed(() => Object.keys(stagedModelSources.value).length)
 
 watch(
