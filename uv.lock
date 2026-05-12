@@ -402,7 +402,7 @@ wheels = [
 [[package]]
 name = "comfygit-core"
 version = "0.4.0"
-source = { git = "https://github.com/comfygit-ai/comfygit.git?subdirectory=packages%2Fcore&branch=dev#4f382e8221473814cd5f5fdf8796305ee58a3aa3" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "blake3" },
     { name = "huggingface-hub" },
@@ -413,10 +413,14 @@ dependencies = [
     { name = "uv" },
     { name = "xxhash" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/38/70/5e86c75b49ae7cb32ad9710a8b08ceb909bf875eafe728780b46c6671de3/comfygit_core-0.4.0.tar.gz", hash = "sha256:745f3d0e540b36f8bec9f34acf55751a18b6a99fb2b0e56654957ab554050d52", size = 707327, upload-time = "2026-05-12T00:35:36.762Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/33/80/cfed146e7801b117e445e366e395d37978982730331974bd306618112950/comfygit_core-0.4.0-py3-none-any.whl", hash = "sha256:66f710b17124fc25c3d3faa4742625aea7f6335af58b955238b74d45af0d3384", size = 423761, upload-time = "2026-05-12T00:35:34.939Z" },
+]
 
 [[package]]
 name = "comfygit-manager"
-version = "0.1.0"
+version = "0.1.1"
 source = { virtual = "." }
 dependencies = [
     { name = "comfygit-core" },
@@ -437,7 +441,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "comfygit-core", git = "https://github.com/comfygit-ai/comfygit.git?subdirectory=packages%2Fcore&branch=dev" },
+    { name = "comfygit-core", specifier = "==0.4.0" },
     { name = "watchdog", specifier = ">=6.0.0" },
     { name = "xxhash", specifier = ">=3.5.0" },
     { name = "zeroconf", specifier = ">=0.131.0" },
