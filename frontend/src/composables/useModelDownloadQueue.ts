@@ -79,7 +79,20 @@ async function downloadFile(item: DownloadQueueItem): Promise<void> {
 
     let lastTime = Date.now()
     let lastDownloaded = 0
+    let lastProgressAt = Date.now()
     let settled = false  // Track if promise is already resolved/rejected
+    const stallResetMs = 2000
+    const stallCheckInterval = window.setInterval(() => {
+      if (settled) return
+      if (Date.now() - lastProgressAt > stallResetMs) {
+        item.speed = 0
+        item.eta = 0
+      }
+    }, 250)
+
+    const cleanup = () => {
+      window.clearInterval(stallCheckInterval)
+    }
 
     eventSource.onmessage = (event) => {
       try {
@@ -89,12 +102,13 @@ async function downloadFile(item: DownloadQueueItem): Promise<void> {
           case 'progress':
             item.downloaded = data.downloaded || 0
             item.size = data.total || item.size
+            lastProgressAt = Date.now()
 
             // Calculate speed
-            const now = Date.now()
+            const now = lastProgressAt
             const elapsed = (now - lastTime) / 1000
-            if (elapsed > 0.5) {
-              const bytesInInterval = item.downloaded - lastDownloaded
+            const bytesInInterval = item.downloaded - lastDownloaded
+            if (bytesInInterval > 0 && elapsed > 0) {
               item.speed = bytesInInterval / elapsed
               lastTime = now
               lastDownloaded = item.downloaded
@@ -103,6 +117,8 @@ async function downloadFile(item: DownloadQueueItem): Promise<void> {
               if (item.speed > 0 && item.size > 0) {
                 const remaining = item.size - item.downloaded
                 item.eta = remaining / item.speed
+              } else {
+                item.eta = 0
               }
             }
 
@@ -114,6 +130,7 @@ async function downloadFile(item: DownloadQueueItem): Promise<void> {
 
           case 'complete':
             settled = true
+            cleanup()
             eventSource.close()
             activeEventSource = null
             resolve()
@@ -121,6 +138,7 @@ async function downloadFile(item: DownloadQueueItem): Promise<void> {
 
           case 'error':
             settled = true
+            cleanup()
             eventSource.close()
             activeEventSource = null
             reject(new Error(data.message || 'Download failed'))
@@ -132,6 +150,7 @@ async function downloadFile(item: DownloadQueueItem): Promise<void> {
     }
 
     eventSource.onerror = () => {
+      cleanup()
       eventSource.close()
       activeEventSource = null
       // Only reject if we haven't already settled (complete/error event was received)

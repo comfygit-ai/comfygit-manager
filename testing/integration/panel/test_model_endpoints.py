@@ -825,7 +825,7 @@ class TestHuggingFaceSearchEndpoint:
         assert call_kwargs["search"] == "flux"
         assert call_kwargs["limit"] == 10
         assert call_kwargs["sort"] == "downloads"
-        assert call_kwargs["direction"] == -1
+        assert "direction" not in call_kwargs
 
     async def test_success_with_limit(self, client, mock_environment, monkeypatch):
         """Should respect limit parameter."""

@@ -266,14 +266,14 @@ class TestHTTPControlServer:
         }
         orch.current_env_name = "test"
 
-        with patch('http.server.HTTPServer') as mock_server:
+        with patch('server.orchestrator.SwitchObserverServer') as mock_server:
             mock_server.return_value = Mock()
 
-            with patch('threading.Thread'):
-                Orchestrator._start_control_server(orch)
+            Orchestrator._start_control_server(orch)
 
             # Should have attempted to bind
             assert mock_server.called
+            assert mock_server.call_args.args[:3] == (metadata_dir.parent, "0.0.0.0", 8189)
 
     def test_start_control_server_writes_port_file(self, metadata_dir):
         """Should write actual bound port to .control_port file."""
@@ -289,11 +289,10 @@ class TestHTTPControlServer:
         }
         orch.current_env_name = "test"
 
-        with patch('http.server.HTTPServer') as mock_server:
+        with patch('server.orchestrator.SwitchObserverServer') as mock_server:
             mock_server.return_value = Mock()
 
-            with patch('threading.Thread'):
-                Orchestrator._start_control_server(orch)
+            Orchestrator._start_control_server(orch)
 
             # Should have written port file
             port_file = metadata_dir / ".control_port"
@@ -317,15 +316,12 @@ class TestHTTPControlServer:
         error1 = OSError()
         error1.errno = 98  # EADDRINUSE
 
-        with patch('http.server.HTTPServer') as mock_server:
+        with patch('server.orchestrator.SwitchObserverServer') as mock_server:
             # First port fails, second succeeds
-            mock_server.side_effect = [
-                error1,
-                Mock()
-            ]
-
-            with patch('threading.Thread'):
-                Orchestrator._start_control_server(orch)
+            failing_server = Mock()
+            failing_server.start.side_effect = error1
+            mock_server.side_effect = [failing_server, Mock()]
+            Orchestrator._start_control_server(orch)
 
             # Should have tried port 8189, then 8190
             assert mock_server.call_count == 2
@@ -348,9 +344,11 @@ class TestHTTPControlServer:
         error = OSError()
         error.errno = 98  # EADDRINUSE
 
-        with patch('http.server.HTTPServer') as mock_server:
+        with patch('server.orchestrator.SwitchObserverServer') as mock_server:
             # All ports fail
-            mock_server.side_effect = error
+            failing_server = Mock()
+            failing_server.start.side_effect = error
+            mock_server.return_value = failing_server
 
             Orchestrator._start_control_server(orch)
 

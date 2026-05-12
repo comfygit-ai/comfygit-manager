@@ -72,10 +72,48 @@
           <span class="summary-text">{{ progress.nodesInstalled.length }} node package{{ progress.nodesInstalled.length > 1 ? 's' : '' }} installed</span>
         </div>
 
+        <div v-if="appliedDependencyReviewCount > 0" class="summary-item success">
+          <span class="summary-icon">✓</span>
+          <span class="summary-text">{{ appliedDependencyReviewCount }} reviewed package{{ appliedDependencyReviewCount > 1 ? 's' : '' }} installed</span>
+        </div>
+
+        <!-- Nodes marked optional -->
+        <div v-if="nodesMarkedOptionalCount > 0" class="summary-item success">
+          <span class="summary-icon">✓</span>
+          <span class="summary-text">{{ nodesMarkedOptionalCount }} node type{{ nodesMarkedOptionalCount > 1 ? 's' : '' }} marked optional</span>
+        </div>
+
+        <!-- Existing node mappings changed -->
+        <div v-if="nodesMappedCount > 0" class="summary-item success">
+          <span class="summary-icon">✓</span>
+          <span class="summary-text">{{ nodesMappedCount }} node mapping{{ nodesMappedCount > 1 ? 's' : '' }} changed</span>
+        </div>
+
+        <!-- Model paths synced -->
+        <div v-if="modelPathsSyncedCount > 0" class="summary-item success">
+          <span class="summary-icon">✓</span>
+          <span class="summary-text">{{ modelPathsSyncedCount }} model path{{ modelPathsSyncedCount > 1 ? 's' : '' }} synced</span>
+        </div>
+
+        <div v-if="modelsMarkedOptionalCount > 0" class="summary-item success">
+          <span class="summary-icon">✓</span>
+          <span class="summary-text">{{ modelsMarkedOptionalCount }} model{{ modelsMarkedOptionalCount > 1 ? 's' : '' }} marked optional</span>
+        </div>
+
+        <div v-if="modelDownloadIntentsChangedCount > 0" class="summary-item success">
+          <span class="summary-icon">✓</span>
+          <span class="summary-text">{{ modelDownloadIntentsChangedCount }} model decision{{ modelDownloadIntentsChangedCount > 1 ? 's' : '' }} changed</span>
+        </div>
+
         <!-- Failed installations summary -->
         <div v-if="failedNodes.length > 0" class="summary-item error">
           <span class="summary-icon">✗</span>
           <span class="summary-text">{{ failedNodes.length }} package{{ failedNodes.length > 1 ? 's' : '' }} failed to install</span>
+        </div>
+
+        <div v-if="dependencyReviewNodes.length > 0" class="summary-item warning">
+          <span class="summary-icon">⚠</span>
+          <span class="summary-text">{{ dependencyReviewNodes.length }} package{{ dependencyReviewNodes.length > 1 ? 's' : '' }} need dependency review</span>
         </div>
 
         <!-- Failed packages detail list -->
@@ -86,6 +124,19 @@
           </div>
         </div>
 
+        <div v-if="dependencyReviewNodes.length > 0" class="failed-list dependency-review-list">
+          <div v-for="node in dependencyReviewNodes" :key="node.node_id" class="failed-item dependency-review-item">
+            <code class="failed-node-id">{{ node.node_id }}</code>
+            <span class="failed-error">Dependency changes require review before install.</span>
+            <button
+              class="review-button"
+              @click="openDependencyReview(node)"
+            >
+              View Changes
+            </button>
+          </div>
+        </div>
+
         <!-- Retry failed button -->
         <button v-if="failedNodes.length > 0" class="retry-button" @click="$emit('retry-failed')">
           Retry Failed ({{ failedNodes.length }})
@@ -93,13 +144,13 @@
 
         <div v-if="!hasFailures" class="summary-item success">
           <span class="summary-icon">✓</span>
-          <span class="summary-text">Workflow dependencies resolved</span>
+          <span class="summary-text">{{ completionMessage }}</span>
         </div>
 
-        <p class="summary-note">Model downloads (if any) will continue in the background.</p>
+        <p v-if="hasBackgroundDownloads" class="summary-note">Model downloads will continue in the background.</p>
 
         <!-- Restart required message -->
-        <div v-if="progress.needsRestart" class="restart-prompt">
+        <div v-if="needsRestart" class="restart-prompt">
           <div class="restart-warning">
             <span class="warning-icon">⚠</span>
             <div class="warning-content">
@@ -122,12 +173,25 @@
       </div>
       <p class="error-message">{{ progress.error }}</p>
     </div>
+
+    <DependencyReviewPreviewModal
+      v-if="dependencyReviewModalOpen"
+      :loading="dependencyReviewLoading"
+      :error="dependencyReviewError"
+      :preview="activeDependencyPreview"
+      :can-apply="Boolean(activeDependencyReviewIdentifier && activeDependencyPreview?.success)"
+      :applying="dependencyReviewApplyLoading"
+      @close="closeDependencyReview"
+      @apply="applyDependencyReview"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import type { ResolutionProgressState } from '@/types/comfygit'
+import { computed, ref } from 'vue'
+import DependencyReviewPreviewModal from '@/components/DependencyReviewPreviewModal.vue'
+import { useComfyGitService } from '@/composables/useComfyGitService'
+import type { DependencyResolutionPreview, ResolutionProgressState } from '@/types/comfygit'
 
 const props = defineProps<{
   progress: ResolutionProgressState
@@ -138,6 +202,13 @@ defineEmits<{
   'retry-failed': []
 }>()
 
+const {
+  previewNodeDependencyChanges,
+  applyReviewedNodeDependencyChanges
+} = useComfyGitService()
+
+const appliedDependencyReviewNodes = ref<Set<string>>(new Set())
+
 const installProgressPercent = computed(() => {
   const total = props.progress.nodeInstallProgress?.totalNodes || props.progress.nodesToInstall.length
   if (!total) return 0
@@ -146,11 +217,58 @@ const installProgressPercent = computed(() => {
 })
 
 const failedNodes = computed(() => {
-  return props.progress.nodeInstallProgress?.completedNodes.filter(n => !n.success) || []
+  return props.progress.nodeInstallProgress?.completedNodes.filter(n => !n.success && !n.dependency_review) || []
 })
 
+function dependencyReviewIdentifier(node: NonNullable<ResolutionProgressState['nodeInstallProgress']>['completedNodes'][number]): string {
+  return node.dependency_review?.identifier || node.node_id
+}
+
+const dependencyReviewNodes = computed(() => {
+  return props.progress.nodeInstallProgress?.completedNodes.filter(n => {
+    return n.dependency_review && !appliedDependencyReviewNodes.value.has(dependencyReviewIdentifier(n))
+  }) || []
+})
+
+const appliedDependencyReviewCount = computed(() => appliedDependencyReviewNodes.value.size)
+
+const needsRestart = computed(() => props.progress.needsRestart || appliedDependencyReviewCount.value > 0)
+
 const hasFailures = computed(() => {
-  return failedNodes.value.length > 0
+  return failedNodes.value.length > 0 || dependencyReviewNodes.value.length > 0
+})
+
+const successfulNodeInstalls = computed(() => props.progress.nodesInstalled.length)
+
+const nodesMarkedOptionalCount = computed(() => props.progress.nodesMarkedOptional?.length || 0)
+
+const nodesMappedCount = computed(() => props.progress.nodesMapped?.length || 0)
+
+const modelPathsSyncedCount = computed(() => props.progress.modelPathsSynced || 0)
+
+const modelsMarkedOptionalCount = computed(() => props.progress.modelsMarkedOptional?.length || 0)
+
+const modelDownloadIntentsChangedCount = computed(() => props.progress.modelDownloadIntentsChanged?.length || 0)
+
+const hasBackgroundDownloads = computed(() => props.progress.completedFiles.length > 0)
+
+const hasAppliedChanges = computed(() => {
+  return successfulNodeInstalls.value > 0 ||
+    nodesMarkedOptionalCount.value > 0 ||
+    nodesMappedCount.value > 0 ||
+    modelPathsSyncedCount.value > 0 ||
+    modelsMarkedOptionalCount.value > 0 ||
+    modelDownloadIntentsChangedCount.value > 0 ||
+    hasBackgroundDownloads.value ||
+    needsRestart.value ||
+    appliedDependencyReviewCount.value > 0
+})
+
+const completionMessage = computed(() => {
+  if (!hasAppliedChanges.value) {
+    return 'No changes applied'
+  }
+  return 'Workflow dependencies resolved'
 })
 
 function getNodeInstallStatus(nodeId: string, index: number): 'pending' | 'installing' | 'complete' | 'failed' {
@@ -166,6 +284,83 @@ function getNodeInstallStatus(nodeId: string, index: number): 'pending' | 'insta
 
 function getNodeInstallError(nodeId: string): string | undefined {
   return props.progress.nodeInstallProgress?.completedNodes.find(n => n.node_id === nodeId)?.error
+}
+
+const dependencyReviewModalOpen = ref(false)
+const dependencyReviewLoading = ref(false)
+const dependencyReviewApplyLoading = ref(false)
+const dependencyReviewError = ref<string | null>(null)
+const activeDependencyPreview = ref<DependencyResolutionPreview | null>(null)
+const activeDependencyReviewIdentifier = ref<string | null>(null)
+
+async function openDependencyReview(node: NonNullable<ResolutionProgressState['nodeInstallProgress']>['completedNodes'][number]) {
+  const identifier = dependencyReviewIdentifier(node)
+  activeDependencyReviewIdentifier.value = identifier
+  dependencyReviewModalOpen.value = true
+  dependencyReviewLoading.value = true
+  dependencyReviewApplyLoading.value = false
+  dependencyReviewError.value = null
+  activeDependencyPreview.value = null
+
+  try {
+    if (node.dependency_review?.preview) {
+      activeDependencyPreview.value = node.dependency_review.preview
+      return
+    }
+
+    const response = await previewNodeDependencyChanges({ id: identifier })
+    activeDependencyPreview.value = response.preview
+    if (!response.preview.success) {
+      dependencyReviewError.value = response.preview.error || 'Unable to generate dependency preview'
+    }
+  } catch (err) {
+    dependencyReviewError.value = err instanceof Error ? err.message : 'Unable to generate dependency preview'
+  } finally {
+    dependencyReviewLoading.value = false
+  }
+}
+
+async function applyDependencyReview() {
+  const identifier = activeDependencyReviewIdentifier.value
+  const preview = activeDependencyPreview.value
+  if (!identifier || !preview || dependencyReviewApplyLoading.value) return
+
+  dependencyReviewApplyLoading.value = true
+  dependencyReviewError.value = null
+
+  try {
+    const result = await applyReviewedNodeDependencyChanges({
+      id: identifier,
+      accepted_preview: {
+        baseline_fingerprint: preview.baseline_fingerprint,
+        diff_fingerprint: preview.diff_fingerprint,
+        proposed_fingerprint: preview.proposed_fingerprint
+      }
+    })
+
+    if (result.status !== 'success') {
+      throw new Error(result.error || result.message || 'Unable to apply dependency changes')
+    }
+
+    appliedDependencyReviewNodes.value = new Set([
+      ...appliedDependencyReviewNodes.value,
+      identifier
+    ])
+    closeDependencyReview()
+  } catch (err) {
+    dependencyReviewError.value = err instanceof Error ? err.message : 'Unable to apply dependency changes'
+  } finally {
+    dependencyReviewApplyLoading.value = false
+  }
+}
+
+function closeDependencyReview() {
+  dependencyReviewModalOpen.value = false
+  dependencyReviewLoading.value = false
+  dependencyReviewApplyLoading.value = false
+  dependencyReviewError.value = null
+  activeDependencyPreview.value = null
+  activeDependencyReviewIdentifier.value = null
 }
 </script>
 
@@ -281,6 +476,11 @@ function getNodeInstallError(nodeId: string): string | undefined {
 .summary-item.error {
   background: var(--cg-color-error-muted);
   color: var(--cg-color-error);
+}
+
+.summary-item.warning {
+  background: var(--cg-color-warning-muted);
+  color: var(--cg-color-warning);
 }
 
 /* Overall progress bar */
@@ -450,6 +650,11 @@ function getNodeInstallError(nodeId: string): string | undefined {
   overflow-y: auto;
 }
 
+.dependency-review-list {
+  background: var(--cg-color-warning-muted);
+  border-color: var(--cg-color-warning);
+}
+
 .failed-item {
   display: flex;
   flex-direction: column;
@@ -457,6 +662,11 @@ function getNodeInstallError(nodeId: string): string | undefined {
   padding: var(--cg-space-1) var(--cg-space-2);
   background: var(--cg-color-bg-primary);
   border-radius: var(--cg-radius-sm);
+}
+
+.dependency-review-item {
+  position: relative;
+  padding-right: 130px;
 }
 
 .failed-node-id {
@@ -469,6 +679,31 @@ function getNodeInstallError(nodeId: string): string | undefined {
   font-size: var(--cg-font-size-xs);
   color: var(--cg-color-text-muted);
   word-break: break-word;
+}
+
+.review-button {
+  position: absolute;
+  right: var(--cg-space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 1px solid var(--cg-color-border);
+  color: var(--cg-color-text-primary);
+  padding: 6px 10px;
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.review-button:hover:not(:disabled) {
+  background: var(--cg-color-bg-hover);
+  border-color: var(--cg-color-border-strong);
+}
+
+.review-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Retry button */

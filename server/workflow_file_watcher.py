@@ -4,8 +4,8 @@ Monitors the workflows directory and broadcasts WebSocket events when
 workflow files are created, modified, or deleted.
 """
 
-import asyncio
 import logging
+from threading import Lock, Timer
 from datetime import datetime
 from pathlib import Path
 from watchdog.events import FileSystemEventHandler
@@ -51,7 +51,8 @@ class WorkflowFileWatcher(FileSystemEventHandler):
         """
         self.workflows_path = workflows_path
         self.prompt_server = prompt_server
-        self.debounce_tasks = {}  # workflow_name -> Task
+        self.debounce_timers = {}  # workflow_name -> Timer
+        self._lock = Lock()
 
     def on_modified(self, event):
         """Handle file modification events."""
@@ -95,6 +96,29 @@ class WorkflowFileWatcher(FileSystemEventHandler):
         logger.debug(f"Workflow deleted: {workflow_name}")
         self._broadcast_change('deleted', workflow_name)
 
+    def on_moved(self, event):
+        """Handle atomic-save rename events."""
+        if event.is_directory:
+            return
+
+        src_is_json = event.src_path.endswith('.json')
+        dest_is_json = event.dest_path.endswith('.json')
+        if not src_is_json and not dest_is_json:
+            return
+
+        # Invalidate is-saved hash cache
+        _get_invalidate_cache()()
+
+        if dest_is_json:
+            workflow_name = Path(event.dest_path).name
+            change_type = 'modified' if src_is_json else 'created'
+        else:
+            workflow_name = Path(event.src_path).name
+            change_type = 'deleted'
+
+        logger.debug(f"Workflow moved: {workflow_name} ({change_type})")
+        self._broadcast_change(change_type, workflow_name)
+
     def _broadcast_change(self, change_type: str, workflow_name: str):
         """Broadcast workflow change via WebSocket with debouncing.
 
@@ -102,14 +126,12 @@ class WorkflowFileWatcher(FileSystemEventHandler):
             change_type: Type of change ('created', 'modified', 'deleted')
             workflow_name: Name of workflow file that changed
         """
-        # Cancel previous debounce task for this workflow
-        if workflow_name in self.debounce_tasks:
-            self.debounce_tasks[workflow_name].cancel()
+        # Cancel previous debounce timer for this workflow
+        with self._lock:
+            if workflow_name in self.debounce_timers:
+                self.debounce_timers[workflow_name].cancel()
 
-        # Create new debounced broadcast task
-        async def delayed_broadcast():
-            await asyncio.sleep(0.1)  # 100ms debounce
-
+        def delayed_broadcast():
             event_data = {
                 "change_type": change_type,
                 "workflow_name": workflow_name,
@@ -119,21 +141,17 @@ class WorkflowFileWatcher(FileSystemEventHandler):
             logger.info(f"Broadcasting workflow change: {change_type} - {workflow_name}")
             self.prompt_server.send_sync("comfygit:workflow-changed", event_data)
 
-            # Clean up task reference
-            if workflow_name in self.debounce_tasks:
-                del self.debounce_tasks[workflow_name]
+            # Clean up timer reference
+            with self._lock:
+                active_timer = self.debounce_timers.get(workflow_name)
+                if active_timer is timer:
+                    del self.debounce_timers[workflow_name]
 
-        # Schedule debounced broadcast
-        try:
-            loop = asyncio.get_event_loop()
-            self.debounce_tasks[workflow_name] = loop.create_task(delayed_broadcast())
-        except RuntimeError:
-            # No event loop available (e.g., during tests without async context)
-            # Fall back to sync broadcast
-            logger.warning("No event loop available, broadcasting synchronously")
-            event_data = {
-                "change_type": change_type,
-                "workflow_name": workflow_name,
-                "timestamp": datetime.now().isoformat()
-            }
-            self.prompt_server.send_sync("comfygit:workflow-changed", event_data)
+        # Watchdog invokes handlers from its own thread, which usually has no
+        # asyncio event loop. A thread timer keeps save bursts debounced without
+        # falling back to immediate broadcasts on partial writes.
+        timer = Timer(0.25, delayed_broadcast)
+        timer.daemon = True
+        with self._lock:
+            self.debounce_timers[workflow_name] = timer
+        timer.start()

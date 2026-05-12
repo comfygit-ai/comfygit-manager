@@ -1,4 +1,7 @@
 """Integration tests for status panel endpoints."""
+import sys
+from unittest.mock import Mock
+
 import pytest
 
 
@@ -154,6 +157,42 @@ class TestStatusEndpoint:
 
         # Verify
         assert data["missing_models_count"] == 2
+
+    async def test_runtime_import_failures_in_response(
+        self,
+        client,
+        mock_environment,
+        mock_env_status,
+        tmp_path,
+        monkeypatch,
+    ):
+        """Should include live custom-node import failures as runtime issues."""
+        custom_nodes_path = tmp_path / "custom_nodes"
+        custom_nodes_path.mkdir()
+        (custom_nodes_path / "FailedNode").mkdir()
+        mock_environment.custom_nodes_path = custom_nodes_path
+
+        monkeypatch.setitem(
+            sys.modules,
+            "nodes",
+            Mock(LOADED_MODULE_DIRS={"LoadedNode": str(custom_nodes_path / "LoadedNode")}),
+        )
+
+        failed_node = Mock()
+        failed_node.name = "FailedNode"
+        failed_node.registry_id = "FailedNode"
+        failed_node.criticality = "required"
+        mock_environment.list_nodes.return_value = [failed_node]
+        mock_env_status.comparison.missing_nodes = set()
+        mock_environment.status.return_value = mock_env_status
+
+        resp = await client.get("/v2/comfygit/status")
+        data = await resp.json()
+
+        runtime_issues = data["runtime_issues"]
+        assert runtime_issues["custom_node_import_failure_count"] == 1
+        assert runtime_issues["custom_node_import_failures"][0]["name"] == "FailedNode"
+        assert "ComfyUI logs" in runtime_issues["custom_node_import_failures"][0]["guidance"]
 
     async def test_analyzed_workflows_in_response(
         self,

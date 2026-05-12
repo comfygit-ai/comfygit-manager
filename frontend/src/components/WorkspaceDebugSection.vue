@@ -1,6 +1,6 @@
 <template>
   <PanelLayout>
-    <template #header>
+    <template v-if="!embedded" #header>
       <PanelHeader
         title="DEBUG (LOGS)"
         :show-info="true"
@@ -29,7 +29,7 @@
     </template>
 
     <!-- Tabs above scroll area -->
-    <template #search>
+    <template v-if="!embedded" #search>
       <BaseTabs
         v-model="activeTab"
         :tabs="[
@@ -114,7 +114,12 @@ const {
   openFile
 } = useComfyGitService()
 
-const activeTab = ref<'workspace' | 'orchestrator'>('workspace')
+const props = defineProps<{
+  embedded?: boolean
+  initialTab?: 'workspace' | 'orchestrator'
+}>()
+
+const activeTab = ref<'workspace' | 'orchestrator'>(props.initialTab ?? 'workspace')
 const logs = ref<LogEntry[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -172,6 +177,10 @@ async function openLogFile() {
 // Reload logs when tab changes
 watch(activeTab, () => {
   loadLogs()
+})
+
+watch(() => props.initialTab, (value) => {
+  if (value) activeTab.value = value
 })
 
 onMounted(() => {

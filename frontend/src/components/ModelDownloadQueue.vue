@@ -183,7 +183,7 @@ function handleCancel(id: string) {
 }
 
 function formatSpeed(bytesPerSec: number): string {
-  if (bytesPerSec === 0) return ''
+  if (bytesPerSec === 0) return '...'
   const mbps = bytesPerSec / (1024 * 1024)
   return `${mbps.toFixed(1)} MB/s`
 }

@@ -64,6 +64,7 @@ export interface ComfyGitStatus {
   comparison: ComparisonStatus
   missing_models_count: number
   has_legacy_manager: boolean
+  runtime_issues?: RuntimeIssues
 }
 
 export interface CommitInfo {
@@ -97,11 +98,120 @@ export interface ExportResult {
   message?: string
 }
 
+export interface CloudUser {
+  id: string
+  email: string | null
+  auth_type?: string
+}
+
+export interface CloudSession {
+  access_token: string
+  refresh_token: string
+  expires_at?: number | null
+  token_type?: string | null
+}
+
+export interface CloudAuthConfig {
+  url: string
+  anon_key: string
+}
+
+export interface CloudAuthResponse {
+  session: CloudSession | null
+  user: CloudUser | null
+}
+
+export interface CloudMeResponse {
+  user: CloudUser
+}
+
+export interface CloudEnvironmentSummary {
+  id: string
+  name: string
+  workflow_count: number
+  node_count: number
+  model_count: number
+  comfyui_version?: string | null
+  python_version?: string | null
+  updated_at: string
+}
+
+export interface CloudEnvironmentsResponse {
+  environments: CloudEnvironmentSummary[]
+}
+
+export interface CloudEnvironmentRevision {
+  id: string
+  environment_id: string
+  revision_number: number
+  environment_name: string
+  source_kind: string
+  source_message?: string | null
+  source_commit_sha?: string | null
+  source_branch?: string | null
+  source_repo_url?: string | null
+  working_copy_revision?: number | null
+  workflow_count: number
+  node_count: number
+  model_count: number
+  comfyui_version?: string | null
+  python_version?: string | null
+  created_at: string
+}
+
+export interface CloudEnvironmentRevisionsResponse {
+  revisions: CloudEnvironmentRevision[]
+}
+
+export interface CloudPublishResult {
+  status: 'success'
+  created_environment: boolean
+  environment: CloudEnvironmentSummary
+  environment_revision: CloudEnvironmentRevision | null
+}
+
 // Export Validation Types
 export interface ModelWithoutSource {
   filename: string
-  hash: string
+  hash: string | null
+  criticality?: 'required' | 'flexible' | 'optional'
   workflows: string[]
+  source_candidates?: Array<{ type: string; url: string }>
+}
+
+export interface NodeWithoutProvenance {
+  name: string
+  source: string
+  criticality: NodeCriticality
+  registry_id?: string | null
+  repository?: string | null
+  version?: string | null
+  pinned_commit?: string | null
+  reason: string
+}
+
+export interface RuntimeNodeImportFailure {
+  name: string
+  registry_id?: string | null
+  module_name?: string | null
+  module_path?: string | null
+  criticality?: NodeCriticality
+  used_in_workflows?: string[]
+  status: 'failed'
+  message: string
+  guidance: string
+}
+
+export interface RuntimeIssues {
+  available: boolean
+  custom_node_import_failures: RuntimeNodeImportFailure[]
+  custom_node_import_failure_count: number
+}
+
+export interface EnvironmentReadinessWarnings {
+  models_without_sources: ModelWithoutSource[]
+  nodes_without_provenance: NodeWithoutProvenance[]
+  runtime_node_import_failures?: RuntimeNodeImportFailure[]
 }
 
 export interface ExportBlockingIssue {
@@ -113,9 +223,7 @@ export interface ExportBlockingIssue {
 export interface ExportValidationResult {
   can_export: boolean
   blocking_issues: ExportBlockingIssue[]
-  warnings: {
-    models_without_sources: ModelWithoutSource[]
-  }
+  warnings: EnvironmentReadinessWarnings
 }
 
 export interface LogResult {
@@ -183,6 +291,11 @@ export interface SwitchBranchResult {
   reason?: 'uncommitted_changes' | 'restart_required'
 }
 
+export interface RevertChangesResult {
+  status: 'success' | 'error'
+  message?: string
+}
+
 // Environment Management Types
 export interface EnvironmentInfo {
   name: string
@@ -233,6 +346,24 @@ export interface SwitchEnvironmentProgress {
   updated_at?: string
   error?: string
   recovery_command?: string
+}
+
+export interface SwitchEnvironmentObserver {
+  kind: 'cg_run_supervisor' | 'manager_orchestrator' | string
+  status_url: string
+  logs_url: string
+}
+
+export interface SwitchEnvironmentResult {
+  status: 'switching'
+  message: string
+  observer?: SwitchEnvironmentObserver | null
+}
+
+export interface SwitchLogEntry {
+  timestamp?: string | null
+  level?: string
+  message: string
 }
 
 export interface CreateEnvironmentRequest {
@@ -295,6 +426,80 @@ export interface WorkflowInfo {
   // Category mismatch (blocking issue)
   has_category_mismatch_issues?: boolean
   models_with_category_mismatch?: number
+  contract_summary?: WorkflowContractSummary
+}
+
+export interface WorkflowContractSummary {
+  has_contract: boolean
+  input_count: number
+  output_count: number
+  status: 'none' | 'valid' | 'incomplete'
+}
+
+export interface WorkflowContractInput {
+  name: string
+  type: string
+  node_id: string | number
+  required: boolean
+  display_name?: string
+  widget_idx?: number
+  field_key?: string
+  api_node_id?: string | number
+  api_field_key?: string
+  default?: unknown
+  min?: number
+  max?: number
+  enum_values?: string[]
+  description?: string
+}
+
+export interface WorkflowContractOutput {
+  name: string
+  type: string
+  node_id: string | number
+  display_name?: string
+  selector?: string
+  description?: string
+}
+
+export interface NamedWorkflowContract {
+  display_name?: string
+  description?: string
+  inputs: WorkflowContractInput[]
+  outputs: WorkflowContractOutput[]
+}
+
+export interface WorkflowExecutionContract {
+  version: number
+  default_contract: string
+  contracts: Record<string, NamedWorkflowContract>
+  api_prompt_file?: string
+  api_prompt_source?: string
+  api_prompt_generated_by?: string
+  api_prompt_generated_at?: string
+  comfyui_version?: string
+  manager_version?: string
+}
+
+export interface WorkflowContractContextNode {
+  node_id: string
+  node_type: string
+  widget_inputs: Array<{
+    widget_idx: number
+    name: string
+    type: string
+    value: unknown
+  }>
+  outputs: Array<{
+    slot_index?: number
+    name: string
+    type: string
+  }>
+}
+
+export interface WorkflowContractContext {
+  workflow_name: string
+  nodes: WorkflowContractContextNode[]
 }
 
 export interface ModelUsageInfo {
@@ -331,6 +536,16 @@ export interface WorkflowDetails {
     repository?: string | null
     latest_version?: string | null
   }>
+  contract_summary?: WorkflowContractSummary
+  execution_contract?: WorkflowExecutionContract | null
+  contract_context?: WorkflowContractContext | null
+}
+
+export interface WorkflowContractResponse {
+  workflow: string
+  contract_summary: WorkflowContractSummary
+  execution_contract: WorkflowExecutionContract | null
+  contract_context: WorkflowContractContext | null
 }
 
 export interface WorkflowResolutionPlan {
@@ -357,6 +572,7 @@ export interface ModelInfo {
   relative_path?: string
   status: 'available' | 'missing' | 'downloadable' | 'path_mismatch'
   source_url?: string
+  has_download_source?: boolean
   used_in_environments?: Array<{ env_name: string; workflow_count: number }>
   used_in_workflows?: string[]
 }
@@ -370,8 +586,77 @@ export interface ModelDetails {
   category: string
   relative_path: string
   last_seen: string | null
-  locations: Array<{ path: string; modified?: string }>
+  locations: ModelLocation[]
   sources: Array<{ type: string; url: string }>
+}
+
+export interface ModelLocation {
+  id?: number
+  path: string
+  base_directory?: string
+  relative_path?: string
+  modified?: string
+}
+
+export interface ModelDeleteResult {
+  status: 'success' | 'partial'
+  deleted: string
+  model_hash: string
+  deleted_paths: string[]
+  missing_paths: string[]
+  errors: Array<{ path: string; error: string }>
+  remaining_locations: number
+}
+
+export interface ModelSourceCandidate {
+  source: 'workflow' | 'huggingface' | 'civitai' | 'direct'
+  source_type: 'huggingface' | 'civitai' | 'custom'
+  url: string
+  workflow?: string
+  confidence?: number
+  reasons?: string[]
+  context?: string
+  validation_status?: 'not_checked' | 'reachable' | 'unreachable' | 'unknown'
+}
+
+export interface ModelSourceCandidatesResponse {
+  model: {
+    filename: string
+    hash: string | null
+    blake3: string | null
+    sha256: string | null
+    category: string
+    node_type?: string | null
+  }
+  candidates: ModelSourceCandidate[]
+}
+
+export interface WorkflowSourceCandidatesResponse {
+  candidates: ModelSourceCandidate[]
+}
+
+export interface EnvironmentModelSourceApplyRequest {
+  sources: Array<{
+    identifier: string
+    source_url: string
+  }>
+}
+
+export interface EnvironmentModelSourceApplyResult {
+  status: 'success' | 'partial' | 'error'
+  applied: Array<{
+    identifier: string
+    model_hash: string
+    source_url: string
+    source_type: string
+  }>
+  errors: Array<{
+    index?: number
+    identifier?: string
+    source_url?: string
+    error: string
+    message: string
+  }>
 }
 
 export interface DownloadModelRequest {
@@ -390,9 +675,15 @@ export interface ConfigSettings {
   auto_sync_models: boolean
   confirm_destructive: boolean
   comfyui_extra_args: string[]
+  manager_source?: 'registry' | 'git' | 'development' | 'unknown' | 'untracked'
+  manager_version?: string | null
+  manager_branch?: string | null
+  manager_commit?: string | null
 }
 
 // Node Management Types
+export type NodeCriticality = 'required' | 'optional'
+
 export interface NodeInfo {
   name: string
   installed: boolean
@@ -406,6 +697,14 @@ export interface NodeInfo {
   used_in_workflows?: string[]
   issue_type?: 'version_gated' | 'uninstallable' | null
   issue_guidance?: string | null
+  criticality?: NodeCriticality | null
+  runtime_import?: {
+    status: 'loaded' | 'failed' | 'unknown'
+    message?: string | null
+    guidance?: string | null
+    module_name?: string | null
+    module_path?: string | null
+  } | null
 }
 
 export interface NodesResult {
@@ -415,6 +714,7 @@ export interface NodesResult {
   missing_count: number
   untracked_count: number
   blocked_count?: number
+  runtime_import_failed_count?: number
 }
 
 export interface TrackDevResult {
@@ -436,6 +736,12 @@ export interface LogEntry {
   func: string       // Function name: "resolve_workflow"
   line: string       // Line number: "871"
   message: string    // Log message
+}
+
+export interface ManifestFileResponse {
+  path: string
+  exists: boolean
+  content: string
 }
 
 // Git Remotes Types
@@ -517,6 +823,7 @@ export interface PushPreview {
   needs_force: boolean
   block_reason: string | null
   is_first_push: boolean
+  warnings?: EnvironmentReadinessWarnings
 }
 
 export interface PushResult {
@@ -550,15 +857,20 @@ export interface ResolvedNode {
   package: {
     package_id: string
     title: string
+    repository?: string | null
+    latest_version?: string | null
   }
   match_confidence: number
   match_type: string
   is_installed: boolean
+  is_optional?: boolean
+  saved_choice?: NodeChoice
 }
 
 export interface UnresolvedNode {
   reference: NodeReference
   reason: string
+  saved_choice?: NodeChoice
 }
 
 export interface VersionGatedNode {
@@ -580,10 +892,12 @@ export interface UninstallableNode {
   is_installed: boolean
   reason: string
   guidance?: string | null
+  saved_choice?: NodeChoice
 }
 
 export interface AmbiguousNode {
   reference: NodeReference
+  saved_choice?: NodeChoice
   options: Array<{
     package: {
       package_id: string
@@ -629,10 +943,13 @@ export interface ResolvedModel {
 export interface UnresolvedModel {
   reference: ModelReference
   reason: string
+  filename?: string
+  saved_choice?: ModelChoice
 }
 
 export interface AmbiguousModel {
   reference: ModelReference
+  saved_choice?: ModelChoice
   options: Array<{
     model: ResolvedModelData
     match_confidence: number
@@ -655,6 +972,7 @@ export interface FullResolutionResult {
   models: {
     resolved: ResolvedModel[]
     unresolved: UnresolvedModel[]
+    saved_optional?: UnresolvedModel[]
     ambiguous: AmbiguousModel[]
   }
   stats: {
@@ -670,7 +988,7 @@ export interface FullResolutionResult {
 }
 
 export interface NodeChoice {
-  action: 'install' | 'optional' | 'skip' | 'manual'
+  action: 'install' | 'optional' | 'skip' | 'manual' | 'map-installed'
   package_id?: string
   manual_url?: string
   install_source?: 'registry' | 'git'
@@ -688,6 +1006,11 @@ export interface ModelChoice {
 export interface AppliedResolutionResult {
   status: 'success' | 'error'
   nodes_to_install: string[]
+  nodes_marked_optional?: string[]
+  nodes_mapped?: Array<{ node_type: string; package_id: string }>
+  models_marked_optional?: string[]
+  model_download_intents_changed?: string[]
+  model_paths_synced?: number
   models_to_download: Array<{
     filename: string
     url: string
@@ -700,11 +1023,73 @@ export interface AppliedResolutionResult {
 
 export interface NodeSearchResult {
   package_id: string
+  display_name?: string
   match_confidence: number
   match_type: string
   description?: string
   repository?: string
+  downloads?: number | null
+  github_stars?: number | null
+  registry_versions?: string[]
+  registry_version?: string | null
+  can_install_registry?: boolean
+  can_install_git?: boolean
   is_installed?: boolean
+}
+
+export type DependencyPackageChangeKind = 'added' | 'removed' | 'upgraded' | 'downgraded' | 'changed'
+
+export interface DependencyPackageChange {
+  name: string
+  current: string | null
+  proposed: string | null
+  kind: DependencyPackageChangeKind
+}
+
+export interface DependencyResolutionPreview {
+  success: boolean
+  node_name: string
+  requirements: string[]
+  changes: DependencyPackageChange[]
+  lockfile_changed: boolean
+  error?: string | null
+  stderr?: string
+  warnings: string[]
+  baseline_fingerprint: string
+  diff_fingerprint: string
+  proposed_fingerprint: string
+  summary: {
+    added: number
+    removed: number
+    upgraded: number
+    downgraded: number
+    changed: number
+    total: number
+  }
+}
+
+export interface DependencyResolutionApplyResult {
+  status: 'success' | 'stale_preview' | 'error'
+  identifier?: string
+  node_name?: string
+  installed?: boolean
+  needs_restart?: boolean
+  message?: string
+  error?: string
+}
+
+export interface DependencyReviewPayload {
+  identifier: string
+  reason: string
+  conflict_kind?: string | null
+  conflict_descriptions?: string[]
+  preview?: DependencyResolutionPreview
+}
+
+export interface NodeInstallQueueStatus {
+  status_str?: string
+  messages?: string[]
+  dependency_review?: DependencyReviewPayload
 }
 
 export interface ModelSearchResult {
@@ -721,7 +1106,12 @@ export interface NodeInstallProgress {
   currentNode?: string
   currentIndex?: number
   totalNodes?: number
-  completedNodes: Array<{ node_id: string; success: boolean; error?: string }>
+  completedNodes: Array<{
+    node_id: string
+    success: boolean
+    error?: string
+    dependency_review?: DependencyReviewPayload
+  }>
 }
 
 // SSE Resolution Progress Types
@@ -735,6 +1125,12 @@ export interface ResolutionProgressState {
   completedFiles: Array<{ filename: string; success: boolean; error?: string; reused?: boolean }>
   nodesToInstall: string[]
   nodesInstalled: string[]
+  nodesMarkedOptional: string[]
+  nodesMapped: Array<{ node_type: string; package_id: string }>
+  modelsMarkedOptional: string[]
+  modelDownloadIntentsChanged: string[]
+  modelPathsSynced?: number
+  dependencyReviews?: Array<{ node_id: string; dependency_review: DependencyReviewPayload }>
   installError?: string
   needsRestart?: boolean
   error?: string
@@ -842,6 +1238,7 @@ export function hasWorkflowConflicts(preview: PullPreview): preview is PullPrevi
 export interface ModelAnalysis {
   filename: string
   hash: string | null
+  size?: number | null
   sources: string[]
   relative_path: string
   locally_available: boolean
@@ -854,6 +1251,12 @@ export interface NodeAnalysis {
   name: string
   source: string  // "registry" | "development" | "git"
   install_spec: string | null
+  registry_id?: string | null
+  repository?: string | null
+  version?: string | null
+  branch?: string | null
+  pinned_commit?: string | null
+  dependency_sources?: string[] | null
   is_dev_node: boolean
 }
 
@@ -866,6 +1269,9 @@ export interface WorkflowAnalysis {
 
 /** Import analysis result from preview endpoint (matches core library ImportAnalysis dataclass) */
 export interface ImportAnalysis {
+  // Raw manifest preview
+  manifest_toml?: string
+
   // ComfyUI version
   comfyui_version: string | null
   comfyui_version_type: string | null
@@ -888,9 +1294,28 @@ export interface ImportAnalysis {
   workflows: WorkflowAnalysis[]
   total_workflows: number
 
+  // Shared overlays
+  overlays?: string[]
+  total_overlays?: number
+
   // Summary flags
   needs_model_downloads: boolean
   needs_node_installs: boolean
+}
+
+/** Remote Git ref option for import source selection */
+export interface GitRemoteRef {
+  name: string
+  commit: string
+  is_default?: boolean
+}
+
+/** Remote Git refs returned before previewing a Git import */
+export interface GitRemoteRefs {
+  default_branch: string | null
+  head_commit: string | null
+  branches: GitRemoteRef[]
+  tags: GitRemoteRef[]
 }
 
 /** Environment name validation result */
@@ -914,6 +1339,7 @@ export interface ImportProgress {
   message: string
   environment_name?: string | null
   error?: string | null
+  logs?: SwitchLogEntry[]
 }
 
 // =============================================================================
@@ -1064,6 +1490,31 @@ export interface DeploymentStatus {
 // First-Time Setup Types
 export type SetupState = 'no_workspace' | 'empty_workspace' | 'unmanaged' | 'managed'
 
+export type RuntimeMode = 'local_unmanaged' | 'local_managed' | 'local_orchestrated' | 'cloud_bound'
+export type LifecycleAuthority = 'manager' | 'orchestrator' | 'cloud'
+
+export interface RuntimeCapabilities {
+  can_initialize_workspace: boolean
+  can_create_environment: boolean
+  can_switch_environment: boolean
+  can_restart_current: boolean
+  can_stop_current: boolean
+  can_delete_environment: boolean
+}
+
+export interface RuntimeContext {
+  mode: RuntimeMode
+  lifecycle_authority: LifecycleAuthority
+  capabilities: RuntimeCapabilities
+  bound_workspace: string | null
+  bound_environment: string | null
+  bound_ref: string | null
+  bound_commit: string | null
+  cloud_session_id: string | null
+  source: string
+  denial_reasons: Record<string, string>
+}
+
 export interface SetupStatus {
   state: SetupState
   workspace_path: string | null
@@ -1073,6 +1524,7 @@ export interface SetupStatus {
   detected_models_dir: string | null
   cli_installed: boolean
   cli_path: string | null
+  runtime_context?: RuntimeContext
 }
 
 // Manager Update Notice Types
@@ -1263,4 +1715,119 @@ export interface HuggingFaceSearchResult {
 export interface HuggingFaceSearchResponse {
   results: HuggingFaceSearchResult[]
   query: string
+}
+
+// =============================================================================
+// Civitai Integration Types
+// =============================================================================
+
+export interface CivitaiCreator {
+  username: string
+  image: string | null
+}
+
+export interface CivitaiHashes {
+  auto_v1?: string | null
+  auto_v2?: string | null
+  sha256?: string | null
+  crc32?: string | null
+  blake3?: string | null
+}
+
+export interface CivitaiFile {
+  id: number | string
+  name: string
+  size_kb: number
+  type: string | null
+  primary: boolean
+  download_url: string | null
+  pickle_scan_result: string | null
+  pickle_scan_message: string | null
+  virus_scan_result: string | null
+  scanned_at: string | null
+  hashes: CivitaiHashes | null
+  metadata: {
+    fp?: string | null
+    size?: string | null
+    format?: string | null
+  }
+}
+
+export interface CivitaiImage {
+  id: number | string
+  url: string
+  nsfw: boolean
+  width?: number | null
+  height?: number | null
+  hash?: string | null
+}
+
+export interface CivitaiVersion {
+  id: number
+  model_id: number
+  name: string
+  description: string | null
+  created_at: string | null
+  updated_at: string | null
+  base_model: string | null
+  download_url: string | null
+  trained_words: string[]
+  download_count: number
+  thumbs_up_count: number
+  rating_count: number
+  rating: number
+  model: {
+    name: string
+    type: string | null
+    nsfw: boolean
+    poi: boolean
+  } | null
+  files: CivitaiFile[]
+  images: CivitaiImage[]
+}
+
+export interface CivitaiModel {
+  id: number
+  name: string
+  description: string | null
+  type: string | null
+  nsfw: boolean
+  tags: string[]
+  mode: string | null
+  creator: CivitaiCreator | null
+  download_count: number
+  thumbs_up_count: number
+  favorite_count: number
+  comment_count: number
+  rating_count: number
+  rating: number
+  matched_version_id?: number | null
+  versions: CivitaiVersion[]
+}
+
+export interface CivitaiSearchResponse {
+  query?: string
+  username?: string | null
+  mode: 'search' | 'user' | 'model' | 'model_version'
+  metadata?: {
+    total_items?: number | null
+    current_page?: number | null
+    page_size?: number | null
+    total_pages?: number | null
+    next_page?: string | null
+    prev_page?: string | null
+  }
+  results: CivitaiModel[]
+  version?: CivitaiVersion
+  download_url?: string
+  download_params?: Record<string, string>
+}
+
+export interface CivitaiModelResponse {
+  model: CivitaiModel
+}
+
+export interface CivitaiModelVersionResponse {
+  version: CivitaiVersion
+  download_url: string
 }

@@ -1,6 +1,6 @@
 <template>
   <PanelLayout>
-    <template #header>
+    <template v-if="!embedded" #header>
       <PanelHeader
         title="GIT REMOTES"
         :show-info="true"
@@ -19,7 +19,7 @@
       </PanelHeader>
     </template>
 
-    <template #search>
+    <template v-if="!embedded" #search>
       <SearchBar
         v-if="!showForm"
         v-model="searchQuery"
@@ -35,6 +35,22 @@
         <ErrorState :message="error" :retry="true" @retry="loadRemotes" />
       </template>
       <template v-else>
+        <div v-if="embedded && !showForm" class="embedded-toolbar">
+          <div class="embedded-toolbar-search">
+            <SearchBar
+              v-model="searchQuery"
+              placeholder="🔍 Search remotes..."
+            />
+          </div>
+          <ActionButton
+            variant="primary"
+            size="sm"
+            @click="handleAddRemote"
+          >
+            + Add Remote
+          </ActionButton>
+        </div>
+
         <!-- Add/Edit Form -->
         <RemoteForm
           v-if="showForm"
@@ -45,12 +61,6 @@
           @submit="handleFormSubmit"
           @cancel="cancelForm"
         />
-
-        <!-- Summary Bar -->
-        <SummaryBar v-if="remotes.length && !showForm" variant="compact">
-          Total: {{ remotes.length }} remote{{ remotes.length !== 1 ? 's' : '' }}
-          <span v-if="trackingInfo"> • Tracking: {{ trackingInfo.remote }}/{{ trackingInfo.branch }}</span>
-        </SummaryBar>
 
         <!-- Remotes List -->
         <SectionGroup v-if="filteredRemotes.length && !showForm" title="REMOTES" :count="filteredRemotes.length">
@@ -128,9 +138,11 @@
     :preview="pushPreview"
     :loading="loadingPreview"
     :pushing="pushing"
+    :error="pushError"
     @close="closePushModal"
     @push="handlePush"
     @pull-first="handlePullFirst"
+    @revalidate="refreshPushPreview"
   />
 
   <!-- Workflow Resolution Modal (V2) -->
@@ -160,7 +172,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useComfyGitService } from '@/composables/useComfyGitService'
+import { ComfyGitApiError, useComfyGitService } from '@/composables/useComfyGitService'
 import type {
   RemoteInfo,
   RemoteSyncStatus,
@@ -183,7 +195,6 @@ import SectionGroup from '@/components/base/molecules/SectionGroup.vue'
 import RemoteCard from '@/components/base/molecules/RemoteCard.vue'
 import RemoteForm from '@/components/base/molecules/RemoteForm.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
-import SummaryBar from '@/components/base/molecules/SummaryBar.vue'
 import EmptyState from '@/components/base/molecules/EmptyState.vue'
 import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
@@ -192,6 +203,10 @@ import PullModal from '@/components/base/molecules/PullModal.vue'
 import PushModal from '@/components/base/molecules/PushModal.vue'
 import WorkflowResolutionModal from '@/components/WorkflowResolutionModal.vue'
 import ValidationResultsModal from '@/components/ValidationResultsModal.vue'
+
+defineProps<{
+  embedded?: boolean
+}>()
 
 const {
   getRemotes,
@@ -208,7 +223,6 @@ const {
 } = useComfyGitService()
 
 const remotes = ref<RemoteInfo[]>([])
-const trackingInfo = ref<{ remote: string; branch: string } | null>(null)
 const syncStatuses = ref<Record<string, RemoteSyncStatus>>({})
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -241,7 +255,6 @@ async function loadRemotes() {
   try {
     const result = await getRemotes()
     remotes.value = result.remotes
-    trackingInfo.value = result.current_branch_tracking || null
 
     // Load sync statuses for all remotes
     await Promise.all(
@@ -349,6 +362,7 @@ const showValidationModal = computed(() =>
 const showPushModal = ref(false)
 const pushPreview = ref<PushPreview | null>(null)
 const pushing = ref(false)
+const pushError = ref<string | null>(null)
 
 // Shared state
 const activeRemote = ref<string | null>(null)
@@ -521,11 +535,26 @@ async function handlePushClick(remoteName: string) {
   showPushModal.value = true
   loadingPreview.value = true
   pushPreview.value = null
+  pushError.value = null
 
   try {
     pushPreview.value = await getPushPreview(remoteName)
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load push preview'
+    pushError.value = err instanceof Error ? err.message : 'Failed to load push preview'
+  } finally {
+    loadingPreview.value = false
+  }
+}
+
+async function refreshPushPreview() {
+  if (!activeRemote.value) return
+
+  loadingPreview.value = true
+  pushError.value = null
+  try {
+    pushPreview.value = await getPushPreview(activeRemote.value)
+  } catch (err) {
+    pushError.value = err instanceof Error ? err.message : 'Failed to refresh push preview'
   } finally {
     loadingPreview.value = false
   }
@@ -534,6 +563,7 @@ async function handlePushClick(remoteName: string) {
 function closePushModal() {
   showPushModal.value = false
   pushPreview.value = null
+  pushError.value = null
   activeRemote.value = null
 }
 
@@ -542,13 +572,27 @@ async function handlePush(options: { force: boolean }) {
 
   pushing.value = true
   const remote = activeRemote.value
+  pushError.value = null
   try {
     await pushToRemote(remote, options)
     closePushModal()
     emit('toast', `✓ Pushed to ${remote}`, 'success')
     await loadRemotes()
   } catch (err) {
-    emit('toast', err instanceof Error ? err.message : 'Push failed', 'error')
+    const message = err instanceof Error ? err.message : 'Push failed'
+    pushError.value = message
+
+    if (err instanceof ComfyGitApiError && err.status === 409 && err.data?.needs_force && pushPreview.value) {
+      pushPreview.value = {
+        ...pushPreview.value,
+        remote_has_new_commits: true,
+        needs_force: true,
+        can_push: true,
+        block_reason: null
+      }
+    } else {
+      emit('toast', message, 'error')
+    }
   } finally {
     pushing.value = false
   }
@@ -564,6 +608,27 @@ function handlePullFirst() {
 
 onMounted(loadRemotes)
 </script>
+
+<style scoped>
+.embedded-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-3);
+  margin-bottom: var(--cg-space-3);
+}
+
+.embedded-toolbar-search {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .embedded-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+</style>
 
 <style scoped>
 /* Minimal custom CSS - all styling comes from atomic components */

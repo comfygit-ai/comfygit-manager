@@ -4,21 +4,33 @@ import sys
 import json
 import subprocess
 import threading
+import time
 import uuid
 from aiohttp import web
 from pathlib import Path
 
+from cgm_core.runtime_context import build_runtime_context, ensure_capability
 from cgm_utils.async_helpers import run_sync
 from cgm_utils.environment_name_validation import validate_environment_name
 from comfygit_core.factories.workspace_factory import WorkspaceFactory
+from comfygit_core.lifecycle.switch_observer import (
+    SWITCH_STATUS_ROUTE,
+    build_switch_observer_payload,
+    read_supervisor_advertisement,
+    read_switch_status,
+)
 from comfygit_core.models.exceptions import CDWorkspaceNotFoundError, CDEnvironmentNotFoundError
 import orchestrator
+from .operations import build_export_validation, execute_environment_export
 
 routes = web.RouteTableDef()
 
 # Exit codes for orchestrator
 RESTART_EXIT_CODE = 42
 SWITCH_ENV_EXIT_CODE = 43
+MIN_SUPPORTED_COMFYUI_VERSION = "v0.4.0"
+DEFAULT_COMFYUI_RELEASE_LIMIT = 100
+MAX_COMFYUI_RELEASE_LIMIT = 100
 
 # Global state for environment creation task
 _create_task_lock = threading.Lock()
@@ -48,6 +60,79 @@ class ServerCreateProgress:
                 _create_task_state["error"] = error
 
 
+def _parse_comfyui_release_version(version: str) -> tuple[int, int, int] | None:
+    """Parse ComfyUI release tags shaped like v0.4.0."""
+    normalized = version.strip()
+    if normalized.startswith("v"):
+        normalized = normalized[1:]
+    parts = normalized.split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        return tuple(int(part) for part in parts)
+    except ValueError:
+        return None
+
+
+def _is_supported_comfyui_release(version: str) -> bool:
+    """Return whether a requested ComfyUI release is supported by the manager."""
+    if version in ("latest", "main", "master") or not version:
+        return True
+    parsed = _parse_comfyui_release_version(version)
+    minimum = _parse_comfyui_release_version(MIN_SUPPORTED_COMFYUI_VERSION)
+    if parsed is None or minimum is None:
+        return True
+    return parsed >= minimum
+
+
+def _unsupported_comfyui_version_response(version: str) -> web.Response:
+    return web.json_response({
+        "status": "error",
+        "message": (
+            f"ComfyUI {version} is below the supported minimum "
+            f"{MIN_SUPPORTED_COMFYUI_VERSION}. Older releases do not provide "
+            "the frontend manager integration ComfyGit relies on."
+        )
+    }, status=400)
+
+
+def _request_public_origin(request: web.Request, port: int) -> str:
+    """Build a browser-reachable origin using the current request host."""
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+    host_header = request.headers.get("X-Forwarded-Host", request.host)
+    host = host_header
+    if host.startswith("["):
+        end = host.find("]")
+        if end != -1:
+            host = host[: end + 1]
+    else:
+        host = host.split(":", 1)[0]
+    return f"{scheme}://{host}:{port}"
+
+
+def _read_supervisor_observer(workspace, request: web.Request) -> dict | None:
+    """Return direct lifecycle observer URLs if a supervisor advertised them."""
+    info = read_supervisor_advertisement(workspace.path)
+    if not info:
+        return None
+
+    return build_switch_observer_payload(
+        _request_public_origin(request, info["port"]),
+        kind=info.get("kind") or "cg_run_supervisor",
+    )
+
+
+def _wait_for_supervisor_observer(workspace, request: web.Request, timeout_s: float = 2.0) -> dict | None:
+    """Wait briefly for a just-spawned lifecycle authority to advertise itself."""
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        observer = _read_supervisor_observer(workspace, request)
+        if observer:
+            return observer
+        time.sleep(0.05)
+    return _read_supervisor_observer(workspace, request)
+
+
 def spawn_orchestrator(environment, target_env: str) -> None:
     """
     Spawn orchestrator daemon for first switch.
@@ -56,6 +141,7 @@ def spawn_orchestrator(environment, target_env: str) -> None:
     """
     # From server/api/v2/environments.py → go up 4 levels to comfygit-manager/
     custom_node_root = Path(__file__).parent.parent.parent.parent
+    orchestrator.ensure_orchestrator_venv(custom_node_root / "server" / ".orchestrator_venv")
     orchestrator_python = orchestrator.get_orchestrator_python(custom_node_root)
     orchestrator_script = custom_node_root / "server" / "orchestrator.py"
 
@@ -154,6 +240,11 @@ def _get_orchestrator_info(workspace) -> dict:
 async def list_environments(request: web.Request) -> web.Response:
     """List all environments in workspace."""
     is_managed, workspace, current_env = orchestrator.detect_environment_type()
+    runtime_context = build_runtime_context(
+        "managed" if is_managed else "no_workspace",
+        workspace_path=str(workspace.path) if workspace else None,
+        current_environment=current_env.name if current_env else None,
+    )
 
     if not is_managed or not workspace:
         return web.json_response({
@@ -163,12 +254,16 @@ async def list_environments(request: web.Request) -> web.Response:
             "orchestrator_active": False,
             "orchestrator_environment": None,
             "is_supervised": os.environ.get("COMFYGIT_SUPERVISED") == "1",
+            "runtime_context": runtime_context.to_dict(),
         })
 
     try:
         orch_info = _get_orchestrator_info(workspace)
         # Get all environment objects
         all_envs = await run_sync(workspace.list_environments)
+        if runtime_context.mode == "cloud_bound":
+            bound_env_name = runtime_context.bound_environment or (current_env.name if current_env else None)
+            all_envs = [env for env in all_envs if env.name == bound_env_name]
 
         environments = []
         for env in all_envs:
@@ -195,6 +290,7 @@ async def list_environments(request: web.Request) -> web.Response:
             "orchestrator_active": orch_info["active"],
             "orchestrator_environment": orch_info["environment"],
             "is_supervised": os.environ.get("COMFYGIT_SUPERVISED") == "1",
+            "runtime_context": runtime_context.to_dict(),
         })
 
     except Exception as e:
@@ -263,6 +359,58 @@ async def get_environment_details(request: web.Request) -> web.Response:
         return web.json_response({"error": "internal_error", "message": str(e)}, status=500)
 
 
+@routes.post("/v2/comfygit/environment_export/{name}/validate")
+async def validate_named_environment_export(request: web.Request) -> web.Response:
+    """Validate export readiness for a specific environment."""
+    is_managed, workspace, _current_env = orchestrator.detect_environment_type()
+
+    if not is_managed or not workspace:
+        return web.json_response({"error": "Not in managed workspace"}, status=500)
+
+    name = request.match_info.get("name", "").strip()
+    if not name:
+        return web.json_response({"error": "Environment name required"}, status=400)
+
+    try:
+        env = await run_sync(workspace.get_environment, name, auto_sync=False)
+    except CDEnvironmentNotFoundError:
+        return web.json_response({"error": f"Environment '{name}' not found"}, status=404)
+
+    try:
+        return web.json_response(await build_export_validation(env))
+    except Exception as e:
+        return web.json_response({"error": "internal_error", "message": str(e)}, status=500)
+
+
+@routes.post("/v2/comfygit/environment_export/{name}")
+async def export_named_environment(request: web.Request) -> web.Response:
+    """Export a specific environment without switching to it."""
+    is_managed, workspace, _current_env = orchestrator.detect_environment_type()
+
+    if not is_managed or not workspace:
+        return web.json_response({"error": "Not in managed workspace"}, status=500)
+
+    name = request.match_info.get("name", "").strip()
+    if not name:
+        return web.json_response({"error": "Environment name required"}, status=400)
+
+    try:
+        env = await run_sync(workspace.get_environment, name, auto_sync=False)
+    except CDEnvironmentNotFoundError:
+        return web.json_response({"error": f"Environment '{name}' not found"}, status=404)
+
+    json_data = await request.json()
+    output_path = json_data.get("output_path")
+
+    try:
+        return web.json_response(await execute_environment_export(env, output_path))
+    except Exception as e:
+        return web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
+
+
 @routes.post("/v2/comfygit/switch_environment")
 async def switch_environment(request: web.Request) -> web.Response:
     """
@@ -297,6 +445,14 @@ async def switch_environment(request: web.Request) -> web.Response:
 
     # Get workspace - use explicit path if provided (first-time setup), otherwise detect
     if workspace_path:
+        runtime_context = build_runtime_context(
+            "unmanaged",
+            workspace_path=workspace_path,
+            current_environment=None,
+        )
+        denial = ensure_capability(runtime_context, "can_switch_environment")
+        if denial:
+            return denial
         try:
             workspace = WorkspaceFactory.find(Path(workspace_path))
             environment = None  # No source environment when switching from unmanaged
@@ -306,10 +462,20 @@ async def switch_environment(request: web.Request) -> web.Response:
             }, status=404)
     else:
         is_managed, workspace, environment = orchestrator.detect_environment_type()
+        runtime_context = build_runtime_context(
+            "managed" if is_managed else "no_workspace",
+            workspace_path=str(workspace.path) if workspace else None,
+            current_environment=environment.name if environment else None,
+        )
+        denial = ensure_capability(runtime_context, "can_switch_environment")
+        if denial and runtime_context.mode == "cloud_bound":
+            return denial
         if not is_managed or not environment:
             return web.json_response({
                 "error": "Not in managed environment"
             }, status=500)
+        if denial:
+            return denial
 
     # Validate target environment exists
     try:
@@ -339,13 +505,17 @@ async def switch_environment(request: web.Request) -> web.Response:
                 )
             }, status=409)
 
-        # Spawn orchestrator - always needed when switching from unmanaged
-        if orchestrator.should_spawn_orchestrator_for_switch():
-            spawn_orchestrator(target_env_obj, target_env)
-
         # Write switch request (source_env may be None for first-time setup)
         source_env_name = environment.name if environment else None
         orchestrator.write_switch_request(metadata_dir, target_env, source_env=source_env_name)
+
+        # Spawn orchestrator when this ComfyUI process is not already running
+        # under a lifecycle authority. The request must exist before spawn so
+        # the new process cannot miss the initial handoff state.
+        if orchestrator.should_spawn_orchestrator_for_switch():
+            spawn_orchestrator(target_env_obj, target_env)
+
+        observer = _wait_for_supervisor_observer(workspace, request)
 
         # Schedule exit with code 43 (after response sent)
         import asyncio
@@ -358,7 +528,8 @@ async def switch_environment(request: web.Request) -> web.Response:
 
         return web.json_response({
             "status": "switching",
-            "message": f"Switching to {target_env}..."
+            "message": f"Switching to {target_env}...",
+            "observer": observer,
         })
 
     except Exception:
@@ -388,7 +559,7 @@ async def get_orchestrator_port(request: web.Request) -> web.Response:
         return web.json_response({"error": "Invalid port file"}, status=500)
 
 
-@routes.get("/v2/comfygit/switch_status")
+@routes.get(SWITCH_STATUS_ROUTE)
 async def get_switch_status(request: web.Request) -> web.Response:
     """
     Get environment switch status.
@@ -412,31 +583,14 @@ async def get_switch_status(request: web.Request) -> web.Response:
             "message": "Server restarting or environment not detected"
         })
 
-    # Check for switch status file in workspace metadata
-    metadata_dir = workspace.path / ".metadata"
-    status_file = metadata_dir / ".switch_status.json"
-
-    if status_file.exists():
-        try:
-            status_data = json.loads(status_file.read_text())
-
-            # Validate required fields
-            if not status_data.get("target_env"):
-                # Invalid file - clean it up
-                status_file.unlink(missing_ok=True)
-                return web.json_response({
-                    "state": "idle",
-                    "message": "No switch in progress"
-                })
-
-            # Return the full status data (includes state, progress, message, etc.)
-            return web.json_response(status_data)
-
-        except Exception as e:
+    status_data = read_switch_status(workspace.path / ".metadata")
+    if status_data:
+        if not status_data.get("target_env"):
             return web.json_response({
-                "error": "invalid_status_file",
-                "message": f"Could not read switch status: {e}"
-            }, status=500)
+                "state": "idle",
+                "message": "No switch in progress"
+            })
+        return web.json_response(status_data)
 
     # No switch in progress
     return web.json_response({
@@ -536,8 +690,19 @@ async def create_environment(request: web.Request) -> web.Response:
             "message": name_error
         }, status=400)
 
+    if not _is_supported_comfyui_release(comfyui_version):
+        return _unsupported_comfyui_version_response(comfyui_version)
+
     # Get workspace - use explicit path if provided (first-time setup), otherwise detect
     if workspace_path:
+        runtime_context = build_runtime_context(
+            "empty_workspace",
+            workspace_path=workspace_path,
+            current_environment=None,
+        )
+        denial = ensure_capability(runtime_context, "can_create_environment")
+        if denial:
+            return denial
         try:
             workspace = WorkspaceFactory.find(Path(workspace_path))
         except CDWorkspaceNotFoundError:
@@ -547,11 +712,21 @@ async def create_environment(request: web.Request) -> web.Response:
             }, status=404)
     else:
         is_managed, workspace, _ = orchestrator.detect_environment_type()
+        runtime_context = build_runtime_context(
+            "managed" if is_managed else "no_workspace",
+            workspace_path=str(workspace.path) if workspace else None,
+            current_environment=None,
+        )
+        denial = ensure_capability(runtime_context, "can_create_environment")
+        if denial and runtime_context.mode == "cloud_bound":
+            return denial
         if not is_managed or not workspace:
             return web.json_response({
                 "status": "error",
                 "message": "Not in managed workspace"
             }, status=500)
+        if denial:
+            return denial
 
     # Check if creation already in progress
     with _create_task_lock:
@@ -636,11 +811,21 @@ async def delete_environment(request: web.Request) -> web.Response:
         }
     """
     is_managed, workspace, current_env = orchestrator.detect_environment_type()
+    runtime_context = build_runtime_context(
+        "managed" if is_managed else "no_workspace",
+        workspace_path=str(workspace.path) if workspace else None,
+        current_environment=current_env.name if current_env else None,
+    )
+    denial = ensure_capability(runtime_context, "can_delete_environment")
+    if denial and runtime_context.mode == "cloud_bound":
+        return denial
     if not is_managed or not workspace:
         return web.json_response({
             "status": "error",
             "message": "Not in managed workspace"
         }, status=500)
+    if denial:
+        return denial
 
     name = request.match_info.get("name", "").strip()
     if not name:
@@ -690,18 +875,22 @@ async def get_comfyui_releases(request: web.Request) -> web.Response:
     Get available ComfyUI releases from GitHub.
 
     Query params:
-        limit: int (default 20)
+        limit: int (default 100, max 100)
 
     Returns:
         [
-            {"tag_name": "v0.3.69", "name": "v0.3.69", "published_at": "2025-01-15T..."},
+            {"tag_name": "v0.4.0", "name": "v0.4.0", "published_at": "2025-01-15T..."},
             ...
         ]
     """
     import urllib.request
     import ssl
 
-    limit = int(request.query.get("limit", "20"))
+    try:
+        requested_limit = int(request.query.get("limit", str(DEFAULT_COMFYUI_RELEASE_LIMIT)))
+    except ValueError:
+        requested_limit = DEFAULT_COMFYUI_RELEASE_LIMIT
+    limit = max(1, min(requested_limit, MAX_COMFYUI_RELEASE_LIMIT))
 
     try:
         # Fetch releases from GitHub API
@@ -718,6 +907,9 @@ async def get_comfyui_releases(request: web.Request) -> web.Response:
         releases = [{"tag_name": "latest", "name": "Latest", "published_at": None}]
 
         for release in releases_data:
+            tag_name = release.get("tag_name")
+            if not tag_name or not _is_supported_comfyui_release(tag_name):
+                continue
             releases.append({
                 "tag_name": release.get("tag_name"),
                 "name": release.get("name") or release.get("tag_name"),

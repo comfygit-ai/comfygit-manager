@@ -67,6 +67,7 @@ import type {
   WorkflowInfo,
   WorkflowDetails,
   ModelInfo,
+  ModelLocation,
   ConfigSettings,
   LogEntry,
   EnvironmentStatus,
@@ -876,7 +877,13 @@ export const mockApi = {
       relative_path: `checkpoints/${identifier}`,
       last_seen: "2025-11-11 23:34:23",
       locations: [
-        { path: `/workspace/models/checkpoints/${identifier}`, modified: "2024-08-03 13:16:22" }
+        {
+          id: 1,
+          path: `/workspace/models/checkpoints/${identifier}`,
+          base_directory: "/workspace/models",
+          relative_path: `checkpoints/${identifier}`,
+          modified: "2024-08-03 13:16:22"
+        }
       ],
       sources: []
     }
@@ -888,9 +895,32 @@ export const mockApi = {
     console.log(`[MOCK] Added source for ${hash}: ${sourceUrl}`)
   },
 
-  deleteModel: async (sha256: string): Promise<void> => {
+  deleteModel: async (sha256: string): Promise<any> => {
     await delay(500)
     console.log(`[MOCK] Deleting model: ${sha256}`)
+    return {
+      status: 'success',
+      deleted: sha256,
+      model_hash: sha256,
+      deleted_paths: [`/workspace/models/checkpoints/${sha256}`],
+      missing_paths: [],
+      errors: [],
+      remaining_locations: 0
+    }
+  },
+
+  deleteModelLocation: async (sha256: string, location: ModelLocation): Promise<any> => {
+    await delay(350)
+    console.log(`[MOCK] Deleting model location: ${sha256}`, location)
+    return {
+      status: 'success',
+      deleted: sha256,
+      model_hash: sha256,
+      deleted_paths: [location.path],
+      missing_paths: [],
+      errors: [],
+      remaining_locations: 1
+    }
   },
 
   downloadModel: async (request: any): Promise<void> => {
@@ -1903,12 +1933,18 @@ export const mockApi = {
     await delay(800)
 
     const nodesToInstall: string[] = []
+    const nodesMarkedOptional: string[] = []
+    const nodesMapped: Array<{ node_type: string; package_id: string }> = []
     const modelsToDownload: any[] = []
 
     // Process node choices
     nodeChoices.forEach((choice, nodeType) => {
       if (choice.action === 'install' && choice.package_id) {
         nodesToInstall.push(choice.package_id)
+      } else if (choice.action === 'optional') {
+        nodesMarkedOptional.push(nodeType)
+      } else if (choice.action === 'map-installed' && choice.package_id) {
+        nodesMapped.push({ node_type: nodeType, package_id: choice.package_id })
       }
     })
 
@@ -1930,6 +1966,8 @@ export const mockApi = {
     return {
       status: 'success',
       nodes_to_install: nodesToInstall,
+      nodes_marked_optional: nodesMarkedOptional,
+      nodes_mapped: nodesMapped,
       models_to_download: modelsToDownload,
       estimated_time_seconds: nodesToInstall.length * 30 + modelsToDownload.length * 120
     }
@@ -1946,42 +1984,77 @@ export const mockApi = {
     const allResults = [
       {
         package_id: 'comfyui-flux-official',
+        display_name: 'ComfyUI FLUX Official',
         match_confidence: 0.95,
         match_type: 'fuzzy',
         description: 'Official FLUX model support for ComfyUI with optimized samplers',
         repository: 'https://github.com/black-forest-labs/flux-comfy',
+        downloads: 128400,
+        github_stars: 4200,
+        registry_versions: ['1.0.0'],
+        registry_version: '1.0.0',
+        can_install_registry: true,
+        can_install_git: true,
         is_installed: false
       },
       {
         package_id: 'flux-advanced-toolkit',
+        display_name: 'FLUX Advanced Toolkit',
         match_confidence: 0.88,
         match_type: 'fuzzy',
         description: 'Advanced FLUX tools including custom schedulers and samplers',
         repository: 'https://github.com/community/flux-toolkit',
+        downloads: 27400,
+        github_stars: 860,
+        registry_versions: [],
+        registry_version: null,
+        can_install_registry: false,
+        can_install_git: true,
         is_installed: false
       },
       {
         package_id: 'comfyui-upscaler-pack',
+        display_name: 'ComfyUI Upscaler Pack',
         match_confidence: 0.82,
         match_type: 'fuzzy',
         description: 'Collection of upscaling nodes with various models',
         repository: 'https://github.com/upscaler/comfyui-pack',
+        downloads: 9130,
+        github_stars: 315,
+        registry_versions: ['2.1.0'],
+        registry_version: '2.1.0',
+        can_install_registry: true,
+        can_install_git: true,
         is_installed: false
       },
       {
         package_id: 'ultimate-image-tools',
+        display_name: 'Ultimate Image Tools',
         match_confidence: 0.75,
         match_type: 'partial',
         description: 'Ultimate image processing toolkit for ComfyUI',
         repository: 'https://github.com/tools/ultimate-image',
+        downloads: 55100,
+        github_stars: 1200,
+        registry_versions: ['1.4.2'],
+        registry_version: '1.4.2',
+        can_install_registry: true,
+        can_install_git: true,
         is_installed: true
       },
       {
         package_id: 'comfyui-controlnet-aux',
+        display_name: 'ComfyUI ControlNet Aux',
         match_confidence: 0.70,
         match_type: 'partial',
         description: 'Auxiliary ControlNet preprocessors',
         repository: 'https://github.com/fannovel16/controlnet-aux',
+        downloads: 234000,
+        github_stars: 5100,
+        registry_versions: ['3.0.0'],
+        registry_version: '3.0.0',
+        can_install_registry: true,
+        can_install_git: true,
         is_installed: true
       }
     ]
@@ -2090,7 +2163,8 @@ export const mockApi = {
       can_export: true,
       blocking_issues: [],
       warnings: {
-        models_without_sources: modelsWithoutSources
+        models_without_sources: modelsWithoutSources,
+        nodes_without_provenance: []
       }
     }
   },
@@ -2113,7 +2187,8 @@ export const mockApi = {
         }
       ],
       warnings: {
-        models_without_sources: []
+        models_without_sources: [],
+        nodes_without_provenance: []
       }
     }
   },

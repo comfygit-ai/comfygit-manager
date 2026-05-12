@@ -5,89 +5,46 @@ from pathlib import Path
 from aiohttp import web
 
 from cgm_core.decorators import requires_environment, logged_operation
+from cgm_core.readiness import build_environment_readiness
 from cgm_utils.async_helpers import run_sync
 
 routes = web.RouteTableDef()
+
+
+async def build_export_validation(env) -> dict:
+    """Validate whether an environment can be exported."""
+    return await build_environment_readiness(env, include_blocking=True)
+
+
+async def execute_environment_export(env, output_path: str | None = None) -> dict:
+    """Export an environment and return the result payload."""
+    if output_path:
+        path = Path(output_path)
+    else:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = Path.cwd().parent / f"{env.name}_export_{timestamp}.tar.gz"
+
+    models_without_sources = []
+
+    class ExportCallbacks:
+        def on_models_without_sources(self, models):
+            models_without_sources.extend(models)
+
+    callbacks = ExportCallbacks()
+    tarball_path = await run_sync(env.export_environment, path, callbacks=callbacks)
+
+    return {
+        "status": "success",
+        "path": str(tarball_path),
+        "models_without_sources": len(models_without_sources),
+    }
 
 
 @routes.post("/v2/comfygit/export/validate")
 @requires_environment
 async def validate_export(request: web.Request, env) -> web.Response:
     """Validate environment export readiness and return warnings."""
-    blocking_issues = []
-    warnings = {
-        "models_without_sources": [],
-    }
-
-    # Check for uncommitted workflow changes
-    status = await run_sync(env.workflow_manager.get_workflow_status)
-    if status.sync_status.has_changes:
-        uncommitted = (
-            list(status.sync_status.new) +
-            list(status.sync_status.modified) +
-            list(status.sync_status.deleted)
-        )
-        blocking_issues.append({
-            "type": "uncommitted_workflows",
-            "message": "Cannot export with uncommitted workflow changes",
-            "details": uncommitted
-        })
-
-    # Check for uncommitted git changes
-    has_git_changes = await run_sync(env.git_manager.has_uncommitted_changes)
-    if has_git_changes:
-        blocking_issues.append({
-            "type": "uncommitted_git_changes",
-            "message": "Cannot export with uncommitted git changes",
-            "details": []
-        })
-
-    # Check for unresolved workflow issues
-    if not status.is_commit_safe:
-        blocking_issues.append({
-            "type": "unresolved_issues",
-            "message": "Cannot export - workflows have unresolved issues",
-            "details": []
-        })
-
-    # If no blocking issues, check for warnings
-    if not blocking_issues:
-        # Check for models without sources
-        pyproject = env.pyproject
-        models_by_hash = {
-            m.hash: m
-            for m in pyproject.models.get_all()
-            if not m.sources
-        }
-
-        if models_by_hash:
-            models_without_sources = []
-            all_workflows = pyproject.workflows.get_all_with_resolutions()
-            for workflow_name in all_workflows.keys():
-                workflow_models = pyproject.workflows.get_workflow_models(workflow_name)
-                for wf_model in workflow_models:
-                    if wf_model.hash and wf_model.hash in models_by_hash:
-                        existing = next(
-                            (m for m in models_without_sources if m["hash"] == wf_model.hash),
-                            None
-                        )
-                        if existing:
-                            existing["workflows"].append(workflow_name)
-                        else:
-                            model_data = models_by_hash[wf_model.hash]
-                            models_without_sources.append({
-                                "filename": model_data.filename,
-                                "hash": wf_model.hash,
-                                "workflows": [workflow_name]
-                            })
-
-            warnings["models_without_sources"] = models_without_sources
-
-    return web.json_response({
-        "can_export": len(blocking_issues) == 0,
-        "blocking_issues": blocking_issues,
-        "warnings": warnings
-    })
+    return web.json_response(await build_export_validation(env))
 
 
 @routes.post("/v2/comfygit/export")
@@ -97,30 +54,8 @@ async def export_environment(request: web.Request, env) -> web.Response:
     json_data = await request.json()
     output_path = json_data.get("output_path")
 
-    # Determine output path
-    if output_path:
-        path = Path(output_path)
-    else:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = Path.cwd().parent / f"{env.name}_export_{timestamp}.tar.gz"
-
-    # Track models without sources
-    models_without_sources = []
-
-    class ExportCallbacks:
-        def on_models_without_sources(self, models):
-            models_without_sources.extend(models)
-
-    callbacks = ExportCallbacks()
-
     try:
-        tarball_path = await run_sync(env.export_environment, path, callbacks=callbacks)
-
-        return web.json_response({
-            "status": "success",
-            "path": str(tarball_path),
-            "models_without_sources": len(models_without_sources),
-        })
+        return web.json_response(await execute_environment_export(env, output_path))
     except Exception as e:
         return web.json_response({
             "status": "error",

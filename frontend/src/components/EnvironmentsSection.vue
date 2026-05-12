@@ -8,6 +8,7 @@
       >
         <template #actions>
           <ActionButton
+            v-if="canCreate"
             variant="primary"
             size="sm"
             @click="openCreateModal"
@@ -17,9 +18,9 @@
           <ActionButton
             variant="secondary"
             size="sm"
-            @click="loadEnvironments"
+            @click="$emit('import')"
           >
-            Refresh
+            Import
           </ActionButton>
         </template>
       </PanelHeader>
@@ -52,7 +53,7 @@
           >
             <template #actions>
               <ActionButton
-                v-if="!env.is_current"
+                v-if="!env.is_current && canSwitch"
                 variant="primary"
                 size="sm"
                 @click="$emit('switch', env.name)"
@@ -66,6 +67,13 @@
               >
                 Details
               </ActionButton>
+              <ActionButton
+                variant="secondary"
+                size="sm"
+                @click="$emit('export', env.name)"
+              >
+                Export
+              </ActionButton>
             </template>
           </EnvironmentListItem>
         </SectionGroup>
@@ -78,6 +86,7 @@
         >
           <template v-if="!searchQuery" #actions>
             <ActionButton
+              v-if="canCreate"
               variant="primary"
               @click="openCreateModal"
             >
@@ -122,9 +131,10 @@
     v-if="selectedEnvironment"
     :environment="selectedEnvironment"
     :detail="environmentDetail"
-    :can-delete="environments.length > 1"
+    :can-delete="canDelete && environments.length > 1"
     @close="selectedEnvironment = null; environmentDetail = null"
     @delete="handleDetailsDelete"
+    @export="handleDetailsExport"
   />
 
   <!-- Create Environment Modal -->
@@ -152,10 +162,22 @@ import SectionGroup from '@/components/base/molecules/SectionGroup.vue'
 import EnvironmentDetailsModal from '@/components/EnvironmentDetailsModal.vue'
 import CreateEnvironmentModal from '@/components/CreateEnvironmentModal.vue'
 
+withDefaults(defineProps<{
+  canCreate?: boolean
+  canSwitch?: boolean
+  canDelete?: boolean
+}>(), {
+  canCreate: true,
+  canSwitch: true,
+  canDelete: true
+})
+
 const emit = defineEmits<{
   switch: [environmentName: string]
   created: [environmentName: string, switchAfter: boolean]
   delete: [environmentName: string]
+  import: []
+  export: [environmentName: string]
 }>()
 
 const { getEnvironments, getEnvironmentDetails } = useComfyGitService()
@@ -169,10 +191,19 @@ const showCreateModal = ref(false)
 const selectedEnvironment = ref<EnvironmentInfo | null>(null)
 const environmentDetail = ref<EnvironmentDetail | null>(null)
 
+const sortedEnvironments = computed(() => {
+  return [...environments.value].sort((a, b) => {
+    if (a.is_current !== b.is_current) {
+      return a.is_current ? -1 : 1
+    }
+    return a.name.localeCompare(b.name)
+  })
+})
+
 const filteredEnvironments = computed(() => {
-  if (!searchQuery.value.trim()) return environments.value
+  if (!searchQuery.value.trim()) return sortedEnvironments.value
   const query = searchQuery.value.toLowerCase()
-  return environments.value.filter(env =>
+  return sortedEnvironments.value.filter(env =>
     env.name.toLowerCase().includes(query) ||
     env.current_branch?.toLowerCase().includes(query)
   )
@@ -198,6 +229,12 @@ function handleDetailsDelete(name: string) {
   selectedEnvironment.value = null
   environmentDetail.value = null
   emit('delete', name)
+}
+
+function handleDetailsExport(name: string) {
+  selectedEnvironment.value = null
+  environmentDetail.value = null
+  emit('export', name)
 }
 
 async function loadEnvironments() {

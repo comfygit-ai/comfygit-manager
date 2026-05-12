@@ -121,6 +121,13 @@
     <template #footer>
       <div class="footer-actions">
         <BaseButton
+          variant="secondary"
+          size="sm"
+          @click="emit('export', environment.name)"
+        >
+          Export
+        </BaseButton>
+        <BaseButton
           v-if="canDelete"
           variant="danger"
           size="sm"
@@ -152,6 +159,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   delete: [name: string]
+  export: [name: string]
 }>()
 
 const expandedSections = ref<Set<string>>(new Set())

@@ -1,0 +1,145 @@
+# Workflow Contract Authoring
+
+This spec defines the intended local authoring flow for workflow execution contracts inside `comfygit-manager`.
+
+The durable contract object shape itself is defined separately in
+`workflow-contract-data-model.md`.
+
+## Purpose
+
+The manager should let workflow authors define a minimal execution contract for a ComfyUI workflow:
+- selected inputs
+- selected outputs
+- contract labels and normalized types
+
+That contract is portable environment state and should travel with revisions instead of being cloud-only dashboard metadata.
+
+## Lifecycle
+
+1. A workflow appears in the manager workflow list.
+2. The user opens a dedicated contract-authoring surface from that workflow.
+3. The manager loads existing saved contract state, if any.
+4. The manager inspects the currently loaded workflow graph and derives candidate inputs/outputs.
+5. The user selects, edits, removes, or reorders contract items.
+6. The manager captures the ComfyUI-native API-format prompt for the current
+   loaded graph.
+7. The manager saves the resulting contract and captured API prompt through the
+   manager API.
+8. The portable contract is written into ComfyGit-managed workflow manifest
+   state and the API prompt is written as a tracked environment artifact.
+
+## Workflow Identity Assumption
+
+For the first contract-authoring slice, workflows may remain environment-local
+and name/path scoped.
+
+That means:
+
+- one environment cannot contain two workflows with the same filename
+- the manager may address workflow contracts using the current workflow name or
+  path
+- if a workflow is renamed, the old workflow-scoped contract state is treated
+  as removed and the renamed workflow is treated as a new workflow identity
+
+The manager should not imply rename-preserving workflow continuity unless core
+later introduces a stronger workflow identity model.
+
+## Intended UX Shape
+
+### CGM-WCA-01 [LIVE]: Contract authoring should start from a workflow-scoped action in the manager
+Validation: HUMAN_REVIEW
+
+Users should start contract work from the workflow itself, not from workspace settings or unrelated global screens.
+
+### CGM-WCA-02 [LIVE]: Contract authoring should use a dedicated manager-owned editor surface
+Validation: HUMAN_REVIEW
+
+The manager should provide a distinct contract authoring surface rather than overloading the dependency resolution wizard or dependency details modal.
+
+### CGM-WCA-03 [RETIRED]: The first contract authoring slice should support inspect-and-save before graph click-mapping
+Validation: HUMAN_REVIEW
+
+This initial sequencing constraint has been retired. The active implementation
+now enters graph-aware I/O mapping directly from a workflow-scoped `Contract`
+action, with inspect/edit/save controls in the same surface.
+
+The retired first implementation would have supported:
+- reading existing contract state
+- showing inferred candidates
+- saving a structured contract
+
+### CGM-WCA-04 [LIVE]: Contract authoring should treat inputs and outputs as separate editable sets
+Validation: HUMAN_REVIEW
+
+The editor should clearly distinguish:
+- workflow inputs exposed to callers
+- workflow outputs exposed to callers
+
+These should not be conflated with dependency metadata.
+
+Input and output order is user-controlled inside the mapping surface. Reordering
+items changes the order of the saved contract arrays and therefore the order
+later contract-driven API/UI surfaces should present.
+
+### CGM-WCA-05 [LIVE]: Contract save must replace the durable saved contract, not only transient UI state
+Validation: TEST
+
+Saving a contract should update the manager backend and the underlying
+ComfyGit-managed manifest state so the contract survives reloads, restarts,
+commits, and later cloud ingestion from pushed repository commits.
+
+### CGM-WCA-05A [LIVE]: Contract save must capture the ComfyUI-native API prompt
+Validation: TEST
+
+Saving a contract should also capture the API-format prompt produced from the
+currently loaded ComfyUI graph using ComfyUI frontend/native export behavior.
+That captured API prompt should be saved as the executable artifact for the
+contract's mapped workflow state.
+
+The manager should not ask core to regenerate API format from UI-format workflow
+JSON. If the frontend cannot capture an API prompt, the contract save should
+fail or remain incomplete rather than silently saving a contract that runtime
+paths cannot execute.
+
+The current implementation captures `graphToPrompt` output from the loaded
+ComfyUI graph and sends the API prompt with the contract save request.
+
+### CGM-WCA-05B [LIVE]: Contract API prompt capture should be explicit save-time state
+Validation: HUMAN_REVIEW
+
+The captured API prompt should update when the user saves or updates the
+contract. Later edits to the UI workflow do not automatically mutate the saved
+contract's API prompt, because the saved contract represents the workflow state
+that was mapped at authoring time.
+
+### CGM-WCA-06 [LIVE]: A workflow without a valid contract should remain editable but not contract-ready
+Validation: HUMAN_REVIEW
+
+The manager should permit workflows to exist without a saved execution contract, while clearly communicating that contract-dependent downstream usage is not yet configured.
+
+### CGM-WCA-07 [LIVE]: Existing saved contract state should prefill the authoring UI
+Validation: TEST
+
+If a workflow already has a saved execution contract, reopening the editor should load and display that state rather than starting from an empty contract.
+
+### CGM-WCA-08 [LIVE]: The workflow contract action should enter graph-aware mapping directly
+Validation: HUMAN_REVIEW
+
+Clicking `Contract` for a workflow should open the I/O mapping surface directly
+and close the main control panel while mapping is active. Users should not have
+to pass through a separate contract review modal before selecting graph
+inputs/outputs.
+
+### CGM-WCA-09 [LIVE]: Contract metadata should live inside the mapping surface
+Validation: HUMAN_REVIEW
+
+The mapping surface should include contract-level metadata controls for the
+default contract name, display name, and description. These controls may be
+collapsed by default because graph input/output mapping is the primary task.
+
+### CGM-WCA-10 [LIVE]: Deleting a workflow contract should be confirmed before mutation
+Validation: HUMAN_REVIEW
+
+The mapping surface should expose contract deletion as a destructive operation
+and require confirmation before calling the delete endpoint. The confirmation
+should distinguish deleting the contract from deleting the workflow.

@@ -5,27 +5,41 @@ import CommitPopover from '@/components/CommitPopover.vue'
 import ModelDownloadQueue from '@/components/ModelDownloadQueue.vue'
 import MockControlPopover from '@/components/MockControlPopover.vue'
 import MissingResourcesPopup from '@/components/MissingResourcesPopup.vue'
+import WorkflowIOMappingOverlay from '@/components/WorkflowIOMappingOverlay.vue'
 import { useModelDownloadQueue } from '@/composables/useModelDownloadQueue'
 import { isMockApi } from '@/services/mockApi'
 import type { ComfyGitStatus } from '@/types/comfygit'
 import { getInitialTheme, applyTheme } from '@/themes'
 import { getCompletedTaskError } from '@/utils/managerTaskError'
+import {
+  isDevAutoReloadEnabled,
+  setDevPanelOpen,
+  shouldRestoreDevPanel,
+  startDevAutoReload
+} from '@/dev/autoReload'
+import { getComfyApi } from '@/utils/comfyApi'
 
 // Load component CSS
+const panelCssFile = './comfygit-panel.css'
+const panelJsFile = './comfygit-panel.js'
+const panelCssUrl = new URL(panelCssFile, import.meta.url).href
+const panelJsUrl = new URL(panelJsFile, import.meta.url).href
 const cssLink = document.createElement('link')
 cssLink.rel = 'stylesheet'
-cssLink.href = new URL('./comfygit-panel.css', import.meta.url).href
+cssLink.href = panelCssUrl
 document.head.appendChild(cssLink)
 
 // Apply initial theme
 const initialTheme = getInitialTheme()
 applyTheme(initialTheme)
 
-// Reset panel tab to default on page load (fresh navigation / refresh)
-// sessionStorage persists across close/reopen within a page, but we want
-// a fresh page load to always start on the status tab.
-sessionStorage.removeItem('ComfyGit.LastView')
-sessionStorage.removeItem('ComfyGit.LastSection')
+// Reset panel tab to default on page load (fresh navigation / refresh).
+// Dev auto-reload preserves this state so a rebuild can reopen the panel
+// near where the developer was working.
+if (!isDevAutoReloadEnabled()) {
+  sessionStorage.removeItem('ComfyGit.LastView')
+  sessionStorage.removeItem('ComfyGit.LastSection')
+}
 
 // Expose theme switcher to console for easy testing
 // Usage: window.ComfyGit.setTheme('comfy') or window.ComfyGit.setTheme('phosphor')
@@ -42,8 +56,39 @@ import { switchTheme, getCurrentTheme, type ThemeName } from '@/themes'
   }
 }
 
+;(window as any).ComfyGitDev = {
+  ...((window as any).ComfyGitDev ?? {}),
+
+  async exportCurrentApiPrompt() {
+    const comfyApp = app as any
+    if (typeof comfyApp.graphToPrompt !== 'function') {
+      throw new Error('ComfyUI graphToPrompt is not available')
+    }
+    return comfyApp.graphToPrompt(comfyApp.rootGraph)
+  },
+
+  async exportApiPromptForWorkflow(workflowData: any) {
+    const comfyApp = app as any
+    if (typeof comfyApp.loadGraphData !== 'function') {
+      throw new Error('ComfyUI loadGraphData is not available')
+    }
+    if (typeof comfyApp.graphToPrompt !== 'function') {
+      throw new Error('ComfyUI graphToPrompt is not available')
+    }
+
+    await comfyApp.loadGraphData(workflowData, true, false, null, {
+      deferWarnings: true,
+      skipAssetScans: true,
+      silentAssetErrors: true
+    })
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+    return comfyApp.graphToPrompt(comfyApp.rootGraph)
+  }
+}
+
 // Panel state
 let panelOverlay: HTMLElement | null = null
+let panelVueApp: ReturnType<typeof createApp> | null = null
 let commitPopover: HTMLElement | null = null
 let commitVueApp: ReturnType<typeof createApp> | null = null
 let downloadQueueContainer: HTMLElement | null = null
@@ -52,6 +97,8 @@ let mockControlPopover: HTMLElement | null = null
 let mockControlApp: ReturnType<typeof createApp> | null = null
 let missingResourcesContainer: HTMLElement | null = null
 let missingResourcesApp: ReturnType<typeof createApp> | null = null
+let ioMappingContainer: HTMLElement | null = null
+let ioMappingApp: ReturnType<typeof createApp> | null = null
 
 // Global status for indicator
 const globalStatus = ref<ComfyGitStatus | null>(null)
@@ -65,10 +112,12 @@ let hasComfyUIManager = false
 let buttonGroup: HTMLElement | null = null
 
 // Fetch status for commit indicator
-async function fetchStatus() {
-  if (!app?.api) return null
+async function fetchStatus(forceRefresh = false) {
+  const api = getComfyApi()
+  if (!api) return null
   try {
-    const response = await app.api.fetchApi('/v2/comfygit/status')
+    const url = forceRefresh ? '/v2/comfygit/status?refresh=true' : '/v2/comfygit/status'
+    const response = await api.fetchApi(url)
     if (response.ok) {
       globalStatus.value = await response.json()
     }
@@ -86,9 +135,10 @@ async function fetchSetupStatus() {
     return
   }
 
-  if (!app?.api) return
+  const api = getComfyApi()
+  if (!api) return
   try {
-    const response = await app.api.fetchApi('/v2/setup/status')
+    const response = await api.fetchApi('/v2/setup/status')
     if (response.ok) {
       const data = await response.json()
       currentSetupState = data.state
@@ -123,9 +173,8 @@ function hasUncommittedChanges(): boolean {
 }
 
 function showPanel(initialView?: string) {
-  if (panelOverlay) {
-    panelOverlay.remove()
-  }
+  closePanel()
+  setDevPanelOpen(true)
 
   panelOverlay = document.createElement('div')
   panelOverlay.className = 'comfygit-panel-overlay'
@@ -146,7 +195,7 @@ function showPanel(initialView?: string) {
   }
   document.addEventListener('keydown', escHandler)
 
-  const vueApp = createApp({
+  panelVueApp = createApp({
     render: () => h(ComfyGitPanel, {
       initialView,
       onClose: closePanel,
@@ -161,11 +210,17 @@ function showPanel(initialView?: string) {
     })
   })
 
-  vueApp.mount(panelContainer)
+  panelVueApp.mount(panelContainer)
   document.body.appendChild(panelOverlay)
 }
 
 function closePanel() {
+  setDevPanelOpen(false)
+
+  if (panelVueApp) {
+    panelVueApp.unmount()
+    panelVueApp = null
+  }
   if (panelOverlay) {
     panelOverlay.remove()
     panelOverlay = null
@@ -360,6 +415,23 @@ function mountMissingResourcesPopup() {
   missingResourcesApp.mount(missingResourcesContainer)
   document.body.appendChild(missingResourcesContainer)
   console.log('[ComfyGit] Missing resources popup mounted')
+}
+
+function mountIOMappingOverlay() {
+  if (ioMappingContainer) return
+
+  ioMappingContainer = document.createElement('div')
+  ioMappingContainer.className = 'comfygit-io-mapping-root'
+
+  ioMappingApp = createApp({
+    render: () => h(WorkflowIOMappingOverlay, {
+      comfyApp: app,
+    })
+  })
+
+  ioMappingApp.mount(ioMappingContainer)
+  document.body.appendChild(ioMappingContainer)
+  console.log('[ComfyGit] Workflow I/O mapping overlay mounted')
 }
 
 // Update commit button indicator and disabled state
@@ -579,7 +651,7 @@ app.registerExtension({
     panelButton.className = 'comfyui-button comfyui-menu-mobile-collapse comfygit-panel-btn'
     panelButton.textContent = 'ComfyGit'
     panelButton.title = 'ComfyGit Control Panel'
-    panelButton.onclick = showPanel
+    panelButton.onclick = () => showPanel()
 
     // Commit button (ash gray)
     commitButton = document.createElement('button')
@@ -615,10 +687,23 @@ app.registerExtension({
     // Mount missing resources popup
     mountMissingResourcesPopup()
 
+    // Mount workflow I/O mapping overlay
+    mountIOMappingOverlay()
+
     // Listen for panel open requests from other components
     window.addEventListener('comfygit:open-panel', ((event: CustomEvent) => {
       const initialView = event.detail?.initialView
       showPanel(initialView)
+    }) as EventListener)
+
+    window.addEventListener('comfygit:close-panel', (() => {
+      closePanel()
+    }) as EventListener)
+
+    window.addEventListener('comfygit:status-refresh', (async () => {
+      await fetchStatus()
+      updateCommitIndicator()
+      updateCommitButtonState()
     }) as EventListener)
 
     // Load any pending downloads from previous session
@@ -630,6 +715,17 @@ app.registerExtension({
     updateCommitIndicator()
     updateCommitButtonState()
     hideBuiltinManagerButton()
+
+    if (shouldRestoreDevPanel()) {
+      setTimeout(() => {
+        if (!panelOverlay) showPanel()
+      }, 100)
+    }
+
+    startDevAutoReload([
+      { name: 'panel script', url: panelJsUrl },
+      { name: 'panel stylesheet', url: panelCssUrl }
+    ])
 
     // Re-check shortly after (built-in Manager button may render after us)
     setTimeout(hideBuiltinManagerButton, 100)
@@ -643,14 +739,15 @@ app.registerExtension({
 
     // Register custom WebSocket event type with ComfyUI API
     // CRITICAL: Use the imported 'app' object, NOT window.app (which doesn't exist yet)
-    const api = (app as any).api
+    const api = getComfyApi()
 
     if (api) {
       api.addEventListener('comfygit:workflow-changed', async (event: CustomEvent) => {
         const { change_type, workflow_name } = event.detail
         console.log(`[ComfyGit] Workflow ${change_type}: ${workflow_name}`)
 
-        // Trigger immediate status check
+        // The backend watcher debounces save bursts before broadcasting, so a
+        // normal status read is enough here and avoids expensive full reloads.
         await fetchStatus()
         updateCommitIndicator()
       })
@@ -971,6 +1068,13 @@ app.registerExtension({
               console.log('[ComfyGit] Reconnected after restart, refreshing node definitions...')
 
               try {
+                const autoRefresh = localStorage.getItem('ComfyGit.Settings.AutoRefresh') !== 'false'
+                if (autoRefresh) {
+                  console.log('[ComfyGit] Auto-refresh enabled after node install restart, reloading page...')
+                  clearWorkflowStateAndReload()
+                  return
+                }
+
                 // Refresh node definitions (like Manager does)
                 if ((app as any).refreshComboInNodes) {
                   await (app as any).refreshComboInNodes()

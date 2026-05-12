@@ -52,6 +52,49 @@
               @input="hfTokenDirty = true"
             />
           </SettingRow>
+
+          <SettingRow
+            label="GitHub Personal Access Token"
+            description="Client-side token used for private Git remote access during deploy and remote operations"
+            stacked
+          >
+            <div class="token-setting">
+              <TextInput
+                v-model="githubToken"
+                type="password"
+                placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                @input="githubTokenDirty = true"
+              />
+              <div v-if="hasSshRemote" class="token-warning">
+                SSH origin remote detected. PAT authentication only works with HTTPS remotes.
+              </div>
+              <div class="token-help">
+                Stored in your browser only. Never sent to the server except when you explicitly test or use authenticated remote operations.
+              </div>
+              <div class="token-actions">
+                <ActionButton
+                  variant="ghost"
+                  size="xs"
+                  :loading="isTestingGitHubToken"
+                  :disabled="!githubToken || isTestingGitHubToken"
+                  @click="handleTestGitHubToken"
+                >
+                  Test Connection
+                </ActionButton>
+                <ActionButton
+                  v-if="hasStoredGitHubToken"
+                  variant="ghost"
+                  size="xs"
+                  @click="handleClearGitHubToken"
+                >
+                  Clear
+                </ActionButton>
+              </div>
+              <div v-if="gitHubTokenTestResult" :class="['token-test-result', gitHubTokenTestResult.type]">
+                {{ gitHubTokenTestResult.message }}
+              </div>
+            </div>
+          </SettingRow>
         </div>
       </SectionGroup>
 
@@ -112,7 +155,9 @@ import Toggle from '@/components/base/atoms/Toggle.vue'
 import SummaryBar from '@/components/base/molecules/SummaryBar.vue'
 import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
+import ActionButton from '@/components/base/atoms/ActionButton.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
+import { isRemoteSsh, useGitAuth } from '@/composables/useGitAuth'
 import type { ConfigSettings } from '@/types/comfygit'
 
 const props = defineProps<{
@@ -125,7 +170,8 @@ const emit = defineEmits<{
   error: [message: string]
 }>()
 
-const { getConfig, updateConfig } = useComfyGitService()
+const { getConfig, updateConfig, getRemotes, testGitAuth } = useComfyGitService()
+const { getToken, setToken, clearToken, hasToken } = useGitAuth()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -138,11 +184,17 @@ const originalConfig = ref<ConfigSettings | null>(null)
 // Editable fields
 const civitaiToken = ref<string>('')
 const huggingfaceToken = ref<string>('')
+const githubToken = ref<string>('')
 const comfyuiExtraArgs = ref<string>('')  // Space-separated args shown as string
 
 // Dirty tracking for token fields (prevents saving masked values)
 const civitaiTokenDirty = ref(false)
 const hfTokenDirty = ref(false)
+const githubTokenDirty = ref(false)
+const originalGitHubToken = ref<string>('')
+const hasSshRemote = ref(false)
+const isTestingGitHubToken = ref(false)
+const gitHubTokenTestResult = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 
 // UI settings (stored in localStorage)
 const autoRefresh = ref(false)
@@ -164,10 +216,13 @@ const hasChanges = computed(() => {
 
   const civitaiChanged = civitaiTokenDirty.value
   const hfChanged = hfTokenDirty.value
+  const githubChanged = githubTokenDirty.value
   const extraArgsChanged = comfyuiExtraArgs.value !== argsToString(originalConfig.value.comfyui_extra_args || [])
 
-  return civitaiChanged || hfChanged || extraArgsChanged
+  return civitaiChanged || hfChanged || githubChanged || extraArgsChanged
 })
+
+const hasStoredGitHubToken = computed(() => hasToken())
 
 async function loadSettings() {
   loading.value = true
@@ -181,10 +236,14 @@ async function loadSettings() {
     civitaiToken.value = config.value.civitai_api_key || ''
     huggingfaceToken.value = config.value.huggingface_token || ''
     comfyuiExtraArgs.value = argsToString(config.value.comfyui_extra_args || [])
+    githubToken.value = getToken() || ''
+    originalGitHubToken.value = githubToken.value
 
     // Reset dirty flags (values loaded from backend are not user edits)
     civitaiTokenDirty.value = false
     hfTokenDirty.value = false
+    githubTokenDirty.value = false
+    gitHubTokenTestResult.value = null
 
     // Load UI settings from localStorage (default to true if not set)
     const storedAutoRefresh = localStorage.getItem('ComfyGit.Settings.AutoRefresh')
@@ -192,6 +251,14 @@ async function loadSettings() {
 
     // Load popup enabled setting (default to true)
     popupEnabled.value = localStorage.getItem('comfygit:popup-disabled') !== 'true'
+
+    try {
+      const result = await getRemotes()
+      const origin = result.remotes?.find(r => r.name === 'origin')
+      hasSshRemote.value = !!(origin && isRemoteSsh(origin.url))
+    } catch {
+      hasSshRemote.value = false
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load settings'
   } finally {
@@ -222,6 +289,14 @@ async function saveSettings() {
     // Send update
     await updateConfig(updates, props.workspacePath || undefined)
 
+    if (githubTokenDirty.value) {
+      if (githubToken.value) {
+        setToken(githubToken.value)
+      } else {
+        clearToken()
+      }
+    }
+
     // Reload to get latest state
     await loadSettings()
 
@@ -244,10 +319,40 @@ function resetSettings() {
     civitaiToken.value = originalConfig.value.civitai_api_key || ''
     huggingfaceToken.value = originalConfig.value.huggingface_token || ''
     comfyuiExtraArgs.value = argsToString(originalConfig.value.comfyui_extra_args || [])
+    githubToken.value = originalGitHubToken.value
     civitaiTokenDirty.value = false
     hfTokenDirty.value = false
+    githubTokenDirty.value = false
+    gitHubTokenTestResult.value = null
     saveStatus.value = null
   }
+}
+
+async function handleTestGitHubToken() {
+  if (!githubToken.value) return
+
+  isTestingGitHubToken.value = true
+  gitHubTokenTestResult.value = null
+  try {
+    const result = await testGitAuth(githubToken.value)
+    gitHubTokenTestResult.value = {
+      type: result.status === 'success' ? 'success' : 'error',
+      message: result.message,
+    }
+  } catch (err) {
+    gitHubTokenTestResult.value = {
+      type: 'error',
+      message: err instanceof Error ? err.message : 'Connection test failed',
+    }
+  } finally {
+    isTestingGitHubToken.value = false
+  }
+}
+
+function handleClearGitHubToken() {
+  githubToken.value = ''
+  githubTokenDirty.value = true
+  gitHubTokenTestResult.value = null
 }
 
 function saveAutoRefreshSetting(value: boolean) {
@@ -336,5 +441,49 @@ onMounted(loadSettings)
   background: var(--cg-color-bg-secondary);
   padding: 0 var(--cg-space-1);
   border-radius: var(--cg-border-radius-sm);
+}
+
+.token-setting {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-2);
+}
+
+.token-help {
+  font-size: var(--cg-font-size-xs);
+  color: var(--cg-color-text-muted);
+}
+
+.token-warning {
+  font-size: var(--cg-font-size-xs);
+  color: var(--cg-color-warning);
+  background: var(--cg-color-warning-muted);
+  border: 1px solid var(--cg-color-warning);
+  padding: var(--cg-space-2);
+}
+
+.token-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  flex-wrap: wrap;
+}
+
+.token-test-result {
+  font-size: var(--cg-font-size-xs);
+  padding: var(--cg-space-2);
+  border: 1px solid transparent;
+}
+
+.token-test-result.success {
+  color: var(--cg-color-success);
+  background: var(--cg-color-success-muted);
+  border-color: var(--cg-color-success);
+}
+
+.token-test-result.error {
+  color: var(--cg-color-error);
+  background: var(--cg-color-error-muted);
+  border-color: var(--cg-color-error);
 }
 </style>

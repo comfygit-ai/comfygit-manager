@@ -71,6 +71,8 @@ Customize these in ComfyUI's **Settings → Keyboard Shortcuts**.
 
 For installation and setup instructions, visit the **[ComfyGit Documentation](https://docs.comfygit.org/)**.
 
+For local manager development, see **[scripts/README.md](scripts/README.md)**.
+
 ---
 
 ## Part of ComfyGit
@@ -94,4 +96,4 @@ For installation and setup instructions, visit the **[ComfyGit Documentation](ht
 
 ## License
 
-[GPL-3.0](LICENSE)
+[GPL-3.0](LICENSE.txt)

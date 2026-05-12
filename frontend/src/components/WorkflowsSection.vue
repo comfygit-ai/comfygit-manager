@@ -50,6 +50,13 @@
               >
                 Details ▸
               </ActionButton>
+              <ActionButton
+                variant="secondary"
+                size="sm"
+                @click="handleContract(wf.name)"
+              >
+                Contract
+              </ActionButton>
             </template>
           </ItemCard>
         </SectionGroup>
@@ -76,6 +83,13 @@
               >
                 Details
               </ActionButton>
+              <ActionButton
+                variant="secondary"
+                size="sm"
+                @click="handleContract(wf.name)"
+              >
+                Contract
+              </ActionButton>
             </template>
           </ItemCard>
         </SectionGroup>
@@ -101,6 +115,13 @@
                 @click="handleDetails(wf.name)"
               >
                 Details
+              </ActionButton>
+              <ActionButton
+                variant="secondary"
+                size="sm"
+                @click="handleContract(wf.name)"
+              >
+                Contract
               </ActionButton>
             </template>
           </ItemCard>
@@ -130,6 +151,13 @@
                 @click="handleDetails(wf.name)"
               >
                 Details
+              </ActionButton>
+              <ActionButton
+                variant="secondary"
+                size="sm"
+                @click="handleContract(wf.name)"
+              >
+                Contract
               </ActionButton>
             </template>
           </ItemCard>
@@ -171,13 +199,14 @@
     :workflow-name="selectedWorkflow"
     @close="handleResolveModalClose"
     @install="handleInstall"
-    @refresh="emit('refresh')"
+    @refresh="handleResolveRefresh"
     @restart="handleRestart"
   />
+
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import { useOrchestratorService } from '@/composables/useOrchestratorService'
 import WorkflowDetailsModal from './WorkflowDetailsModal.vue'
@@ -192,9 +221,10 @@ import ActionButton from '@/components/base/atoms/ActionButton.vue'
 import EmptyState from '@/components/base/molecules/EmptyState.vue'
 import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
+import { activateSavedWorkflow } from '@/utils/workflowLoader'
 
 const emit = defineEmits<{
-  refresh: []
+  refresh: [options?: { refreshWorkflows?: boolean }]
 }>()
 
 const { getWorkflows } = useComfyGitService()
@@ -285,11 +315,42 @@ function handleDetails(name: string) {
 
 function handleResolve(name: string) {
   selectedWorkflow.value = name
+  showDetailsModal.value = false
   showResolveModal.value = true
 }
 
+async function handleContract(name: string) {
+  selectedWorkflow.value = name
+  try {
+    await activateSavedWorkflow(name)
+  } catch (err) {
+    console.error('[ComfyGit] Failed to activate workflow for contract mapping:', err)
+    error.value = err instanceof Error ? err.message : 'Failed to open workflow for contract mapping'
+    return
+  }
+
+  window.dispatchEvent(new CustomEvent('comfygit:open-io-mapping', {
+    detail: { workflowName: name }
+  }))
+  window.dispatchEvent(new CustomEvent('comfygit:close-panel'))
+}
+
+function handleOpenWorkflowContract(event: Event) {
+  const customEvent = event as CustomEvent<{ workflowName?: string }>
+  const workflowName = customEvent.detail?.workflowName
+  if (!workflowName) return
+  handleContract(workflowName)
+}
+
 function handleInstall() {
-  emit('refresh')
+  // The resolve modal emits install immediately before close on success.
+  // The close handler performs the single workflow reload for this view.
+}
+
+function handleResolveRefresh() {
+  // Keep parent status/header metadata fresh without asking the parent to
+  // reload this workflow list a second time.
+  emit('refresh', { refreshWorkflows: false })
 }
 
 async function handleResolveModalClose() {
@@ -350,14 +411,34 @@ function formatWorkflowSubtitle(wf: WorkflowInfo): string {
                     wf.sync_state === 'modified' ? 'Modified' :
                     wf.sync_state === 'synced' ? 'Synced' : wf.sync_state
 
+  const contractLabel = formatContractSummary(wf)
+
   if (wf.has_path_sync_issues && wf.models_needing_path_sync && wf.models_needing_path_sync > 0) {
-    return `${wf.models_needing_path_sync} model path${wf.models_needing_path_sync > 1 ? 's' : ''} need${wf.models_needing_path_sync === 1 ? 's' : ''} sync`
+    return `${wf.models_needing_path_sync} model path${wf.models_needing_path_sync > 1 ? 's' : ''} need${wf.models_needing_path_sync === 1 ? 's' : ''} sync · ${contractLabel}`
   }
 
-  return syncLabel || 'Unknown'
+  return `${syncLabel || 'Unknown'} · ${contractLabel}`
 }
 
-onMounted(loadWorkflows)
+function formatContractSummary(wf: WorkflowInfo): string {
+  const summary = wf.contract_summary
+  if (!summary || !summary.has_contract) {
+    return 'No contract'
+  }
+  if (summary.status === 'incomplete') {
+    return `${summary.input_count} in / ${summary.output_count} out · incomplete`
+  }
+  return `${summary.input_count} in / ${summary.output_count} out`
+}
+
+onMounted(() => {
+  loadWorkflows()
+  window.addEventListener('comfygit:open-workflow-contract', handleOpenWorkflowContract as EventListener)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('comfygit:open-workflow-contract', handleOpenWorkflowContract as EventListener)
+})
 </script>
 
 <style scoped>

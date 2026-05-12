@@ -22,13 +22,21 @@
 
         <!-- Tab Content -->
         <div class="tab-content">
+          <WorkflowLinksTab
+            v-if="activeTab === 'workflow'"
+            @queue="handleDirectQueue"
+          />
           <HuggingFaceTab
-            v-if="activeTab === 'huggingface'"
+            v-else-if="activeTab === 'huggingface'"
             @queue="handleQueue"
           />
-          <CivitaiTab v-else-if="activeTab === 'civitai'" />
+          <CivitaiTab
+            v-else-if="activeTab === 'civitai'"
+            @queue="handleDirectQueue"
+          />
           <DirectUrlTab
             v-else-if="activeTab === 'direct'"
+            clear-on-submit
             @queue="handleDirectQueue"
           />
         </div>
@@ -47,6 +55,7 @@
 import { ref } from 'vue'
 import BaseModal from '@/components/base/BaseModal.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import WorkflowLinksTab from '@/components/download/WorkflowLinksTab.vue'
 import HuggingFaceTab from '@/components/download/HuggingFaceTab.vue'
 import CivitaiTab from '@/components/download/CivitaiTab.vue'
 import DirectUrlTab from '@/components/download/DirectUrlTab.vue'
@@ -63,12 +72,13 @@ const emit = defineEmits<{
 const { addToQueue } = useModelDownloadQueue()
 
 const tabs = [
+  { id: 'workflow', label: 'Workflow Links', icon: '🔎' },
   { id: 'huggingface', label: 'HuggingFace', icon: '🤗' },
   { id: 'civitai', label: 'Civitai', icon: '🎨' },
   { id: 'direct', label: 'Direct URL', icon: '🔗' }
 ] as const
 
-const activeTab = ref<'huggingface' | 'civitai' | 'direct'>('huggingface')
+const activeTab = ref<(typeof tabs)[number]['id']>('workflow')
 
 function handleQueue(items: Array<{ url: string; destination: string; filename: string }>) {
   addToQueue(items.map(item => ({

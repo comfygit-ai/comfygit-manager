@@ -160,6 +160,16 @@ class TestEnvironmentDetection:
 
         assert should_spawn is False
 
+    def test_should_not_spawn_orchestrator_when_cg_run_supervised(self, mock_workspace, metadata_dir, monkeypatch):
+        """Should let cg run consume switch requests when it is the supervisor."""
+        monkeypatch.setenv("COMFYGIT_CG_RUN_SUPERVISOR", "1")
+
+        from server.orchestrator import should_spawn_orchestrator_for_switch
+
+        should_spawn = should_spawn_orchestrator_for_switch()
+
+        assert should_spawn is False
+
     def test_should_not_spawn_orchestrator_when_already_running(self, mock_workspace, metadata_dir):
         """Should not spawn orchestrator when PID file exists with running process."""
         # Write PID file with current process (guaranteed to be running)

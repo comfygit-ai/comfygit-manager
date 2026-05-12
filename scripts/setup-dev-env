@@ -9,12 +9,28 @@
 #   --workspace PATH   Override COMFYGIT_HOME (default: $COMFYGIT_HOME or ~/comfygit)
 #   --all              Apply to all environments in workspace
 #   --sync             Run 'cg sync' after setup
+#   --docker           Start/recreate the manager Docker dev stack
+#   --comfygit PATH    Override sibling comfygit repo path for --docker
+#   --comfyui-port N   ComfyUI host/container port for --docker (default: 8188)
+#   --torch-backend B  PyTorch backend for Docker create/run (default: cu126)
+#   --project-name N   Docker Compose project name for --docker
+#   --models-dir PATH  Host models directory for --docker
+#   --extra-node PATH  Extra dev node path for --docker; may be repeated
+#   --no-build         Do not rebuild the Docker image for --docker
 #   -h, --help         Show this help message
 #
 # This script:
 #   1. Replaces registry-installed comfygit-manager with a symlink to this repo
-#   2. Adds comfygit-core as editable local source via .local-uv-config (not tracked in git)
+#   2. Adds comfygit-core as an editable local overlay source
 #   3. Marks comfygit-manager as a development node (skips version checks)
+#
+# IMPORTANT:
+#   Do NOT use raw `uv pip install -e` here as the primary mechanism.
+#   That only mutates the venv, while `cg run` / `cg sync` reconcile from the
+#   managed environment manifest and can replace the editable install with a
+#   packaged wheel. Local editable package paths belong in the machine-local
+#   overlay file at `.cec/overlays/.local.toml`, which is injected at sync time
+#   and ignored by git.
 
 set -e
 
@@ -29,14 +45,24 @@ fi
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 MANAGER_PATH="$(dirname "$SCRIPT_DIR")"
 
-# Auto-detect CORE_PATH (sibling repo)
-CORE_PATH="$(dirname "$MANAGER_PATH")/comfygit/packages/core"
+# Auto-detect sibling comfygit repo; --comfygit can override before validation.
+DEFAULT_COMFYGIT_REPO_ROOT="$(dirname "$MANAGER_PATH")/comfygit"
+COMFYGIT_REPO_ROOT="$DEFAULT_COMFYGIT_REPO_ROOT"
+CORE_PATH="$COMFYGIT_REPO_ROOT/packages/core"
 
 # Defaults
 WORKSPACE_PATH=""
 ALL_ENVS=false
 RUN_SYNC=false
 ENV_NAME=""
+START_DOCKER=false
+DOCKER_COMFYGIT_PATH="$COMFYGIT_REPO_ROOT"
+DOCKER_COMFYUI_PORT="${COMFYUI_PORT:-8188}"
+DOCKER_TORCH_BACKEND="${COMFYGIT_TORCH_BACKEND:-cu126}"
+DOCKER_PROJECT_NAME=""
+DOCKER_MODELS_DIR="${SHARED_MODELS_HOST_DIR:-$HOME/dev/models}"
+DOCKER_EXTRA_NODE_ARGS=()
+DOCKER_BUILD=true
 
 # Parse arguments
 show_help() {
@@ -61,6 +87,38 @@ while [[ $# -gt 0 ]]; do
             RUN_SYNC=true
             shift
             ;;
+        --docker)
+            START_DOCKER=true
+            shift
+            ;;
+        --comfygit)
+            DOCKER_COMFYGIT_PATH="$2"
+            shift 2
+            ;;
+        --comfyui-port)
+            DOCKER_COMFYUI_PORT="$2"
+            shift 2
+            ;;
+        --torch-backend)
+            DOCKER_TORCH_BACKEND="$2"
+            shift 2
+            ;;
+        --project-name)
+            DOCKER_PROJECT_NAME="$2"
+            shift 2
+            ;;
+        --models-dir)
+            DOCKER_MODELS_DIR="$2"
+            shift 2
+            ;;
+        --extra-node)
+            DOCKER_EXTRA_NODE_ARGS+=(--extra-node "$2")
+            shift 2
+            ;;
+        --no-build)
+            DOCKER_BUILD=false
+            shift
+            ;;
         -*)
             echo "Error: Unknown option $1"
             echo "Run with --help for usage"
@@ -76,6 +134,9 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+COMFYGIT_REPO_ROOT="$DOCKER_COMFYGIT_PATH"
+CORE_PATH="$COMFYGIT_REPO_ROOT/packages/core"
 
 # Resolve workspace path: arg > COMFYGIT_HOME > ~/comfygit
 if [[ -z "$WORKSPACE_PATH" ]]; then
@@ -93,16 +154,29 @@ if [[ "$ALL_ENVS" == "false" ]] && [[ -z "$ENV_NAME" ]]; then
     exit 1
 fi
 
-# Validate paths
-if [[ ! -d "$WORKSPACE_PATH" ]]; then
-    echo "Error: Workspace not found: $WORKSPACE_PATH"
-    echo "Set COMFYGIT_HOME or use --workspace"
+if [[ "$START_DOCKER" == "true" ]] && [[ "$ALL_ENVS" == "true" ]]; then
+    echo "Error: --docker requires a single environment name, not --all"
     exit 1
 fi
 
+# Validate paths
+if [[ ! -d "$WORKSPACE_PATH" ]]; then
+    if [[ "$START_DOCKER" == "true" ]]; then
+        mkdir -p "$WORKSPACE_PATH"
+    else
+        echo "Error: Workspace not found: $WORKSPACE_PATH"
+        echo "Set COMFYGIT_HOME or use --workspace"
+        exit 1
+    fi
+fi
+
 if [[ ! -d "$WORKSPACE_PATH/environments" ]]; then
-    echo "Error: No environments directory in workspace: $WORKSPACE_PATH"
-    exit 1
+    if [[ "$START_DOCKER" == "true" ]]; then
+        mkdir -p "$WORKSPACE_PATH/environments"
+    else
+        echo "Error: No environments directory in workspace: $WORKSPACE_PATH"
+        exit 1
+    fi
 fi
 
 if [[ ! -d "$CORE_PATH" ]]; then
@@ -120,6 +194,10 @@ fi
 echo "[setup-dev-env] Workspace: $WORKSPACE_PATH"
 echo "[setup-dev-env] Manager:   $MANAGER_PATH"
 echo "[setup-dev-env] Core:      $CORE_PATH"
+echo "[setup-dev-env] ComfyGit:  $COMFYGIT_REPO_ROOT"
+if [[ "$START_DOCKER" == "true" ]]; then
+    echo "[setup-dev-env] Models:    $DOCKER_MODELS_DIR -> /data/models"
+fi
 echo ""
 
 # Build list of environments to process
@@ -136,10 +214,14 @@ if [[ "$ALL_ENVS" == "true" ]]; then
     fi
 else
     if [[ ! -d "$WORKSPACE_PATH/environments/$ENV_NAME" ]]; then
-        echo "Error: Environment not found: $ENV_NAME"
-        echo "Available environments:"
-        ls -1 "$WORKSPACE_PATH/environments/" 2>/dev/null || echo "  (none)"
-        exit 1
+        if [[ "$START_DOCKER" == "true" ]]; then
+            echo "[setup-dev-env] Environment '$ENV_NAME' not found locally; Docker stack will create it"
+        else
+            echo "Error: Environment not found: $ENV_NAME"
+            echo "Available environments:"
+            ls -1 "$WORKSPACE_PATH/environments/" 2>/dev/null || echo "  (none)"
+            exit 1
+        fi
     fi
     ENVS=("$ENV_NAME")
 fi
@@ -150,9 +232,17 @@ setup_environment() {
     local env_path="$WORKSPACE_PATH/environments/$env_name"
     local custom_nodes="$env_path/ComfyUI/custom_nodes"
     local manager_link="$custom_nodes/comfygit-manager"
+    local cec_path="$env_path/.cec"
     local pyproject="$env_path/.cec/pyproject.toml"
+    local overlay_path="$env_path/.cec/overlays/.local.toml"
+    local gitignore_path="$env_path/.cec/.gitignore"
 
     echo "[setup-dev-env] Setting up environment: $env_name"
+
+    if [[ ! -d "$env_path" ]]; then
+        echo "  Environment directory does not exist yet; skipping host setup"
+        return 0
+    fi
 
     # Ensure custom_nodes exists
     if [[ ! -d "$custom_nodes" ]]; then
@@ -184,14 +274,73 @@ setup_environment() {
         ln -s "$MANAGER_PATH" "$manager_link"
     fi
 
-    # Add comfygit-core as local source (writes to .local-uv-config, not tracked in git)
-    echo "  Configuring comfygit-core local source..."
-    COMFYGIT_HOME="$WORKSPACE_PATH" cg -e "$env_name" env-config local-sources add comfygit-core \
-        --path "$CORE_PATH" --editable 2>/dev/null \
-        && echo "  Core source: Configured in .local-uv-config" \
-        || echo "  Core source: Failed to configure (is cg installed?)"
+    # Configure comfygit-core as a machine-local editable overlay source.
+    # This is intentionally not a direct venv mutation: cg sync/run own the venv.
+    if [[ ! -d "$cec_path" ]]; then
+        echo "  Warning: .cec directory not found, skipping core local overlay"
+    else
+        mkdir -p "$(dirname "$overlay_path")"
+        python3 - "$overlay_path" "$CORE_PATH" <<'PYEOF'
+import json
+import sys
+from pathlib import Path
 
-    # Mark comfygit-manager as development node + clean up old pyproject injection
+overlay_path = Path(sys.argv[1])
+core_path = sys.argv[2]
+source_line = f"comfygit-core = {{ path = {json.dumps(core_path)}, editable = true }}"
+
+if overlay_path.exists():
+    lines = overlay_path.read_text(encoding="utf-8").splitlines()
+else:
+    lines = [
+        "[overlay]",
+        'description = "Local development sources"',
+        'kind = "local"',
+        "",
+    ]
+
+result: list[str] = []
+in_sources = False
+sources_found = False
+inserted = False
+
+for line in lines:
+    stripped = line.strip()
+    is_section = stripped.startswith("[") and stripped.endswith("]")
+
+    if is_section:
+        if in_sources and not inserted:
+            result.append(source_line)
+            inserted = True
+        in_sources = stripped == "[sources]"
+        sources_found = sources_found or in_sources
+        result.append(line)
+        continue
+
+    if in_sources and stripped.startswith("comfygit-core"):
+        continue
+
+    result.append(line)
+
+if sources_found:
+    if in_sources and not inserted:
+        result.append(source_line)
+else:
+    if result and result[-1].strip():
+        result.append("")
+    result.extend(["[sources]", source_line])
+
+overlay_path.write_text("\n".join(result).rstrip() + "\n", encoding="utf-8")
+PYEOF
+        echo "  Core local overlay: $overlay_path"
+
+        # Ensure local overlay state stays machine-local in older environments.
+        touch "$gitignore_path"
+        grep -qxF 'overlays/.*' "$gitignore_path" || printf '\n# Local overlays and activation (machine-specific)\noverlays/.*\n' >> "$gitignore_path"
+        grep -qxF '.overlay-config.toml' "$gitignore_path" || printf '.overlay-config.toml\n' >> "$gitignore_path"
+    fi
+
+    # Mark comfygit-manager as development node + clean up old pyproject source injection
     if [[ ! -f "$pyproject" ]]; then
         echo "  Warning: .cec/pyproject.toml not found, skipping dev node config"
     else
@@ -205,7 +354,8 @@ with open(pyproject_path, "r") as f:
 
 modified = False
 
-# Clean up old direct pyproject injection of comfygit-core source (now in .local-uv-config)
+# Clean up old direct pyproject injection of comfygit-core source. Current
+# local editable sources live in .cec/overlays/.local.toml instead.
 if '[tool.uv.sources.comfygit-core]' in content:
     content = re.sub(
         r'\n?\[tool\.uv\.sources\.comfygit-core\][^\[]*',
@@ -214,6 +364,24 @@ if '[tool.uv.sources.comfygit-core]' in content:
         flags=re.DOTALL
     )
     print("  Cleaned up old [tool.uv.sources.comfygit-core] from pyproject.toml")
+    modified = True
+
+sources_table = re.search(
+    r'(\n?\[tool\.uv\.sources\]\n)(.*?)(?=\n\[|\Z)',
+    content,
+    flags=re.DOTALL,
+)
+if sources_table and 'comfygit-core' in sources_table.group(2):
+    table_body = re.sub(
+        r'(?m)^comfygit-core\s*=.*\n?',
+        '',
+        sources_table.group(2),
+    )
+    replacement = sources_table.group(1) + table_body
+    if not table_body.strip():
+        replacement = ''
+    content = content[:sources_table.start()] + replacement + content[sources_table.end():]
+    print("  Cleaned up old comfygit-core entry from [tool.uv.sources]")
     modified = True
 
 if '[tool.comfygit.nodes.comfygit-manager]' in content:
@@ -263,12 +431,41 @@ if [[ "$RUN_SYNC" == "true" ]]; then
     echo "[setup-dev-env] Running cg sync..."
     for env in "${ENVS[@]}"; do
         echo "  Syncing $env..."
-        COMFYGIT_HOME="$WORKSPACE_PATH" cg sync -e "$env"
+        COMFYGIT_HOME="$WORKSPACE_PATH" cg -e "$env" sync
     done
     echo ""
 fi
 
+if [[ "$START_DOCKER" == "true" ]]; then
+    docker_script="$MANAGER_PATH/scripts/start-dev-container"
+    if [[ ! -x "$docker_script" ]]; then
+        echo "Error: Docker helper not found or not executable: $docker_script"
+        exit 1
+    fi
+
+    docker_args=(
+        "$ENV_NAME"
+        --workspace "$WORKSPACE_PATH"
+        --torch-backend "$DOCKER_TORCH_BACKEND"
+        --comfyui-port "$DOCKER_COMFYUI_PORT"
+        --comfygit "$DOCKER_COMFYGIT_PATH"
+        --models-dir "$DOCKER_MODELS_DIR"
+    )
+    if [[ -n "$DOCKER_PROJECT_NAME" ]]; then
+        docker_args+=(--project-name "$DOCKER_PROJECT_NAME")
+    fi
+    if [[ "${#DOCKER_EXTRA_NODE_ARGS[@]}" -gt 0 ]]; then
+        docker_args+=("${DOCKER_EXTRA_NODE_ARGS[@]}")
+    fi
+    if [[ "$DOCKER_BUILD" == "false" ]]; then
+        docker_args+=(--no-build)
+    fi
+
+    echo "[setup-dev-env] Starting Docker dev stack via $docker_script"
+    "$docker_script" "${docker_args[@]}"
+fi
+
 echo "[setup-dev-env] Setup complete!"
 if [[ "$RUN_SYNC" == "false" ]]; then
-    echo "[setup-dev-env] Run 'cg run -e <env>' to start (sync happens automatically)"
+    echo "[setup-dev-env] Run 'cg -e <env> run' to start (sync happens automatically)"
 fi

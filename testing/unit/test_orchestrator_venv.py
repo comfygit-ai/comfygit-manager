@@ -74,6 +74,25 @@ class TestOrchestratorVenv:
         assert "install" in args
         assert "comfygit-core" in args
 
+    def test_ensure_orchestrator_venv_recreates_stale_directory(self, temp_dir, mocker):
+        """Should remove a stale venv directory when its Python executable is missing."""
+        from server.orchestrator import ensure_orchestrator_venv
+
+        venv_path = temp_dir / ".orchestrator_venv"
+        stale_file = venv_path / "stale.txt"
+        stale_file.parent.mkdir(parents=True)
+        stale_file.write_text("old")
+
+        mock_uv_create = mocker.patch(
+            "server.orchestrator._create_venv_with_uv",
+            return_value=True
+        )
+
+        ensure_orchestrator_venv(venv_path)
+
+        assert not stale_file.exists()
+        mock_uv_create.assert_called_once()
+
     def test_orchestrator_venv_isolated_from_comfyui(self, mock_orchestrator_venv, mock_environment):
         """Orchestrator venv should be independent of ComfyUI environment."""
         orch_python = mock_orchestrator_venv / "bin" / "python"

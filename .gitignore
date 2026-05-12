@@ -44,6 +44,7 @@ Thumbs.db
 # ENV
 .env
 .env.*
+.cache/
 
 # Legacy reference repos (large, don't need to track)
 legacy/

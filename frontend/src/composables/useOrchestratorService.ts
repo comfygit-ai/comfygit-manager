@@ -4,6 +4,7 @@
  * Uses ComfyUI API proxy routes instead of direct orchestrator connections.
  * Works with cloud proxies (RunPod, Vast.ai) and local development.
  */
+import { fetchComfyApi } from '@/utils/comfyApi'
 
 export interface OrchestratorHealth {
   status: string
@@ -28,23 +29,8 @@ export interface OrchestratorStatus {
   recovery_command?: string
 }
 
-// Access ComfyUI's API
-declare global {
-  interface Window {
-    app?: {
-      api: {
-        fetchApi: (endpoint: string, options?: RequestInit) => Promise<Response>
-      }
-    }
-  }
-}
-
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  if (!window.app?.api) {
-    throw new Error('ComfyUI API not available')
-  }
-
-  const response = await window.app.api.fetchApi(endpoint, options)
+  const response = await fetchComfyApi(endpoint, options)
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}))

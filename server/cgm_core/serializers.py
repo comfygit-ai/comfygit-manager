@@ -1,6 +1,7 @@
 """Convert core library types to JSON-serializable dicts."""
 
 from cgm_core.version_utils import get_latest_version
+from cgm_core.runtime_imports import collect_runtime_import_report
 
 
 def _safe_list(value) -> list:
@@ -29,6 +30,142 @@ def _safe_sequence(value) -> list:
     if isinstance(value, (list, tuple, set)):
         return list(value)
     return []
+
+
+def _safe_dict(value) -> dict:
+    """Safely pass through dict values and reject placeholder objects."""
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
+def _contract_has_shape(contract) -> bool:
+    """Return True when a value looks like a workflow execution contract."""
+    return contract is not None and isinstance(getattr(contract, "contracts", None), dict)
+
+
+def _derive_contract_status(contract) -> str:
+    """Derive compact contract health from durable contract state."""
+    if contract is None or not _contract_has_shape(contract):
+        return "none"
+
+    contracts = _safe_dict(getattr(contract, "contracts", None))
+    if not contracts:
+        return "incomplete"
+
+    default_contract_name = _safe_str(getattr(contract, "default_contract", None))
+    if not default_contract_name:
+        return "incomplete"
+
+    default_contract = contracts.get(default_contract_name)
+    if default_contract is None:
+        return "incomplete"
+
+    outputs = _safe_sequence(getattr(default_contract, "outputs", None))
+    if not outputs:
+        return "incomplete"
+    if not _safe_str(getattr(contract, "api_prompt_file", None)):
+        return "incomplete"
+
+    return "valid"
+
+
+def serialize_workflow_contract_summary(contract) -> dict:
+    """Serialize compact derived contract health for workflow list/detail payloads."""
+    contracts = _safe_dict(getattr(contract, "contracts", None))
+    default_contract_name = _safe_str(getattr(contract, "default_contract", None))
+    default_contract = contracts.get(default_contract_name) if default_contract_name else None
+    inputs = _safe_sequence(getattr(default_contract, "inputs", None))
+    outputs = _safe_sequence(getattr(default_contract, "outputs", None))
+
+    return {
+        "has_contract": _contract_has_shape(contract),
+        "input_count": len(inputs),
+        "output_count": len(outputs),
+        "status": _derive_contract_status(contract),
+    }
+
+
+def serialize_workflow_execution_contract(contract) -> dict | None:
+    """Serialize the durable workflow execution contract for manager UI use."""
+    if contract is None or not _contract_has_shape(contract):
+        return None
+
+    contracts_payload = {}
+    for name, named_contract in _safe_dict(getattr(contract, "contracts", None)).items():
+        inputs = []
+        for item in _safe_sequence(getattr(named_contract, "inputs", None)):
+            input_payload = {
+                "name": getattr(item, "name", ""),
+                "type": getattr(item, "type", ""),
+                "node_id": getattr(item, "node_id", ""),
+                "required": bool(getattr(item, "required", False)),
+            }
+            if getattr(item, "display_name", None) is not None:
+                input_payload["display_name"] = item.display_name
+            if getattr(item, "widget_idx", None) is not None:
+                input_payload["widget_idx"] = item.widget_idx
+            if getattr(item, "field_key", None) is not None:
+                input_payload["field_key"] = item.field_key
+            if getattr(item, "api_node_id", None) is not None:
+                input_payload["api_node_id"] = item.api_node_id
+            if getattr(item, "api_field_key", None) is not None:
+                input_payload["api_field_key"] = item.api_field_key
+            if getattr(item, "default", None) is not None:
+                input_payload["default"] = item.default
+            if getattr(item, "min", None) is not None:
+                input_payload["min"] = item.min
+            if getattr(item, "max", None) is not None:
+                input_payload["max"] = item.max
+            enum_values = _safe_sequence(getattr(item, "enum_values", None))
+            if enum_values:
+                input_payload["enum_values"] = enum_values
+            if getattr(item, "description", None) is not None:
+                input_payload["description"] = item.description
+            inputs.append(input_payload)
+
+        outputs = []
+        for item in _safe_sequence(getattr(named_contract, "outputs", None)):
+            output_payload = {
+                "name": getattr(item, "name", ""),
+                "type": getattr(item, "type", ""),
+                "node_id": getattr(item, "node_id", ""),
+            }
+            if getattr(item, "display_name", None) is not None:
+                output_payload["display_name"] = item.display_name
+            if getattr(item, "selector", None) is not None:
+                output_payload["selector"] = item.selector
+            if getattr(item, "description", None) is not None:
+                output_payload["description"] = item.description
+            outputs.append(output_payload)
+
+        contract_payload = {
+            "inputs": inputs,
+            "outputs": outputs,
+        }
+        if getattr(named_contract, "display_name", None) is not None:
+            contract_payload["display_name"] = named_contract.display_name
+        if getattr(named_contract, "description", None) is not None:
+            contract_payload["description"] = named_contract.description
+        contracts_payload[name] = contract_payload
+
+    payload = {
+        "version": int(getattr(contract, "version", 1)),
+        "default_contract": getattr(contract, "default_contract", "default"),
+        "contracts": contracts_payload,
+    }
+    for key in (
+        "api_prompt_file",
+        "api_prompt_source",
+        "api_prompt_generated_by",
+        "api_prompt_generated_at",
+        "comfyui_version",
+        "manager_version",
+    ):
+        value = _safe_str(getattr(contract, key, None))
+        if value is not None:
+            payload[key] = value
+    return payload
 
 
 def _extract_node_type(node) -> str | None:
@@ -246,6 +383,24 @@ def serialize_workflow_details(
             node_entry["guidance"] = guidance
         nodes.append(node_entry)
 
+    for node in _safe_sequence(getattr(workflow.resolution, "nodes_unresolved", None)):
+        node_name = _extract_node_type(node)
+        if not node_name:
+            continue
+        key = ("missing", node_name)
+        if key in seen_blocked_nodes:
+            continue
+        seen_blocked_nodes.add(key)
+        node_entry = {
+            "name": node_name,
+            "version": None,
+            "status": "missing",
+        }
+        guidance = _extract_node_guidance(node, node_guidance)
+        if guidance:
+            node_entry["guidance"] = guidance
+        nodes.append(node_entry)
+
     return {
         "name": name,
         "path": f"workflows/{name}",
@@ -273,6 +428,17 @@ def serialize_environment_status(status, env_name: str, env=None) -> dict:
     if env and hasattr(env, 'custom_nodes_path'):
         legacy_manager_path = env.custom_nodes_path / "ComfyUI-Manager"
         has_legacy_manager = legacy_manager_path.exists()
+
+    runtime_import_report = None
+    if env is not None:
+        try:
+            runtime_import_report = collect_runtime_import_report(
+                env,
+                nodes=env.list_nodes(),
+                status=status,
+            )
+        except Exception:
+            runtime_import_report = None
 
     # Serialize analyzed workflows with full resolution state
     analyzed = []
@@ -358,4 +524,13 @@ def serialize_environment_status(status, env_name: str, env=None) -> dict:
         },
         "missing_models_count": len(status.missing_models),
         "has_legacy_manager": has_legacy_manager,
+        "runtime_issues": (
+            runtime_import_report.to_summary_dict()
+            if runtime_import_report is not None
+            else {
+                "available": False,
+                "custom_node_import_failures": [],
+                "custom_node_import_failure_count": 0,
+            }
+        ),
     }

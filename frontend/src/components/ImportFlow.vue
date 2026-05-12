@@ -22,20 +22,53 @@
             class="git-url-input"
             v-model="gitUrlInput"
             placeholder="https://github.com/user/repo.git"
-            @keyup.enter="handleAnalyzeGitUrl"
-            :disabled="isAnalyzingGit"
+            @input="handleGitUrlChanged"
+            @keyup.enter="handleGitImportAction"
+            :disabled="isAnalyzingGit || isLoadingGitRefs"
           />
           <ActionButton
             variant="primary"
             size="sm"
-            :disabled="!gitUrlInput.trim() || isAnalyzingGit"
-            @click="handleAnalyzeGitUrl"
+            :disabled="!gitUrlInput.trim() || isAnalyzingGit || isLoadingGitRefs"
+            @click="handleGitImportAction"
           >
-            {{ isAnalyzingGit ? 'Analyzing...' : 'ANALYZE' }}
+            {{ gitImportActionLabel }}
           </ActionButton>
         </div>
+        <div v-if="gitRefs" class="git-ref-row">
+          <label class="git-ref-label" for="git-ref-select">Source ref</label>
+          <select
+            id="git-ref-select"
+            v-model="selectedGitRef"
+            class="git-ref-select"
+          >
+            <optgroup v-if="gitRefs.branches.length" label="Branches">
+              <option
+                v-for="branch in gitRefs.branches"
+                :key="`branch:${branch.name}`"
+                :value="branch.name"
+              >
+                {{ branch.name }}{{ branch.is_default ? ' (default)' : '' }}
+              </option>
+            </optgroup>
+            <optgroup v-if="gitRefs.tags.length" label="Tags">
+              <option
+                v-for="tag in gitRefs.tags"
+                :key="`tag:${tag.name}`"
+                :value="tag.name"
+              >
+                {{ tag.name }}
+              </option>
+            </optgroup>
+          </select>
+          <div v-if="selectedGitRefCommit" class="git-ref-commit">
+            {{ selectedGitRefCommit.slice(0, 12) }}
+          </div>
+        </div>
         <div v-if="gitPreviewError" class="git-error">{{ gitPreviewError }}</div>
-        <div class="git-url-hint">Paste a GitHub URL to preview the environment</div>
+        <div class="git-url-hint">
+          {{ gitRefs ? 'Choose a branch or tag, then analyze the selected source.' : 'Paste a GitHub URL, then load refs before analysis.' }}
+        </div>
       </div>
     </div>
 
@@ -59,7 +92,9 @@
             <div class="file-bar-icon">🔗</div>
             <div class="file-bar-info">
               <div class="file-bar-name">{{ formatGitUrl(gitUrl) }}</div>
-              <div class="file-bar-size">Git Repository</div>
+              <div class="file-bar-size">
+                Git Repository<span v-if="selectedGitRef"> • {{ selectedGitRef }}</span>
+              </div>
             </div>
           </div>
         </template>
@@ -95,6 +130,8 @@
         :nodes="previewData.nodes"
         :git-branch="previewData.gitBranch"
         :git-commit="previewData.gitCommit"
+        :git-url="previewData.gitUrl"
+        :manifest-toml="previewData.manifestToml"
       />
 
       <!-- Configuration -->
@@ -145,21 +182,27 @@
         Importing environment <strong>{{ importConfig.name }}</strong>...
       </p>
 
-      <TaskProgressDisplay
+      <LifecycleProgressDisplay
+        :state="importDisplayState"
         :progress="importProgress.progress"
-        :message="importProgress.message"
-        :current-phase="importProgress.phase"
-        :variant="importProgress.error ? 'error' : 'default'"
-        :show-steps="true"
+        :state-label="importProgress.message"
         :steps="importSteps"
+        :logs="importLogs"
+        log-title="Import Log"
+        active-message="This may take several minutes. Please wait..."
+        complete-message="Environment creation completed. Copy logs if needed before closing."
+        :error-message="importProgress.error || 'Environment import failed. Review logs for details.'"
       />
 
-      <p v-if="!importProgress.error" class="progress-warning">
-        This may take several minutes. Please wait...
-      </p>
-
-      <div v-if="importProgress.error" class="import-error">
-        <p class="error-message">{{ importProgress.error }}</p>
+      <div class="import-progress-footer">
+        <ActionButton
+          variant="secondary"
+          size="md"
+          :disabled="!importComplete"
+          @click="handleDone"
+        >
+          All Done
+        </ActionButton>
       </div>
     </div>
 
@@ -197,9 +240,9 @@ import ImportPreview from '@/components/base/molecules/ImportPreview.vue'
 import ImportConfigForm from '@/components/base/molecules/ImportConfigForm.vue'
 import IssueCard from '@/components/base/molecules/IssueCard.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
-import TaskProgressDisplay from '@/components/base/molecules/TaskProgressDisplay.vue'
+import LifecycleProgressDisplay from '@/components/base/molecules/LifecycleProgressDisplay.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
-import type { ImportAnalysis } from '@/types/comfygit'
+import type { GitRemoteRef, GitRemoteRefs, ImportAnalysis, SwitchLogEntry } from '@/types/comfygit'
 
 const props = defineProps<{
   // Optional: Allow parent to inject workspace path for first-time setup
@@ -217,11 +260,20 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'import-complete': [environmentName: string, switchRequested: boolean]
+  'import-dismissed': [environmentName: string | null]
   'import-started': []
   'source-cleared': []
 }>()
 
-const { previewTarballImport, previewGitImport, validateEnvironmentName, executeImport, executeGitImport, getImportProgress } = useComfyGitService()
+const {
+  previewTarballImport,
+  getGitImportRefs,
+  previewGitImport,
+  validateEnvironmentName,
+  executeImport,
+  executeGitImport,
+  getImportProgress
+} = useComfyGitService()
 
 // Polling interval for import progress
 let importPollInterval: ReturnType<typeof setInterval> | null = null
@@ -232,6 +284,7 @@ const isImporting = ref(props.resumeImport ?? false)
 const importComplete = ref(false)
 const importSuccess = ref(false)
 const importResultMessage = ref('')
+const completedEnvironmentName = ref<string | null>(null)
 const isLoadingPreview = ref(false)
 const previewError = ref<string | null>(null)
 
@@ -239,6 +292,9 @@ const previewError = ref<string | null>(null)
 const gitUrlInput = ref('')
 const gitUrl = ref<string | null>(null) // Set after successful preview
 const isAnalyzingGit = ref(false)
+const isLoadingGitRefs = ref(false)
+const gitRefs = ref<GitRemoteRefs | null>(null)
+const selectedGitRef = ref('')
 const gitPreviewError = ref<string | null>(null)
 
 // Import analysis from API
@@ -260,46 +316,65 @@ const importProgress = ref({
   progress: props.initialProgress?.progress ?? 0,
   error: null as string | null
 })
+const importLogs = ref<SwitchLogEntry[]>([])
 
 // Import steps (matches core library phases)
 const importSteps = [
-  { id: 'clone_comfyui', label: 'Clone/restore ComfyUI', progressThreshold: 15 },
-  { id: 'extract_builtins', label: 'Extract builtin nodes', progressThreshold: 20 },
-  { id: 'configure_pytorch', label: 'Configure PyTorch', progressThreshold: 35 },
-  { id: 'install_dependencies', label: 'Install dependencies', progressThreshold: 60 },
-  { id: 'sync_nodes', label: 'Sync custom nodes', progressThreshold: 70 },
-  { id: 'copy_workflows', label: 'Copy workflows', progressThreshold: 80 },
-  { id: 'resolve_models', label: 'Resolve models', progressThreshold: 85 },
-  { id: 'download_models', label: 'Download models', progressThreshold: 95 },
-  { id: 'finalize', label: 'Finalize environment', progressThreshold: 100 },
+  { state: 'clone_comfyui', label: 'Clone/restore ComfyUI', aliases: ['restore_comfyui'], progressThreshold: 10 },
+  { state: 'extract_builtins', label: 'Extract builtin nodes', progressThreshold: 20 },
+  { state: 'probe_pytorch', label: 'Configure PyTorch', aliases: ['configure_pytorch'], progressThreshold: 30 },
+  { state: 'copy_workflows', label: 'Copy workflows', aliases: ['init_git'], progressThreshold: 45 },
+  { state: 'sync_environment', label: 'Sync dependencies and custom nodes', aliases: ['install_dependencies', 'sync_nodes', 'detect_overlays', 'add_requirements'], progressThreshold: 75 },
+  { state: 'resolve_models', label: 'Resolve models', progressThreshold: 85 },
+  { state: 'download_models', label: 'Download models', progressThreshold: 95 },
+  { state: 'finalize', label: 'Finalize environment', progressThreshold: 100 },
 ]
+
+const importDisplayState = computed(() => {
+  if (importComplete.value) return importSuccess.value ? 'complete' : 'error'
+  return importProgress.value.phase || 'importing'
+})
 
 // Transform ImportAnalysis to the format ImportPreview expects
 const previewData = computed(() => {
   if (!importAnalysis.value) {
     return {
       sourceEnvironment: '',
-      workflows: [] as string[],
-      models: [] as Array<{ filename: string; size: number; type: string }>,
-      nodes: [] as string[],
+      workflows: [],
+      models: [],
+      nodes: [],
       gitBranch: undefined,
-      gitCommit: undefined
+      gitCommit: undefined,
+      gitUrl: undefined,
+      manifestToml: ''
     }
   }
 
   const analysis = importAnalysis.value
   return {
     sourceEnvironment: analysis.comfyui_version ? `ComfyUI ${analysis.comfyui_version}` : 'Unknown',
-    workflows: analysis.workflows.map(w => w.name),
-    models: analysis.models.map(m => ({
-      filename: m.filename,
-      size: 0,
-      type: m.relative_path.split('/')[0] || 'model'
-    })),
-    nodes: analysis.nodes.map(n => n.name),
-    gitBranch: undefined,
-    gitCommit: undefined
+    workflows: analysis.workflows,
+    models: analysis.models,
+    nodes: analysis.nodes,
+    gitBranch: gitUrl.value ? selectedGitRef.value || undefined : undefined,
+    gitCommit: gitUrl.value ? selectedGitRefCommit.value || undefined : undefined,
+    gitUrl: gitUrl.value || undefined,
+    manifestToml: analysis.manifest_toml || ''
   }
+})
+
+const selectedGitRefOption = computed<GitRemoteRef | null>(() => {
+  if (!gitRefs.value || !selectedGitRef.value) return null
+  return [...gitRefs.value.branches, ...gitRefs.value.tags]
+    .find(ref => ref.name === selectedGitRef.value) ?? null
+})
+
+const selectedGitRefCommit = computed(() => selectedGitRefOption.value?.commit ?? null)
+
+const gitImportActionLabel = computed(() => {
+  if (isLoadingGitRefs.value) return 'Loading refs...'
+  if (isAnalyzingGit.value) return 'Analyzing...'
+  return gitRefs.value ? 'ANALYZE' : 'LOAD REFS'
 })
 
 const canImport = computed(() => {
@@ -333,10 +408,13 @@ function handleClearSource() {
   selectedFile.value = null
   gitUrl.value = null
   gitUrlInput.value = ''
+  gitRefs.value = null
+  selectedGitRef.value = ''
   gitPreviewError.value = null
   importComplete.value = false
   importSuccess.value = false
   importResultMessage.value = ''
+  completedEnvironmentName.value = null
   importAnalysis.value = null
   previewError.value = null
   importConfig.value = { name: '', modelStrategy: 'required', torchBackend: 'auto', switchAfterImport: true }
@@ -356,6 +434,13 @@ function handleReset() {
     progress: 0,
     error: null
   }
+  importLogs.value = []
+}
+
+function handleDone() {
+  const envName = completedEnvironmentName.value
+  handleReset()
+  emit('import-dismissed', envName)
 }
 
 async function handleAnalyzeGitUrl() {
@@ -365,7 +450,7 @@ async function handleAnalyzeGitUrl() {
   gitPreviewError.value = null
 
   try {
-    const analysis = await previewGitImport(gitUrlInput.value.trim())
+    const analysis = await previewGitImport(gitUrlInput.value.trim(), selectedGitRef.value || undefined)
     gitUrl.value = gitUrlInput.value.trim()
     importAnalysis.value = analysis
   } catch (err) {
@@ -373,6 +458,45 @@ async function handleAnalyzeGitUrl() {
   } finally {
     isAnalyzingGit.value = false
   }
+}
+
+function handleGitUrlChanged() {
+  gitRefs.value = null
+  selectedGitRef.value = ''
+  gitPreviewError.value = null
+}
+
+async function handleLoadGitRefs() {
+  if (!gitUrlInput.value.trim()) return
+
+  isLoadingGitRefs.value = true
+  gitPreviewError.value = null
+
+  try {
+    const refs = await getGitImportRefs(gitUrlInput.value.trim())
+    gitRefs.value = refs
+    selectedGitRef.value = refs.default_branch ||
+      refs.branches[0]?.name ||
+      refs.tags[0]?.name ||
+      ''
+
+    if (!selectedGitRef.value) {
+      gitPreviewError.value = 'No importable branches or tags were found for this repository.'
+    }
+  } catch (err) {
+    gitPreviewError.value = err instanceof Error ? err.message : 'Failed to load repository refs'
+  } finally {
+    isLoadingGitRefs.value = false
+  }
+}
+
+async function handleGitImportAction() {
+  if (!gitRefs.value) {
+    await handleLoadGitRefs()
+    return
+  }
+
+  await handleAnalyzeGitUrl()
 }
 
 function formatGitUrl(url: string): string {
@@ -405,6 +529,7 @@ async function handleStartImport() {
   isImporting.value = true
   importComplete.value = false
   importProgress.value = { message: `Creating environment '${importConfig.value.name}'...`, phase: '', progress: 0, error: null }
+  importLogs.value = []
 
   // Notify parent that import has started
   emit('import-started')
@@ -424,7 +549,8 @@ async function handleStartImport() {
         gitUrl.value,
         importConfig.value.name,
         importConfig.value.modelStrategy,
-        importConfig.value.torchBackend
+        importConfig.value.torchBackend,
+        selectedGitRef.value || undefined
       )
     } else {
       throw new Error('No import source selected')
@@ -437,13 +563,23 @@ async function handleStartImport() {
       // Error starting import
       importSuccess.value = false
       importResultMessage.value = result.message
-      isImporting.value = false
+      importProgress.value = {
+        message: 'Failed to start import',
+        phase: '',
+        progress: 0,
+        error: result.message
+      }
       importComplete.value = true
     }
   } catch (error) {
     importSuccess.value = false
     importResultMessage.value = error instanceof Error ? error.message : 'Unknown error occurred during import'
-    isImporting.value = false
+    importProgress.value = {
+      message: 'Failed to start import',
+      phase: '',
+      progress: 0,
+      error: importResultMessage.value
+    }
     importComplete.value = true
   }
 }
@@ -462,13 +598,20 @@ async function startImportPolling() {
         progress: progress.progress ?? (progress.state === 'importing' ? 50 : 0),
         error: progress.error || null
       }
+      importLogs.value = progress.logs || importLogs.value
 
       if (progress.state === 'complete') {
         stopImportPolling()
         importSuccess.value = true
         importResultMessage.value = `Environment '${progress.environment_name}' created successfully`
-        isImporting.value = false
+        importProgress.value = {
+          message: `Environment '${progress.environment_name}' created successfully`,
+          phase: 'complete',
+          progress: 100,
+          error: null
+        }
         importComplete.value = true
+        completedEnvironmentName.value = progress.environment_name || importConfig.value.name || null
 
         // Notify parent
         if (progress.environment_name) {
@@ -479,7 +622,12 @@ async function startImportPolling() {
         stopImportPolling()
         importSuccess.value = false
         importResultMessage.value = progress.error || progress.message
-        isImporting.value = false
+        importProgress.value = {
+          message: progress.message || 'Environment import failed',
+          phase: 'error',
+          progress: progress.progress ?? importProgress.value.progress,
+          error: importResultMessage.value
+        }
         importComplete.value = true
         return false
       }
@@ -536,6 +684,7 @@ onMounted(async () => {
         phase: progress.phase || '',
         error: null
       }
+      importLogs.value = progress.logs || []
 
       // Start polling for progress updates
       startImportPolling()
@@ -624,6 +773,19 @@ defineExpose({
   flex-direction: column;
   gap: var(--cg-space-4);
   padding: var(--cg-space-4);
+  padding-bottom: 0;
+}
+
+.import-progress-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 calc(-1 * var(--cg-space-4));
+  padding: var(--cg-space-4);
+  background: var(--cg-color-bg-primary);
+  border-top: 1px solid var(--cg-color-border-subtle);
 }
 
 .creating-intro {
@@ -801,6 +963,45 @@ defineExpose({
 .git-url-input:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.git-ref-row {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto;
+  align-items: center;
+  gap: var(--cg-space-2);
+  margin-top: var(--cg-space-3);
+}
+
+.git-ref-label {
+  color: var(--cg-color-text-secondary);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.git-ref-select {
+  min-width: 0;
+  height: 32px;
+  padding: 0 var(--cg-space-2);
+  background: var(--cg-color-bg-secondary);
+  border: 1px solid var(--cg-color-border);
+  color: var(--cg-color-text-primary);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-sm);
+}
+
+.git-ref-select:focus {
+  outline: none;
+  border-color: var(--cg-color-accent);
+}
+
+.git-ref-commit {
+  color: var(--cg-color-text-muted);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  border: 1px solid var(--cg-color-border-subtle);
+  padding: var(--cg-space-1) var(--cg-space-2);
 }
 
 .git-url-hint {

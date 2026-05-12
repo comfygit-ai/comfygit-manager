@@ -7,30 +7,21 @@
         </div>
 
         <div class="modal-body">
-          <ProgressBar
+          <LifecycleProgressDisplay
+            :state="state"
             :progress="progress"
-            :variant="progressVariant"
-          />
-
-          <div class="progress-info">
-            <div class="progress-percentage">{{ progress }}%</div>
-            <div class="progress-state">{{ stateLabel }}</div>
-          </div>
-
-          <div class="switch-steps">
-            <div
-              v-for="step in steps"
-              :key="step.state"
-              :class="['switch-step', step.status]"
-            >
-              <span class="step-icon">{{ step.icon }}</span>
-              <span class="step-label">{{ step.label }}</span>
-            </div>
-          </div>
-
-          <p class="progress-warning">
-            Please wait, do not close this window.
-          </p>
+            :state-label="stateLabel"
+            :steps="steps"
+            :logs="logs"
+            log-title="Supervisor Log"
+            complete-message="Environment switched. Copy logs if needed, then refresh the page."
+          >
+            <template v-if="state === 'complete'" #actions>
+              <button class="refresh-btn" @click="emit('refresh')">
+                Refresh Page
+              </button>
+            </template>
+          </LifecycleProgressDisplay>
         </div>
       </div>
     </div>
@@ -39,13 +30,19 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import ProgressBar from '@/components/base/atoms/ProgressBar.vue'
+import LifecycleProgressDisplay from '@/components/base/molecules/LifecycleProgressDisplay.vue'
+import type { SwitchLogEntry } from '@/types/comfygit'
 
 const props = defineProps<{
   show: boolean
   state: string        // e.g., 'preparing', 'syncing', 'starting', 'validating', 'complete'
   progress: number     // 0-100
   message?: string
+  logs?: SwitchLogEntry[]
+}>()
+
+const emit = defineEmits<{
+  refresh: []
 }>()
 
 // Map states to human-readable labels
@@ -63,42 +60,14 @@ const stateLabel = computed(() => {
   return props.message || labels[props.state] || props.state
 })
 
-// Progress bar variant based on state
-const progressVariant = computed(() => {
-  if (props.state === 'complete') return 'success'
-  if (props.state === 'critical_failure' || props.state === 'rolled_back') return 'error'
-  return 'default'
-})
-
 // Steps with status
 const steps = computed(() => {
-  const allSteps = [
+  return [
     { state: 'preparing', label: 'Stopping current environment', icon: '●' },
     { state: 'syncing', label: 'Preparing target environment', icon: '●' },
     { state: 'starting', label: 'Starting new environment', icon: '●' },
     { state: 'validating', label: 'Waiting for server to be ready', icon: '●' }
   ]
-
-  const currentStateIndex = allSteps.findIndex(s => s.state === props.state)
-
-  return allSteps.map((step, index) => {
-    let status = 'pending'
-    let icon = '○'
-
-    if (index < currentStateIndex) {
-      status = 'completed'
-      icon = '✓'
-    } else if (index === currentStateIndex) {
-      status = 'active'
-      icon = '⟳'
-    }
-
-    return {
-      ...step,
-      status,
-      icon
-    }
-  })
 })
 </script>
 
@@ -122,7 +91,7 @@ const steps = computed(() => {
   border: 1px solid var(--cg-color-accent);
   border-radius: var(--cg-radius-lg);
   box-shadow: var(--cg-shadow-xl), 0 0 20px var(--cg-color-accent-muted);
-  max-width: 500px;
+  max-width: 620px;
   width: 90%;
   animation: modalSlideIn 0.3s ease;
 }
@@ -160,96 +129,21 @@ const steps = computed(() => {
   gap: var(--cg-space-4);
 }
 
-.progress-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--cg-space-2);
-}
-
-.progress-percentage {
-  font-size: var(--cg-font-size-xl);
-  font-weight: var(--cg-font-weight-bold);
-  color: var(--cg-color-accent);
+.refresh-btn {
+  padding: var(--cg-space-2) var(--cg-space-4);
+  background: var(--cg-color-accent);
+  border: 1px solid var(--cg-color-accent);
+  border-radius: var(--cg-radius-sm);
+  color: var(--cg-color-bg-primary);
   font-family: var(--cg-font-mono);
-}
-
-.progress-state {
   font-size: var(--cg-font-size-sm);
-  color: var(--cg-color-text-secondary);
-  text-align: right;
-  flex: 1;
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+  cursor: pointer;
 }
 
-.switch-steps {
-  display: flex;
-  flex-direction: column;
-  gap: var(--cg-space-2);
-  padding: var(--cg-space-3);
-  background: var(--cg-color-bg-tertiary);
-  border: 1px solid var(--cg-color-border-subtle);
-  border-radius: var(--cg-radius-sm);
-}
-
-.switch-step {
-  display: flex;
-  align-items: center;
-  gap: var(--cg-space-2);
-  font-size: var(--cg-font-size-sm);
-  transition: all var(--cg-transition-fast);
-}
-
-.switch-step.pending {
-  color: var(--cg-color-text-muted);
-}
-
-.switch-step.pending .step-icon {
-  color: var(--cg-color-text-muted);
-}
-
-.switch-step.active {
-  color: var(--cg-color-accent);
-  font-weight: var(--cg-font-weight-medium);
-}
-
-.switch-step.active .step-icon {
-  color: var(--cg-color-accent);
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.switch-step.completed {
-  color: var(--cg-color-success);
-}
-
-.switch-step.completed .step-icon {
-  color: var(--cg-color-success);
-}
-
-.step-icon {
-  flex-shrink: 0;
-  font-size: var(--cg-font-size-base);
-  width: 16px;
-  display: inline-block;
-  text-align: center;
-}
-
-.step-label {
-  flex: 1;
-}
-
-.progress-warning {
-  margin: 0;
-  padding: var(--cg-space-2) var(--cg-space-3);
-  background: var(--cg-color-info-muted);
-  border: 1px solid var(--cg-color-info);
-  border-radius: var(--cg-radius-sm);
-  font-size: var(--cg-font-size-sm);
-  color: var(--cg-color-info);
-  text-align: center;
+.refresh-btn:hover {
+  background: var(--cg-color-accent-hover);
+  border-color: var(--cg-color-accent-hover);
 }
 </style>

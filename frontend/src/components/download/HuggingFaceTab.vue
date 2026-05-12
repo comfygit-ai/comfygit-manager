@@ -80,8 +80,11 @@
       :revision="selectedRevision"
       :initial-path="initialPath"
       :preselected-file="preselectedFile"
+      :mode="modeKind"
+      :action-label="actionLabel"
       @back="handleBack"
       @queue="$emit('queue', $event)"
+      @select-source="$emit('selectSource', $event)"
     />
 
     <!-- Token Configuration Modal -->
@@ -89,6 +92,7 @@
       v-if="showTokenModal"
       provider="huggingface"
       :current-token-mask="tokenMask"
+      :overlay-z-index="overlayZIndex + 2"
       @close="showTokenModal = false"
       @saved="handleTokenSaved"
       @cleared="handleTokenCleared"
@@ -107,8 +111,19 @@ import { useComfyGitService } from '@/composables/useComfyGitService'
 import { parseHuggingFaceUrl} from '@/utils/huggingface'
 import type { HuggingFaceSearchResult } from '@/types/comfygit'
 
+withDefaults(defineProps<{
+  modeKind?: 'download' | 'source'
+  actionLabel?: string
+  overlayZIndex?: number
+}>(), {
+  modeKind: 'download',
+  actionLabel: 'Queue Download',
+  overlayZIndex: 10003
+})
+
 defineEmits<{
   queue: [items: HfDownloadItem[]]
+  selectSource: [url: string]
 }>()
 
 const { searchHuggingFaceRepos, getConfig } = useComfyGitService()

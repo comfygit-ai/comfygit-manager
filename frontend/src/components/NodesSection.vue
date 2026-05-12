@@ -33,15 +33,6 @@
         <ErrorState :message="error" :retry="true" @retry="loadNodes" />
       </template>
       <template v-else>
-        <!-- Summary at top -->
-        <SummaryBar v-if="nodesData.total_count" variant="compact">
-          {{ nodesData.installed_count }} installed
-          <template v-if="nodesData.missing_count"> • {{ nodesData.missing_count }} missing</template>
-          <template v-if="blockedVersionGatedCount"> • {{ blockedVersionGatedCount }} blocked</template>
-          <template v-if="actionableCommunityCount"> • {{ actionableCommunityCount }} community-mapped</template>
-          <template v-if="nodesData.untracked_count"> • {{ nodesData.untracked_count }} untracked</template>
-        </SummaryBar>
-
         <!-- Version Mismatches (highest priority - needs repair) -->
         <SectionGroup
           v-if="hasMismatches"
@@ -241,18 +232,31 @@
           <ItemCard
             v-for="node in filteredInstalled"
             :key="node.name"
-            status="synced"
+            :status="getInstalledNodeStatus(node)"
           >
-            <template #icon>{{ node.source === 'development' ? '🔧' : '📦' }}</template>
+            <template #icon>{{ getInstalledNodeIcon(node) }}</template>
             <template #title>{{ node.name }}</template>
             <template #subtitle>
-              <span v-if="node.version">{{ node.source === 'development' ? '' : 'v' }}{{ node.version }}</span>
-              <span v-else style="color: var(--cg-color-text-muted)">version unknown</span>
-              <span style="color: var(--cg-color-text-muted); margin-left: 8px;">
-                • {{ getSourceLabel(node.source) }}
-              </span>
+              <template v-if="hasRuntimeImportFailure(node)">
+                <span style="color: var(--cg-color-error)">Import failed</span>
+                <span style="color: var(--cg-color-text-muted); margin-left: 8px;">
+                  • {{ getSourceLabel(node.source) }}
+                </span>
+              </template>
+              <template v-else>
+                <span v-if="node.version">{{ node.source === 'development' ? '' : 'v' }}{{ node.version }}</span>
+                <span v-else style="color: var(--cg-color-text-muted)">version unknown</span>
+                <span style="color: var(--cg-color-text-muted); margin-left: 8px;">
+                  • {{ getSourceLabel(node.source) }}
+                </span>
+              </template>
             </template>
             <template #details>
+              <DetailRow
+                v-if="hasRuntimeImportFailure(node)"
+                label="Runtime:"
+                value="Import failed. Check ComfyUI logs for the error message."
+              />
               <DetailRow
                 label="Used by:"
                 :value="getUsageLabel(node)"
@@ -266,13 +270,18 @@
               >
                 View Details
               </ActionButton>
-              <ActionButton
-                variant="secondary"
-                size="xs"
-                @click="openNodeManager"
-              >
-                Manage
-              </ActionButton>
+              <label class="criticality-control">
+                <span>Readiness</span>
+                <select
+                  class="criticality-select"
+                  :value="getNodeCriticality(node)"
+                  :disabled="isCriticalityUpdating(node)"
+                  @change="handleCriticalityChange(node, $event)"
+                >
+                  <option value="required">Required</option>
+                  <option value="optional">Optional</option>
+                </select>
+              </label>
             </template>
           </ItemCard>
         </SectionGroup>
@@ -382,7 +391,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
-import type { NodeInfo, NodesResult, VersionMismatch } from '@/types/comfygit'
+import type { NodeCriticality, NodeInfo, NodesResult, VersionMismatch } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
 import SearchBar from '@/components/base/molecules/SearchBar.vue'
@@ -390,7 +399,6 @@ import SectionGroup from '@/components/base/molecules/SectionGroup.vue'
 import ItemCard from '@/components/base/molecules/ItemCard.vue'
 import DetailRow from '@/components/base/molecules/DetailRow.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
-import SummaryBar from '@/components/base/molecules/SummaryBar.vue'
 import EmptyState from '@/components/base/molecules/EmptyState.vue'
 import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
@@ -412,7 +420,14 @@ const emit = defineEmits<{
   toast: [message: string, type: 'info' | 'success' | 'warning' | 'error']
 }>()
 
-const { getNodes, trackNodeAsDev, installNode, uninstallNode, queueNodeInstall } = useComfyGitService()
+const {
+  getNodes,
+  trackNodeAsDev,
+  installNode,
+  uninstallNode,
+  queueNodeInstall,
+  updateNodeCriticality
+} = useComfyGitService()
 
 const nodesData = ref<NodesResult>({
   nodes: [],
@@ -429,6 +444,7 @@ const searchQuery = ref('')
 const showPopover = ref(false)
 const selectedNode = ref<NodeInfo | null>(null)
 const queuedCommunityInstalls = ref<Set<string>>(new Set())
+const criticalityUpdates = ref<Set<string>>(new Set())
 
 // Confirmation dialog state
 interface ConfirmDialogConfig {
@@ -475,9 +491,6 @@ const filteredBlocked = computed(() =>
 const filteredCommunity = computed(() =>
   filteredNodes.value.filter(n => n.issue_type === 'uninstallable')
 )
-
-const blockedVersionGatedCount = computed(() => filteredBlocked.value.length)
-const actionableCommunityCount = computed(() => filteredCommunity.value.length)
 
 function getCommunityInstallKey(node: NodeInfo): string {
   return node.registry_id || node.name
@@ -550,6 +563,58 @@ function getUsageLabel(node: NodeInfo): string {
     return node.used_in_workflows[0]
   }
   return `${node.used_in_workflows.length} workflows`
+}
+
+function getNodeCriticality(node: NodeInfo): NodeCriticality {
+  return node.criticality === 'optional' ? 'optional' : 'required'
+}
+
+function hasRuntimeImportFailure(node: NodeInfo): boolean {
+  return node.runtime_import?.status === 'failed'
+}
+
+function getInstalledNodeStatus(node: NodeInfo): 'synced' | 'broken' {
+  return hasRuntimeImportFailure(node) ? 'broken' : 'synced'
+}
+
+function getInstalledNodeIcon(node: NodeInfo): string {
+  if (hasRuntimeImportFailure(node)) return '!'
+  return node.source === 'development' ? '🔧' : '📦'
+}
+
+function isCriticalityUpdating(node: NodeInfo): boolean {
+  return criticalityUpdates.value.has(node.name)
+}
+
+async function handleCriticalityChange(node: NodeInfo, event: Event) {
+  const select = event.target as HTMLSelectElement
+  const previousCriticality = getNodeCriticality(node)
+  const nextCriticality = select.value as NodeCriticality
+
+  if (nextCriticality === previousCriticality) {
+    return
+  }
+
+  criticalityUpdates.value = new Set(criticalityUpdates.value).add(node.name)
+  node.criticality = nextCriticality
+
+  try {
+    const result = await updateNodeCriticality(node.name, nextCriticality)
+    if (result.status !== 'success') {
+      node.criticality = previousCriticality
+      emit('toast', result.message || `Failed to update "${node.name}" criticality`, 'error')
+      return
+    }
+    emit('toast', `Marked "${node.name}" as ${nextCriticality}`, 'success')
+  } catch (err) {
+    node.criticality = previousCriticality
+    select.value = previousCriticality
+    emit('toast', `Error updating criticality: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
+  } finally {
+    const nextUpdates = new Set(criticalityUpdates.value)
+    nextUpdates.delete(node.name)
+    criticalityUpdates.value = nextUpdates
+  }
 }
 
 function getBlockedSubtitle(node: NodeInfo): string {
@@ -771,5 +836,30 @@ onMounted(loadNodes)
   font-weight: var(--cg-font-weight-medium);
   color: var(--cg-color-warning);
   background: color-mix(in srgb, var(--cg-color-warning) 15%, transparent);
+}
+
+.criticality-control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  margin-left: auto;
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+}
+
+.criticality-select {
+  height: 26px;
+  min-width: 96px;
+  padding: 0 var(--cg-space-2);
+  color: var(--cg-color-text-primary);
+  background: var(--cg-color-bg-secondary);
+  border: 1px solid var(--cg-color-border);
+  border-radius: var(--cg-radius-sm);
+  font-size: var(--cg-font-size-xs);
+}
+
+.criticality-select:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 </style>

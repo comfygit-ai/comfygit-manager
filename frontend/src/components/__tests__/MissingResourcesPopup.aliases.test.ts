@@ -158,4 +158,134 @@ describe('MissingResourcesPopup alias dedupe', () => {
 
     wrapper.unmount()
   })
+
+  it('dedupes missing models when filename and source URL are identical', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          workflow: 'unsaved',
+          package_aliases: {},
+          nodes: {
+            resolved: [],
+            unresolved: [],
+            version_gated: [],
+            uninstallable: [],
+            ambiguous: []
+          },
+          models: {
+            resolved: [
+              {
+                reference: { widget_value: 'ltx-2.3-22b-distilled-fp8.safetensors' },
+                match_type: 'property_download_intent',
+                download_source: 'https://example.com/models/ltx-2.3-22b-distilled-fp8.safetensors',
+                target_path: 'checkpoints/ltx-2.3-22b-distilled-fp8.safetensors'
+              },
+              {
+                reference: { widget_value: 'ltx-2.3-22b-distilled-fp8.safetensors' },
+                match_type: 'property_download_intent',
+                download_source: 'https://example.com/models/ltx-2.3-22b-distilled-fp8.safetensors',
+                target_path: 'checkpoints/ltx-2.3-22b-distilled-fp8.safetensors'
+              },
+              {
+                reference: { widget_value: 'gemma_3_12B_it_fp4_mixed.safetensors' },
+                match_type: 'property_download_intent',
+                download_source: 'https://example.com/models/gemma_3_12B_it_fp4_mixed.safetensors',
+                target_path: 'text_encoders/gemma_3_12B_it_fp4_mixed.safetensors'
+              }
+            ],
+            unresolved: [],
+            ambiguous: []
+          },
+          stats: {
+            total_nodes: 0,
+            total_models: 3,
+            download_intents: 3,
+            nodes_needing_installation: 0,
+            packages_needing_installation: 0,
+            needs_user_input: false,
+            is_fully_resolved: false,
+            models_with_category_mismatch: 0
+          }
+        })
+      }) as any
+    )
+
+    const wrapper = mountPopup()
+    await flushPromises()
+
+    window.dispatchEvent(
+      new CustomEvent('comfygit:workflow-loaded', {
+        detail: { workflow: { id: 'wf-model-dedupe' } }
+      })
+    )
+    await flushPromises()
+    await flushPromises()
+
+    expect(document.body.textContent || '').toContain('Missing Models (2)')
+    expect(document.body.querySelectorAll('.model-item')).toHaveLength(2)
+
+    wrapper.unmount()
+  })
+
+  it('does not dedupe missing models when no source URL is available', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          workflow: 'unsaved',
+          package_aliases: {},
+          nodes: {
+            resolved: [],
+            unresolved: [],
+            version_gated: [],
+            uninstallable: [],
+            ambiguous: []
+          },
+          models: {
+            resolved: [],
+            unresolved: [
+              {
+                reference: { widget_value: 'model.safetensors' },
+                reason: 'not_found'
+              },
+              {
+                reference: { widget_value: 'model.safetensors' },
+                reason: 'not_found'
+              }
+            ],
+            ambiguous: []
+          },
+          stats: {
+            total_nodes: 0,
+            total_models: 2,
+            download_intents: 0,
+            nodes_needing_installation: 0,
+            packages_needing_installation: 0,
+            needs_user_input: false,
+            is_fully_resolved: false,
+            models_with_category_mismatch: 0
+          }
+        })
+      }) as any
+    )
+
+    const wrapper = mountPopup()
+    await flushPromises()
+
+    window.dispatchEvent(
+      new CustomEvent('comfygit:workflow-loaded', {
+        detail: { workflow: { id: 'wf-model-no-source' } }
+      })
+    )
+    await flushPromises()
+    await flushPromises()
+
+    expect(document.body.textContent || '').toContain('Missing Models (2)')
+    expect(document.body.querySelectorAll('.model-item')).toHaveLength(2)
+
+    wrapper.unmount()
+  })
 })

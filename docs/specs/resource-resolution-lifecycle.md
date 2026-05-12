@@ -1,0 +1,146 @@
+# Resource Resolution Lifecycle
+
+## Purpose
+
+This spec defines how the manager handles workflows that reference missing
+nodes, models, or other resources.
+
+The resource-resolution flow is a local manager feature. It should help users
+make the current ComfyGit environment runnable without turning the manager into
+a cloud deployment or provider orchestration surface.
+
+## Lifecycle
+
+1. A workflow is loaded, imported, or selected for inspection.
+2. The manager analyzes the workflow graph against the active environment.
+3. Missing resources are classified as installable nodes, blocked nodes, model
+   download intents, or manual follow-up.
+4. The user reviews the resolution plan in a manager-owned surface.
+5. The manager applies selected installs and queues selected downloads through
+   backend APIs.
+6. The active workflow/environment state is refreshed so the user can retry the
+   workflow with current dependency state.
+
+## Clauses
+
+### CGM-RRL-01 [LIVE]: Missing-resource interception is manager-owned and environment-scoped
+Validation: LLM_REVIEW
+
+The manager may intercept ComfyUI missing-resource signals and replace or
+augment the default popup when the active ComfyUI instance is managed by
+ComfyGit.
+
+The manager should not assume it owns missing-resource behavior for unrelated
+or unsupervised ComfyUI instances.
+
+### CGM-RRL-02 [LIVE]: Resource analysis must be tied to the active workflow identity
+Validation: LLM_REVIEW
+
+Resolution UI should analyze the workflow that is currently loaded or
+explicitly selected. It should avoid using stale global workflow state when the
+user has loaded a different workflow or when no saved workflow is active.
+
+### CGM-RRL-03 [LIVE]: Saved and unsaved workflow analysis are distinct modes
+Validation: LLM_REVIEW
+
+The manager may analyze saved workflow files and browser-provided workflow JSON,
+but the UI and API should preserve which mode is being used.
+
+Unsaved workflow analysis should not imply that durable workflow metadata or
+contracts have already been written.
+
+### CGM-RRL-04 [LIVE]: Resolution actions should separate installs from model download intents
+Validation: LLM_REVIEW
+
+Node installation actions, model download intents, and manual follow-up should
+remain distinguishable in backend payloads and frontend review UI.
+
+A workflow that only needs model downloads should not require the user to step
+through node-install selection as if nodes were missing.
+
+### CGM-RRL-05 [PARTIAL]: Popup suppression should be workflow-scoped rather than global-only
+Validation: LLM_REVIEW
+
+Suppression state should prevent repeated prompts for the same active workflow
+and session without hiding unrelated missing-resource prompts for other
+workflows.
+
+The current code has session suppression behavior, but this remains a useful
+review target whenever the active workflow lifecycle changes.
+
+### CGM-RRL-06 [PARTIAL]: Apply-resolution results should expose follow-up state
+Validation: TEST
+
+After applying a resolution plan, the API should return enough information for
+the frontend to show what was installed, what was queued for download, and what
+still requires manual action.
+
+This is especially important for model download intents, because a queued
+download is not the same as a model already being available on disk.
+
+Apply-resolution results should also report durable workflow resource-decision
+changes such as:
+
+- node types mapped to an already installed node package
+- node types marked optional for the workflow
+- saved workflow node decisions cleared by an explicit skip
+- models marked optional for the workflow
+- saved workflow model download intents changed or cleared by an explicit user
+  action
+
+Those outcomes are manifest mutations even when no package install or model
+download occurs, so the applying summary should not report them as "no changes
+applied."
+
+### CGM-RRL-06A [LIVE]: Saved workflow resource decisions should be explicit durable choices
+Validation: TEST
+
+When a user resolves a workflow node by mapping it to an installed package,
+marking it optional, or skipping a previous saved decision, the manager should
+persist that choice in the workflow's durable node mapping state.
+
+When a user resolves a missing workflow model by marking it optional or by
+recording a download intent, the manager should persist that choice in the
+workflow's durable model state.
+
+Saved node and model decisions should remain available when the user reopens
+workflow resolution from Workflow Details, even if the workflow is currently
+considered resolved. Reopening resolution should not require the user to first
+make the resource required again from Workflow Details just to change the prior
+choice.
+
+Applying a saved workflow resource decision should invalidate stale workflow
+resolution cache state before re-analysis, because the cache may otherwise
+reflect the previous manifest decision.
+
+Current implementation note: the Manager API performs these manifest mutations
+directly. This is acceptable for the current local panel slice, but the
+manifest mutation policy should move into ComfyGit core once CLI or other
+adapters need the same workflow resource-decision behavior.
+
+### CGM-RRL-06B [LIVE]: Risky node dependency changes require explicit review before apply
+Validation: TEST
+
+When a node install attempt discovers that the package would materially change
+already-resolved Python dependencies, the manager should pause that package as
+`Needs Review` rather than silently applying the change.
+
+The review surface should request a fresh core resolver preview only when no
+node install queue is actively mutating the environment. Applying the reviewed
+change should pass the accepted preview fingerprints back through the Manager
+API so core can reject stale previews before installing the package.
+
+### CGM-RRL-07 [PLANNED]: Workflow model links should feed both missing-model and provenance repair flows
+Validation: MIXED
+
+When workflows contain likely model links in notes, markdown-like instructions,
+or metadata, the manager should expose those links as source candidates.
+
+Those candidates may help users in two different states:
+
+- a referenced model is missing locally and the user wants to download it
+- a referenced model exists locally but lacks portable source provenance
+
+The resolution system should preserve this distinction. A workflow link is a
+candidate source, not proof that a missing model is installed and not proof that
+an existing local model came from that exact URL until the user confirms it.

@@ -236,6 +236,27 @@ class TestLogEndpoint:
         # Verify: Should skip first 10, return next 5
         assert len(data["commits"]) == 5
 
+    async def test_branch_history_uses_selected_branch_ref(
+        self,
+        client,
+        mock_environment,
+    ):
+        """Should show selected branch history even when current HEAD is detached elsewhere."""
+        commits = [{"hash": f"main{i}"} for i in range(4)]
+        mock_environment.git_manager.get_version_history.return_value = commits
+        mock_environment.get_current_branch.return_value = None
+
+        resp = await client.get("/v2/comfygit/log?branch=main&limit=3")
+        data = await resp.json()
+
+        assert resp.status == 200
+        assert len(data["commits"]) == 3
+        assert data["commits"][0]["hash"] == "main0"
+        assert data["has_more"] is True
+        assert data["current_branch"] is None
+        mock_environment.git_manager.get_version_history.assert_called_once_with(4, "main")
+        mock_environment.get_commit_history.assert_not_called()
+
     async def test_error_no_environment(self, client, monkeypatch):
         """Should return 500 when no environment detected."""
         monkeypatch.setattr(

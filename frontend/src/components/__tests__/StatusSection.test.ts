@@ -187,4 +187,39 @@ describe('StatusSection - Setup State Issue Cards', () => {
     expect(wrapper.text()).toContain('community packages')
     expect(wrapper.text().toLowerCase()).not.toContain('uninstallable node mappings')
   })
+
+  it('shows runtime custom node import failures in issues', () => {
+    const status = createMockStatus()
+    status.runtime_issues = {
+      available: true,
+      custom_node_import_failure_count: 1,
+      custom_node_import_failures: [
+        {
+          name: 'ComfyUI-FL-VoxCPM',
+          registry_id: 'ComfyUI-FL-VoxCPM',
+          module_name: 'ComfyUI-FL-VoxCPM',
+          module_path: '/tmp/custom_nodes/ComfyUI-FL-VoxCPM',
+          criticality: 'required',
+          used_in_workflows: ['VoxCPM V2 TTS'],
+          status: 'failed',
+          message: 'Import failed',
+          guidance: 'Import failed during ComfyUI startup. Check the ComfyUI logs for the error message.'
+        }
+      ]
+    }
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed'
+      },
+      global: {
+        stubs: ['StatusDetailModal', 'Teleport']
+      }
+    })
+
+    expect(wrapper.text()).toContain('1 custom node failed to import')
+    expect(wrapper.text()).toContain('ComfyUI-FL-VoxCPM')
+    expect(wrapper.text()).toContain('VoxCPM V2 TTS')
+  })
 })

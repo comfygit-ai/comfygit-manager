@@ -27,6 +27,7 @@ interface Step {
   id: string
   label: string
   progressThreshold: number
+  aliases?: string[]
 }
 
 interface Props {
@@ -48,8 +49,8 @@ function getStepStatus(stepId: string): 'pending' | 'active' | 'completed' {
   const step = props.steps.find(s => s.id === stepId)
   if (!step) return 'pending'
 
+  if (props.currentPhase === stepId || (step.aliases || []).includes(props.currentPhase || '')) return 'active'
   if (props.progress >= step.progressThreshold) return 'completed'
-  if (props.currentPhase === stepId) return 'active'
   return 'pending'
 }
 

@@ -222,39 +222,6 @@ describe('ModelResolutionStep', () => {
     expect(wrapper.emitted('search-result-selected')?.[0]).toEqual([mockSearchResults[0]])
   })
 
-  it('shows manual download URL panel when triggered', () => {
-    const wrapper = mount(ModelResolutionStep, {
-      props: {
-        models: mockModels,
-        currentIndex: 0,
-        showManualDownload: true
-      }
-    })
-
-    expect(wrapper.find('.manual-download-panel').exists()).toBe(true)
-    expect(wrapper.find('.manual-download-header h4').text()).toBe('Enter Download URL')
-  })
-
-  it('emits manual-download-submit with URL and path', async () => {
-    const wrapper = mount(ModelResolutionStep, {
-      props: {
-        models: mockModels,
-        currentIndex: 0,
-        showManualDownload: true
-      }
-    })
-
-    await wrapper.find('.url-input').setValue('https://example.com/model.safetensors')
-    await wrapper.find('.path-input').setValue('checkpoints/model.safetensors')
-    await wrapper.find('.btn.primary').trigger('click')
-
-    expect(wrapper.emitted('manual-download-submit')).toBeTruthy()
-    expect(wrapper.emitted('manual-download-submit')?.[0]).toEqual([
-      'https://example.com/model.safetensors',
-      'checkpoints/model.safetensors'
-    ])
-  })
-
   it('calculates progress percentage correctly', () => {
     const wrapper = mount(ModelResolutionStep, {
       props: {

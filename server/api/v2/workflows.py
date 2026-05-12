@@ -7,6 +7,12 @@ from pathlib import Path
 import xxhash
 from aiohttp import web
 
+from comfygit_core.models.workflow_contract import (
+    NamedWorkflowContract,
+    WorkflowContractInput,
+    WorkflowContractOutput,
+    WorkflowExecutionContract,
+)
 from comfygit_core.strategies.auto import AutoNodeStrategy, AutoModelStrategy
 from comfygit_core.models.workflow import (
     NodeResolutionContext, ModelResolutionContext,
@@ -16,7 +22,12 @@ from comfygit_core.models.workflow import (
 from comfygit_core.analyzers.workflow_dependency_parser import WorkflowDependencyParser
 
 from cgm_core.decorators import requires_environment, logged_operation
-from cgm_core.serializers import serialize_workflow_details
+from cgm_core.dependency_preview import dependency_review_response
+from cgm_core.serializers import (
+    serialize_workflow_contract_summary,
+    serialize_workflow_details,
+    serialize_workflow_execution_contract,
+)
 from cgm_core.version_utils import get_latest_version
 from cgm_utils.async_helpers import run_sync
 
@@ -75,6 +86,44 @@ def _get_disk_workflow_hashes(workflows_path: Path) -> dict[str, str]:
     return _workflow_hash_cache
 
 
+def _safe_int_metadata(value) -> int | None:
+    """Return JSON-safe integer metadata from registry fields."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
+
+
+def _safe_str_metadata(value) -> str | None:
+    """Return JSON-safe string metadata from registry fields."""
+    return value if isinstance(value, str) else None
+
+
+def _registry_installable_versions(package_data) -> list[str]:
+    """Return registry versions with downloadable artifacts from mapping data."""
+    versions = getattr(package_data, "versions", None)
+    if not isinstance(versions, dict):
+        return []
+
+    installable = []
+    for version_id, version_data in versions.items():
+        if getattr(version_data, "deprecated", False):
+            continue
+        if not getattr(version_data, "download_url", None):
+            continue
+        installable.append(str(version_id))
+
+    def sort_key(version: str):
+        parts = []
+        for part in version.replace("-", ".").split("."):
+            if part.isdigit():
+                parts.append((0, int(part)))
+            else:
+                parts.append((1, part))
+        return parts
+
+    return sorted(installable, key=sort_key, reverse=True)
+
+
 @routes.post("/v2/comfygit/workflow/is-saved")
 @requires_environment
 async def check_workflow_saved(request: web.Request, env) -> web.Response:
@@ -103,27 +152,36 @@ async def check_workflow_saved(request: web.Request, env) -> web.Response:
 # Serialization Helpers for Interactive Resolution Wizard
 # =============================================================================
 
-def _serialize_resolved_node(node: ResolvedNodePackage, workflow_name: str, uninstalled_set: set = None) -> dict:
+def _serialize_resolved_node(
+    node: ResolvedNodePackage,
+    workflow_name: str,
+    uninstalled_set: set = None,
+    saved_choice: dict | None = None,
+) -> dict:
     """Convert ResolvedNodePackage to frontend ResolvedNode format."""
     uninstalled_set = uninstalled_set or set()
 
     latest_version = get_latest_version(getattr(node.package_data, "versions", None))
 
-    return {
+    serialized = {
         "reference": {
             "node_type": node.node_type,
             "workflow": workflow_name
         },
         "package": {
-            "package_id": node.package_id,
-            "title": node.package_data.display_name if node.package_data else node.package_id,
+            "package_id": node.package_id or "",
+            "title": node.package_data.display_name if node.package_data else (node.package_id or node.node_type),
             "repository": node.package_data.repository if node.package_data else None,
             "latest_version": latest_version
         },
         "match_confidence": node.match_confidence,
         "match_type": node.match_type,
-        "is_installed": node.package_id not in uninstalled_set
+        "is_installed": node.package_id not in uninstalled_set,
+        "is_optional": bool(getattr(node, "is_optional", False)),
     }
+    if saved_choice:
+        serialized["saved_choice"] = saved_choice
+    return serialized
 
 
 def _serialize_version_gated_node(node, workflow_name: str, node_guidance: dict[str, str] | None = None) -> dict:
@@ -141,11 +199,16 @@ def _serialize_version_gated_node(node, workflow_name: str, node_guidance: dict[
     }
 
 
-def _serialize_uninstallable_node(node: ResolvedNodePackage, workflow_name: str, node_guidance: dict[str, str] | None = None) -> dict:
+def _serialize_uninstallable_node(
+    node: ResolvedNodePackage,
+    workflow_name: str,
+    node_guidance: dict[str, str] | None = None,
+    saved_choice: dict | None = None,
+) -> dict:
     """Convert uninstallable ResolvedNodePackage to frontend format."""
     node_guidance = node_guidance or {}
     latest_version = get_latest_version(getattr(node.package_data, "versions", None))
-    return {
+    serialized = {
         "reference": {
             "node_type": node.node_type,
             "workflow": workflow_name
@@ -162,11 +225,14 @@ def _serialize_uninstallable_node(node: ResolvedNodePackage, workflow_name: str,
         "reason": "no_installable_package_version",
         "guidance": node_guidance.get(node.node_type),
     }
+    if saved_choice:
+        serialized["saved_choice"] = saved_choice
+    return serialized
 
 
-def _serialize_unresolved_node(node, workflow_name: str) -> dict:
+def _serialize_unresolved_node(node, workflow_name: str, saved_choice: dict | None = None) -> dict:
     """Convert WorkflowNode to frontend UnresolvedNode format."""
-    return {
+    serialized = {
         "reference": {
             "node_type": node.type,
             "workflow": workflow_name,
@@ -174,15 +240,23 @@ def _serialize_unresolved_node(node, workflow_name: str) -> dict:
         },
         "reason": "not_found_in_registry"
     }
+    if saved_choice:
+        serialized["saved_choice"] = saved_choice
+    return serialized
 
 
-def _serialize_ambiguous_node(options: list[ResolvedNodePackage], workflow_name: str, uninstalled_set: set = None) -> dict:
+def _serialize_ambiguous_node(
+    options: list[ResolvedNodePackage],
+    workflow_name: str,
+    uninstalled_set: set = None,
+    saved_choice: dict | None = None,
+) -> dict:
     """Convert ambiguous node options to frontend AmbiguousNode format."""
     if not options:
         return None
     uninstalled_set = uninstalled_set or set()
 
-    return {
+    serialized = {
         "reference": {
             "node_type": options[0].node_type,
             "workflow": workflow_name
@@ -202,6 +276,9 @@ def _serialize_ambiguous_node(options: list[ResolvedNodePackage], workflow_name:
             for opt in options
         ]
     }
+    if saved_choice:
+        serialized["saved_choice"] = saved_choice
+    return serialized
 
 
 def _serialize_resolved_model(model: ResolvedModel) -> dict:
@@ -274,6 +351,23 @@ def _safe_int(value) -> int:
         return 0
 
 
+def _safe_number(value):
+    """Safely convert value to int/float when numeric, otherwise return None."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return value
+    try:
+        text = str(value).strip()
+        if text == "":
+            return None
+        if "." in text:
+            return float(text)
+        return int(text)
+    except (TypeError, ValueError):
+        return None
+
+
 def _safe_sequence(value) -> list:
     """Safely convert sequence-like values to a list."""
     if value is None:
@@ -290,6 +384,166 @@ def _safe_dict(value) -> dict:
     return {}
 
 
+def _workflow_manifest_models(env, workflow_name: str) -> list:
+    """Return manifest models for a workflow, tolerating unavailable manifest data."""
+    try:
+        return _safe_sequence(env.pyproject.workflows.get_workflow_models(workflow_name))
+    except Exception:
+        return []
+
+
+def _widget_value_at(widgets_values, index: int):
+    """Return a widget value from ComfyUI list-style or dict-style widget data."""
+    if isinstance(widgets_values, (list, tuple)):
+        return widgets_values[index] if index < len(widgets_values) else None
+    if isinstance(widgets_values, dict):
+        if index in widgets_values:
+            return widgets_values[index]
+        return widgets_values.get(str(index))
+    return None
+
+
+def _iter_widget_values(widgets_values):
+    """Yield stable widget index/value pairs for fallback contract context."""
+    if isinstance(widgets_values, (list, tuple)):
+        yield from enumerate(widgets_values)
+        return
+    if isinstance(widgets_values, dict):
+        for key, value in widgets_values.items():
+            try:
+                yield int(key), value
+            except (TypeError, ValueError):
+                yield key, value
+
+
+def _get_workflow_contract_context(env, workflow_name: str) -> dict | None:
+    """Build lightweight contract-authoring context from the current workflow file."""
+    try:
+        workflow_path = env.workflow_manager.get_workflow_path(workflow_name)
+    except FileNotFoundError:
+        return None
+
+    try:
+        with open(workflow_path, encoding="utf-8") as f:
+            workflow_data = json.load(f)
+        workflow = Workflow.from_json(workflow_data)
+    except Exception as e:
+        logger.debug("Failed to load workflow contract context for '%s': %s", workflow_name, e)
+        return None
+
+    nodes = []
+    for node in workflow.nodes.values():
+        widget_candidates = []
+        widget_idx = 0
+        for input_def in node.inputs:
+            if not input_def.widget:
+                continue
+            widget_candidates.append({
+                "widget_idx": widget_idx,
+                "name": input_def.name,
+                "type": input_def.type,
+                "value": _widget_value_at(node.widgets_values, widget_idx),
+            })
+            widget_idx += 1
+
+        if not widget_candidates:
+            for idx, value in _iter_widget_values(node.widgets_values):
+                inferred_type = "number" if isinstance(value, int | float) else "string"
+                widget_candidates.append({
+                    "widget_idx": idx,
+                    "name": f"widget_{idx}",
+                    "type": inferred_type,
+                    "value": value,
+                })
+
+        output_candidates = []
+        for output_def in node.outputs:
+            output_candidates.append({
+                "slot_index": output_def.slot_index,
+                "name": output_def.name,
+                "type": output_def.type,
+            })
+
+        if not output_candidates and node.type in {"SaveImage", "PreviewImage"}:
+            output_candidates.append({
+                "slot_index": None,
+                "name": "image",
+                "type": "image",
+            })
+
+        nodes.append({
+            "node_id": node.id,
+            "node_type": node.type,
+            "widget_inputs": widget_candidates,
+            "outputs": output_candidates,
+        })
+
+    return {
+        "workflow_name": workflow_name,
+        "nodes": nodes,
+    }
+
+
+def _parse_execution_contract_payload(data: dict) -> WorkflowExecutionContract:
+    """Parse manager JSON payload into a core workflow execution contract."""
+    contracts_data = _safe_dict(data.get("contracts"))
+    parsed_contracts: dict[str, NamedWorkflowContract] = {}
+
+    for contract_name, contract_data in contracts_data.items():
+        contract_dict = _safe_dict(contract_data)
+
+        inputs = []
+        for item in _safe_sequence(contract_dict.get("inputs")):
+            item_dict = _safe_dict(item)
+            inputs.append(WorkflowContractInput(
+                name=item_dict["name"],
+                type=item_dict["type"],
+                node_id=item_dict["node_id"],
+                required=bool(item_dict["required"]),
+                display_name=_safe_str(item_dict.get("display_name")),
+                widget_idx=item_dict.get("widget_idx"),
+                field_key=_safe_str(item_dict.get("field_key")),
+                api_node_id=item_dict.get("api_node_id"),
+                api_field_key=_safe_str(item_dict.get("api_field_key")),
+                default=item_dict.get("default"),
+                min=_safe_number(item_dict.get("min")),
+                max=_safe_number(item_dict.get("max")),
+                enum_values=[str(value) for value in _safe_sequence(item_dict.get("enum_values"))],
+                description=_safe_str(item_dict.get("description")),
+            ))
+
+        outputs = []
+        for item in _safe_sequence(contract_dict.get("outputs")):
+            item_dict = _safe_dict(item)
+            outputs.append(WorkflowContractOutput(
+                name=item_dict["name"],
+                type=item_dict["type"],
+                node_id=item_dict["node_id"],
+                display_name=_safe_str(item_dict.get("display_name")),
+                selector=_safe_str(item_dict.get("selector")),
+                description=_safe_str(item_dict.get("description")),
+            ))
+
+        parsed_contracts[contract_name] = NamedWorkflowContract(
+            display_name=_safe_str(contract_dict.get("display_name")),
+            description=_safe_str(contract_dict.get("description")),
+            inputs=inputs,
+            outputs=outputs,
+        )
+
+    return WorkflowExecutionContract(
+        version=_safe_int(data.get("version")) or 1,
+        default_contract=_safe_str(data.get("default_contract")) or "default",
+        contracts=parsed_contracts,
+        api_prompt_file=_safe_str(data.get("api_prompt_file")),
+        api_prompt_source=_safe_str(data.get("api_prompt_source")),
+        api_prompt_generated_by=_safe_str(data.get("api_prompt_generated_by")),
+        api_prompt_generated_at=_safe_str(data.get("api_prompt_generated_at")),
+        comfyui_version=_safe_str(data.get("comfyui_version")),
+        manager_version=_safe_str(data.get("manager_version")),
+    )
+
+
 def _get_package_aliases(workflow_manager) -> dict[str, str]:
     """Return package alias metadata when available."""
     resolver = getattr(workflow_manager, "global_node_resolver", None)
@@ -297,6 +551,67 @@ def _get_package_aliases(workflow_manager) -> dict[str, str]:
     global_mappings = getattr(repository, "global_mappings", None)
     aliases = getattr(global_mappings, "package_aliases", None)
     return _safe_dict(aliases)
+
+
+def _reconstruct_optional_node_buckets(env, dependencies, workflow_name: str) -> dict[str, list]:
+    """Place saved optional node mappings back into their original resolution buckets."""
+    custom_map = env.pyproject.workflows.get_custom_node_map(workflow_name)
+    if not isinstance(custom_map, dict):
+        custom_map = {}
+    optional_node_types = {
+        node_type for node_type, mapping in custom_map.items()
+        if mapping is False
+    }
+    if not optional_node_types:
+        return {"unresolved": [], "ambiguous": [], "uninstallable": [], "resolved": []}
+
+    installed = env.pyproject.nodes.get_existing()
+    resolver = env.workflow_manager.global_node_resolver
+    node_context = NodeResolutionContext(
+        installed_packages=installed,
+        custom_mappings={
+            node_type: mapping for node_type, mapping in custom_map.items()
+            if mapping is not False
+        },
+        workflow_name=workflow_name,
+        auto_select_ambiguous=True,
+    )
+
+    unique_nodes = {}
+    for node in getattr(dependencies, "non_builtin_nodes", []) or []:
+        if node.type not in optional_node_types:
+            continue
+        existing = unique_nodes.get(node.type)
+        if existing is None or (node.properties.get("cnr_id") and not existing.properties.get("cnr_id")):
+            unique_nodes[node.type] = node
+
+    buckets = {"unresolved": [], "ambiguous": [], "uninstallable": [], "resolved": []}
+    for node in unique_nodes.values():
+        resolved_packages = resolver.resolve_single_node_with_context(node, node_context)
+        if resolved_packages is None:
+            buckets["unresolved"].append(node)
+            continue
+
+        if len(resolved_packages) == 1:
+            candidate = resolved_packages[0]
+            if candidate.is_manager_only_uninstallable:
+                buckets["uninstallable"].append(candidate)
+            else:
+                buckets["resolved"].append(candidate)
+            continue
+
+        installable_candidates = [
+            pkg for pkg in resolved_packages if not pkg.is_manager_only_uninstallable
+        ]
+        if len(installable_candidates) == 1:
+            buckets["resolved"].append(installable_candidates[0])
+        elif len(installable_candidates) > 1:
+            buckets["ambiguous"].append(installable_candidates)
+        else:
+            selected = min(resolved_packages, key=lambda x: x.rank or 999)
+            buckets["uninstallable"].append(selected)
+
+    return buckets
 
 
 def _collect_uninstallable_nodes_to_install(
@@ -319,14 +634,19 @@ def _collect_uninstallable_nodes_to_install(
         action = node_choice.get("action")
 
         if action == "install":
+            # Explicit install choices carry package/version/source intent and are
+            # collected separately. Avoid adding the package again without its
+            # selected version.
+            if node_choice.get("package_id"):
+                continue
             nodes_to_install.append(package_id)
             continue
 
-        if action == "skip" or not node_choice:
+        if action in ("optional", "skip") or not node_choice:
             continue
 
         logger.warning(
-            "Ignoring invalid uninstallable action '%s' for node_type '%s'; valid actions are 'install' or 'skip'",
+            "Ignoring invalid uninstallable action '%s' for node_type '%s'; valid actions are 'install', 'optional', or 'skip'",
             action,
             node_type,
         )
@@ -334,9 +654,120 @@ def _collect_uninstallable_nodes_to_install(
     return nodes_to_install
 
 
-def _serialize_unresolved_model(ref: WorkflowNodeWidgetRef, workflow_name: str) -> dict:
+def _explicit_registry_install_package_ids(node_choices: dict[str, dict]) -> set[str]:
+    """Return package ids covered by explicit non-Git install choices."""
+    package_ids: set[str] = set()
+
+    for choice in node_choices.values():
+        if not isinstance(choice, dict):
+            continue
+        if choice.get("action") != "install" or choice.get("install_source") == "git":
+            continue
+        package_id = choice.get("package_id")
+        if package_id:
+            package_ids.add(package_id)
+
+    return package_ids
+
+
+def _collect_explicit_nodes_to_install(
+    installed: dict,
+    skipped_packages: set[str],
+    node_choices: dict[str, dict],
+) -> list[str]:
+    """Collect explicit registry/manual install choices that are not installed yet."""
+    nodes_to_install: list[str] = []
+
+    for choice in node_choices.values():
+        if not isinstance(choice, dict):
+            continue
+
+        action = choice.get("action")
+        if action != "install":
+            continue
+        if choice.get("install_source") == "git":
+            continue
+
+        package_id = choice.get("package_id")
+        if not package_id or package_id in installed or package_id in skipped_packages:
+            continue
+
+        version = choice.get("version")
+        if isinstance(version, str) and version and version != "latest":
+            nodes_to_install.append(f"{package_id}@{version}")
+        else:
+            nodes_to_install.append(package_id)
+
+    return nodes_to_install
+
+
+async def _apply_explicit_node_mapping_choices(
+    env,
+    workflow_name: str,
+    node_choices: dict[str, dict],
+) -> dict[str, list]:
+    """Persist explicit per-workflow node mapping choices before resolution."""
+    custom_map = await run_sync(env.pyproject.workflows.get_custom_node_map, workflow_name)
+    before = dict(custom_map) if isinstance(custom_map, dict) else {}
+
+    changes = {
+        "nodes_marked_optional": [],
+        "nodes_optional_cleared": [],
+        "nodes_mapped": [],
+    }
+
+    for node_type, choice in node_choices.items():
+        if not isinstance(choice, dict):
+            continue
+
+        action = choice.get("action")
+        if action in ("install", "map-installed"):
+            package_id = choice.get("package_id")
+            if not package_id or before.get(node_type) == package_id:
+                continue
+            await run_sync(
+                env.pyproject.workflows.set_custom_node_mapping,
+                workflow_name,
+                node_type,
+                package_id,
+            )
+            changes["nodes_mapped"].append({
+                "node_type": node_type,
+                "package_id": package_id,
+            })
+            continue
+
+        if action == "optional":
+            if before.get(node_type) is False:
+                continue
+            await run_sync(
+                env.pyproject.workflows.set_custom_node_mapping,
+                workflow_name,
+                node_type,
+                None,
+            )
+            changes["nodes_marked_optional"].append(node_type)
+            continue
+
+        if action == "skip" and node_type in before:
+            removed = await run_sync(
+                env.pyproject.workflows.remove_custom_node_mapping,
+                workflow_name,
+                node_type,
+            )
+            if removed:
+                changes["nodes_optional_cleared"].append(node_type)
+
+    return changes
+
+
+def _serialize_unresolved_model(
+    ref: WorkflowNodeWidgetRef,
+    workflow_name: str,
+    saved_choice: dict | None = None,
+) -> dict:
     """Convert WorkflowNodeWidgetRef to frontend UnresolvedModel format."""
-    return {
+    serialized = {
         "reference": {
             "workflow": workflow_name,
             "node_id": ref.node_id,
@@ -346,14 +777,80 @@ def _serialize_unresolved_model(ref: WorkflowNodeWidgetRef, workflow_name: str) 
         },
         "reason": "not_found_in_index"
     }
+    if saved_choice:
+        serialized["saved_choice"] = saved_choice
+    return serialized
 
 
-def _serialize_ambiguous_model(options: list[ResolvedModel]) -> dict:
+def _serialize_saved_optional_model(manifest_model, ref: WorkflowNodeWidgetRef, workflow_name: str) -> dict:
+    """Serialize a durable optional model decision as an editable model choice."""
+    return {
+        "reference": {
+            "workflow": workflow_name,
+            "node_id": ref.node_id,
+            "node_type": ref.node_type,
+            "widget_name": getattr(ref, 'widget_name', None),
+            "widget_value": ref.widget_value,
+        },
+        "filename": manifest_model.filename,
+        "reason": "saved_optional",
+        "saved_choice": {"action": "optional"},
+    }
+
+
+def _model_ref_key(ref: WorkflowNodeWidgetRef) -> tuple[str, int | None, str]:
+    return (
+        str(getattr(ref, "node_id", "")),
+        getattr(ref, "widget_index", None),
+        str(getattr(ref, "widget_value", "")),
+    )
+
+
+def _reconstruct_saved_optional_models(env, workflow_name: str, result) -> list[dict]:
+    """Return optional manifest model choices that should stay editable."""
+    existing_refs = set()
+    for model in list(getattr(result, "models_resolved", []) or []):
+        existing_refs.add(_model_ref_key(model.reference))
+    for ref in list(getattr(result, "models_unresolved", []) or []):
+        existing_refs.add(_model_ref_key(ref))
+    for options in list(getattr(result, "models_ambiguous", []) or []):
+        for model in options:
+            existing_refs.add(_model_ref_key(model.reference))
+
+    saved_models = []
+    for manifest_model in _workflow_manifest_models(env, workflow_name):
+        if manifest_model.criticality != "optional":
+            continue
+        if manifest_model.sources:
+            continue
+        for ref in manifest_model.nodes:
+            ref_key = _model_ref_key(ref)
+            if ref_key in existing_refs:
+                continue
+            saved_models.append(_serialize_saved_optional_model(manifest_model, ref, workflow_name))
+            existing_refs.add(ref_key)
+
+    return saved_models
+
+
+def _saved_optional_model_choice_map(env, workflow_name: str) -> dict[tuple[str, int | None, str], dict]:
+    saved = {}
+    for manifest_model in _workflow_manifest_models(env, workflow_name):
+        if manifest_model.criticality != "optional":
+            continue
+        if manifest_model.sources:
+            continue
+        for ref in manifest_model.nodes:
+            saved[_model_ref_key(ref)] = {"action": "optional"}
+    return saved
+
+
+def _serialize_ambiguous_model(options: list[ResolvedModel], saved_choice: dict | None = None) -> dict:
     """Convert ambiguous model options to frontend AmbiguousModel format."""
     if not options:
         return None
     ref = options[0].reference
-    return {
+    serialized = {
         "reference": {
             "workflow": options[0].workflow,
             "node_id": ref.node_id,
@@ -377,6 +874,9 @@ def _serialize_ambiguous_model(options: list[ResolvedModel]) -> dict:
             for opt in options if opt.resolved_model
         ]
     }
+    if saved_choice:
+        serialized["saved_choice"] = saved_choice
+    return serialized
 
 
 # =============================================================================
@@ -391,8 +891,8 @@ class PanelNodeStrategy:
         Args:
             choices: Dict mapping node_type to choice dict:
                 {
-                    "action": "install" | "optional" | "skip" | "manual",
-                    "package_id": str (for install/manual),
+                    "action": "install" | "optional" | "skip" | "manual" | "map-installed",
+                    "package_id": str (for install/manual/map-installed),
                     "manual_url": str (for manual)
                 }
         """
@@ -418,7 +918,7 @@ class PanelNodeStrategy:
                 package_id=None
             )
 
-        if action in ("install", "manual"):
+        if action in ("install", "manual", "map-installed"):
             package_id = choice.get("package_id") or choice.get("manual_url")
             if not package_id:
                 return None
@@ -529,6 +1029,113 @@ class PanelModelStrategy:
         return None
 
 
+def _apply_explicit_model_choices_to_manifest(env, workflow_name: str, model_choices: dict[str, dict]) -> dict:
+    """Apply explicit model choices that may not appear in fresh issue analysis."""
+    changes = {
+        "models_marked_optional": [],
+        "model_download_intents_changed": [],
+    }
+    if not model_choices:
+        return changes
+
+    current_models = _workflow_manifest_models(env, workflow_name)
+
+    updated_models = False
+    for model in current_models:
+        choice = model_choices.get(model.filename)
+        if not choice:
+            continue
+
+        action = choice.get("action")
+        if action == "optional":
+            changed = (
+                model.status != "unresolved"
+                or model.criticality != "optional"
+                or bool(model.sources)
+                or model.relative_path is not None
+                or model.hash is not None
+            )
+            model.status = "unresolved"
+            model.criticality = "optional"
+            model.sources = []
+            model.relative_path = None
+            model.hash = None
+            if changed:
+                changes["models_marked_optional"].append(model.filename)
+                updated_models = True
+            continue
+
+        if action in ("skip", "cancel_download"):
+            changed = (
+                model.criticality == "optional"
+                or bool(model.sources)
+                or model.relative_path is not None
+            )
+            model.status = "unresolved"
+            model.criticality = "required"
+            model.sources = []
+            model.relative_path = None
+            model.hash = None
+            if changed:
+                changes["model_download_intents_changed"].append(model.filename)
+                updated_models = True
+            continue
+
+        if action == "download":
+            url = choice.get("url")
+            if not url:
+                continue
+            target_path = choice.get("target_path")
+            changed = (
+                model.status != "unresolved"
+                or model.criticality != "required"
+                or model.sources != [url]
+                or model.relative_path != target_path
+                or model.hash is not None
+            )
+            model.status = "unresolved"
+            model.criticality = "required"
+            model.sources = [url]
+            model.relative_path = target_path
+            model.hash = None
+            if changed:
+                changes["model_download_intents_changed"].append(model.filename)
+                updated_models = True
+            continue
+
+        if action == "select":
+            selected = choice.get("selected_model") or {}
+            selected_hash = selected.get("hash")
+            if not selected_hash:
+                continue
+            changed = (
+                model.status != "resolved"
+                or model.criticality != "required"
+                or model.hash != selected_hash
+                or model.filename != selected.get("filename", model.filename)
+            )
+            model.status = "resolved"
+            model.criticality = "required"
+            model.hash = selected_hash
+            model.filename = selected.get("filename", model.filename)
+            model.category = selected.get("category", model.category)
+            model.sources = []
+            model.relative_path = None
+            if changed:
+                changes["model_download_intents_changed"].append(model.filename)
+                updated_models = True
+
+    if updated_models:
+        try:
+            env.pyproject.workflows.set_workflow_models(workflow_name, current_models)
+        except Exception:
+            logger.exception("Failed to write workflow model choices for '%s'", workflow_name)
+
+    changes["models_marked_optional"] = list(dict.fromkeys(changes["models_marked_optional"]))
+    changes["model_download_intents_changed"] = list(dict.fromkeys(changes["model_download_intents_changed"]))
+    return changes
+
+
 @routes.get("/v2/comfygit/workflows")
 @requires_environment
 async def get_workflows(request: web.Request, env) -> web.Response:
@@ -562,14 +1169,17 @@ async def get_workflows(request: web.Request, env) -> web.Response:
 
     workflows = []
     for wf in status.workflow.analyzed_workflows:
+        contract = env.get_workflow_execution_contract(wf.name)
+        contract_summary = serialize_workflow_contract_summary(contract)
         version_gated_count = len(_safe_sequence(getattr(wf.resolution, "nodes_version_gated", None)))
         uninstallable_count = len(_safe_sequence(getattr(wf.resolution, "nodes_uninstallable", None)))
+        unresolved_nodes_count = len(_safe_sequence(getattr(wf.resolution, "nodes_unresolved", None)))
         issue_summary = _safe_str(getattr(wf, "issue_summary", None))
 
         workflow_data = {
             "name": wf.name,
             "status": "broken" if wf.has_issues else wf.sync_state,
-            "missing_nodes": wf.uninstalled_count,
+            "missing_nodes": wf.uninstalled_count + unresolved_nodes_count,
             "version_gated_count": version_gated_count,
             "uninstallable_count": uninstallable_count,
             "missing_models": len(wf.resolution.models_unresolved) + len(wf.resolution.models_ambiguous),
@@ -580,6 +1190,7 @@ async def get_workflows(request: web.Request, env) -> web.Response:
             # Category mismatch (blocking issue)
             "has_category_mismatch_issues": getattr(wf, 'has_category_mismatch_issues', False) is True,
             "models_with_category_mismatch": _safe_int(getattr(wf, 'models_with_category_mismatch_count', 0)),
+            "contract_summary": contract_summary,
         }
         if issue_summary:
             workflow_data["issue_summary"] = issue_summary
@@ -605,8 +1216,7 @@ async def get_workflow_details(request: web.Request, env) -> web.Response:
     # Get criticality map from pyproject (filename -> criticality)
     criticality_map = {}
     try:
-        manifest_models = env.pyproject.workflows.get_workflow_models(name)
-        for model in manifest_models:
+        for model in _workflow_manifest_models(env, name):
             criticality_map[model.filename] = model.criticality or "required"
     except Exception:
         pass  # Fallback to default behavior if pyproject read fails
@@ -620,7 +1230,78 @@ async def get_workflow_details(request: web.Request, env) -> web.Response:
     except Exception:
         pass  # Fallback if model index unavailable
 
-    return web.json_response(serialize_workflow_details(workflow, name, criticality_map, available_models))
+    contract = env.get_workflow_execution_contract(name)
+    payload = serialize_workflow_details(workflow, name, criticality_map, available_models)
+    payload["contract_summary"] = serialize_workflow_contract_summary(contract)
+    payload["execution_contract"] = serialize_workflow_execution_contract(contract)
+    payload["contract_context"] = _get_workflow_contract_context(env, name)
+
+    return web.json_response(payload)
+
+
+@routes.get("/v2/comfygit/workflow/{name}/contract")
+@requires_environment
+async def get_workflow_contract(request: web.Request, env) -> web.Response:
+    """Get the saved execution contract and authoring context for a workflow."""
+    name = request.match_info["name"]
+
+    contract = env.get_workflow_execution_contract(name)
+    return web.json_response({
+        "workflow": name,
+        "contract_summary": serialize_workflow_contract_summary(contract),
+        "execution_contract": serialize_workflow_execution_contract(contract),
+        "contract_context": _get_workflow_contract_context(env, name),
+    })
+
+
+@routes.put("/v2/comfygit/workflow/{name}/contract")
+@logged_operation("save workflow contract")
+async def put_workflow_contract(request: web.Request, env) -> web.Response:
+    """Create or replace the saved execution contract for a workflow."""
+    name = request.match_info["name"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    api_prompt = body.get("api_prompt")
+    if not isinstance(api_prompt, dict) or not api_prompt:
+        return web.json_response({
+            "error": (
+                "Contract save requires a captured ComfyUI API prompt. "
+                "Refresh ComfyUI and try saving the contract again."
+            )
+        }, status=400)
+
+    try:
+        contract = _parse_execution_contract_payload(body)
+    except KeyError as e:
+        return web.json_response({"error": f"Missing required field: {e.args[0]}"}, status=400)
+    except Exception as e:
+        return web.json_response({"error": f"Invalid execution contract payload: {e}"}, status=400)
+
+    await run_sync(env.set_workflow_execution_contract, name, contract, api_prompt)
+
+    return web.json_response({
+        "status": "success",
+        "workflow": name,
+        "contract_summary": serialize_workflow_contract_summary(contract),
+        "execution_contract": serialize_workflow_execution_contract(contract),
+    })
+
+
+@routes.delete("/v2/comfygit/workflow/{name}/contract")
+@logged_operation("delete workflow contract")
+async def delete_workflow_contract(request: web.Request, env) -> web.Response:
+    """Delete the saved execution contract for a workflow."""
+    name = request.match_info["name"]
+
+    removed = await run_sync(env.remove_workflow_execution_contract, name)
+    if not removed:
+        return web.json_response({"error": "Workflow contract not found"}, status=404)
+
+    return web.json_response({"status": "success", "workflow": name})
 
 
 @routes.post("/v2/comfygit/workflow/{name}/model-importance")
@@ -780,29 +1461,40 @@ async def install_workflow(request: web.Request, env) -> web.Response:
         # Install each node, continuing on failure
         installed = []
         failed = []
+        dependency_review_required = []
         for node_id in uninstalled:
             try:
                 await run_sync(env.add_node, node_id)
                 installed.append(node_id)
             except Exception as e:
+                review_result = dependency_review_response(node_id, e)
+                if review_result:
+                    dependency_review_required.append({
+                        "node_id": node_id,
+                        "error": str(e),
+                        "dependency_review": review_result.get("dependency_review"),
+                    })
+                    continue
                 failed.append({"node_id": node_id, "error": str(e)})
 
         # Determine overall status
-        if len(failed) == 0:
+        if len(failed) == 0 and len(dependency_review_required) == 0:
             status = "success"
             message = f"Installed {len(installed)} node packages"
-        elif len(installed) == 0:
+        elif len(installed) == 0 and len(dependency_review_required) == 0:
             status = "error"
             message = f"All {len(failed)} packages failed to install"
         else:
             status = "partial"
-            message = f"Installed {len(installed)} packages, {len(failed)} failed"
+            blocked = len(failed) + len(dependency_review_required)
+            message = f"Installed {len(installed)} packages, {blocked} need attention"
 
         return web.json_response({
             "status": status,
             "message": message,
             "nodes_installed": installed,
-            "failed": failed
+            "failed": failed,
+            "dependency_review_required": dependency_review_required,
         })
     except Exception as e:
         return web.json_response({
@@ -829,7 +1521,7 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
 
     # Call analyze_and_resolve_workflow directly (NOT env.resolve_workflow)
     # This gives us analysis + resolution WITHOUT executing downloads
-    _, result = await run_sync(
+    dependencies, result = await run_sync(
         env.workflow_manager.analyze_and_resolve_workflow,
         name
     )
@@ -856,6 +1548,18 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
     uninstallable_nodes = _safe_sequence(getattr(result, "nodes_uninstallable", None))
     node_guidance = _safe_dict(getattr(result, "node_guidance", None))
     package_aliases = _get_package_aliases(env.workflow_manager)
+    optional_buckets = _reconstruct_optional_node_buckets(env, dependencies, name)
+    saved_optional_choice = {"action": "optional"}
+    custom_node_map = env.pyproject.workflows.get_custom_node_map(name)
+    if not isinstance(custom_node_map, dict):
+        custom_node_map = {}
+    resolved_nodes = [
+        node for node in result.nodes_resolved
+        if getattr(node, "is_optional", False) is not True
+    ] + optional_buckets["resolved"]
+    unresolved_nodes = list(result.nodes_unresolved) + optional_buckets["unresolved"]
+    ambiguous_nodes = list(result.nodes_ambiguous) + optional_buckets["ambiguous"]
+    uninstallable_nodes = uninstallable_nodes + optional_buckets["uninstallable"]
 
     # needs_user_input: user must make choices for unresolved/ambiguous items
     needs_user_input = bool(
@@ -881,24 +1585,75 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
         and not has_uninstallable
     )
 
+    saved_optional_model_choices = _saved_optional_model_choice_map(env, name)
+    saved_optional_models = _reconstruct_saved_optional_models(env, name, result)
+
     # Transform to frontend format
     response = {
         "workflow": name,
         "nodes": {
-            "resolved": [_serialize_resolved_node(n, name, uninstalled_set) for n in result.nodes_resolved],
-            "unresolved": [_serialize_unresolved_node(n, name) for n in result.nodes_unresolved],
+            "resolved": [
+                _serialize_resolved_node(
+                    n,
+                    name,
+                    uninstalled_set,
+                    {
+                        "action": "map-installed",
+                        "package_id": custom_node_map.get(n.node_type),
+                    } if isinstance(custom_node_map.get(n.node_type), str) else None,
+                )
+                for n in resolved_nodes
+            ],
+            "unresolved": [
+                _serialize_unresolved_node(
+                    n,
+                    name,
+                    saved_optional_choice if n in optional_buckets["unresolved"] else None,
+                )
+                for n in unresolved_nodes
+            ],
             "version_gated": [_serialize_version_gated_node(n, name, node_guidance) for n in version_gated_nodes],
-            "uninstallable": [_serialize_uninstallable_node(n, name, node_guidance) for n in uninstallable_nodes],
+            "uninstallable": [
+                _serialize_uninstallable_node(
+                    n,
+                    name,
+                    node_guidance,
+                    saved_optional_choice if n in optional_buckets["uninstallable"] else None,
+                )
+                for n in uninstallable_nodes
+            ],
             "ambiguous": [
-                amb for amb in [_serialize_ambiguous_node(opts, name, uninstalled_set) for opts in result.nodes_ambiguous]
+                amb for amb in [
+                    _serialize_ambiguous_node(
+                        opts,
+                        name,
+                        uninstalled_set,
+                        saved_optional_choice if opts in optional_buckets["ambiguous"] else None,
+                    )
+                    for opts in ambiguous_nodes
+                ]
                 if amb is not None
             ]
         },
         "models": {
             "resolved": [_serialize_resolved_model(m) for m in result.models_resolved],
-            "unresolved": [_serialize_unresolved_model(m, name) for m in result.models_unresolved],
+            "unresolved": [
+                _serialize_unresolved_model(
+                    m,
+                    name,
+                    saved_optional_model_choices.get(_model_ref_key(m)),
+                )
+                for m in result.models_unresolved
+            ],
+            "saved_optional": saved_optional_models,
             "ambiguous": [
-                amb for amb in [_serialize_ambiguous_model(opts) for opts in result.models_ambiguous]
+                amb for amb in [
+                    _serialize_ambiguous_model(
+                        opts,
+                        saved_optional_model_choices.get(_model_ref_key(opts[0].reference)) if opts else None,
+                    )
+                    for opts in result.models_ambiguous
+                ]
                 if amb is not None
             ]
         },
@@ -906,13 +1661,18 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
         "node_guidance": node_guidance,
         "stats": {
             "total_nodes": (
-                len(result.nodes_resolved)
-                + len(result.nodes_unresolved)
-                + len(result.nodes_ambiguous)
+                len(resolved_nodes)
+                + len(unresolved_nodes)
+                + len(ambiguous_nodes)
                 + len(version_gated_nodes)
                 + len(uninstallable_nodes)
             ),
-            "total_models": len(result.models_resolved) + len(result.models_unresolved) + len(result.models_ambiguous),
+            "total_models": (
+                len(result.models_resolved)
+                + len(result.models_unresolved)
+                + len(result.models_ambiguous)
+                + len(saved_optional_models)
+            ),
             "download_intents": download_intents_count,
             "nodes_needing_installation": nodes_needing_installation,  # Node types count
             "packages_needing_installation": packages_needing_installation,  # Unique packages count
@@ -1135,14 +1895,24 @@ async def search_nodes(request: web.Request, env) -> web.Response:
 
     results = []
     for match in matches:
+        package_data = match.package_data
+        registry_versions = _registry_installable_versions(package_data)
+        repository = _safe_str_metadata(getattr(package_data, "repository", None)) if package_data else None
         # Normalize: highest score becomes 1.0, others scale proportionally
         normalized_confidence = match.score / max_score
         results.append({
             "package_id": match.package_id,
+            "display_name": _safe_str_metadata(getattr(package_data, "display_name", None)) if package_data else None,
             "match_confidence": normalized_confidence,
             "match_type": match.confidence,  # "high", "medium", "low"
-            "description": match.package_data.description if match.package_data else None,
-            "repository": match.package_data.repository if match.package_data else None,
+            "description": _safe_str_metadata(getattr(package_data, "description", None)) if package_data else None,
+            "repository": repository,
+            "downloads": _safe_int_metadata(getattr(package_data, "downloads", None)) if package_data else None,
+            "github_stars": _safe_int_metadata(getattr(package_data, "github_stars", None)) if package_data else None,
+            "registry_versions": registry_versions,
+            "registry_version": registry_versions[0] if registry_versions else None,
+            "can_install_registry": bool(registry_versions),
+            "can_install_git": bool(repository),
             "is_installed": match.package_id in installed
         })
 
@@ -1229,11 +1999,23 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
     node_strategy = PanelNodeStrategy(node_choices)
     model_strategy = PanelModelStrategy(model_choices)
 
+    mapping_changes = await _apply_explicit_node_mapping_choices(
+        env=env,
+        workflow_name=name,
+        node_choices=node_choices,
+    )
+    await run_sync(env.workflow_cache.invalidate, env.name, name)
+
     # Get current resolution state (does NOT execute downloads)
     _, result = await run_sync(
         env.workflow_manager.analyze_and_resolve_workflow,
         name
     )
+    model_paths_to_sync = sum(
+        1 for model in result.models_resolved
+        if getattr(model, "needs_path_sync", False)
+    )
+    model_paths_synced = 0
 
     # Apply strategies to fix unresolved issues (writes to pyproject.toml)
     if result.has_issues:
@@ -1243,13 +2025,26 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
             node_strategy,
             model_strategy
         )
+        model_paths_synced = model_paths_to_sync
+    elif model_paths_to_sync > 0:
+        model_paths_synced = await run_sync(
+            env.workflow_manager.update_workflow_model_paths,
+            result
+        )
+
+    nodes_marked_optional = mapping_changes["nodes_marked_optional"]
 
     # Collect what needs to be installed (excluding user-skipped packages)
     nodes_to_install = []
     installed = env.pyproject.nodes.get_existing()
+    explicit_registry_package_ids = _explicit_registry_install_package_ids(node_choices)
     for node in result.nodes_resolved:
         if node.package_id and node.match_type != "optional":
-            if node.package_id not in installed and node.package_id not in skipped_packages:
+            if (
+                node.package_id not in installed
+                and node.package_id not in skipped_packages
+                and node.package_id not in explicit_registry_package_ids
+            ):
                 nodes_to_install.append(node.package_id)
 
     nodes_to_install.extend(
@@ -1260,46 +2055,16 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
             node_choices=node_choices,
         )
     )
+    nodes_to_install.extend(
+        _collect_explicit_nodes_to_install(
+            installed=installed,
+            skipped_packages=skipped_packages,
+            node_choices=node_choices,
+        )
+    )
+    nodes_to_install = list(dict.fromkeys(nodes_to_install))
 
-    # Handle user overrides for existing download intents
-    # Get current workflow models from pyproject to check for download intents
-    try:
-        current_models = env.pyproject.workflows.get_workflow_models(name)
-        updated_models = False
-
-        for model in current_models:
-            if model.status == "unresolved" and model.sources:
-                # This is a download intent - check if user wants to change it
-                choice = model_choices.get(model.filename)
-                if choice:
-                    action = choice.get("action")
-                    if action in ("skip", "cancel_download"):
-                        # Cancel the download intent - clear sources and mark unresolved
-                        model.sources = []
-                        model.relative_path = None
-                        updated_models = True
-                    elif action == "optional":
-                        # Mark as optional and clear download intent
-                        # Status remains 'unresolved' - model has no hash (never downloaded)
-                        model.status = "unresolved"
-                        model.criticality = "optional"
-                        model.sources = []
-                        model.relative_path = None
-                        updated_models = True
-                    elif action == "download":
-                        # Update download intent with new URL/path
-                        new_url = choice.get("url")
-                        new_path = choice.get("target_path")
-                        if new_url:
-                            model.sources = [new_url]
-                            if new_path:
-                                model.relative_path = new_path
-                            updated_models = True
-
-        if updated_models:
-            env.pyproject.workflows.set_workflow_models(name, current_models)
-    except Exception:
-        pass  # Continue even if update fails
+    model_manifest_changes = _apply_explicit_model_choices_to_manifest(env, name, model_choices)
 
     # Write property_download_intent models to pyproject (they're in models_resolved, not processed by fix_resolution)
     try:
@@ -1416,6 +2181,12 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
     return web.json_response({
         "status": "success",
         "nodes_to_install": nodes_to_install,
+        "nodes_marked_optional": nodes_marked_optional,
+        "nodes_optional_cleared": mapping_changes["nodes_optional_cleared"],
+        "nodes_mapped": mapping_changes["nodes_mapped"],
+        "models_marked_optional": model_manifest_changes["models_marked_optional"],
+        "model_download_intents_changed": model_manifest_changes["model_download_intents_changed"],
+        "model_paths_synced": model_paths_synced,
         "models_to_download": models_to_download,
         "estimated_time_seconds": estimated_time
     })
@@ -1496,6 +2267,13 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
     async def run_resolution():
         """Run resolution in thread pool and signal completion."""
         try:
+            mapping_changes = await _apply_explicit_node_mapping_choices(
+                env=env,
+                workflow_name=name,
+                node_choices=node_choices,
+            )
+            await run_sync(env.workflow_cache.invalidate, env.name, name)
+
             result = await run_sync(
                 env.resolve_workflow,
                 name,
@@ -1504,13 +2282,25 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
                 fix=True,
                 download_callbacks=callbacks
             )
+            model_paths_synced = sum(
+                1 for model in result.models_resolved
+                if getattr(model, "needs_path_sync", False)
+            )
+
+            nodes_marked_optional = mapping_changes["nodes_marked_optional"]
+            model_manifest_changes = _apply_explicit_model_choices_to_manifest(env, name, model_choices)
 
             # Collect nodes to install
             nodes_to_install = []
             installed = env.pyproject.nodes.get_existing()
+            explicit_registry_package_ids = _explicit_registry_install_package_ids(node_choices)
             for node in result.nodes_resolved:
                 if node.package_id and node.match_type != "optional":
-                    if node.package_id not in installed and node.package_id not in skipped_packages:
+                    if (
+                        node.package_id not in installed
+                        and node.package_id not in skipped_packages
+                        and node.package_id not in explicit_registry_package_ids
+                    ):
                         nodes_to_install.append(node.package_id)
 
             nodes_to_install.extend(
@@ -1521,6 +2311,14 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
                     node_choices=node_choices,
                 )
             )
+            nodes_to_install.extend(
+                _collect_explicit_nodes_to_install(
+                    installed=installed,
+                    skipped_packages=skipped_packages,
+                    node_choices=node_choices,
+                )
+            )
+            nodes_to_install = list(dict.fromkeys(nodes_to_install))
 
             # Get download results
             download_results = []
@@ -1536,6 +2334,12 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
             queue_event("done", {
                 "status": "success",
                 "nodes_to_install": nodes_to_install,
+                "nodes_marked_optional": nodes_marked_optional,
+                "nodes_optional_cleared": mapping_changes["nodes_optional_cleared"],
+                "nodes_mapped": mapping_changes["nodes_mapped"],
+                "models_marked_optional": model_manifest_changes["models_marked_optional"],
+                "model_download_intents_changed": model_manifest_changes["model_download_intents_changed"],
+                "model_paths_synced": model_paths_synced,
                 "download_results": download_results
             })
         except Exception as e:
@@ -1599,11 +2403,18 @@ async def get_pending_downloads(request: web.Request, env) -> web.Response:
                 if model.get("status") == "unresolved" and model.get("sources"):
                     sources = model.get("sources", [])
                     if sources:
+                        target_path = model.get("relative_path")
+                        if target_path:
+                            models_dir = env.workspace.workspace_config_manager.get_models_directory()
+                            normalized_target = str(target_path).replace("\\", "/").lstrip("/")
+                            if models_dir and (models_dir / normalized_target).exists():
+                                continue
+
                         pending_downloads.append({
                             "workflow": workflow_name,
                             "filename": model.get("filename", "unknown"),
                             "url": sources[0],  # Use first source URL
-                            "target_path": model.get("relative_path"),
+                            "target_path": target_path,
                             "size": 0  # Unknown until download starts
                         })
 
@@ -1664,7 +2475,7 @@ async def download_model_stream(request: web.Request, env) -> web.StreamResponse
         workflow: Workflow name (for updating pyproject.toml)
     """
     url = request.query.get("url")
-    target_path = request.query.get("target_path")
+    target_path = (request.query.get("target_path") or "").replace("\\", "/").lstrip("/")
     filename = request.query.get("filename", "model.safetensors")
     workflow_name = request.query.get("workflow")
 

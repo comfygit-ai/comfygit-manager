@@ -1,85 +1,95 @@
 <template>
   <div class="direct-url-tab">
-    <div class="input-group">
-      <label>Download URL</label>
-      <BaseInput
-        v-model="url"
-        placeholder="https://example.com/model.safetensors"
-      />
-    </div>
+    <DirectModelUrlForm
+      v-if="requiresTarget"
+      :initial-url="initialUrl"
+      :label="label"
+      :placeholder="placeholder"
+      :description="description"
+      :action-label="actionLabel"
+      :loading="loading"
+      :note="note"
+      :suggested-directory="suggestedDirectory"
+      :target-filename="targetFilename"
+      :clear-on-submit="clearOnSubmit"
+      @submit="handleTargetedSubmit"
+    />
 
-    <div class="input-group">
-      <label>Target Path (relative to models directory)</label>
-      <BaseInput
-        v-model="targetPath"
-        placeholder="e.g. checkpoints/model.safetensors"
-      />
-      <p v-if="targetPathError" class="error">{{ targetPathError }}</p>
-    </div>
-
-    <p class="note">Model will be queued for background download.</p>
-
-    <div class="actions">
-      <BaseButton
-        variant="primary"
-        :disabled="!isValid"
-        @click="handleQueue"
-      >
-        Queue Download
-      </BaseButton>
-    </div>
+    <SourceUrlActionForm
+      v-else
+      v-model="sourceUrl"
+      :label="label"
+      :placeholder="placeholder"
+      :description="description"
+      :action-label="actionLabel"
+      :loading="loading"
+      @submit="handleSourceSubmit"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import BaseInput from '@/components/base/BaseInput.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { ref, watch } from 'vue'
+import DirectModelUrlForm from '@/components/download/DirectModelUrlForm.vue'
+import SourceUrlActionForm from '@/components/model-source/SourceUrlActionForm.vue'
 
-// Emits
+const props = withDefaults(defineProps<{
+  modeKind?: 'download' | 'source'
+  initialUrl?: string
+  label?: string
+  placeholder?: string
+  description?: string
+  actionLabel?: string
+  loading?: boolean
+  note?: string
+  suggestedDirectory?: string | null
+  targetFilename?: string | null
+  requiresTarget?: boolean
+  clearOnSubmit?: boolean
+}>(), {
+  modeKind: 'download',
+  initialUrl: '',
+  label: 'Download URL',
+  placeholder: 'https://example.com/model.safetensors',
+  description: '',
+  actionLabel: 'Queue Download',
+  loading: false,
+  note: 'Model will be queued for background download.',
+  suggestedDirectory: null,
+  targetFilename: null,
+  requiresTarget: true,
+  clearOnSubmit: false
+})
+
 interface Emits {
   (e: 'queue', items: Array<{ url: string; targetPath: string; filename: string }>): void
+  (e: 'selectSource', url: string, targetPath?: string): void
 }
 const emit = defineEmits<Emits>()
 
-// Internal state
-const url = ref('')
-const targetPath = ref('')
+const sourceUrl = ref('')
 
-// Computed: Target path validation
-const targetPathError = computed(() => {
-  const p = targetPath.value.trim()
-  if (!p) return null
-  const last = p.replace(/\\/g, '/').split('/').pop() || ''
-  const hasExt = last.includes('.') && !last.endsWith('.')
-  if (!hasExt) {
-    return 'Target path must include a filename (e.g. checkpoints/model.safetensors).'
+watch(() => props.initialUrl, (value) => {
+  if ((value || '') !== sourceUrl.value) {
+    sourceUrl.value = value || ''
   }
-  return null
-})
+}, { immediate: true })
 
-// Computed: Form validation
-const isValid = computed(() => {
-  return url.value.trim() !== '' &&
-         targetPath.value.trim() !== '' &&
-         !targetPathError.value
-})
-
-// Handle queue download
-const handleQueue = () => {
-  if (!isValid.value) return
-
-  const filename = targetPath.value.replace(/\\/g, '/').split('/').pop() || ''
+const handleTargetedSubmit = (payload: { url: string; targetPath: string; filename: string }) => {
+  if (props.modeKind === 'source') {
+    emit('selectSource', payload.url, payload.targetPath)
+    return
+  }
 
   emit('queue', [{
-    url: url.value.trim(),
-    targetPath: targetPath.value.trim(),
-    filename
+    url: payload.url,
+    targetPath: payload.targetPath,
+    filename: payload.filename
   }])
+}
 
-  // Clear form after queuing
-  url.value = ''
-  targetPath.value = ''
+const handleSourceSubmit = (url: string) => {
+  emit('selectSource', url)
 }
 </script>
 
@@ -88,35 +98,5 @@ const handleQueue = () => {
   display: flex;
   flex-direction: column;
   gap: var(--cg-space-4);
-}
-
-.input-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--cg-space-2);
-}
-
-.input-group label {
-  font-weight: var(--cg-font-weight-medium);
-  font-size: var(--cg-font-size-sm);
-  color: var(--cg-color-text-secondary);
-}
-
-.error {
-  color: var(--cg-color-error);
-  font-size: var(--cg-font-size-sm);
-  margin: 0;
-}
-
-.note {
-  color: var(--cg-color-text-muted);
-  font-size: var(--cg-font-size-sm);
-  margin: 0;
-}
-
-.actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: var(--cg-space-2);
 }
 </style>

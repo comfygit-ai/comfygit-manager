@@ -1,0 +1,239 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANAGER_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+COMPOSE_FILE="$MANAGER_ROOT/dev/docker/docker-compose.yml"
+
+ENV_NAME=""
+PROJECT_NAME=""
+WORKSPACE="${COMFYGIT_HOME:-$MANAGER_ROOT/.comfygit-workspace}"
+TORCH_BACKEND="${COMFYGIT_TORCH_BACKEND:-cu126}"
+COMFYUI_PORT="${COMFYUI_PORT:-8188}"
+SUPERVISOR_CONTROL_PORT="${COMFYGIT_SUPERVISOR_CONTROL_PORT:-}"
+BUILD=true
+CONTAINER_SSH_AUTH_SOCK="/ssh-agent"
+RUNTIME_MODE="${COMFYGIT_RUNTIME_MODE:-}"
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") <environment-name> [options]
+
+Starts the ComfyGit Manager Docker dev stack for one environment. The container
+mounts the ComfyGit Manager repo, the ComfyGit repo, and the shared workspace.
+It creates the environment when missing and configures local editable development
+paths through .cec/overlays/.local.toml.
+
+Options:
+  --workspace PATH       ComfyGit workspace path (default: $WORKSPACE)
+  --torch-backend NAME   PyTorch backend passed to cg create/run (default: $TORCH_BACKEND)
+  --comfyui-port PORT    Host/container ComfyUI port (default: $COMFYUI_PORT)
+  --project-name NAME    Docker Compose project name (default: comfygit-<environment-name>)
+  --comfygit PATH        ComfyGit repo path (default: sibling ../comfygit)
+  --models-dir PATH      Host models directory mounted into the container (default: ~/dev/models)
+  --extra-node PATH      Extra dev node path to mount/track; may be repeated
+  --runtime-mode MODE    Manager runtime mode, e.g. cloud_bound
+  --ssh-agent PATH       Host SSH agent socket to forward (default: \$SSH_AUTH_SOCK)
+  --no-ssh-agent         Disable SSH agent forwarding even if an agent exists
+  --git-credentials PATH Host git credential-store file to mount read-only (default: ~/.git-credentials)
+  --no-git-credentials   Disable mounting host git HTTPS credentials
+  --no-build             Do not rebuild the image before starting
+  -h, --help             Show this help
+
+Examples:
+  $(basename "$0") comfygit-cloud-test1 --comfyui-port 8189
+  $(basename "$0") scratch-env --torch-backend cu126 --project-name cg-scratch
+EOF
+}
+
+COMFYGIT_PATH="${COMFYGIT_DEV_REPO_PATH:-$(dirname "$MANAGER_ROOT")/comfygit}"
+MODELS_HOST_DIR="${SHARED_MODELS_HOST_DIR:-$HOME/dev/models}"
+EXTRA_DEV_NODE_PATHS_VALUE="${EXTRA_DEV_NODE_PATHS:-}"
+HOST_SSH_AUTH_SOCK="${COMFYGIT_SSH_AUTH_SOCK:-${SSH_AUTH_SOCK:-}}"
+SSH_AGENT_FORWARDING=true
+HOST_GIT_CREDENTIALS_PATH="${COMFYGIT_GIT_CREDENTIALS_PATH:-$HOME/.git-credentials}"
+GIT_CREDENTIALS_FORWARDING=true
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --workspace)
+      WORKSPACE="$2"
+      shift 2
+      ;;
+    --torch-backend)
+      TORCH_BACKEND="$2"
+      shift 2
+      ;;
+    --comfyui-port)
+      COMFYUI_PORT="$2"
+      shift 2
+      ;;
+    --project-name)
+      PROJECT_NAME="$2"
+      shift 2
+      ;;
+    --comfygit)
+      COMFYGIT_PATH="$2"
+      shift 2
+      ;;
+    --models-dir)
+      MODELS_HOST_DIR="$2"
+      shift 2
+      ;;
+    --extra-node)
+      if [[ -z "$EXTRA_DEV_NODE_PATHS_VALUE" ]]; then
+        EXTRA_DEV_NODE_PATHS_VALUE="$2"
+      else
+        EXTRA_DEV_NODE_PATHS_VALUE="$EXTRA_DEV_NODE_PATHS_VALUE:$2"
+      fi
+      shift 2
+      ;;
+    --runtime-mode)
+      RUNTIME_MODE="$2"
+      shift 2
+      ;;
+    --ssh-agent)
+      HOST_SSH_AUTH_SOCK="$2"
+      SSH_AGENT_FORWARDING=true
+      shift 2
+      ;;
+    --no-ssh-agent)
+      SSH_AGENT_FORWARDING=false
+      shift
+      ;;
+    --git-credentials)
+      HOST_GIT_CREDENTIALS_PATH="$2"
+      GIT_CREDENTIALS_FORWARDING=true
+      shift 2
+      ;;
+    --no-git-credentials)
+      GIT_CREDENTIALS_FORWARDING=false
+      shift
+      ;;
+    --no-build)
+      BUILD=false
+      shift
+      ;;
+    -*)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+    *)
+      if [[ -n "$ENV_NAME" ]]; then
+        echo "Only one environment name may be provided" >&2
+        exit 1
+      fi
+      ENV_NAME="$1"
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "$ENV_NAME" ]]; then
+  echo "Environment name is required" >&2
+  usage >&2
+  exit 1
+fi
+
+if [[ ! -d "$COMFYGIT_PATH/packages/core" ]] || [[ ! -d "$COMFYGIT_PATH/packages/cli" ]]; then
+  echo "ComfyGit repo not found or missing packages/core and packages/cli: $COMFYGIT_PATH" >&2
+  exit 1
+fi
+
+if [[ -z "$PROJECT_NAME" ]]; then
+  PROJECT_NAME="comfygit-${ENV_NAME//[^a-zA-Z0-9]/-}"
+fi
+
+mkdir -p "$WORKSPACE" "$MODELS_HOST_DIR"
+mkdir -p "$MANAGER_ROOT/.cache"
+
+HOST_GIT_USER_NAME="${GIT_AUTHOR_NAME:-$(git config --global --get user.name 2>/dev/null || git config --get user.name 2>/dev/null || true)}"
+HOST_GIT_USER_EMAIL="${GIT_AUTHOR_EMAIL:-$(git config --global --get user.email 2>/dev/null || git config --get user.email 2>/dev/null || true)}"
+
+if [[ "$SSH_AGENT_FORWARDING" == "true" && -n "$HOST_SSH_AUTH_SOCK" && -S "$HOST_SSH_AUTH_SOCK" ]]; then
+  export COMFYGIT_SSH_AUTH_SOCK="$HOST_SSH_AUTH_SOCK"
+  export COMFYGIT_CONTAINER_SSH_AUTH_SOCK="$CONTAINER_SSH_AUTH_SOCK"
+  SSH_AGENT_STATUS="$HOST_SSH_AUTH_SOCK -> $CONTAINER_SSH_AUTH_SOCK"
+else
+  # Compose requires the bind source to exist even when forwarding is disabled.
+  export COMFYGIT_SSH_AUTH_SOCK="$MANAGER_ROOT/.cache/no-ssh-agent.sock"
+  : > "$COMFYGIT_SSH_AUTH_SOCK"
+  export COMFYGIT_CONTAINER_SSH_AUTH_SOCK=""
+  if [[ "$SSH_AGENT_FORWARDING" == "false" ]]; then
+    SSH_AGENT_STATUS="disabled"
+  elif [[ -z "$HOST_SSH_AUTH_SOCK" ]]; then
+    SSH_AGENT_STATUS='disabled (SSH_AUTH_SOCK is not set)'
+  else
+    SSH_AGENT_STATUS="disabled ($HOST_SSH_AUTH_SOCK is not a socket)"
+  fi
+fi
+
+if [[ "$GIT_CREDENTIALS_FORWARDING" == "true" && -n "$HOST_GIT_CREDENTIALS_PATH" && -f "$HOST_GIT_CREDENTIALS_PATH" ]]; then
+  export COMFYGIT_GIT_CREDENTIALS_PATH="$HOST_GIT_CREDENTIALS_PATH"
+  export COMFYGIT_CONTAINER_GIT_CREDENTIALS_PATH="/host-git-credentials"
+  GIT_CREDENTIALS_STATUS="$HOST_GIT_CREDENTIALS_PATH -> /host-git-credentials"
+else
+  export COMFYGIT_GIT_CREDENTIALS_PATH="$MANAGER_ROOT/.cache/no-git-credentials"
+  : > "$COMFYGIT_GIT_CREDENTIALS_PATH"
+  export COMFYGIT_CONTAINER_GIT_CREDENTIALS_PATH=""
+  if [[ "$GIT_CREDENTIALS_FORWARDING" == "false" ]]; then
+    GIT_CREDENTIALS_STATUS="disabled"
+  elif [[ -z "$HOST_GIT_CREDENTIALS_PATH" ]]; then
+    GIT_CREDENTIALS_STATUS="disabled (no credential-store path configured)"
+  else
+    GIT_CREDENTIALS_STATUS="disabled ($HOST_GIT_CREDENTIALS_PATH not found)"
+  fi
+fi
+
+export COMFYGIT_ENV_NAME="$ENV_NAME"
+export COMFYGIT_HOME="$WORKSPACE"
+export COMFYGIT_TORCH_BACKEND="$TORCH_BACKEND"
+export COMFYUI_PORT
+export COMPOSE_PROJECT_NAME="$PROJECT_NAME"
+export COMFYGIT_DEV_REPO_PATH="$COMFYGIT_PATH"
+export COMFYGIT_DEV_CORE_PATH="$COMFYGIT_PATH/packages/core"
+export COMFYGIT_MANAGER_DEV_PATH="$MANAGER_ROOT"
+export COMFYGIT_RUNTIME_MODE="$RUNTIME_MODE"
+if [[ -z "$SUPERVISOR_CONTROL_PORT" ]]; then
+  SUPERVISOR_CONTROL_PORT=$((COMFYUI_PORT + 1000))
+fi
+export COMFYGIT_SUPERVISOR_CONTROL_HOST="${COMFYGIT_SUPERVISOR_CONTROL_HOST:-0.0.0.0}"
+export COMFYGIT_SUPERVISOR_CONTROL_PORT="$SUPERVISOR_CONTROL_PORT"
+export EXTRA_DEV_NODE_PATHS="$EXTRA_DEV_NODE_PATHS_VALUE"
+export SHARED_MODELS_HOST_DIR="$MODELS_HOST_DIR"
+export SHARED_MODELS_DIR="${SHARED_MODELS_DIR:-/data/models}"
+export GIT_AUTHOR_NAME="$HOST_GIT_USER_NAME"
+export GIT_AUTHOR_EMAIL="$HOST_GIT_USER_EMAIL"
+export GIT_COMMITTER_NAME="${GIT_COMMITTER_NAME:-$HOST_GIT_USER_NAME}"
+export GIT_COMMITTER_EMAIL="${GIT_COMMITTER_EMAIL:-$HOST_GIT_USER_EMAIL}"
+
+args=(-f "$COMPOSE_FILE" up -d --force-recreate)
+if [[ "$BUILD" == "true" ]]; then
+  args+=(--build)
+fi
+args+=(comfygit-manager-dev)
+
+echo "[start-dev-container] Project:     $PROJECT_NAME"
+echo "[start-dev-container] Environment: $COMFYGIT_ENV_NAME"
+echo "[start-dev-container] Workspace:   $COMFYGIT_HOME"
+echo "[start-dev-container] ComfyGit:    $COMFYGIT_DEV_REPO_PATH"
+echo "[start-dev-container] Manager:     $COMFYGIT_MANAGER_DEV_PATH"
+echo "[start-dev-container] Models:      $SHARED_MODELS_HOST_DIR -> $SHARED_MODELS_DIR"
+echo "[start-dev-container] SSH agent:   $SSH_AGENT_STATUS"
+echo "[start-dev-container] Git creds:   $GIT_CREDENTIALS_STATUS"
+echo "[start-dev-container] Runtime:     ${COMFYGIT_RUNTIME_MODE:-detected local}"
+if [[ -n "$GIT_COMMITTER_NAME" && -n "$GIT_COMMITTER_EMAIL" ]]; then
+  echo "[start-dev-container] Git author:  $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL>"
+else
+  echo "[start-dev-container] Git author:  not configured on host"
+fi
+echo "[start-dev-container] Backend:     $COMFYGIT_TORCH_BACKEND"
+echo "[start-dev-container] ComfyUI:     http://127.0.0.1:$COMFYUI_PORT"
+echo "[start-dev-container] Supervisor:  http://127.0.0.1:$COMFYGIT_SUPERVISOR_CONTROL_PORT"
+
+docker compose "${args[@]}"

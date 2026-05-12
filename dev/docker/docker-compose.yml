@@ -1,0 +1,56 @@
+services:
+  comfygit-manager-dev:
+    build:
+      context: ../..
+      dockerfile: dev/docker/Dockerfile
+    environment:
+      BLENDER_BIN: ${BLENDER_BIN:-/usr/local/bin/blender}
+      BLENDER_CYCLES_DEVICE: ${BLENDER_CYCLES_DEVICE:-AUTO}
+      BLENDER_CYCLES_USE_CPU: ${BLENDER_CYCLES_USE_CPU:-0}
+      BLENDER_RENDER_TIMEOUT_SECONDS: ${BLENDER_RENDER_TIMEOUT_SECONDS:-600}
+      COMFYGIT_CREATE_ARGS: ${COMFYGIT_CREATE_ARGS:-}
+      COMFYGIT_DEV_CORE_PATH: ${COMFYGIT_DEV_CORE_PATH:-${PWD}/../comfygit/packages/core}
+      COMFYGIT_DEV_REPO_PATH: ${COMFYGIT_DEV_REPO_PATH:-${PWD}/../comfygit}
+      COMFYGIT_ENV_NAME: ${COMFYGIT_ENV_NAME:-manager-dev}
+      COMFYGIT_HOME: ${COMFYGIT_HOME:-${PWD}/.comfygit-workspace}
+      COMFYGIT_MANAGER_DEV_PATH: ${COMFYGIT_MANAGER_DEV_PATH:-${PWD}}
+      COMFYGIT_RUNTIME_MODE: ${COMFYGIT_RUNTIME_MODE:-}
+      COMFYGIT_SUPERVISOR_CONTROL_HOST: ${COMFYGIT_SUPERVISOR_CONTROL_HOST:-0.0.0.0}
+      COMFYGIT_SUPERVISOR_CONTROL_PORT: ${COMFYGIT_SUPERVISOR_CONTROL_PORT:-9188}
+      COMFYGIT_TORCH_BACKEND: ${COMFYGIT_TORCH_BACKEND:-cu126}
+      COMFYUI_EXTRA_ARGS: ${COMFYUI_EXTRA_ARGS:---disable-auto-launch --disable-metadata}
+      COMFYUI_HOST: 127.0.0.1
+      COMFYUI_PORT: ${COMFYUI_PORT:-8188}
+      EXTRA_DEV_NODE_PATHS: ${EXTRA_DEV_NODE_PATHS:-}
+      GIT_AUTHOR_EMAIL: ${GIT_AUTHOR_EMAIL:-}
+      GIT_AUTHOR_NAME: ${GIT_AUTHOR_NAME:-}
+      GIT_COMMITTER_EMAIL: ${GIT_COMMITTER_EMAIL:-}
+      GIT_COMMITTER_NAME: ${GIT_COMMITTER_NAME:-}
+      HOST_GIT_CREDENTIALS_PATH: ${COMFYGIT_CONTAINER_GIT_CREDENTIALS_PATH:-}
+      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-all}
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      PROJECT_ROOT: ${COMFYGIT_MANAGER_DEV_PATH:-${PWD}}
+      SHARED_MODELS_DIR: ${SHARED_MODELS_DIR:-/data/models}
+      SSH_AUTH_SOCK: ${COMFYGIT_CONTAINER_SSH_AUTH_SOCK:-}
+      WINDOW_BACKEND: ${WINDOW_BACKEND:-headless}
+    gpus: all
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:${COMFYUI_PORT:-8188}/system_stats"]
+      interval: 20s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    mem_limit: 48g
+    ports:
+      - "${COMFYUI_PORT:-8188}:${COMFYUI_PORT:-8188}"
+      - "${COMFYGIT_SUPERVISOR_CONTROL_PORT:-9188}:${COMFYGIT_SUPERVISOR_CONTROL_PORT:-9188}"
+    restart: unless-stopped
+    shm_size: 8g
+    volumes:
+      - ${COMFYGIT_HOME:-${PWD}/.comfygit-workspace}:${COMFYGIT_HOME:-${PWD}/.comfygit-workspace}
+      - ${COMFYGIT_DEV_REPO_PATH:-${PWD}/../comfygit}:${COMFYGIT_DEV_REPO_PATH:-${PWD}/../comfygit}
+      - ${COMFYGIT_MANAGER_DEV_PATH:-${PWD}}:${COMFYGIT_MANAGER_DEV_PATH:-${PWD}}
+      - ${SHARED_MODELS_HOST_DIR:-${HOME}/dev/models}:${SHARED_MODELS_DIR:-/data/models}
+      - ${EXTRA_DEV_NODES_ROOT:-${HOME}/dev/comfyui/custom-nodes-dev}:${EXTRA_DEV_NODES_ROOT:-${HOME}/dev/comfyui/custom-nodes-dev}:ro
+      - ${COMFYGIT_SSH_AUTH_SOCK:-${PWD}/.cache/no-ssh-agent.sock}:/ssh-agent
+      - ${COMFYGIT_GIT_CREDENTIALS_PATH:-${PWD}/.cache/no-git-credentials}:/host-git-credentials:ro

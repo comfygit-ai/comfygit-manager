@@ -45,15 +45,25 @@
       <div class="env-switcher-header">
         <div class="env-switcher-label">CURRENT ENVIRONMENT</div>
         <div class="env-control-buttons">
-          <button class="env-control-btn" title="Restart environment" @click="handleRestart">
+          <button
+            v-if="runtimeCapabilities.can_restart_current"
+            class="env-control-btn"
+            title="Restart environment"
+            @click="handleRestart"
+          >
             Restart
           </button>
-          <button class="env-control-btn stop" title="Stop environment" @click="handleStop">
+          <button
+            v-if="runtimeCapabilities.can_stop_current"
+            class="env-control-btn stop"
+            title="Stop environment"
+            @click="handleStop"
+          >
             Stop
           </button>
         </div>
       </div>
-      <button class="env-switcher-btn" @click="selectView('environments', 'all-envs')">
+      <button class="env-switcher-btn" @click="selectView('environments', 'workspace')">
         <div v-if="status" class="header-info">
           <span>{{ currentEnvironment?.name || status?.environment || 'Loading...' }}</span>
           <span class="branch-name">({{ status.branch || 'detached' }})</span>
@@ -91,91 +101,60 @@
               MODELS
             </button>
             <button
-              :class="['sidebar-item', { active: currentView === 'branches' }]"
-              @click="selectView('branches', 'this-env')"
-            >
-              BRANCHES
-            </button>
-            <button
-              :class="['sidebar-item', { active: currentView === 'history' }]"
-              @click="selectView('history', 'this-env')"
-            >
-              HISTORY
-            </button>
-            <button
               :class="['sidebar-item', { active: currentView === 'nodes' }]"
               @click="selectView('nodes', 'this-env')"
             >
               NODES
             </button>
             <button
-              :class="['sidebar-item', { active: currentView === 'debug-env' }]"
-              @click="selectView('debug-env', 'this-env')"
+              :class="['sidebar-item', { active: currentView === 'version-control' }]"
+              @click="openVersionControl('remotes')"
             >
-              DEBUG
+              VERSION CONTROL
             </button>
           </div>
 
           <div class="sidebar-divider"></div>
 
-          <!-- ALL ENVS Section -->
+          <!-- WORKSPACE Section -->
           <div class="sidebar-section">
-            <div class="sidebar-section-title">ALL ENVS</div>
+            <div class="sidebar-section-title">WORKSPACE</div>
             <button
               :class="['sidebar-item', { active: currentView === 'environments' }]"
-              @click="selectView('environments', 'all-envs')"
+              @click="selectView('environments', 'workspace')"
             >
               ENVIRONMENTS
             </button>
             <button
               :class="['sidebar-item', { active: currentView === 'model-index' }]"
-              @click="selectView('model-index', 'all-envs')"
+              @click="selectView('model-index', 'workspace')"
             >
               MODEL INDEX
             </button>
             <button
               :class="['sidebar-item', { active: currentView === 'settings' }]"
-              @click="selectView('settings', 'all-envs')"
+              @click="selectView('settings', 'workspace')"
             >
               SETTINGS
-            </button>
-            <button
-              :class="['sidebar-item', { active: currentView === 'debug-workspace' }]"
-              @click="selectView('debug-workspace', 'all-envs')"
-            >
-              DEBUG
             </button>
           </div>
 
           <div class="sidebar-divider"></div>
 
-          <!-- SHARING Section -->
+          <!-- DIAGNOSTICS Section -->
           <div class="sidebar-section">
-            <div class="sidebar-section-title">SHARING</div>
+            <div class="sidebar-section-title">DIAGNOSTICS</div>
             <button
-              :class="['sidebar-item', { active: currentView === 'deploy' }]"
-              @click="selectView('deploy', 'sharing')"
+              :class="['sidebar-item', { active: currentView === 'diagnostics' && diagnosticsTab === 'manifest' }]"
+              @click="openDiagnostics('manifest')"
             >
-              DEPLOY
-              <span v-if="liveInstanceCount > 0" class="sidebar-badge">{{ liveInstanceCount }}</span>
+              MANIFEST
             </button>
             <button
-              :class="['sidebar-item', { active: currentView === 'export' }]"
-              @click="selectView('export', 'sharing')"
+              :class="['sidebar-item', { active: currentView === 'diagnostics' && diagnosticsTab !== 'manifest' }]"
+              @click="openDiagnostics('env')"
             >
-              EXPORT
-            </button>
-            <button
-              :class="['sidebar-item', { active: currentView === 'import' }]"
-              @click="selectView('import', 'sharing')"
-            >
-              IMPORT
-            </button>
-            <button
-              :class="['sidebar-item', { active: currentView === 'remotes' }]"
-              @click="selectView('remotes', 'sharing')"
-            >
-              REMOTES
+              LOGGING
             </button>
           </div>
         </div>
@@ -205,14 +184,15 @@
             @commit-changes="showCommitModal = true"
             @sync-environment="showSyncModal = true"
             @view-workflows="selectView('workflows', 'this-env')"
-            @view-history="selectView('history', 'this-env')"
-            @view-debug="selectView('debug-env', 'this-env')"
+            @view-history="openVersionControl('history')"
+            @view-debug="openDiagnostics('env')"
             @view-nodes="selectView('nodes', 'this-env')"
             @repair-missing-models="handleRepairMissingModels"
             @repair-environment="handleRepairEnvironment"
             @start-setup="showSetupWizard = true"
-            @view-environments="selectView('environments', 'all-envs')"
+            @view-environments="selectView('environments', 'workspace')"
             @create-environment="handleCreateEnvironmentFromStatus"
+            @refresh-status="refresh"
           />
 
           <!-- Workflows View -->
@@ -225,26 +205,28 @@
           <!-- Models (Environment) View -->
           <ModelsEnvSection
             v-else-if="currentView === 'models-env'"
+            ref="modelsEnvSectionRef"
             @navigate="handleNavigate"
           />
 
-          <!-- Branches View -->
-          <BranchSection
-            v-else-if="currentView === 'branches'"
+          <!-- Version Control View -->
+          <VersionControlSection
+            v-else-if="currentView === 'version-control'"
+            :commits="commits"
+            :history-has-more="historyHasMore"
+            :is-loading-history-more="isLoadingHistoryMore"
+            :current-ref="status?.branch"
             :branches="branches"
             :current="status?.branch || null"
+            :initial-tab="versionControlTab"
+            @select="handleCommitSelect"
+            @checkout="handleCheckout"
+            @load-more-history="loadMoreHistory"
             @switch="handleBranchSwitch"
             @create="handleBranchCreate"
             @delete="handleBranchDelete"
-          />
-
-          <!-- History View -->
-          <HistorySection
-            v-else-if="currentView === 'history'"
-            :commits="commits"
-            :current-ref="status?.branch"
-            @select="handleCommitSelect"
-            @checkout="handleCheckout"
+            @revert-current="handleRevertCurrentBranchChanges"
+            @toast="handleToast"
           />
 
           <!-- Nodes View -->
@@ -256,45 +238,32 @@
             @toast="handleToast"
           />
 
-          <!-- Debug (Environment) View -->
-          <DebugEnvSection v-else-if="currentView === 'debug-env'" />
+          <!-- Diagnostics View -->
+          <DiagnosticsSection
+            v-else-if="currentView === 'diagnostics'"
+            :initial-tab="diagnosticsTab"
+          />
 
           <!-- Environments View -->
           <EnvironmentsSection
             v-else-if="currentView === 'environments'"
             ref="environmentsSectionRef"
+            :can-create="runtimeCapabilities.can_create_environment"
+            :can-switch="runtimeCapabilities.can_switch_environment"
+            :can-delete="runtimeCapabilities.can_delete_environment"
             @switch="handleEnvironmentSwitch"
             @created="handleEnvironmentCreated"
             @delete="handleEnvironmentDelete"
+            @import="handleOpenImportFromEnvironments"
+            @export="handleOpenExportFromEnvironments"
           />
 
           <!-- Model Index View -->
-          <ModelIndexSection v-else-if="currentView === 'model-index'" @refresh="refresh" />
+          <ModelIndexSection v-else-if="currentView === 'model-index'" ref="modelIndexSectionRef" @refresh="refresh" />
 
           <!-- Settings View -->
           <WorkspaceSettingsSection v-else-if="currentView === 'settings'" />
 
-          <!-- Debug (Workspace) View -->
-          <WorkspaceDebugSection v-else-if="currentView === 'debug-workspace'" />
-
-          <!-- Deploy View -->
-          <DeploySection
-            v-else-if="currentView === 'deploy'"
-            @toast="handleToast"
-            @navigate="handleNavigate"
-          />
-
-          <!-- Export View -->
-          <ExportSection v-else-if="currentView === 'export'" />
-
-          <!-- Import View -->
-          <ImportSection
-            v-else-if="currentView === 'import'"
-            @import-complete-switch="handleImportCompleteSwitch"
-          />
-
-          <!-- Remotes View -->
-          <RemotesSection v-else-if="currentView === 'remotes'" @toast="handleToast" />
         </template>
       </div>
     </div>
@@ -323,6 +292,37 @@
       @cancel="confirmDialog = null"
       @secondary="confirmDialog.onSecondary"
     />
+
+    <BaseModal
+      v-if="showImportModal"
+      title="IMPORT ENVIRONMENT"
+      size="xl"
+      fixed-height
+      @close="showImportModal = false"
+    >
+      <template #body>
+        <ImportSection
+          embedded
+          @import-complete-switch="handleImportCompleteSwitch"
+          @import-dismissed="handleImportDismissed"
+        />
+      </template>
+    </BaseModal>
+
+    <BaseModal
+      v-if="showExportModal"
+      :title="selectedExportEnvironment ? `EXPORT ENVIRONMENT: ${selectedExportEnvironment.toUpperCase()}` : 'EXPORT ENVIRONMENT'"
+      size="md"
+      @close="closeExportModal"
+    >
+      <template #body>
+        <ExportSection
+          embedded
+          :environment-name="selectedExportEnvironment"
+          @close="closeExportModal"
+        />
+      </template>
+    </BaseModal>
 
     <!-- Environment Switching Modals -->
     <ConfirmSwitchModal
@@ -359,6 +359,8 @@
       :state="switchProgress.state"
       :progress="switchProgress.progress"
       :message="switchProgress.message"
+      :logs="switchLogs"
+      @refresh="reloadAfterEnvironmentSwitch"
     />
 
     <!-- Environment Selector Modal -->
@@ -392,7 +394,7 @@
                 </div>
               </div>
               <button
-                v-if="!env.is_current"
+                v-if="!env.is_current && runtimeCapabilities.can_switch_environment"
                 class="switch-btn"
                 @click="handleEnvironmentSwitch(env.name)"
               >
@@ -439,22 +441,19 @@
 import { ref, computed, onMounted } from 'vue'
 import EnvironmentSwitcher from './EnvironmentSwitcher.vue'
 import StatusSection from './StatusSection.vue'
-import BranchSection from './BranchSection.vue'
-import HistorySection from './HistorySection.vue'
 import WorkflowsSection from './WorkflowsSection.vue'
 import ModelsEnvSection from './ModelsEnvSection.vue'
 import ModelIndexSection from './ModelIndexSection.vue'
 import NodesSection from './NodesSection.vue'
-import RemotesSection from './RemotesSection.vue'
 import WorkspaceSettingsSection from './WorkspaceSettingsSection.vue'
-import WorkspaceDebugSection from './WorkspaceDebugSection.vue'
-import DebugEnvSection from './DebugEnvSection.vue'
 import EnvironmentsSection from './EnvironmentsSection.vue'
 import ExportSection from './ExportSection.vue'
 import ImportSection from './ImportSection.vue'
-import DeploySection from './DeploySection.vue'
+import VersionControlSection from './VersionControlSection.vue'
+import DiagnosticsSection from './DiagnosticsSection.vue'
 import CommitDetailModal from './CommitDetailModal.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
+import BaseModal from './base/BaseModal.vue'
 import CommitPopover from './CommitPopover.vue'
 import ConfirmSwitchModal from './base/molecules/ConfirmSwitchModal.vue'
 import SwitchProgressModal from './base/molecules/SwitchProgressModal.vue'
@@ -465,9 +464,21 @@ import FirstTimeSetupWizard from './FirstTimeSetupWizard.vue'
 import UpdateNoticeBanner from './UpdateNoticeBanner.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import { useOrchestratorService } from '@/composables/useOrchestratorService'
-import { useDeployInstances } from '@/composables/useDeployInstances'
-import type { ComfyGitStatus, CommitInfo, BranchInfo, EnvironmentInfo, SetupStatus, SetupState, UpdateCheckResponse } from '@/types/comfygit'
+import type {
+  ComfyGitStatus,
+  CommitInfo,
+  BranchInfo,
+  EnvironmentInfo,
+  RuntimeCapabilities,
+  SetupStatus,
+  SetupState,
+  UpdateCheckResponse,
+  SwitchEnvironmentObserver,
+  SwitchEnvironmentProgress,
+  SwitchLogEntry
+} from '@/types/comfygit'
 import { dismissVersion, shouldShowUpdateNotice } from '@/utils/updateNotice'
+import { fetchComfyApi } from '@/utils/comfyApi'
 
 const props = defineProps<{
   initialView?: string
@@ -485,6 +496,7 @@ const {
   checkout,
   createBranch,
   switchBranch,
+  revertChanges,
   deleteBranch,
   getEnvironments,
   switchEnvironment,
@@ -499,20 +511,40 @@ const {
 
 const orchestratorService = useOrchestratorService()
 
-// Get live instance count for sidebar badge (autoStart fetches on panel load)
-const { liveInstanceCount } = useDeployInstances({ autoStart: true })
+type ViewName = 'status' | 'workflows' | 'models-env' | 'nodes' | 'version-control' |
+                'environments' | 'model-index' | 'settings' | 'diagnostics'
 
-type ViewName = 'status' | 'workflows' | 'models-env' | 'branches' | 'history' | 'nodes' | 'debug-env' |
-                'environments' | 'model-index' | 'settings' | 'debug-workspace' |
-                'export' | 'import' | 'remotes' | 'deploy'
-
-type SectionName = 'this-env' | 'all-envs' | 'sharing'
+type SectionName = 'this-env' | 'version-control' | 'workspace' | 'diagnostics'
+type SwitchProgressLike = Partial<SwitchEnvironmentProgress> & {
+  state?: string
+  progress?: number
+  message?: string
+}
 
 const status = ref<ComfyGitStatus | null>(null)
 const commits = ref<CommitInfo[]>([])
+const historyHasMore = ref(false)
+const isLoadingHistoryMore = ref(false)
 const branches = ref<BranchInfo[]>([])
 const environments = ref<EnvironmentInfo[]>([])
 const currentEnvironment = computed(() => environments.value.find(e => e.is_current))
+const selectedExportEnvironment = ref<string | null>(null)
+const showImportModal = ref(false)
+const showExportModal = ref(false)
+const versionControlTab = ref<'history' | 'branches' | 'remotes'>('remotes')
+type DiagnosticsTab = 'manifest' | 'env' | 'workspace' | 'orchestrator'
+
+function getInitialDiagnosticsTab(initialView?: string): DiagnosticsTab {
+  const tabMap: Record<string, DiagnosticsTab> = {
+    'manifest': 'manifest',
+    'debug-env': 'env',
+    'debug-workspace': 'workspace',
+    'debug-orchestrator': 'orchestrator',
+  }
+  return initialView ? tabMap[initialView] ?? 'manifest' : 'manifest'
+}
+
+const diagnosticsTab = ref<DiagnosticsTab>(getInitialDiagnosticsTab(props.initialView))
 
 // First-time setup state
 const setupStatus = ref<SetupStatus | null>(null)
@@ -520,6 +552,17 @@ const showSetupWizard = ref(false)
 const wizardInitialStep = ref<1 | 2>(1)
 const setupState = computed<SetupState>(() => {
   return setupStatus.value?.state || 'managed'
+})
+const defaultRuntimeCapabilities: RuntimeCapabilities = {
+  can_initialize_workspace: false,
+  can_create_environment: true,
+  can_switch_environment: true,
+  can_restart_current: true,
+  can_stop_current: true,
+  can_delete_environment: true
+}
+const runtimeCapabilities = computed<RuntimeCapabilities>(() => {
+  return setupStatus.value?.runtime_context?.capabilities || defaultRuntimeCapabilities
 })
 const isLoading = ref(false)
 const error = ref<string | null>(null)
@@ -534,6 +577,8 @@ const updateNoticeVisible = computed(() => !updateNoticeHidden.value && shouldSh
 
 // Ref to child components for triggering reloads
 const workflowsSectionRef = ref<{ loadWorkflows: (forceRefresh?: boolean) => Promise<void> } | null>(null)
+const modelsEnvSectionRef = ref<{ loadModels: () => Promise<void> } | null>(null)
+const modelIndexSectionRef = ref<{ loadModels: () => Promise<void> } | null>(null)
 const environmentsSectionRef = ref<{ loadEnvironments: () => Promise<void>; openCreateModal: () => void } | null>(null)
 const statusSectionRef = ref<{ resetRepairingState: () => void } | null>(null)
 
@@ -543,14 +588,23 @@ const showSwitchProgress = ref(false)
 const targetEnvironment = ref<string>('')
 const switchWorkspacePath = ref<string | null>(null)  // For first-time setup
 const switchProgress = ref({ state: 'idle', progress: 0, message: '' })
+const switchObserver = ref<SwitchEnvironmentObserver | null>(null)
+const switchLogs = ref<SwitchLogEntry[]>([])
 let switchPollInterval: number | null = null
 let progressSimulationInterval: number | null = null
 
 // Map initial view prop to view/section
 const initialViewMap: Record<string, { view: ViewName; section: SectionName }> = {
-  'debug-env': { view: 'debug-env', section: 'this-env' },
-  'debug-workspace': { view: 'debug-workspace', section: 'all-envs' },
-  'status': { view: 'status', section: 'this-env' }
+  'manifest': { view: 'diagnostics', section: 'diagnostics' },
+  'debug-env': { view: 'diagnostics', section: 'diagnostics' },
+  'debug-workspace': { view: 'diagnostics', section: 'diagnostics' },
+  'debug-orchestrator': { view: 'diagnostics', section: 'diagnostics' },
+  'history': { view: 'version-control', section: 'version-control' },
+  'branches': { view: 'version-control', section: 'version-control' },
+  'remotes': { view: 'version-control', section: 'version-control' },
+  'status': { view: 'status', section: 'this-env' },
+  'workflows': { view: 'workflows', section: 'this-env' },
+  'nodes': { view: 'nodes', section: 'this-env' },
 }
 const initialConfig = props.initialView ? initialViewMap[props.initialView] : null
 
@@ -559,20 +613,27 @@ const VIEW_STORAGE_KEY = 'ComfyGit.LastView'
 const SECTION_STORAGE_KEY = 'ComfyGit.LastSection'
 
 // Valid values for validation
-const validViews: ViewName[] = ['status', 'workflows', 'models-env', 'branches', 'history', 'nodes', 'debug-env',
-                                'environments', 'model-index', 'settings', 'debug-workspace',
-                                'export', 'import', 'remotes', 'deploy']
-const validSections: SectionName[] = ['this-env', 'all-envs', 'sharing']
+const validViews: ViewName[] = ['status', 'workflows', 'models-env', 'nodes', 'version-control',
+                                'environments', 'model-index', 'settings', 'diagnostics']
+const validSections: SectionName[] = ['this-env', 'version-control', 'workspace', 'diagnostics']
 
 // Read saved view from sessionStorage (with validation)
 function getSavedView(): { view: ViewName; section: SectionName } | null {
   try {
     const savedView = sessionStorage.getItem(VIEW_STORAGE_KEY)
     const savedSection = sessionStorage.getItem(SECTION_STORAGE_KEY)
+    const normalizedView =
+      savedView === 'branches' || savedView === 'history' || savedView === 'remotes' ? 'version-control' :
+      savedView === 'manifest' || savedView === 'debug-env' || savedView === 'debug-workspace' ? 'diagnostics' :
+      savedView
+    const normalizedSection =
+      savedSection === 'all-envs' ? 'workspace' :
+      savedSection === 'sharing' ? 'version-control' :
+      savedSection
     if (savedView && savedSection &&
-        validViews.includes(savedView as ViewName) &&
-        validSections.includes(savedSection as SectionName)) {
-      return { view: savedView as ViewName, section: savedSection as SectionName }
+        validViews.includes(normalizedView as ViewName) &&
+        validSections.includes(normalizedSection as SectionName)) {
+      return { view: normalizedView as ViewName, section: normalizedSection as SectionName }
     }
   } catch {
     // sessionStorage may be unavailable
@@ -597,36 +658,92 @@ function selectView(view: ViewName, section: SectionName) {
 }
 
 function handleNavigate(view: string) {
-  const viewMap: Record<string, { view: ViewName; section: SectionName }> = {
-    'model-index': { view: 'model-index', section: 'all-envs' },
-    'remotes': { view: 'remotes', section: 'sharing' }
-  }
+    const viewMap: Record<string, { view: ViewName; section: SectionName }> = {
+      'model-index': { view: 'model-index', section: 'workspace' },
+      'remotes': { view: 'version-control', section: 'version-control' },
+    }
   const target = viewMap[view]
   if (target) {
     selectView(target.view, target.section)
   }
 }
 
+function openVersionControl(tab: 'history' | 'branches' | 'remotes') {
+  versionControlTab.value = tab
+  selectView('version-control', 'version-control')
+}
+
+function openDiagnostics(tab: DiagnosticsTab) {
+  diagnosticsTab.value = tab
+  selectView('diagnostics', 'diagnostics')
+}
+
 function handleSwitchBranchClick() {
-  selectView('branches', 'this-env')
+  openVersionControl('branches')
 }
 
 function handleOpenNodeManager() {
   // Close the panel first
   emit('close')
 
-  // Find and click the Manager button in the toolbar
-  // ComfyUI-Manager adds a button with text "Manager" to the menu
-  setTimeout(() => {
-    const buttons = document.querySelectorAll('button.comfyui-button')
-    for (const btn of buttons) {
-      if (btn.textContent?.trim() === 'Manager') {
-        (btn as HTMLButtonElement).click()
-        return
-      }
+  setTimeout(async () => {
+    if (
+      await executeComfyUICommand('Comfy.OpenManagerDialog') ||
+      await executeComfyUICommand('Comfy.Manager.CustomNodesManager.ShowCustomNodesMenu') ||
+      clickComfyUIButton(['Extensions', 'Manage extensions']) ||
+      clickComfyUIButton(['Manager'])
+    ) {
+      return
     }
-    console.warn('[ComfyGit] Manager button not found in toolbar')
+
+    console.warn('[ComfyGit] Extensions manager entrypoint not found')
   }, 100) // Small delay to let panel close first
+}
+
+async function executeComfyUICommand(commandId: string): Promise<boolean> {
+  const app = (window as any).app
+  const commandManagers = [
+    app?.extensionManager?.command,
+    app?.extensionManager?.commands,
+    app?.command,
+    app?.commands
+  ]
+
+  for (const commandManager of commandManagers) {
+    if (typeof commandManager?.execute !== 'function') {
+      continue
+    }
+
+    try {
+      await commandManager.execute(commandId)
+      return true
+    } catch (error) {
+      console.debug(`[ComfyGit] Command ${commandId} did not open Extensions manager`, error)
+    }
+  }
+
+  return false
+}
+
+function clickComfyUIButton(labels: string[]): boolean {
+  const normalizedLabels = labels.map(label => label.toLowerCase())
+  const candidates = document.querySelectorAll('button, [role="button"]')
+
+  for (const candidate of candidates) {
+    const element = candidate as HTMLElement
+    const values = [
+      element.textContent?.trim(),
+      element.getAttribute('title')?.trim(),
+      element.getAttribute('aria-label')?.trim()
+    ].filter(Boolean).map(value => value!.toLowerCase())
+
+    if (values.some(value => normalizedLabels.includes(value))) {
+      element.click()
+      return true
+    }
+  }
+
+  return false
 }
 
 interface ConfirmDialogConfig {
@@ -741,7 +858,7 @@ async function handleUpdateManager() {
       setRefreshFlag()
       try {
         // This will drop the connection; expected.
-        await window.app?.api?.fetchApi('/v2/manager/reboot')
+        await fetchComfyApi('/v2/manager/reboot')
       } catch {
         // Expected on restart
       }
@@ -772,7 +889,7 @@ const statusTooltip = computed(() => {
   return ''
 })
 
-async function refresh() {
+async function refresh(options: { refreshWorkflows?: boolean } = {}) {
   isLoading.value = true
   error.value = null
 
@@ -780,27 +897,70 @@ async function refresh() {
     // Use forceRefresh=true to clear cached environment state
     const [statusRes, historyRes, branchesRes, envsRes] = await Promise.all([
       getStatus(true),
-      getHistory(),
+      getHistory(HISTORY_PAGE_SIZE),
       getBranches(),
       getEnvironments()
     ])
     status.value = statusRes
     commits.value = historyRes.commits
+    historyHasMore.value = historyRes.has_more
     branches.value = branchesRes.branches
     environments.value = envsRes
     emit('statusUpdate', statusRes)
 
-    // Also refresh workflows section if it's mounted
-    if (workflowsSectionRef.value) {
+    const refreshWorkflows = options.refreshWorkflows ?? true
+    // The workflows section performs its own initial load. Refresh it here only
+    // for explicit parent-level refreshes to avoid a mount-time double fetch.
+    if (refreshWorkflows && workflowsSectionRef.value) {
       await workflowsSectionRef.value.loadWorkflows(true)
+    }
+    if (currentView.value === 'models-env' && modelsEnvSectionRef.value) {
+      await modelsEnvSectionRef.value.loadModels()
+    }
+    if (currentView.value === 'model-index' && modelIndexSectionRef.value) {
+      await modelIndexSectionRef.value.loadModels()
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load status'
     status.value = null
     commits.value = []
+    historyHasMore.value = false
     branches.value = []
   } finally {
     isLoading.value = false
+  }
+}
+
+async function refreshEnvironments() {
+  isLoading.value = true
+  error.value = null
+
+  try {
+    environments.value = await getEnvironments()
+    if (environmentsSectionRef.value) {
+      await environmentsSectionRef.value.loadEnvironments()
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to load environments'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const HISTORY_PAGE_SIZE = 50
+
+async function loadMoreHistory() {
+  if (isLoadingHistoryMore.value || !historyHasMore.value) return
+
+  isLoadingHistoryMore.value = true
+  try {
+    const result = await getHistory(HISTORY_PAGE_SIZE, commits.value.length)
+    commits.value = [...commits.value, ...result.commits]
+    historyHasMore.value = result.has_more
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Failed to load more commits', 'error')
+  } finally {
+    isLoadingHistoryMore.value = false
   }
 }
 
@@ -808,15 +968,20 @@ function handleCommitSelect(commit: CommitInfo) {
   selectedCommit.value = commit
 }
 
-async function handleCheckout(commit: CommitInfo) {
-  selectedCommit.value = null
-
-  const hasChanges = status.value && (
+function hasUncommittedChanges(): boolean {
+  if (!status.value) return false
+  return (
     status.value.workflows.new.length > 0 ||
     status.value.workflows.modified.length > 0 ||
     status.value.workflows.deleted.length > 0 ||
     status.value.has_changes
   )
+}
+
+async function handleCheckout(commit: CommitInfo) {
+  selectedCommit.value = null
+
+  const hasChanges = hasUncommittedChanges()
 
   confirmDialog.value = {
     title: hasChanges ? 'Checkout with Uncommitted Changes' : 'Checkout Commit',
@@ -849,12 +1014,7 @@ async function handleCheckout(commit: CommitInfo) {
 }
 
 async function handleBranchSwitch(branchName: string) {
-  const hasChanges = status.value && (
-    status.value.workflows.new.length > 0 ||
-    status.value.workflows.modified.length > 0 ||
-    status.value.workflows.deleted.length > 0 ||
-    status.value.has_changes
-  )
+  const hasChanges = hasUncommittedChanges()
 
   confirmDialog.value = {
     title: hasChanges ? 'Switch Branch with Uncommitted Changes' : 'Switch Branch',
@@ -882,6 +1042,37 @@ async function handleBranchSwitch(branchName: string) {
         showToast('Restarting ComfyUI...', 'success')
       } else {
         showToast(result.message || 'Branch switch failed', 'error')
+      }
+    }
+  }
+}
+
+async function handleRevertCurrentBranchChanges() {
+  if (!hasUncommittedChanges()) {
+    showToast('No uncommitted changes to revert', 'info')
+    return
+  }
+
+  confirmDialog.value = {
+    title: 'Revert Uncommitted Changes',
+    message: 'Discard all uncommitted changes on the current branch?',
+    details: getChangeDetails(),
+    warning: 'This permanently discards uncommitted workflow and manifest changes, then restarts ComfyUI from the current HEAD.',
+    confirmLabel: 'Revert Changes',
+    cancelLabel: 'Cancel',
+    destructive: true,
+    onConfirm: async () => {
+      confirmDialog.value = null
+      setRefreshFlag()
+
+      const toastId = showToast('Reverting uncommitted changes...', 'info', 0)
+      const result = await revertChanges()
+      removeToast(toastId)
+
+      if (result.status === 'success') {
+        showToast('Restarting ComfyUI...', 'success')
+      } else {
+        showToast(result.message || 'Revert failed', 'error')
       }
     }
   }
@@ -989,6 +1180,10 @@ function setRefreshFlag() {
 
 // Restart current environment
 async function handleRestart() {
+  if (!runtimeCapabilities.value.can_restart_current) {
+    showToast('Restart is not available in this runtime context.', 'warning')
+    return
+  }
   confirmDialog.value = {
     title: 'Restart Environment',
     message: 'Restart the current environment?',
@@ -1001,9 +1196,7 @@ async function handleRestart() {
       showToast('Restarting environment...', 'info')
       try {
         // Call the reboot endpoint
-        if (window.app?.api) {
-          await window.app.api.fetchApi('/v2/manager/reboot')
-        }
+        await fetchComfyApi('/v2/manager/reboot')
       } catch {
         // Expected - server will restart and connection will drop
       }
@@ -1013,6 +1206,10 @@ async function handleRestart() {
 
 // Stop current environment
 async function handleStop() {
+  if (!runtimeCapabilities.value.can_stop_current) {
+    showToast('Stop is not available in this runtime context.', 'warning')
+    return
+  }
   confirmDialog.value = {
     title: 'Stop Environment',
     message: 'Stop the current environment?',
@@ -1024,9 +1221,7 @@ async function handleStop() {
       showToast('Stopping environment...', 'info')
       try {
         // Call the stop endpoint - works for both supervised and unmanaged environments
-        if (window.app?.api) {
-          await window.app.api.fetchApi('/v2/comfygit/stop', { method: 'POST' })
-        }
+        await fetchComfyApi('/v2/comfygit/stop', { method: 'POST' })
       } catch {
         // Expected - server will shut down and connection will drop
       }
@@ -1036,6 +1231,10 @@ async function handleStop() {
 
 // Environment switching flow
 async function handleEnvironmentSwitch(envName: string, workspacePath?: string | null) {
+  if (!runtimeCapabilities.value.can_switch_environment) {
+    showToast('Environment switching is not available in this runtime context.', 'warning')
+    return
+  }
   showEnvironmentSelector.value = false
   targetEnvironment.value = envName
   switchWorkspacePath.value = workspacePath || null
@@ -1046,18 +1245,23 @@ async function confirmEnvironmentSwitch() {
   showConfirmSwitch.value = false
   showSwitchProgress.value = true
 
-  // Set flag to prompt for refresh after server restart
-  setRefreshFlag()
+  // Switch completion is handled by the switch modal itself. Do not reuse the
+  // restart/git pending-refresh flag, because that auto-reloads before users
+  // can read or copy handoff logs.
+  sessionStorage.removeItem('ComfyGit.PendingRefresh')
 
   switchProgress.value = {
     progress: 10,
     state: getStateFromProgress(10),
     message: getMessageFromProgress(10)
   }
+  switchObserver.value = null
+  switchLogs.value = []
 
   try {
     // Initiate the switch (pass workspace path for first-time setup)
-    await switchEnvironment(targetEnvironment.value, switchWorkspacePath.value || undefined)
+    const result = await switchEnvironment(targetEnvironment.value, switchWorkspacePath.value || undefined)
+    switchObserver.value = result?.observer || null
 
     // Start smooth progress simulation (10% → 60% over 5 seconds)
     startProgressSimulation()
@@ -1069,6 +1273,8 @@ async function confirmEnvironmentSwitch() {
     showSwitchProgress.value = false
     showToast(`Failed to initiate switch: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
     switchProgress.value = { state: 'idle', progress: 0, message: '' }
+    switchObserver.value = null
+    switchLogs.value = []
     switchWorkspacePath.value = null  // Clean up
   }
 }
@@ -1128,13 +1334,48 @@ function stopProgressSimulation() {
   }
 }
 
+async function fetchSwitchObserverProgress(): Promise<SwitchProgressLike | null> {
+  const observer = switchObserver.value
+  if (!observer?.status_url) return null
+
+  try {
+    const response = await fetch(observer.status_url, { cache: 'no-store' })
+    if (!response.ok) return null
+    return await response.json() as SwitchProgressLike
+  } catch {
+    return null
+  }
+}
+
+async function refreshSwitchObserverLogs() {
+  const observer = switchObserver.value
+  if (!observer?.logs_url) return
+
+  try {
+    const response = await fetch(observer.logs_url, { cache: 'no-store' })
+    if (!response.ok) return
+    const payload = await response.json() as { logs?: SwitchLogEntry[] }
+    switchLogs.value = payload.logs || []
+  } catch {
+    // Expected while a container or supervisor is not yet reachable.
+  }
+}
+
 function startSwitchPolling() {
   if (switchPollInterval) return
 
   switchPollInterval = window.setInterval(async () => {
     try {
-      // Try orchestrator first (survives ComfyUI restarts)
-      let progress = await orchestratorService.getStatus()
+      await refreshSwitchObserverLogs()
+
+      // Try direct supervisor observer first. It survives the ComfyUI restart
+      // that breaks the normal /api proxy path during handoff.
+      let progress = await fetchSwitchObserverProgress()
+
+      if (!progress) {
+        // Try orchestrator proxy for non-cg-run environments.
+        progress = await orchestratorService.getStatus()
+      }
 
       // Fallback to ComfyUI server if orchestrator unavailable
       if (!progress || progress.state === 'idle') {
@@ -1179,28 +1420,51 @@ function startSwitchPolling() {
       if (progress.state === 'complete') {
         stopProgressSimulation()
         stopSwitchPolling()
-        showSwitchProgress.value = false
-        showToast(`✓ Switched to ${targetEnvironment.value}`, 'success')
-        await refresh()
-        targetEnvironment.value = ''
+        switchProgress.value = {
+          state: 'complete',
+          progress: 100,
+          message: progress.message || `Successfully switched to ${targetEnvironment.value}`
+        }
+        showToast(`✓ Switched to ${targetEnvironment.value}. Refresh the page to load it.`, 'success')
       } else if (progress.state === 'rolled_back') {
         stopProgressSimulation()
         stopSwitchPolling()
         showSwitchProgress.value = false
         showToast('Switch failed, restored previous environment', 'warning')
         targetEnvironment.value = ''
+        switchObserver.value = null
       } else if (progress.state === 'critical_failure') {
         stopProgressSimulation()
         stopSwitchPolling()
         showSwitchProgress.value = false
         showToast(`Critical error during switch: ${progress.message}`, 'error')
         targetEnvironment.value = ''
+        switchObserver.value = null
       }
     } catch (err) {
-      console.error('Failed to poll switch progress:', err)
       // Continue polling - server might be restarting
     }
   }, 1000) // Poll every 1 second
+}
+
+function reloadAfterEnvironmentSwitch() {
+  sessionStorage.removeItem('ComfyGit.PendingRefresh')
+  localStorage.removeItem('workflow')
+  localStorage.removeItem('Comfy.PreviousWorkflow')
+  localStorage.removeItem('Comfy.OpenWorkflowsPaths')
+  localStorage.removeItem('Comfy.ActiveWorkflowIndex')
+
+  Object.keys(sessionStorage).forEach(key => {
+    if (
+      key.startsWith('workflow:') ||
+      key.startsWith('Comfy.OpenWorkflowsPaths:') ||
+      key.startsWith('Comfy.ActiveWorkflowIndex:')
+    ) {
+      sessionStorage.removeItem(key)
+    }
+  })
+
+  window.location.reload()
 }
 
 function stopSwitchPolling() {
@@ -1323,12 +1587,16 @@ async function handleEnvironmentCreated(environmentName: string, switchAfter: bo
   }
 
   // Switch if requested
-  if (switchAfter) {
+  if (switchAfter && runtimeCapabilities.value.can_switch_environment) {
     await handleEnvironmentSwitch(environmentName)
   }
 }
 
 async function handleEnvironmentDelete(envName: string) {
+  if (!runtimeCapabilities.value.can_delete_environment) {
+    showToast('Environment deletion is not available in this runtime context.', 'warning')
+    return
+  }
   // Check if trying to delete current environment
   if (currentEnvironment.value?.name === envName) {
     showToast('Cannot delete the currently active environment. Switch to another environment first.', 'error')
@@ -1375,7 +1643,9 @@ async function handleSetupComplete(environmentName: string, workspacePath: strin
   }
 
   // Trigger environment switch with workspace path for first-time setup
-  await handleEnvironmentSwitch(environmentName, workspacePath)
+  if (runtimeCapabilities.value.can_switch_environment) {
+    await handleEnvironmentSwitch(environmentName, workspacePath)
+  }
 }
 
 function handleSetupWizardClose() {
@@ -1397,6 +1667,26 @@ async function handleImportCompleteSwitch(environmentName: string) {
   await handleEnvironmentSwitch(environmentName)
 }
 
+async function handleImportDismissed() {
+  showImportModal.value = false
+  await refreshEnvironments()
+}
+
+function handleOpenImportFromEnvironments() {
+  selectedExportEnvironment.value = null
+  showImportModal.value = true
+}
+
+function handleOpenExportFromEnvironments(environmentName: string) {
+  selectedExportEnvironment.value = environmentName
+  showExportModal.value = true
+}
+
+function closeExportModal() {
+  showExportModal.value = false
+  selectedExportEnvironment.value = null
+}
+
 async function handleEnvironmentCreatedNoSwitch(envName: string) {
   // Refresh setup status to get updated environments list
   setupStatus.value = await getSetupStatus()
@@ -1407,8 +1697,12 @@ async function handleEnvironmentCreatedNoSwitch(envName: string) {
 }
 
 function handleCreateEnvironmentFromStatus() {
+  if (!runtimeCapabilities.value.can_create_environment) {
+    showToast('Environment creation is not available in this runtime context.', 'warning')
+    return
+  }
   // Navigate to environments section and trigger create modal
-  selectView('environments', 'all-envs')
+  selectView('environments', 'workspace')
   // Give time for section to mount, then open create modal
   setTimeout(() => {
     environmentsSectionRef.value?.openCreateModal()
@@ -1422,6 +1716,9 @@ function getChangeDetails(): string[] {
   if (wf.new.length) details.push(`${wf.new.length} new workflow(s)`)
   if (wf.modified.length) details.push(`${wf.modified.length} modified workflow(s)`)
   if (wf.deleted.length) details.push(`${wf.deleted.length} deleted workflow(s)`)
+  if (status.value.has_changes && details.length === 0) {
+    details.push('manifest or environment metadata changes')
+  }
   return details
 }
 
@@ -1431,19 +1728,19 @@ onMounted(async () => {
     setupStatus.value = await getSetupStatus()
 
     // Block panel for all non-managed states
-    if (setupStatus.value.state === 'no_workspace') {
+    if (setupStatus.value.state === 'no_workspace' && runtimeCapabilities.value.can_initialize_workspace) {
       showSetupWizard.value = true
       wizardInitialStep.value = 1
       return
     }
 
-    if (setupStatus.value.state === 'empty_workspace') {
+    if (setupStatus.value.state === 'empty_workspace' && runtimeCapabilities.value.can_create_environment) {
       showSetupWizard.value = true
       wizardInitialStep.value = 2  // Skip workspace creation
       return
     }
 
-    if (setupStatus.value.state === 'unmanaged') {
+    if (setupStatus.value.state === 'unmanaged' && runtimeCapabilities.value.can_switch_environment) {
       showSetupWizard.value = true
       wizardInitialStep.value = 2  // Skip workspace creation
       return
@@ -1455,7 +1752,7 @@ onMounted(async () => {
   }
 
   await Promise.all([
-    refresh(),
+    refresh({ refreshWorkflows: false }),
     loadUpdateNotice()
   ])
 })
@@ -1714,6 +2011,7 @@ onMounted(async () => {
   background: var(--cg-color-bg-hover);
 }
 
+
 .sidebar-badge {
   margin-left: auto;
   padding: 1px 6px;
@@ -1940,6 +2238,8 @@ onMounted(async () => {
 
 .toast-message {
   flex: 1;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
 }
 
 /* Toast transitions */

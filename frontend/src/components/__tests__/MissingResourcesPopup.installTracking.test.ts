@@ -266,7 +266,11 @@ describe('MissingResourcesPopup install tracking hardening', () => {
     expect((document.body.querySelector('.base-modal-error') as HTMLElement).textContent || '')
       .toContain('1 of 2 installs queued, 1 failed')
     const allDoneButton = findButtonByText('All Done')
-    expect(allDoneButton.disabled).toBe(true)
+    expect(allDoneButton.disabled).toBe(false)
+
+    allDoneButton.click()
+    await flushPromises()
+    expect(document.body.textContent || '').not.toContain('Missing Dependencies')
 
     wrapper.unmount()
   })

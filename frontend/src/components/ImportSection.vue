@@ -1,6 +1,6 @@
 <template>
   <PanelLayout>
-    <template #header>
+    <template v-if="!embedded" #header>
       <PanelHeader
         title="IMPORT ENVIRONMENT"
         :show-info="true"
@@ -9,7 +9,10 @@
     </template>
 
     <template #content>
-      <ImportFlow @import-complete="handleImportComplete" />
+      <ImportFlow
+        @import-complete="handleImportComplete"
+        @import-dismissed="handleImportDismissed"
+      />
     </template>
   </PanelLayout>
 
@@ -61,8 +64,13 @@ import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
 import ImportFlow from './ImportFlow.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 
+defineProps<{
+  embedded?: boolean
+}>()
+
 const emit = defineEmits<{
   'import-complete-switch': [environmentName: string]
+  'import-dismissed': [environmentName: string | null]
 }>()
 
 const showInfoPopover = ref(false)
@@ -71,6 +79,10 @@ function handleImportComplete(envName: string, switchRequested: boolean) {
   if (switchRequested) {
     emit('import-complete-switch', envName)
   }
+}
+
+function handleImportDismissed(envName: string | null) {
+  emit('import-dismissed', envName)
 }
 </script>
 

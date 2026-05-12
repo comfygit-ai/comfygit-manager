@@ -1,6 +1,11 @@
 <template>
   <Teleport to="body">
-    <div class="base-modal-overlay" @click="handleOverlayClick">
+    <div
+      class="base-modal-overlay"
+      :style="{ zIndex: overlayZIndex }"
+      @pointerdown="handleOverlayPointerDown"
+      @click="handleOverlayClick"
+    >
       <div :class="['base-modal-content', size, { 'fixed-height': fixedHeight }]" @click.stop>
         <div class="base-modal-header">
           <slot name="header">
@@ -32,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 
 const props = withDefaults(defineProps<{
   title?: string
@@ -42,22 +47,32 @@ const props = withDefaults(defineProps<{
   loading?: boolean
   error?: string
   fixedHeight?: boolean
+  overlayZIndex?: number
 }>(), {
   size: 'md',
   showCloseButton: true,
   closeOnOverlayClick: true,
   loading: false,
-  fixedHeight: false
+  fixedHeight: false,
+  overlayZIndex: 10003
 })
 
 const emit = defineEmits<{
   close: []
 }>()
 
-function handleOverlayClick() {
-  if (props.closeOnOverlayClick) {
+const pointerStartedOnOverlay = ref(false)
+
+function handleOverlayPointerDown(event: PointerEvent) {
+  pointerStartedOnOverlay.value = event.target === event.currentTarget
+}
+
+function handleOverlayClick(event: MouseEvent) {
+  const clickedOverlay = event.target === event.currentTarget
+  if (props.closeOnOverlayClick && clickedOverlay && pointerStartedOnOverlay.value) {
     emit('close')
   }
+  pointerStartedOnOverlay.value = false
 }
 
 function handleKeydown(e: KeyboardEvent) {

@@ -404,13 +404,12 @@ const createProgress = ref<{ progress: number; message: string; phase?: string }
 // Environment creation steps (matches core library phases)
 const environmentCreationSteps = [
   { id: 'init_structure', label: 'Initialize structure', progressThreshold: 5 },
-  { id: 'resolve_version', label: 'Resolve ComfyUI version', progressThreshold: 10 },
-  { id: 'clone_comfyui', label: 'Clone/restore ComfyUI', progressThreshold: 25 },
-  { id: 'configure_environment', label: 'Configure environment', progressThreshold: 30 },
-  { id: 'create_venv', label: 'Create virtual environment', progressThreshold: 35 },
-  { id: 'install_pytorch', label: 'Install PyTorch', progressThreshold: 70 },
-  { id: 'configure_pytorch', label: 'Configure PyTorch', progressThreshold: 75 },
-  { id: 'install_dependencies', label: 'Install dependencies', progressThreshold: 95 },
+  { id: 'probe_pytorch', label: 'Detect PyTorch backend', progressThreshold: 10 },
+  { id: 'resolve_version', label: 'Resolve ComfyUI version', progressThreshold: 15 },
+  { id: 'clone_comfyui', label: 'Clone/restore ComfyUI', progressThreshold: 30, aliases: ['restore_comfyui'] },
+  { id: 'configure_environment', label: 'Configure environment', progressThreshold: 40 },
+  { id: 'install_dependencies', label: 'Install PyTorch and dependencies', progressThreshold: 85 },
+  { id: 'install_manager', label: 'Install ComfyGit manager', progressThreshold: 90 },
   { id: 'finalize', label: 'Finalize environment', progressThreshold: 100 },
 ]
 

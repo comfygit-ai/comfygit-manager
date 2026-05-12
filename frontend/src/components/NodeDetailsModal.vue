@@ -23,6 +23,14 @@
           <span class="value">{{ sourceLabel }}</span>
         </div>
 
+        <div v-if="hasRuntimeImportFailure" class="runtime-warning">
+          <div class="runtime-warning-title">Import failed</div>
+          <p>
+            This node is installed, but ComfyUI did not load it during startup.
+            Check the ComfyUI logs for the Python import error.
+          </p>
+        </div>
+
         <div class="detail-row" v-if="node.registry_id">
           <span class="label">Registry ID:</span>
           <span class="value mono">{{ node.registry_id }}</span>
@@ -88,7 +96,12 @@ const emit = defineEmits<{
   close: []
 }>()
 
+const hasRuntimeImportFailure = computed(() => {
+  return props.node.runtime_import?.status === 'failed'
+})
+
 const statusClass = computed(() => {
+  if (hasRuntimeImportFailure.value) return 'error'
   if (!props.node.installed) return 'missing'
   if (!props.node.tracked) return 'warning'
   if (props.node.source === 'development') return 'dev'
@@ -96,6 +109,7 @@ const statusClass = computed(() => {
 })
 
 const statusLabel = computed(() => {
+  if (hasRuntimeImportFailure.value) return 'Import Failed'
   if (!props.node.installed) return 'Missing'
   if (!props.node.tracked) return 'Untracked'
   if (props.node.source === 'development') return 'Development'
@@ -160,6 +174,33 @@ const sourceLabel = computed(() => {
   background: rgba(245, 158, 11, 0.15);
   color: var(--cg-color-warning, #f59e0b);
   border: 1px solid var(--cg-color-warning, #f59e0b);
+}
+
+.status-badge.error {
+  background: var(--cg-color-error-muted);
+  color: var(--cg-color-error);
+  border: 1px solid var(--cg-color-error);
+}
+
+.runtime-warning {
+  padding: var(--cg-space-3);
+  color: var(--cg-color-error);
+  background: var(--cg-color-error-muted);
+  border: 1px solid var(--cg-color-error);
+  border-radius: var(--cg-radius-sm);
+}
+
+.runtime-warning-title {
+  font-size: var(--cg-font-size-sm);
+  font-weight: var(--cg-font-weight-semibold);
+  margin-bottom: var(--cg-space-1);
+}
+
+.runtime-warning p {
+  margin: 0;
+  color: var(--cg-color-text-secondary);
+  font-size: var(--cg-font-size-sm);
+  line-height: 1.45;
 }
 
 .detail-row {

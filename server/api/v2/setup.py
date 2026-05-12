@@ -8,6 +8,7 @@ from pathlib import Path
 
 from aiohttp import web
 
+from cgm_core.runtime_context import build_runtime_context, ensure_capability
 from comfygit_core.factories.workspace_factory import WorkspaceFactory
 from comfygit_core.models.exceptions import CDWorkspaceNotFoundError
 import orchestrator
@@ -39,6 +40,37 @@ def _update_init_state(state: str, progress: int, message: str, **kwargs):
             _init_task_state[key] = value
 
 
+def _setup_status_payload(
+    state: str,
+    *,
+    workspace_path: str | None,
+    default_path: str,
+    environments: list[str],
+    current_environment: str | None,
+    detected_models_dir: str | None,
+    has_comfyui_manager: bool,
+    cli_installed: bool,
+    cli_path: str | None,
+) -> dict:
+    runtime_context = build_runtime_context(
+        state,
+        workspace_path=workspace_path,
+        current_environment=current_environment,
+    )
+    return {
+        "state": state,
+        "workspace_path": workspace_path,
+        "default_path": default_path,
+        "environments": environments,
+        "current_environment": current_environment,
+        "detected_models_dir": detected_models_dir,
+        "has_comfyui_manager": has_comfyui_manager,
+        "cli_installed": cli_installed,
+        "cli_path": cli_path,
+        "runtime_context": runtime_context.to_dict(),
+    }
+
+
 @routes.get("/v2/setup/status")
 async def get_setup_status(request: web.Request) -> web.Response:
     """Get current setup status."""
@@ -66,17 +98,17 @@ async def get_setup_status(request: web.Request) -> web.Response:
 
     if is_managed and workspace and current_env:
         # Fully managed
-        return web.json_response({
-            "state": "managed",
-            "workspace_path": str(workspace.path),
-            "default_path": default_path,
-            "environments": [e.name for e in workspace.list_environments()],
-            "current_environment": current_env.name,
-            "detected_models_dir": None,
-            "has_comfyui_manager": has_comfyui_manager,
-            "cli_installed": cli_installed,
-            "cli_path": cli_path
-        })
+        return web.json_response(_setup_status_payload(
+            "managed",
+            workspace_path=str(workspace.path),
+            default_path=default_path,
+            environments=[e.name for e in workspace.list_environments()],
+            current_environment=current_env.name,
+            detected_models_dir=None,
+            has_comfyui_manager=has_comfyui_manager,
+            cli_installed=cli_installed,
+            cli_path=cli_path,
+        ))
 
     # Try to find workspace at default location
     try:
@@ -84,42 +116,42 @@ async def get_setup_status(request: web.Request) -> web.Response:
         envs = workspace.list_environments()
 
         if not envs:
-            return web.json_response({
-                "state": "empty_workspace",
-                "workspace_path": str(workspace.path),
-                "default_path": default_path,
-                "environments": [],
-                "current_environment": None,
-                "detected_models_dir": detected_models_dir,
-                "has_comfyui_manager": has_comfyui_manager,
-                "cli_installed": cli_installed,
-                "cli_path": cli_path
-            })
+            return web.json_response(_setup_status_payload(
+                "empty_workspace",
+                workspace_path=str(workspace.path),
+                default_path=default_path,
+                environments=[],
+                current_environment=None,
+                detected_models_dir=detected_models_dir,
+                has_comfyui_manager=has_comfyui_manager,
+                cli_installed=cli_installed,
+                cli_path=cli_path,
+            ))
         else:
-            return web.json_response({
-                "state": "unmanaged",
-                "workspace_path": str(workspace.path),
-                "default_path": default_path,
-                "environments": [e.name for e in envs],
-                "current_environment": None,
-                "detected_models_dir": detected_models_dir,
-                "has_comfyui_manager": has_comfyui_manager,
-                "cli_installed": cli_installed,
-                "cli_path": cli_path
-            })
+            return web.json_response(_setup_status_payload(
+                "unmanaged",
+                workspace_path=str(workspace.path),
+                default_path=default_path,
+                environments=[e.name for e in envs],
+                current_environment=None,
+                detected_models_dir=detected_models_dir,
+                has_comfyui_manager=has_comfyui_manager,
+                cli_installed=cli_installed,
+                cli_path=cli_path,
+            ))
 
     except CDWorkspaceNotFoundError:
-        return web.json_response({
-            "state": "no_workspace",
-            "workspace_path": None,
-            "default_path": default_path,
-            "environments": [],
-            "current_environment": None,
-            "detected_models_dir": detected_models_dir,
-            "has_comfyui_manager": has_comfyui_manager,
-            "cli_installed": cli_installed,
-            "cli_path": cli_path
-        })
+        return web.json_response(_setup_status_payload(
+            "no_workspace",
+            workspace_path=None,
+            default_path=default_path,
+            environments=[],
+            current_environment=None,
+            detected_models_dir=detected_models_dir,
+            has_comfyui_manager=has_comfyui_manager,
+            cli_installed=cli_installed,
+            cli_path=cli_path,
+        ))
 
 
 @routes.post("/v2/setup/validate_path")
@@ -243,6 +275,11 @@ def _validate_models_path(path: Path) -> web.Response:
 async def initialize_workspace(request: web.Request) -> web.Response:
     """Initialize a new workspace."""
     global _init_task_state
+
+    runtime_context = build_runtime_context("no_workspace")
+    denial = ensure_capability(runtime_context, "can_initialize_workspace")
+    if denial:
+        return denial
 
     # Check if already in progress
     with _init_task_lock:

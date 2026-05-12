@@ -45,10 +45,29 @@
           :relative-date="commit.date_relative || commit.relative_date || ''"
           :clickable="false"
         />
+
+        <div v-if="hasMore" class="load-more-row">
+          <ActionButton
+            variant="secondary"
+            size="sm"
+            :loading="isLoadingMore"
+            @click="loadMoreCommits"
+          >
+            Load More
+          </ActionButton>
+        </div>
       </CommitList>
     </template>
 
     <template #footer>
+      <ActionButton
+        v-if="isCurrent"
+        variant="destructive"
+        size="sm"
+        @click="$emit('revert-current')"
+      >
+        Revert Changes
+      </ActionButton>
       <ActionButton
         v-if="!isCurrent"
         variant="destructive"
@@ -88,6 +107,7 @@ defineEmits<{
   close: []
   delete: [branchName: string]
   switch: [branchName: string]
+  'revert-current': []
 }>()
 
 const { getBranchHistory } = useComfyGitService()
@@ -95,12 +115,31 @@ const { getBranchHistory } = useComfyGitService()
 const commits = ref<CommitInfo[]>([])
 const hasMore = ref(false)
 const isLoading = ref(true)
+const isLoadingMore = ref(false)
+const PAGE_SIZE = 50
+
+async function loadCommits(offset = 0) {
+  const result = await getBranchHistory(props.branchName, PAGE_SIZE, offset)
+  commits.value = offset === 0
+    ? result.commits
+    : [...commits.value, ...result.commits]
+  hasMore.value = result.has_more
+}
+
+async function loadMoreCommits() {
+  if (isLoadingMore.value || !hasMore.value) return
+
+  isLoadingMore.value = true
+  try {
+    await loadCommits(commits.value.length)
+  } finally {
+    isLoadingMore.value = false
+  }
+}
 
 onMounted(async () => {
   try {
-    const result = await getBranchHistory(props.branchName, 50)
-    commits.value = result.commits
-    hasMore.value = result.has_more
+    await loadCommits()
   } finally {
     isLoading.value = false
   }
@@ -174,6 +213,13 @@ onMounted(async () => {
 .branch-commits {
   max-height: 300px;
   overflow-y: auto;
+}
+
+.load-more-row {
+  display: flex;
+  justify-content: center;
+  padding: var(--cg-space-3);
+  border-top: 1px solid var(--cg-color-border-subtle);
 }
 
 .footer-spacer {

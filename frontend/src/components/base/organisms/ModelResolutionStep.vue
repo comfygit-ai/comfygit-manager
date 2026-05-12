@@ -36,7 +36,7 @@
         :status-label="currentModelStatusLabel"
         @mark-optional="handleMarkOptional"
         @skip="handleSkip"
-        @download-url="handleDownloadUrl"
+        @find-source="handleFindSource"
         @search="handleSearch"
         @option-selected="handleOptionSelected"
         @clear-choice="handleClearChoice"
@@ -53,7 +53,7 @@
       <div v-if="showSearch" class="model-resolution-modal-overlay" @click.self="closeSearch">
         <div class="model-search-modal">
           <div class="model-modal-header">
-            <h4>Search Workspace Models</h4>
+            <h4>Search Model Index</h4>
             <button class="model-modal-close-btn" @click="closeSearch">✕</button>
           </div>
           <div class="model-modal-body">
@@ -88,43 +88,17 @@
       </div>
     </Teleport>
 
-    <!-- Download URL Modal -->
-    <Teleport to="body">
-      <div v-if="showDownloadUrl" class="model-resolution-modal-overlay" @click.self="closeDownloadUrl">
-        <div class="model-download-url-modal">
-          <div class="model-modal-header">
-            <h4>Enter Download URL</h4>
-            <button class="model-modal-close-btn" @click="closeDownloadUrl">✕</button>
-          </div>
-          <div class="model-modal-body">
-            <div class="model-input-group">
-              <label class="model-input-label">Download URL</label>
-              <BaseInput
-                v-model="downloadUrl"
-                placeholder="https://civitai.com/api/download/..."
-              />
-            </div>
-            <div class="model-input-group">
-              <label class="model-input-label">Host Path</label>
-              <BaseInput
-                v-model="downloadPath"
-                :placeholder="suggestedPath || 'e.g. loras/model.safetensors'"
-              />
-            </div>
-            <div class="model-modal-actions">
-              <BaseButton variant="secondary" @click="closeDownloadUrl">Cancel</BaseButton>
-              <BaseButton
-                variant="primary"
-                :disabled="!downloadUrl.trim() || !downloadPath.trim()"
-                @click="submitDownloadUrl"
-              >
-                Queue Download
-              </BaseButton>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <ModelSourceModal
+      v-if="showFindSource && currentModel && sourceModalModel"
+      :model="sourceModalModel"
+      :workflow-name="currentModel.reference?.workflow || null"
+      :node-type="currentModel.reference?.node_type || null"
+      :defer-save="true"
+      action-label="Use Source"
+      :overlay-z-index="10013"
+      @selected="handleSourceSelected"
+      @close="closeFindSource"
+    />
   </div>
 </template>
 
@@ -133,9 +107,9 @@ import { ref, computed, nextTick } from 'vue'
 import ModelResolutionItem from '../molecules/ModelResolutionItem.vue'
 import type { ResolutionStatus } from '../molecules/ModelResolutionItem.vue'
 import ItemNavigator from '../molecules/ItemNavigator.vue'
-import BaseButton from '../BaseButton.vue'
 import BaseInput from '../BaseInput.vue'
-import type { ModelSearchResult, ModelChoice } from '@/types/comfygit'
+import ModelSourceModal from '@/components/ModelSourceModal.vue'
+import type { ModelDetails, ModelSearchResult, ModelChoice } from '@/types/comfygit'
 
 // Node type to model directory mapping (from comfyui_models.py)
 const NODE_DIRECTORY_MAPPINGS: Record<string, string[]> = {
@@ -214,10 +188,8 @@ const emit = defineEmits<{
 // Local state
 const currentIndex = ref(0)
 const showSearch = ref(false)
-const showDownloadUrl = ref(false)
+const showFindSource = ref(false)
 const searchQuery = ref('')
-const downloadUrl = ref('')
-const downloadPath = ref('')
 const searchResults = ref<ModelSearchResult[]>([])
 const isSearching = ref(false)
 
@@ -239,7 +211,23 @@ const suggestedPath = computed(() => {
   if (!currentModel.value) return ''
   const dir = getDirectoryForNodeType(currentModel.value.reference?.node_type)
   if (!dir) return ''  // Unknown node type - user must specify path
-  return `${dir}/${currentModel.value.filename}`
+  return `${dir}/${currentModel.value.filename.replace(/\\/g, '/')}`
+})
+
+const sourceModalModel = computed<ModelDetails | null>(() => {
+  if (!currentModel.value) return null
+  return {
+    filename: currentModel.value.filename,
+    hash: '',
+    blake3: null,
+    sha256: null,
+    size: 0,
+    category: getDirectoryForNodeType(currentModel.value.reference?.node_type) || 'unknown',
+    relative_path: suggestedPath.value || currentModel.value.filename,
+    last_seen: null,
+    locations: [],
+    sources: []
+  }
 })
 
 // Compute status for ItemNavigator
@@ -342,24 +330,26 @@ function handleSearch() {
   showSearch.value = true
 }
 
-function handleDownloadUrl() {
+function handleFindSource() {
   if (!currentModel.value) return
-  // Pre-populate with existing download intent data if available
-  downloadUrl.value = currentModel.value.download_source || ''
-  downloadPath.value = currentModel.value.target_path || suggestedPath.value
-  showDownloadUrl.value = true
+  showFindSource.value = true
+}
+
+function closeFindSource() {
+  showFindSource.value = false
+}
+
+function handleSourceSelected(url: string, targetPath?: string) {
+  if (!currentModel.value) return
+  emit('download-url', currentModel.value.filename, url, targetPath || suggestedPath.value || undefined)
+  closeFindSource()
+  nextTick(() => advanceToNextUnresolved())
 }
 
 function closeSearch() {
   showSearch.value = false
   searchQuery.value = ''
   searchResults.value = []
-}
-
-function closeDownloadUrl() {
-  showDownloadUrl.value = false
-  downloadUrl.value = ''
-  downloadPath.value = ''
 }
 
 function handleSearchInput() {
@@ -374,13 +364,6 @@ function selectSearchResult(result: ModelSearchResult) {
   if (!currentModel.value) return
   // TODO: emit proper selection
   closeSearch()
-  nextTick(() => advanceToNextUnresolved())
-}
-
-function submitDownloadUrl() {
-  if (!currentModel.value || !downloadUrl.value.trim()) return
-  emit('download-url', currentModel.value.filename, downloadUrl.value.trim(), downloadPath.value.trim() || undefined)
-  closeDownloadUrl()
   nextTick(() => advanceToNextUnresolved())
 }
 
@@ -464,8 +447,7 @@ function formatSize(bytes: number): string {
   z-index: 10010;
 }
 
-.model-search-modal,
-.model-download-url-modal {
+.model-search-modal {
   width: 90%;
   max-width: 500px;
   max-height: 80vh;
@@ -517,25 +499,6 @@ function formatSize(bytes: number): string {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.model-input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.model-input-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--cg-color-text-secondary, #aaa);
-}
-
-.model-modal-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  margin-top: 8px;
 }
 
 .model-search-results {

@@ -45,10 +45,17 @@
         </div>
       </div>
 
-      <SearchBar
-        v-model="searchQuery"
-        placeholder="🔍 Search all indexed models..."
-      />
+      <div class="model-search-row">
+        <SearchBar
+          v-model="searchQuery"
+          placeholder="🔍 Search all indexed models..."
+        />
+        <ModelListFilterButton
+          v-model:model-type="modelTypeFilter"
+          v-model:missing-source-only="missingSourceOnly"
+          :model-types="availableModelTypes"
+        />
+      </div>
     </template>
 
     <template #content>
@@ -82,6 +89,7 @@
             <template #title>{{ model.filename }}</template>
             <template #subtitle>{{ formatSize(model.size) }}</template>
             <template #details>
+              <div v-if="!hasModelSource(model)" class="source-chip">No source URL</div>
               <DetailRow
                 label="Hash:"
                 :value="model.hash ? model.hash.substring(0, 16) : 'N/A'"
@@ -127,49 +135,53 @@
     v-if="selectedModelId"
     :identifier="selectedModelId"
     @close="selectedModelId = null"
+    @source-saved="handleModelSourcesChanged"
+    @source-removed="handleModelSourcesChanged"
+    @deleted="handleModelDeleted"
   />
 
   <!-- Change Directory Modal -->
-  <Teleport to="body">
-    <div v-if="showDirectoryModal" class="modal-overlay" @click.self="showDirectoryModal = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Change Models Directory</h3>
-          <button class="modal-close" @click="showDirectoryModal = false">✕</button>
+  <BaseModal
+    v-if="showDirectoryModal"
+    title="Change Models Directory"
+    size="md"
+    :overlay-z-index="10010"
+    @close="showDirectoryModal = false"
+  >
+    <template #body>
+      <div class="directory-modal-body">
+        <div class="input-group">
+          <label>Current Directory</label>
+          <code class="current-path">{{ currentDirectory || 'Not set' }}</code>
         </div>
-        <div class="modal-body">
-          <div class="input-group">
-            <label>Current Directory</label>
-            <code class="current-path">{{ currentDirectory || 'Not set' }}</code>
-          </div>
-          <div class="input-group">
-            <label>New Directory Path</label>
-            <BaseInput
-              v-model="newDirectoryPath"
-              placeholder="/path/to/models"
-            />
-          </div>
-          <p class="modal-note">
-            Note: Changing the directory will scan and index all models in the new location.
-            This may take a few minutes for large collections.
-          </p>
+        <div class="input-group">
+          <label>New Directory Path</label>
+          <BaseInput
+            v-model="newDirectoryPath"
+            placeholder="/path/to/models"
+          />
         </div>
-        <div class="modal-footer">
-          <BaseButton variant="secondary" @click="showDirectoryModal = false">
-            Cancel
-          </BaseButton>
-          <BaseButton
-            variant="primary"
-            :disabled="!newDirectoryPath.trim() || changingDirectory"
-            :loading="changingDirectory"
-            @click="handleChangeDirectory"
-          >
-            {{ changingDirectory ? 'Indexing...' : 'Change Directory' }}
-          </BaseButton>
-        </div>
+        <p class="modal-note">
+          Note: Changing the directory will scan and index all models in the new location.
+          This may take a few minutes for large collections.
+        </p>
       </div>
-    </div>
-  </Teleport>
+    </template>
+
+    <template #footer>
+      <BaseButton variant="secondary" @click="showDirectoryModal = false">
+        Cancel
+      </BaseButton>
+      <BaseButton
+        variant="primary"
+        :disabled="!newDirectoryPath.trim() || changingDirectory"
+        :loading="changingDirectory"
+        @click="handleChangeDirectory"
+      >
+        {{ changingDirectory ? 'Indexing...' : 'Change Directory' }}
+      </BaseButton>
+    </template>
+  </BaseModal>
 
   <!-- Unified Model Download Modal -->
   <ModelDownloadModal
@@ -196,6 +208,8 @@ import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import ModelDetailModal from '@/components/ModelDetailModal.vue'
 import ModelDownloadModal from '@/components/ModelDownloadModal.vue'
+import ModelListFilterButton from '@/components/models/ModelListFilterButton.vue'
+import BaseModal from '@/components/base/BaseModal.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 
@@ -216,6 +230,8 @@ const loading = ref(false)
 const scanning = ref(false)
 const error = ref<string | null>(null)
 const searchQuery = ref('')
+const modelTypeFilter = ref('all')
+const missingSourceOnly = ref(false)
 const showPopover = ref(false)
 const selectedModelId = ref<string | null>(null)
 
@@ -235,13 +251,17 @@ const totalSize = computed(() =>
   models.value.reduce((sum, m) => sum + (m.size || 0), 0)
 )
 
+const availableModelTypes = computed(() => uniqueModelTypes(models.value))
+
 // Search filtering
 const filteredModels = computed(() => {
-  if (!searchQuery.value.trim()) return models.value
   const query = searchQuery.value.toLowerCase()
   return models.value.filter(m => {
     const modelAny = m as any
     const sha256 = m.sha256 || modelAny.sha256_hash || ''
+    if (modelTypeFilter.value !== 'all' && normalizedModelType(m) !== modelTypeFilter.value) return false
+    if (missingSourceOnly.value && hasModelSource(m)) return false
+    if (!query.trim()) return true
     return (
       m.filename.toLowerCase().includes(query) ||
       sha256.toLowerCase().includes(query)
@@ -285,8 +305,34 @@ function formatSize(bytes: number | undefined): string {
   return `${(bytes / 1024).toFixed(0)} KB`
 }
 
+function normalizedModelType(model: ModelInfo): string {
+  return model.type || 'other'
+}
+
+function uniqueModelTypes(modelList: ModelInfo[]): string[] {
+  return Array.from(new Set(modelList.map(normalizedModelType))).sort((a, b) => a.localeCompare(b))
+}
+
+function hasModelSource(model: ModelInfo): boolean {
+  const modelAny = model as ModelInfo & { sources?: unknown[] }
+  if (typeof model.has_download_source === 'boolean') return model.has_download_source
+  if (Array.isArray(modelAny.sources) && modelAny.sources.length > 0) return true
+  return Boolean(model.source_url)
+}
+
 function viewDetails(model: ModelInfo) {
   selectedModelId.value = model.hash || model.filename
+}
+
+async function handleModelDeleted() {
+  selectedModelId.value = null
+  await loadModels()
+  emit('refresh')
+}
+
+async function handleModelSourcesChanged() {
+  await loadModels()
+  emit('refresh')
 }
 
 async function scanForModels() {
@@ -353,9 +399,36 @@ onMounted(() => {
   loadModels()
   loadCurrentDirectory()
 })
+
+defineExpose({
+  loadModels
+})
 </script>
 
 <style scoped>
+.model-search-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cg-space-2);
+}
+
+.model-search-row :deep(.search-bar) {
+  flex: 1;
+  min-width: 0;
+}
+
+.source-chip {
+  align-self: flex-start;
+  width: fit-content;
+  padding: 2px 7px;
+  border: 1px solid var(--cg-color-warning);
+  background: var(--cg-color-warning-muted);
+  color: var(--cg-color-warning);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+}
+
 /* Progress bar styles */
 .indexing-progress {
   background: var(--cg-color-bg-tertiary);
@@ -395,66 +468,8 @@ onMounted(() => {
   background: var(--cg-color-accent);
   transition: width 0.2s ease;
 }
-</style>
 
-<!-- Unscoped modal styles (for Teleport) -->
-<style>
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10010;
-}
-
-.modal-content {
-  width: 90%;
-  max-width: 500px;
-  background: var(--cg-color-bg-primary, #1a1a2e);
-  border: 1px solid var(--cg-color-border, #333);
-  border-radius: var(--cg-radius-lg, 8px);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--cg-color-border, #333);
-  background: var(--cg-color-bg-secondary, #252542);
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--cg-color-text-primary, #fff);
-}
-
-.modal-close {
-  background: none;
-  border: none;
-  font-size: 18px;
-  color: var(--cg-color-text-muted, #888);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  transition: all 0.15s ease;
-}
-
-.modal-close:hover {
-  color: var(--cg-color-text-primary, #fff);
-  background: var(--cg-color-bg-hover, #333);
-}
-
-.modal-body {
-  padding: 16px;
+.directory-modal-body {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -490,20 +505,5 @@ onMounted(() => {
   padding: 8px;
   background: var(--cg-color-bg-secondary, #252542);
   border-radius: 4px;
-}
-
-.modal-error {
-  font-size: 12px;
-  color: var(--cg-color-error, #ef4444);
-  margin-top: 4px;
-}
-
-.modal-footer {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  padding: 12px 16px;
-  border-top: 1px solid var(--cg-color-border, #333);
-  background: var(--cg-color-bg-secondary, #252542);
 }
 </style>

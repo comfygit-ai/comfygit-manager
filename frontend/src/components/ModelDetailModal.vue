@@ -4,6 +4,7 @@
     size="lg"
     :loading="loading"
     :error="error"
+    :overlay-z-index="overlayZIndex"
     @close="$emit('close')"
   >
     <template #body>
@@ -24,6 +25,22 @@
             <span class="detail-label">SHA256:</span>
             <span class="detail-value mono">{{ details.sha256 || 'Not computed' }}</span>
             <button v-if="details.sha256" class="copy-btn" @click="copyToClipboard(details.sha256)">Copy</button>
+          </div>
+          <div v-if="missingFullHashes" class="detail-row">
+            <span class="detail-label"></span>
+            <span class="detail-value">
+              <button
+                class="compute-hashes-btn"
+                :disabled="computingHashes"
+                @click="computeHashes"
+              >
+                {{ computingHashes ? 'Computing hashes...' : 'Compute Full Hashes' }}
+              </button>
+            </span>
+          </div>
+          <div v-if="hashError" class="detail-row">
+            <span class="detail-label"></span>
+            <span class="detail-value hash-error">{{ hashError }}</span>
           </div>
           <div class="detail-row">
             <span class="detail-label">Size:</span>
@@ -46,9 +63,18 @@
             <div v-for="(loc, idx) in details.locations" :key="idx" class="location-item">
               <span class="location-path mono">{{ loc.path }}</span>
               <span v-if="loc.modified" class="location-modified">Modified: {{ loc.modified }}</span>
-              <button v-if="loc.path" class="open-location-btn" @click="openLocation(loc.path)">
-                Open File Location
-              </button>
+              <div v-if="loc.path" class="location-actions">
+                <button class="open-location-btn" @click="copyToClipboard(loc.path)">
+                  Copy File Path
+                </button>
+                <button
+                  class="delete-location-btn"
+                  :disabled="deletingLocation"
+                  @click="openLocationDeleteConfirm(loc)"
+                >
+                  Delete File
+                </button>
+              </div>
             </div>
           </div>
           <div v-else class="empty-state">No locations found</div>
@@ -56,7 +82,12 @@
 
         <!-- Sources -->
         <section class="detail-section">
-          <h4 class="section-header">Download Sources ({{ details.sources?.length || 0 }})</h4>
+          <div class="section-header-row">
+            <h4 class="section-header">Download Sources ({{ details.sources?.length || 0 }})</h4>
+            <button class="find-source-btn" @click="showSourceModal = true">
+              Find Source
+            </button>
+          </div>
           <div v-if="details.sources?.length" class="sources-list">
             <div v-for="(src, idx) in details.sources" :key="idx" class="source-item">
               <span class="source-type">{{ src.type }}:</span>
@@ -73,23 +104,6 @@
           <div v-else class="empty-state">
             No download sources configured
           </div>
-
-          <!-- Add Source Form -->
-          <div class="add-source-form">
-            <input
-              v-model="newSourceUrl"
-              type="text"
-              placeholder="Enter download URL (CivitAI, HuggingFace, etc.)"
-              class="source-input"
-            />
-            <button
-              class="add-source-btn"
-              :disabled="!newSourceUrl.trim() || addingSource"
-              @click="handleAddSource"
-            >
-              {{ addingSource ? 'Adding...' : 'Add Source' }}
-            </button>
-          </div>
           <p v-if="sourceError" class="source-error">{{ sourceError }}</p>
           <p v-if="sourceSuccess" class="source-success">{{ sourceSuccess }}</p>
         </section>
@@ -97,7 +111,16 @@
     </template>
 
     <template #footer>
-      <button class="btn-secondary" @click="$emit('close')">Close</button>
+      <BaseButton
+        v-if="details"
+        variant="danger"
+        :disabled="deletingModel"
+        @click="showDeleteConfirm = true"
+      >
+        Delete Model
+      </BaseButton>
+      <div class="footer-spacer"></div>
+      <BaseButton variant="secondary" @click="$emit('close')">Close</BaseButton>
     </template>
   </BaseModal>
 
@@ -107,33 +130,142 @@
       {{ toast.message }}
     </div>
   </Teleport>
+
+  <ModelSourceModal
+    v-if="details && showSourceModal"
+    :model="details"
+    :overlay-z-index="(overlayZIndex || 10003) + 2"
+    @close="showSourceModal = false"
+    @saved="handleSourceSaved"
+    @hashes-computed="handleHashesComputed"
+  />
+
+  <BaseModal
+    v-if="details && showDeleteConfirm"
+    title="Delete Model"
+    size="md"
+    :overlay-z-index="(overlayZIndex || 10003) + 4"
+    :close-on-overlay-click="!deletingModel"
+    :show-close-button="!deletingModel"
+    @close="showDeleteConfirm = false"
+  >
+    <template #body>
+      <div class="delete-confirm">
+        <p>
+          This will permanently delete all indexed file locations for
+          <strong>{{ details.filename }}</strong>.
+        </p>
+        <div class="delete-meta">
+          <span>Hash</span>
+          <code>{{ details.hash }}</code>
+        </div>
+        <div class="delete-paths">
+          <h4>Files to delete ({{ deletionPaths.length }})</h4>
+          <code v-for="path in deletionPaths" :key="path" class="delete-path">
+            {{ path }}
+          </code>
+        </div>
+        <p v-if="deleteError" class="delete-error">{{ deleteError }}</p>
+        <p class="delete-warning">
+          This removes the files from disk and removes the model from the workspace index when no locations remain.
+        </p>
+      </div>
+    </template>
+
+    <template #footer>
+      <BaseButton variant="secondary" :disabled="deletingModel" @click="showDeleteConfirm = false">
+        Cancel
+      </BaseButton>
+      <BaseButton variant="danger" :loading="deletingModel" :disabled="deletingModel" @click="confirmDeleteModel">
+        {{ deletingModel ? 'Deleting...' : 'Delete Model' }}
+      </BaseButton>
+    </template>
+  </BaseModal>
+
+  <BaseModal
+    v-if="details && locationDeleteTarget"
+    title="Delete Model Location"
+    size="md"
+    :overlay-z-index="(overlayZIndex || 10003) + 4"
+    :close-on-overlay-click="!deletingLocation"
+    :show-close-button="!deletingLocation"
+    @close="closeLocationDeleteConfirm"
+  >
+    <template #body>
+      <div class="delete-confirm">
+        <p>
+          This will permanently delete only this indexed file location for
+          <strong>{{ details.filename }}</strong>.
+        </p>
+        <div class="delete-paths">
+          <h4>File to delete</h4>
+          <code class="delete-path">{{ locationDeleteTarget.path }}</code>
+        </div>
+        <p v-if="locationDeleteError" class="delete-error">{{ locationDeleteError }}</p>
+        <p class="delete-warning">
+          Other indexed locations and source metadata for this model will be preserved if any locations remain.
+        </p>
+      </div>
+    </template>
+
+    <template #footer>
+      <BaseButton variant="secondary" :disabled="deletingLocation" @click="closeLocationDeleteConfirm">
+        Cancel
+      </BaseButton>
+      <BaseButton
+        variant="danger"
+        :loading="deletingLocation"
+        :disabled="deletingLocation"
+        @click="confirmDeleteLocation"
+      >
+        {{ deletingLocation ? 'Deleting...' : 'Delete File' }}
+      </BaseButton>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import BaseModal from '@/components/base/BaseModal.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
+import ModelSourceModal from '@/components/ModelSourceModal.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
-import type { ModelDetails } from '@/types/comfygit'
+import { copyToClipboard as copyTextToClipboard } from '@/utils/copyToClipboard'
+import type { ModelDetails, ModelLocation } from '@/types/comfygit'
 
 const props = defineProps<{
   identifier: string
+  overlayZIndex?: number
 }>()
 
 const emit = defineEmits<{
   close: []
+  sourceSaved: []
+  sourceRemoved: []
+  deleted: []
 }>()
 
-const { getModelDetails, addModelSource, removeModelSource, openFileLocation } = useComfyGitService()
+const { getModelDetails, removeModelSource, computeModelHashes, deleteModel, deleteModelLocation } = useComfyGitService()
 
 const details = ref<ModelDetails | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 
-const newSourceUrl = ref('')
-const addingSource = ref(false)
 const removingSourceUrl = ref<string | null>(null)
 const sourceError = ref<string | null>(null)
 const sourceSuccess = ref<string | null>(null)
+const showSourceModal = ref(false)
+const computingHashes = ref(false)
+const hashError = ref<string | null>(null)
+const showDeleteConfirm = ref(false)
+const deletingModel = ref(false)
+const deleteError = ref<string | null>(null)
+const locationDeleteTarget = ref<ModelLocation | null>(null)
+const deletingLocation = ref(false)
+const locationDeleteError = ref<string | null>(null)
+
+const missingFullHashes = computed(() => Boolean(details.value?.hash && (!details.value.blake3 || !details.value.sha256)))
+const deletionPaths = computed(() => details.value?.locations?.map(location => location.path).filter(Boolean) || [])
 
 // Toast notifications
 const toast = ref<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
@@ -156,37 +288,13 @@ function formatSize(bytes: number | undefined): string {
   return `${(bytes / 1024).toFixed(0)} KB`
 }
 
-function copyToClipboard(text: string) {
-  navigator.clipboard.writeText(text)
-  showToast('Copied to clipboard!')
-}
-
-async function openLocation(path: string) {
+async function copyToClipboard(text: string) {
   try {
-    await openFileLocation(path)
-    showToast('Opening file location...')
+    await copyTextToClipboard(text)
+    showToast('Copied to clipboard!')
   } catch (err) {
-    showToast('Failed to open location', 'error')
-  }
-}
-
-async function handleAddSource() {
-  if (!newSourceUrl.value.trim() || !details.value) return
-
-  addingSource.value = true
-  sourceError.value = null
-  sourceSuccess.value = null
-
-  try {
-    await addModelSource(details.value.hash, newSourceUrl.value.trim())
-    sourceSuccess.value = 'Source added successfully!'
-    newSourceUrl.value = ''
-    // Reload details to show updated sources
-    await loadDetails()
-  } catch (err) {
-    sourceError.value = err instanceof Error ? err.message : 'Failed to add source'
-  } finally {
-    addingSource.value = false
+    console.error('Failed to copy:', err)
+    showToast('Failed to copy to clipboard', 'error')
   }
 }
 
@@ -202,10 +310,111 @@ async function removeSource(url: string) {
     showToast('Source removed')
     // Reload details to show updated sources
     await loadDetails()
+    emit('sourceRemoved')
   } catch (err) {
     sourceError.value = err instanceof Error ? err.message : 'Failed to remove source'
   } finally {
     removingSourceUrl.value = null
+  }
+}
+
+async function handleSourceSaved() {
+  sourceSuccess.value = 'Source added successfully!'
+  showSourceModal.value = false
+  await loadDetails()
+  emit('sourceSaved')
+}
+
+async function handleHashesComputed() {
+  await loadDetails()
+}
+
+async function computeHashes() {
+  if (!details.value?.hash) return
+
+  computingHashes.value = true
+  hashError.value = null
+
+  try {
+    details.value = await computeModelHashes(details.value.hash)
+    showToast('Hashes computed successfully!')
+  } catch (err) {
+    hashError.value = err instanceof Error ? err.message : 'Failed to compute hashes'
+  } finally {
+    computingHashes.value = false
+  }
+}
+
+async function confirmDeleteModel() {
+  if (!details.value?.hash) return
+
+  deletingModel.value = true
+  deleteError.value = null
+
+  try {
+    const result = await deleteModel(details.value.hash)
+    if (result.status === 'partial' || result.errors.length > 0) {
+      const failedCount = result.errors.length
+      deleteError.value = `Deleted ${result.deleted_paths.length} file(s), but ${failedCount} location(s) failed.`
+      showToast(deleteError.value, 'error', 4000)
+      await loadDetails()
+      return
+    }
+
+    showToast(`Deleted ${result.deleted_paths.length} model file(s)`)
+    showDeleteConfirm.value = false
+    emit('deleted')
+    emit('close')
+  } catch (err) {
+    deleteError.value = err instanceof Error ? err.message : 'Failed to delete model'
+    showToast(deleteError.value, 'error', 4000)
+  } finally {
+    deletingModel.value = false
+  }
+}
+
+function openLocationDeleteConfirm(location: ModelLocation) {
+  locationDeleteTarget.value = location
+  locationDeleteError.value = null
+}
+
+function closeLocationDeleteConfirm() {
+  if (deletingLocation.value) return
+  locationDeleteTarget.value = null
+  locationDeleteError.value = null
+}
+
+async function confirmDeleteLocation() {
+  if (!details.value?.hash || !locationDeleteTarget.value) return
+
+  deletingLocation.value = true
+  locationDeleteError.value = null
+
+  try {
+    const result = await deleteModelLocation(details.value.hash, locationDeleteTarget.value)
+    if (result.status === 'partial' || result.errors.length > 0) {
+      const message = result.errors[0]?.error || 'Failed to delete model location'
+      locationDeleteError.value = message
+      showToast(message, 'error', 4000)
+      await loadDetails()
+      return
+    }
+
+    showToast('Deleted model file location')
+    locationDeleteTarget.value = null
+
+    if (result.remaining_locations <= 0) {
+      emit('deleted')
+      emit('close')
+      return
+    }
+
+    await loadDetails()
+  } catch (err) {
+    locationDeleteError.value = err instanceof Error ? err.message : 'Failed to delete model location'
+    showToast(locationDeleteError.value, 'error', 4000)
+  } finally {
+    deletingLocation.value = false
   }
 }
 
@@ -247,6 +456,37 @@ onMounted(loadDetails)
   border-bottom: 1px solid var(--cg-color-border);
 }
 
+.section-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--cg-space-3);
+  border-bottom: 1px solid var(--cg-color-border);
+  margin-bottom: var(--cg-space-2);
+  padding-bottom: var(--cg-space-2);
+}
+
+.section-header-row .section-header {
+  margin: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.find-source-btn {
+  background: transparent;
+  border: 1px solid var(--cg-color-accent);
+  color: var(--cg-color-accent);
+  padding: 4px 10px;
+  font-size: var(--cg-font-size-xs);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+}
+
+.find-source-btn:hover {
+  background: var(--cg-color-accent-muted);
+}
+
 .detail-row {
   display: flex;
   align-items: center;
@@ -286,6 +526,31 @@ onMounted(loadDetails)
   border-color: var(--cg-color-accent);
 }
 
+.compute-hashes-btn {
+  background: transparent;
+  border: 1px solid var(--cg-color-accent);
+  color: var(--cg-color-accent);
+  padding: 4px 10px;
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
+  cursor: pointer;
+}
+
+.compute-hashes-btn:hover:not(:disabled) {
+  background: var(--cg-color-accent-muted);
+}
+
+.compute-hashes-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.hash-error {
+  color: var(--cg-color-error);
+  font-size: var(--cg-font-size-sm);
+}
+
 .locations-list,
 .sources-list {
   display: flex;
@@ -311,6 +576,13 @@ onMounted(loadDetails)
 .location-modified {
   color: var(--cg-color-text-muted);
   font-size: var(--cg-font-size-xs);
+}
+
+.location-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cg-space-2);
+  margin-top: var(--cg-space-2);
 }
 
 .source-item {
@@ -364,49 +636,6 @@ onMounted(loadDetails)
   padding: var(--cg-space-2);
 }
 
-.add-source-form {
-  display: flex;
-  gap: var(--cg-space-2);
-  margin-top: var(--cg-space-3);
-}
-
-.source-input {
-  flex: 1;
-  background: var(--cg-color-bg-tertiary);
-  border: 1px solid var(--cg-color-border);
-  color: var(--cg-color-text-primary);
-  padding: var(--cg-space-2);
-  font-size: var(--cg-font-size-sm);
-}
-
-.source-input::placeholder {
-  color: var(--cg-color-text-muted);
-}
-
-.source-input:focus {
-  outline: none;
-  border-color: var(--cg-color-accent);
-}
-
-.add-source-btn {
-  background: var(--cg-color-accent);
-  border: none;
-  color: var(--cg-color-bg-primary);
-  padding: var(--cg-space-2) var(--cg-space-3);
-  font-size: var(--cg-font-size-sm);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.add-source-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.add-source-btn:not(:disabled):hover {
-  filter: brightness(1.1);
-}
-
 .source-error {
   color: var(--cg-color-error);
   font-size: var(--cg-font-size-sm);
@@ -432,8 +661,11 @@ onMounted(loadDetails)
   border-color: var(--cg-color-accent);
 }
 
+.footer-spacer {
+  flex: 1;
+}
+
 .open-location-btn {
-  margin-top: var(--cg-space-2);
   background: var(--cg-color-bg-tertiary);
   border: 1px solid var(--cg-color-border);
   color: var(--cg-color-text-muted);
@@ -447,6 +679,26 @@ onMounted(loadDetails)
   background: var(--cg-color-bg-hover);
   color: var(--cg-color-accent);
   border-color: var(--cg-color-accent);
+}
+
+.delete-location-btn {
+  background: transparent;
+  border: 1px solid var(--cg-color-error);
+  color: var(--cg-color-error);
+  padding: 4px 12px;
+  font-size: var(--cg-font-size-xs);
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.delete-location-btn:hover:not(:disabled) {
+  background: var(--cg-color-error);
+  color: white;
+}
+
+.delete-location-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Toast styles */
@@ -474,6 +726,64 @@ onMounted(loadDetails)
 
 .toast.info {
   border-color: var(--cg-color-accent);
+}
+
+.delete-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-3);
+}
+
+.delete-confirm p {
+  margin: 0;
+  color: var(--cg-color-text-primary);
+  line-height: var(--cg-line-height-normal);
+}
+
+.delete-meta {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: var(--cg-space-2);
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-sm);
+}
+
+.delete-meta code {
+  color: var(--cg-color-text-primary);
+  font-family: var(--cg-font-mono);
+  word-break: break-all;
+}
+
+.delete-paths {
+  background: var(--cg-color-bg-tertiary);
+  border: 1px solid var(--cg-color-border);
+  padding: var(--cg-space-3);
+}
+
+.delete-paths h4 {
+  margin: 0 0 var(--cg-space-2) 0;
+  color: var(--cg-color-error);
+  font-size: var(--cg-font-size-sm);
+}
+
+.delete-path {
+  display: block;
+  color: var(--cg-color-text-primary);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  word-break: break-all;
+  padding: 4px 0;
+}
+
+.delete-warning {
+  color: var(--cg-color-warning) !important;
+  border: 1px solid var(--cg-color-warning);
+  background: var(--cg-color-warning-muted);
+  padding: var(--cg-space-2);
+}
+
+.delete-error {
+  color: var(--cg-color-error) !important;
 }
 
 @keyframes toastSlideIn {

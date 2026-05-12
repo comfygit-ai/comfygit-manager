@@ -1,6 +1,11 @@
 <template>
   <Teleport to="body">
-    <div v-if="show" class="popover-overlay" @click="$emit('close')">
+    <div
+      v-if="show"
+      class="popover-overlay"
+      :style="{ zIndex: overlayZIndex }"
+      @click="$emit('close')"
+    >
       <div
         class="popover"
         :style="{ maxWidth }"
@@ -26,8 +31,10 @@ withDefaults(defineProps<{
   show: boolean
   title: string
   maxWidth?: string
+  overlayZIndex?: number
 }>(), {
-  maxWidth: '400px'
+  maxWidth: '400px',
+  overlayZIndex: 10004
 })
 
 defineEmits<{

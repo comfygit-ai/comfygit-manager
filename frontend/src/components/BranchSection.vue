@@ -1,6 +1,6 @@
 <template>
   <PanelLayout>
-    <template #header>
+    <template v-if="!embedded" #header>
       <PanelHeader title="BRANCHES">
         <template #actions>
           <ActionButton
@@ -16,6 +16,16 @@
     </template>
 
     <template #content>
+      <div v-if="embedded && !showCreateInput" class="branch-toolbar">
+        <ActionButton
+          variant="primary"
+          size="sm"
+          @click="showCreateInput = true"
+        >
+          + Create Branch
+        </ActionButton>
+      </div>
+
       <!-- Create Branch Form -->
       <BranchCreateForm
         v-if="showCreateInput"
@@ -62,6 +72,7 @@
         @close="selectedBranch = null"
         @delete="handleDeleteFromModal"
         @switch="handleSwitchFromModal"
+        @revert-current="handleRevertCurrentFromModal"
       />
     </template>
   </PanelLayout>
@@ -81,12 +92,14 @@ import BranchDetailModal from '@/components/BranchDetailModal.vue'
 defineProps<{
   branches: BranchInfo[]
   current: string | null
+  embedded?: boolean
 }>()
 
 const emit = defineEmits<{
   switch: [branch: string]
   create: [name: string]
   delete: [branch: string]
+  'revert-current': []
 }>()
 
 const showCreateInput = ref(false)
@@ -114,9 +127,20 @@ function handleSwitchFromModal(branchName: string) {
   selectedBranch.value = null
   emit('switch', branchName)
 }
+
+function handleRevertCurrentFromModal() {
+  selectedBranch.value = null
+  emit('revert-current')
+}
 </script>
 
 <style scoped>
+.branch-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--cg-space-3);
+}
+
 .branch-list {
   background: var(--cg-color-bg-tertiary);
   border: 1px solid var(--cg-color-border-subtle);

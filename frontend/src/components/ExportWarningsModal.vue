@@ -1,29 +1,28 @@
 <template>
   <BaseModal
-    title="Export Warnings"
+    :title="mode === 'publish' ? 'Publish Warnings' : 'Export Warnings'"
     size="md"
     @close="$emit('cancel')"
   >
     <template #body>
       <div class="export-warnings">
-        <!-- Success State (all models now have sources) -->
-        <div v-if="models.length === 0" class="success-header">
+        <!-- Success State (all dependencies now have portable provenance) -->
+        <div v-if="warningCount === 0" class="success-header">
           <span class="success-icon">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
               <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 1 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z"/>
             </svg>
           </span>
           <div class="success-summary">
-            <h3 class="success-title">All models have source URLs</h3>
-            <p class="success-description">
-              Your environment is ready to export. Recipients will be able to download all models automatically.
-            </p>
+              <h3 class="success-title">All dependencies have portable provenance</h3>
+              <p class="success-description">
+              Your environment is ready to {{ mode }}. Recipients will be able to reconstruct declared dependencies automatically.
+              </p>
           </div>
         </div>
 
-        <!-- Warning State (models still missing sources) -->
+        <!-- Warning State (dependencies still missing provenance) -->
         <template v-else>
-          <!-- Warning Header -->
           <div class="warning-header">
             <span class="warning-icon">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -33,46 +32,25 @@
             </span>
             <div class="warning-summary">
               <h3 class="warning-title">
-                {{ models.length }} model{{ models.length !== 1 ? 's' : '' }} missing source URLs
+                {{ warningCount }} reproducibility warning{{ warningCount !== 1 ? 's' : '' }}
               </h3>
               <p class="warning-description">
-                Recipients won't be able to download these models automatically.
-                Click "Add Source" to fix, or export anyway.
+                The issues below can prevent another machine from building this environment exactly.
+                Review the details, or {{ mode }} anyway.
               </p>
+              <ul class="warning-list">
+                <li v-for="model in visibleModelWarnings" :key="model.hash || model.filename">
+                  Model: {{ model.filename }}
+                </li>
+                <li v-for="node in visibleNodeWarnings" :key="node.name">
+                  Node: {{ node.name }} ({{ node.criticality }})
+                </li>
+                <li v-if="hiddenWarningCount">+{{ hiddenWarningCount }} more</li>
+              </ul>
+              <button class="review-issues-btn" @click="showReadinessIssuesModal = true">
+                Review Issues
+              </button>
             </div>
-          </div>
-
-          <!-- Models List -->
-          <div class="models-section">
-            <div class="models-list">
-              <div
-                v-for="model in visibleModels"
-                :key="model.hash"
-                class="model-item"
-              >
-                <div class="model-info">
-                  <div class="model-filename">{{ model.filename }}</div>
-                  <div class="model-workflows">
-                    Used by: {{ model.workflows.join(', ') }}
-                  </div>
-                </div>
-                <button
-                  class="add-source-btn"
-                  @click="selectedModelHash = model.hash"
-                >
-                  Add Source
-                </button>
-              </div>
-            </div>
-
-            <!-- Show More Button -->
-            <button
-              v-if="models.length > 3 && !showAllModels"
-              class="show-more-btn"
-              @click="showAllModels = true"
-            >
-              Show {{ models.length - 3 }} more model{{ models.length - 3 !== 1 ? 's' : '' }}...
-            </button>
           </div>
         </template>
       </div>
@@ -80,19 +58,19 @@
 
     <template #footer>
       <BaseButton variant="secondary" @click="$emit('cancel')">
-        Cancel Export
+        Cancel {{ mode === 'publish' ? 'Publish' : 'Export' }}
       </BaseButton>
       <BaseButton variant="primary" @click="$emit('confirm')">
-        {{ models.length === 0 ? 'Export' : 'Export Anyway' }}
+        {{ warningCount === 0 ? actionLabel : `${actionLabel} Anyway` }}
       </BaseButton>
     </template>
   </BaseModal>
 
-  <!-- Model Detail Modal (for adding sources) -->
-  <ModelDetailModal
-    v-if="selectedModelHash"
-    :identifier="selectedModelHash"
-    @close="handleDetailModalClose"
+  <ReadinessIssuesModal
+    v-if="showReadinessIssuesModal"
+    :warnings="warnings"
+    @close="showReadinessIssuesModal = false"
+    @revalidate="$emit('revalidate')"
   />
 </template>
 
@@ -100,33 +78,44 @@
 import { ref, computed } from 'vue'
 import BaseModal from './base/BaseModal.vue'
 import BaseButton from './base/BaseButton.vue'
-import ModelDetailModal from './ModelDetailModal.vue'
-import type { ModelWithoutSource } from '@/types/comfygit'
+import ReadinessIssuesModal from '@/components/ReadinessIssuesModal.vue'
+import type { ModelWithoutSource, NodeWithoutProvenance } from '@/types/comfygit'
 
 const props = defineProps<{
   models: ModelWithoutSource[]
+  nodes?: NodeWithoutProvenance[]
+  mode?: 'export' | 'publish'
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   confirm: []
   cancel: []
   revalidate: []
 }>()
 
-const showAllModels = ref(false)
-const selectedModelHash = ref<string | null>(null)
+const showReadinessIssuesModal = ref(false)
+const mode = computed(() => props.mode || 'export')
+const actionLabel = computed(() => mode.value === 'publish' ? 'Publish' : 'Export')
+const nodes = computed(() => props.nodes || [])
+const warningCount = computed(() => props.models.length + nodes.value.length)
 
-const visibleModels = computed(() => {
-  if (showAllModels.value || props.models.length <= 3) {
-    return props.models
-  }
-  return props.models.slice(0, 3)
+const warnings = computed(() => ({
+  models_without_sources: props.models,
+  nodes_without_provenance: nodes.value,
+}))
+
+const visibleModelWarnings = computed(() =>
+  props.models.slice(0, 3)
+)
+
+const visibleNodeWarnings = computed(() => {
+  const remainingSlots = Math.max(0, 3 - visibleModelWarnings.value.length)
+  return nodes.value.slice(0, remainingSlots)
 })
 
-function handleDetailModalClose() {
-  selectedModelHash.value = null
-  emit('revalidate')
-}
+const hiddenWarningCount = computed(() =>
+  warningCount.value - visibleModelWarnings.value.length - visibleNodeWarnings.value.length
+)
 </script>
 
 <style scoped>
@@ -174,81 +163,27 @@ function handleDetailModalClose() {
   color: var(--cg-color-text-secondary);
 }
 
-.models-section {
-  background: var(--cg-color-bg-tertiary);
-  border: 1px solid var(--cg-color-border);
-  border-radius: var(--cg-radius-md);
-  overflow: hidden;
-}
-
-.models-list {
-  max-height: 240px;
-  overflow-y: auto;
-}
-
-.model-item {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--cg-space-3);
-  padding: var(--cg-space-3);
-  border-bottom: 1px solid var(--cg-color-border-subtle);
-}
-
-.model-item:last-child {
-  border-bottom: none;
-}
-
-.model-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.model-filename {
+.warning-list {
+  margin: var(--cg-space-2) 0 0 0;
+  padding-left: var(--cg-space-4);
+  color: var(--cg-color-text-secondary);
   font-size: var(--cg-font-size-sm);
-  font-weight: var(--cg-font-weight-medium);
-  color: var(--cg-color-text-primary);
-  font-family: var(--cg-font-mono);
-  word-break: break-all;
 }
 
-.model-workflows {
-  margin-top: var(--cg-space-1);
-  font-size: var(--cg-font-size-xs);
-  color: var(--cg-color-text-muted);
-}
-
-.add-source-btn {
-  flex-shrink: 0;
-  background: var(--cg-color-bg-secondary);
-  border: 1px solid var(--cg-color-border);
-  color: var(--cg-color-accent);
-  padding: 4px 10px;
-  font-size: var(--cg-font-size-xs);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.add-source-btn:hover {
-  background: var(--cg-color-accent);
-  color: var(--cg-color-bg-primary);
-  border-color: var(--cg-color-accent);
-}
-
-.show-more-btn {
-  width: 100%;
-  padding: var(--cg-space-2);
+.review-issues-btn {
+  margin-top: var(--cg-space-3);
+  border: 1px solid var(--cg-color-warning);
   background: transparent;
-  border: none;
-  border-top: 1px solid var(--cg-color-border-subtle);
-  color: var(--cg-color-accent);
-  font-size: var(--cg-font-size-sm);
+  color: var(--cg-color-warning);
+  padding: var(--cg-space-2) var(--cg-space-3);
   cursor: pointer;
-  transition: background var(--cg-transition-base);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--cg-letter-spacing-wide);
 }
 
-.show-more-btn:hover {
-  background: var(--cg-color-bg-secondary);
+.review-issues-btn:hover {
+  background: var(--cg-color-warning-muted);
 }
 
 /* Success state styles */

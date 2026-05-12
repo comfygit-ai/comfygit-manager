@@ -8,6 +8,14 @@
         </div>
 
         <div class="modal-body">
+          <div v-if="error" class="error-box">
+            <span class="error-icon">!</span>
+            <div>
+              <strong>Push failed</strong>
+              <p>{{ error }}</p>
+            </div>
+          </div>
+
           <!-- Loading State -->
           <template v-if="loading">
             <div class="loading-state">
@@ -19,7 +27,7 @@
           <!-- Blocked by uncommitted changes -->
           <template v-else-if="preview?.has_uncommitted_changes">
             <div class="warning-box">
-              <span class="warning-icon">⚠</span>
+              <span class="warning-icon">!</span>
               <div>
                 <strong>UNCOMMITTED CHANGES</strong>
                 <p>Commit your changes before pushing.</p>
@@ -30,12 +38,19 @@
           <!-- Remote has new commits warning -->
           <template v-else-if="preview?.remote_has_new_commits">
             <div class="warning-box">
-              <span class="warning-icon">⚠</span>
+              <span class="warning-icon">!</span>
               <div>
                 <strong>REMOTE HAS NEW COMMITS</strong>
                 <p>The remote has commits you don't have locally. You should pull first to avoid overwriting changes.</p>
               </div>
             </div>
+
+            <ReproducibilityWarningBanner
+              v-if="hasReadinessWarnings"
+              :warnings="warnings"
+              :message="warningBannerMessage"
+              @review="showReadinessIssuesModal = true"
+            />
 
             <!-- Outgoing commits -->
             <div v-if="preview.commits_ahead > 0" class="commits-section">
@@ -79,6 +94,13 @@
               <span>This will create the remote branch for the first time.</span>
             </div>
 
+            <ReproducibilityWarningBanner
+              v-if="hasReadinessWarnings"
+              :warnings="warnings"
+              :message="warningBannerMessage"
+              @review="showReadinessIssuesModal = true"
+            />
+
             <!-- Outgoing commits -->
             <div v-if="preview.commits_ahead > 0" class="commits-section">
               <h4 class="section-title">OUTGOING COMMITS</h4>
@@ -113,7 +135,7 @@
               :loading="pushing"
               @click="handlePush(true)"
             >
-              Force Push
+              {{ hasReadinessWarnings ? 'Force Push Anyway' : 'Force Push' }}
             </ActionButton>
           </template>
           <template v-else-if="preview && preview.commits_ahead > 0 && !preview.has_uncommitted_changes">
@@ -122,35 +144,75 @@
               :loading="pushing"
               @click="handlePush(false)"
             >
-              Push
+              {{ hasReadinessWarnings ? 'Push Anyway' : 'Push' }}
             </ActionButton>
           </template>
         </div>
       </div>
     </div>
   </teleport>
+
+  <ReadinessIssuesModal
+    v-if="showReadinessIssuesModal && preview?.warnings"
+    :warnings="preview.warnings"
+    @close="showReadinessIssuesModal = false"
+    @revalidate="$emit('revalidate')"
+  />
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { PushPreview } from '@/types/comfygit'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
+import ReadinessIssuesModal from '@/components/ReadinessIssuesModal.vue'
+import ReproducibilityWarningBanner from '@/components/base/molecules/ReproducibilityWarningBanner.vue'
 
-defineProps<{
+const props = defineProps<{
   show: boolean
   remoteName: string
   preview: PushPreview | null
   loading: boolean
   pushing: boolean
+  error?: string | null
 }>()
 
 const emit = defineEmits<{
   close: []
   push: [options: { force: boolean }]
   'pull-first': []
+  revalidate: []
 }>()
 
 const forceChecked = ref(false)
+const showReadinessIssuesModal = ref(false)
+
+const warnings = computed(() => props.preview?.warnings || {
+  models_without_sources: [],
+  nodes_without_provenance: [],
+  runtime_node_import_failures: []
+})
+
+const modelWarningCount = computed(() =>
+  warnings.value.models_without_sources.length
+)
+
+const nodeWarningCount = computed(() =>
+  warnings.value.nodes_without_provenance.length
+)
+
+const runtimeImportWarningCount = computed(() =>
+  warnings.value.runtime_node_import_failures?.length || 0
+)
+
+const readinessWarningCount = computed(() =>
+  modelWarningCount.value + nodeWarningCount.value + runtimeImportWarningCount.value
+)
+
+const hasReadinessWarnings = computed(() => readinessWarningCount.value > 0)
+
+const warningBannerMessage = computed(() => {
+  return 'The issues below can prevent another machine from building this environment exactly.'
+})
 
 function handlePush(force: boolean) {
   emit('push', { force })
@@ -267,7 +329,14 @@ function handlePush(force: boolean) {
 }
 
 .warning-icon {
-  font-size: var(--cg-font-size-xl);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--cg-color-warning);
+  border-radius: 50%;
+  font-weight: var(--cg-font-weight-bold);
   flex-shrink: 0;
 }
 
@@ -349,6 +418,35 @@ function handlePush(force: boolean) {
   padding: var(--cg-space-3);
   background: var(--cg-color-bg-secondary);
   border-radius: var(--cg-radius-sm);
+}
+
+.error-box {
+  display: flex;
+  gap: var(--cg-space-3);
+  padding: var(--cg-space-3);
+  margin-bottom: var(--cg-space-3);
+  background: var(--cg-color-error-muted);
+  border: 1px solid var(--cg-color-error);
+  border-radius: var(--cg-radius-sm);
+  color: var(--cg-color-text-primary);
+}
+
+.error-icon {
+  color: var(--cg-color-error);
+  font-weight: var(--cg-font-weight-semibold);
+  flex-shrink: 0;
+}
+
+.error-box strong {
+  display: block;
+  margin-bottom: var(--cg-space-1);
+}
+
+.error-box p {
+  margin: 0;
+  color: var(--cg-color-text-secondary);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .checkbox-option {

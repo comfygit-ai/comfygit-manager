@@ -1,6 +1,6 @@
 <template>
   <PanelLayout>
-    <template #header>
+    <template v-if="!embedded" #header>
       <PanelHeader :title="headerTitle" />
     </template>
 
@@ -11,7 +11,7 @@
         message="No commits yet"
       />
 
-      <CommitList v-else>
+      <CommitList v-else class="history-commits">
         <CommitItem
           v-for="commit in commits"
           :key="commit.hash"
@@ -33,6 +33,17 @@
             </ActionButton>
           </template>
         </CommitItem>
+
+        <div v-if="hasMore" class="load-more-row">
+          <ActionButton
+            variant="secondary"
+            size="sm"
+            :loading="isLoadingMore"
+            @click="$emit('load-more')"
+          >
+            Load More
+          </ActionButton>
+        </div>
       </CommitList>
     </template>
   </PanelLayout>
@@ -50,7 +61,10 @@ import EmptyState from '@/components/base/molecules/EmptyState.vue'
 
 const props = defineProps<{
   commits: CommitInfo[]
+  hasMore?: boolean
+  isLoadingMore?: boolean
   currentRef?: string | null
+  embedded?: boolean
 }>()
 
 const headerTitle = computed(() => {
@@ -61,9 +75,20 @@ const headerTitle = computed(() => {
 defineEmits<{
   select: [commit: CommitInfo]
   checkout: [commit: CommitInfo]
+  'load-more': []
 }>()
 </script>
 
 <style scoped>
-/* Minimal custom styles - everything else comes from atomic components */
+.history-commits {
+  max-height: min(420px, calc(70vh - 260px));
+  overflow-y: auto;
+}
+
+.load-more-row {
+  display: flex;
+  justify-content: center;
+  padding: var(--cg-space-3);
+  border-top: 1px solid var(--cg-color-border-subtle);
+}
 </style>

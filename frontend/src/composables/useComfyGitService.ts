@@ -4,15 +4,23 @@ import type {
   CommitResult,
   LogResult,
   ExportResult,
+  CloudAuthConfig,
+  CloudAuthResponse,
+  CloudMeResponse,
+  CloudEnvironmentsResponse,
+  CloudEnvironmentRevisionsResponse,
+  CloudPublishResult,
   ExportValidationResult,
   BranchesResult,
   CommitDetail,
   CheckoutResult,
   CreateBranchResult,
   SwitchBranchResult,
+  RevertChangesResult,
   EnvironmentInfo,
   EnvironmentDetail,
   SwitchEnvironmentProgress,
+  SwitchEnvironmentResult,
   CreateEnvironmentRequest,
   CreateEnvironmentResult,
   CreateEnvironmentProgress,
@@ -20,14 +28,27 @@ import type {
   SyncEnvironmentResult,
   WorkflowInfo,
   WorkflowDetails,
+  WorkflowExecutionContract,
+  WorkflowContractResponse,
   WorkflowResolutionPlan,
   ModelInfo,
   ModelDetails,
+  ModelLocation,
+  ModelDeleteResult,
+  ModelSourceCandidatesResponse,
+  WorkflowSourceCandidatesResponse,
+  EnvironmentModelSourceApplyRequest,
+  EnvironmentModelSourceApplyResult,
   DownloadModelRequest,
   ConfigSettings,
   LogEntry,
+  ManifestFileResponse,
+  NodeCriticality,
   NodeInfo,
+  NodeInstallQueueStatus,
   NodesResult,
+  DependencyResolutionApplyResult,
+  DependencyResolutionPreview,
   RemotesResult,
   RemoteOperationResult,
   RemoteSyncStatus,
@@ -36,6 +57,7 @@ import type {
   PushPreview,
   PushResult,
   ImportAnalysis,
+  GitRemoteRefs,
   ValidateNameResult,
   ImportResult,
   ImportProgress,
@@ -66,10 +88,15 @@ import type {
   DeployToWorkerRequest,
   HuggingFaceRepoInfoResponse,
   HuggingFaceSearchResponse,
-  ModelsSubdirectoriesResponse
+  ModelsSubdirectoriesResponse,
+  CivitaiModel,
+  CivitaiModelResponse,
+  CivitaiModelVersionResponse,
+  CivitaiSearchResponse
 } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
 import { useMockControls } from '@/composables/useMockControls'
+import { fetchComfyApi, getComfyClientId } from '@/utils/comfyApi'
 
 // Access ComfyUI's API
 declare global {
@@ -84,6 +111,20 @@ declare global {
 
 // Toggle between mock and real API (set VITE_USE_MOCK_API=false in .env to disable)
 const USE_MOCK = isMockApi()
+
+export class ComfyGitApiError extends Error {
+  status: number
+  data: Record<string, any>
+  endpoint: string
+
+  constructor(message: string, status: number, data: Record<string, any>, endpoint: string) {
+    super(message)
+    this.name = 'ComfyGitApiError'
+    this.status = status
+    this.data = data
+    this.endpoint = endpoint
+  }
+}
 
 // UUID generator that works in non-secure contexts (HTTP)
 // generateUUID() only works in secure contexts (HTTPS/localhost)
@@ -294,23 +335,110 @@ export function useComfyGitService() {
   const error = ref<string | null>(null)
 
   async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    if (!window.app?.api) {
-      throw new Error('ComfyUI API not available')
-    }
-
-    const response = await window.app.api.fetchApi(endpoint, options)
+    const response = await fetchComfyApi(endpoint, options)
+    const text = await response.text()
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.error || errorData.message || `Request failed: ${response.status}`)
+      let errorData: Record<string, any> = {}
+      if (text) {
+        try {
+          const parsed = JSON.parse(text)
+          if (parsed && typeof parsed === 'object') {
+            errorData = parsed
+          }
+        } catch {
+          errorData = { error: text }
+        }
+      }
+
+      const message =
+        errorData.error ||
+        errorData.message ||
+        errorData.detail ||
+        response.statusText ||
+        `Request failed: ${response.status}`
+
+      throw new ComfyGitApiError(String(message), response.status, errorData, endpoint)
     }
 
     // Handle empty responses (some endpoints return 200 with no body)
-    const text = await response.text()
     if (!text) {
       return undefined as T
     }
     return JSON.parse(text)
+  }
+
+  async function getCloudAuthConfig(cloudUrl: string): Promise<CloudAuthConfig> {
+    return fetchApi<CloudAuthConfig>(`/v2/comfygit/cloud/auth/config?cloud_url=${encodeURIComponent(cloudUrl)}`)
+  }
+
+  async function loginToCloud(cloudUrl: string, email: string, password: string): Promise<CloudAuthResponse> {
+    return fetchApi<CloudAuthResponse>('/v2/comfygit/cloud/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cloud_url: cloudUrl, email, password })
+    })
+  }
+
+  async function signupToCloud(cloudUrl: string, email: string, password: string): Promise<CloudAuthResponse> {
+    return fetchApi<CloudAuthResponse>('/v2/comfygit/cloud/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cloud_url: cloudUrl, email, password })
+    })
+  }
+
+  async function getCloudMe(cloudUrl: string, accessToken: string): Promise<CloudMeResponse> {
+    return fetchApi<CloudMeResponse>(`/v2/comfygit/cloud/auth/me?cloud_url=${encodeURIComponent(cloudUrl)}`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    })
+  }
+
+  async function logoutFromCloud(cloudUrl: string, refreshToken?: string | null): Promise<{ success: boolean }> {
+    return fetchApi<{ success: boolean }>('/v2/comfygit/cloud/auth/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cloud_url: cloudUrl, refresh_token: refreshToken || null })
+    })
+  }
+
+  async function getCloudEnvironments(cloudUrl: string, accessToken: string): Promise<CloudEnvironmentsResponse> {
+    return fetchApi<CloudEnvironmentsResponse>(`/v2/comfygit/cloud/environments?cloud_url=${encodeURIComponent(cloudUrl)}`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    })
+  }
+
+  async function getCloudEnvironmentRevisions(
+    cloudUrl: string,
+    environmentId: string,
+    accessToken: string
+  ): Promise<CloudEnvironmentRevisionsResponse> {
+    return fetchApi<CloudEnvironmentRevisionsResponse>(
+      `/v2/comfygit/cloud/environments/${encodeURIComponent(environmentId)}/revisions?cloud_url=${encodeURIComponent(cloudUrl)}`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      }
+    )
+  }
+
+  async function publishCurrentEnvironmentToCloud(
+    cloudUrl: string,
+    accessToken: string,
+    sourceMessage?: string | null,
+    cloudEnvironmentId?: string | null,
+  ): Promise<CloudPublishResult> {
+    return fetchApi<CloudPublishResult>('/v2/comfygit/cloud/publish', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({
+        cloud_url: cloudUrl,
+        source_message: sourceMessage || null,
+        cloud_environment_id: cloudEnvironmentId || null,
+      })
+    })
   }
 
   async function getStatus(forceRefresh = false): Promise<ComfyGitStatus> {
@@ -330,23 +458,29 @@ export function useComfyGitService() {
 
   async function getHistory(limit = 10, offset = 0): Promise<LogResult> {
     if (USE_MOCK) {
-      const commits = await mockApi.getCommitHistory(limit)
+      const allCommits = await mockApi.getCommitHistory(limit + offset + 1)
+      const commits = allCommits.slice(offset, offset + limit)
       return {
         commits,
-        total: commits.length,
-        offset
+        has_more: allCommits.length > offset + limit,
+        current_branch: null
       }
     }
 
     return fetchApi<LogResult>(`/v2/comfygit/log?limit=${limit}&offset=${offset}`)
   }
 
-  async function getBranchHistory(branchName: string, limit = 50): Promise<LogResult> {
+  async function getBranchHistory(branchName: string, limit = 50, offset = 0): Promise<LogResult> {
     if (USE_MOCK) {
-      const commits = await mockApi.getCommitHistory(limit)
-      return { commits, has_more: false, current_branch: branchName }
+      const allCommits = await mockApi.getCommitHistory(limit + offset + 1)
+      const commits = allCommits.slice(offset, offset + limit)
+      return {
+        commits,
+        has_more: allCommits.length > offset + limit,
+        current_branch: branchName
+      }
     }
-    return fetchApi<LogResult>(`/v2/comfygit/log?branch=${encodeURIComponent(branchName)}&limit=${limit}`)
+    return fetchApi<LogResult>(`/v2/comfygit/log?branch=${encodeURIComponent(branchName)}&limit=${limit}&offset=${offset}`)
   }
 
   async function exportEnv(outputPath?: string): Promise<ExportResult> {
@@ -375,7 +509,7 @@ export function useComfyGitService() {
       return {
         can_export: true,
         blocking_issues: [],
-        warnings: { models_without_sources: [] }
+        warnings: { models_without_sources: [], nodes_without_provenance: [] }
       }
     }
 
@@ -390,6 +524,26 @@ export function useComfyGitService() {
     if (USE_MOCK) return mockApi.exportEnvWithForce(outputPath)
 
     return fetchApi<ExportResult>('/v2/comfygit/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ output_path: outputPath, force: true })
+    })
+  }
+
+  async function validateEnvironmentExport(environmentName: string): Promise<ExportValidationResult> {
+    if (USE_MOCK) return mockApi.validateExport()
+
+    return fetchApi<ExportValidationResult>(`/v2/comfygit/environment_export/${encodeURIComponent(environmentName)}/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    })
+  }
+
+  async function exportEnvironmentWithForce(environmentName: string, outputPath?: string): Promise<ExportResult> {
+    if (USE_MOCK) return mockApi.exportEnvWithForce(outputPath)
+
+    return fetchApi<ExportResult>(`/v2/comfygit/environment_export/${encodeURIComponent(environmentName)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ output_path: outputPath, force: true })
@@ -429,6 +583,16 @@ export function useComfyGitService() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ branch, force })
+    })
+  }
+
+  async function revertChanges(): Promise<RevertChangesResult> {
+    if (USE_MOCK) return { status: 'success', message: 'Restarting from current HEAD...' }
+
+    return fetchApi<RevertChangesResult>('/v2/comfygit/revert-changes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
     })
   }
 
@@ -531,13 +695,13 @@ export function useComfyGitService() {
     }
   }
 
-  async function switchEnvironment(targetEnv: string, workspacePath?: string): Promise<void> {
+  async function switchEnvironment(targetEnv: string, workspacePath?: string): Promise<SwitchEnvironmentResult | void> {
     if (USE_MOCK) return mockApi.switchEnvironment(targetEnv)
 
     const body: { target_env: string; workspace_path?: string } = { target_env: targetEnv }
     if (workspacePath) body.workspace_path = workspacePath
 
-    return fetchApi('/v2/comfygit/switch_environment', {
+    return fetchApi<SwitchEnvironmentResult>('/v2/comfygit/switch_environment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -592,12 +756,12 @@ export function useComfyGitService() {
     return fetchApi<CreateEnvironmentProgress>('/v2/workspace/environments/create_status')
   }
 
-  async function getComfyUIReleases(limit = 20): Promise<ComfyUIRelease[]> {
+  async function getComfyUIReleases(limit = 100): Promise<ComfyUIRelease[]> {
     if (USE_MOCK) {
       return [
         { tag_name: 'latest', name: 'Latest', published_at: new Date().toISOString() },
-        { tag_name: 'v0.3.69', name: 'v0.3.69', published_at: '2025-01-15T00:00:00Z' },
-        { tag_name: 'v0.3.68', name: 'v0.3.68', published_at: '2025-01-10T00:00:00Z' },
+        { tag_name: 'v0.5.0', name: 'v0.5.0', published_at: '2026-04-30T00:00:00Z' },
+        { tag_name: 'v0.4.0', name: 'v0.4.0', published_at: '2026-04-30T00:00:00Z' },
       ]
     }
 
@@ -670,6 +834,58 @@ export function useComfyGitService() {
     return fetchApi<WorkflowDetails>(`/v2/comfygit/workflow/${encodeURIComponent(name)}/details`)
   }
 
+  async function getWorkflowContract(name: string): Promise<WorkflowContractResponse> {
+    if (USE_MOCK) {
+      return {
+        workflow: name,
+        contract_summary: { has_contract: false, input_count: 0, output_count: 0, status: 'none' },
+        execution_contract: null,
+        contract_context: null,
+      }
+    }
+
+    return fetchApi<WorkflowContractResponse>(`/v2/comfygit/workflow/${encodeURIComponent(name)}/contract`)
+  }
+
+  async function saveWorkflowContract(
+    name: string,
+    contract: WorkflowExecutionContract,
+    apiPrompt?: Record<string, unknown>,
+  ): Promise<WorkflowContractResponse> {
+    if (USE_MOCK) {
+      return {
+        workflow: name,
+        contract_summary: {
+          has_contract: true,
+          input_count: contract.contracts[contract.default_contract]?.inputs.length ?? 0,
+          output_count: contract.contracts[contract.default_contract]?.outputs.length ?? 0,
+          status: (contract.contracts[contract.default_contract]?.outputs.length ?? 0) > 0 ? 'valid' : 'incomplete',
+        },
+        execution_contract: contract,
+        contract_context: null,
+      }
+    }
+
+    return fetchApi<WorkflowContractResponse>(`/v2/comfygit/workflow/${encodeURIComponent(name)}/contract`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...contract,
+        api_prompt: apiPrompt,
+      }),
+    })
+  }
+
+  async function deleteWorkflowContract(name: string): Promise<{ status: string; workflow: string }> {
+    if (USE_MOCK) {
+      return { status: 'success', workflow: name }
+    }
+
+    return fetchApi<{ status: string; workflow: string }>(`/v2/comfygit/workflow/${encodeURIComponent(name)}/contract`, {
+      method: 'DELETE',
+    })
+  }
+
   async function resolveWorkflow(name: string): Promise<WorkflowResolutionPlan> {
     if (USE_MOCK) return mockApi.resolveWorkflow(name)
 
@@ -728,6 +944,110 @@ export function useComfyGitService() {
     return fetchApi<ModelDetails>(`/v2/workspace/models/details/${encodeURIComponent(identifier)}`)
   }
 
+  async function getModelSourceCandidates(identifier: string): Promise<ModelSourceCandidatesResponse> {
+    if (USE_MOCK) {
+      return {
+        model: {
+          filename: 'mock-model.safetensors',
+          hash: identifier,
+          blake3: null,
+          sha256: null,
+          category: 'checkpoints'
+        },
+        candidates: [
+          {
+            source: 'workflow',
+            source_type: 'huggingface',
+            url: 'https://huggingface.co/example/model/resolve/main/mock-model.safetensors',
+            workflow: 'example-workflow',
+            confidence: 80,
+            reasons: ['filename match', 'known model host'],
+            context: 'Download mock-model.safetensors from https://huggingface.co/example/model/resolve/main/mock-model.safetensors',
+            validation_status: 'not_checked'
+          }
+        ]
+      }
+    }
+
+    return fetchApi<ModelSourceCandidatesResponse>(`/v2/workspace/models/${encodeURIComponent(identifier)}/source-candidates`)
+  }
+
+  async function getWorkflowModelSourceCandidates(
+    workflowName: string,
+    model: { filename: string; category?: string | null; nodeType?: string | null }
+  ): Promise<ModelSourceCandidatesResponse> {
+    if (USE_MOCK) {
+      return {
+        model: {
+          filename: model.filename,
+          hash: null,
+          blake3: null,
+          sha256: null,
+          category: model.category || 'unknown',
+          node_type: model.nodeType || null
+        },
+        candidates: [
+          {
+            source: 'workflow',
+            source_type: 'huggingface',
+            url: 'https://huggingface.co/example/model/resolve/main/mock-model.safetensors',
+            workflow: workflowName,
+            confidence: 80,
+            reasons: ['known model host', 'workflow link'],
+            context: `Workflow note near ${model.filename} references https://huggingface.co/example/model/resolve/main/mock-model.safetensors`,
+            validation_status: 'not_checked'
+          }
+        ]
+      }
+    }
+
+    const params = new URLSearchParams({
+      filename: model.filename
+    })
+    if (model.category) params.set('category', model.category)
+    if (model.nodeType) params.set('node_type', model.nodeType)
+
+    return fetchApi<ModelSourceCandidatesResponse>(
+      `/v2/comfygit/workflow/${encodeURIComponent(workflowName)}/model-source-candidates?${params.toString()}`
+    )
+  }
+
+  async function computeModelHashes(identifier: string): Promise<ModelDetails> {
+    if (USE_MOCK) {
+      const details = await mockApi.getModelDetails(identifier)
+      return {
+        ...details,
+        blake3: details.blake3 || 'b'.repeat(64),
+        sha256: details.sha256 || 'a'.repeat(64)
+      }
+    }
+
+    return fetchApi<ModelDetails>(`/v2/workspace/models/${encodeURIComponent(identifier)}/hashes`, {
+      method: 'POST'
+    })
+  }
+
+  async function getWorkflowSourceCandidates(): Promise<WorkflowSourceCandidatesResponse> {
+    if (USE_MOCK) {
+      return {
+        candidates: [
+          {
+            source: 'workflow',
+            source_type: 'huggingface',
+            url: 'https://huggingface.co/example/model/resolve/main/mock-model.safetensors',
+            workflow: 'example-workflow',
+            confidence: 80,
+            reasons: ['known model host', 'model file URL'],
+            context: 'Download mock-model.safetensors from https://huggingface.co/example/model/resolve/main/mock-model.safetensors',
+            validation_status: 'not_checked'
+          }
+        ]
+      }
+    }
+
+    return fetchApi<WorkflowSourceCandidatesResponse>('/v2/workspace/models/workflow-source-candidates')
+  }
+
   async function openFileLocation(path: string): Promise<{ status: string }> {
     if (USE_MOCK) {
       console.log(`[MOCK] Opening file location: ${path}`)
@@ -754,6 +1074,29 @@ export function useComfyGitService() {
     })
   }
 
+  async function applyEnvironmentModelSources(
+    request: EnvironmentModelSourceApplyRequest
+  ): Promise<EnvironmentModelSourceApplyResult> {
+    if (USE_MOCK) {
+      return {
+        status: 'success',
+        applied: request.sources.map((source) => ({
+          identifier: source.identifier,
+          model_hash: source.identifier,
+          source_url: source.source_url,
+          source_type: 'custom'
+        })),
+        errors: []
+      }
+    }
+
+    return fetchApi<EnvironmentModelSourceApplyResult>('/v2/comfygit/models/sources/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request)
+    })
+  }
+
   async function removeModelSource(hash: string, sourceUrl: string): Promise<{ status: string }> {
     if (USE_MOCK) {
       return { status: 'success' }
@@ -766,11 +1109,26 @@ export function useComfyGitService() {
     })
   }
 
-  async function deleteModel(sha256: string): Promise<void> {
-    if (USE_MOCK) return mockApi.deleteModel(sha256)
+  async function deleteModel(identifier: string): Promise<ModelDeleteResult> {
+    if (USE_MOCK) return mockApi.deleteModel(identifier)
 
-    return fetchApi(`/v2/workspace/models/${sha256}`, {
+    return fetchApi<ModelDeleteResult>(`/v2/workspace/models/${encodeURIComponent(identifier)}`, {
       method: 'DELETE'
+    })
+  }
+
+  async function deleteModelLocation(identifier: string, location: ModelLocation): Promise<ModelDeleteResult> {
+    if (USE_MOCK) return mockApi.deleteModelLocation(identifier, location)
+
+    return fetchApi<ModelDeleteResult>(`/v2/workspace/models/${encodeURIComponent(identifier)}/locations`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location_id: location.id,
+        base_directory: location.base_directory,
+        relative_path: location.relative_path,
+        path: location.path
+      })
     })
   }
 
@@ -856,6 +1214,116 @@ export function useComfyGitService() {
     return fetchApi(`/v2/workspace/huggingface/search?${params}`)
   }
 
+  async function searchCivitaiModels(
+    query: string,
+    options: {
+      username?: string
+      type?: string
+      sort?: string
+      period?: string
+      nsfwLevel?: number
+      limit?: number
+      page?: number
+    } = {}
+  ): Promise<CivitaiSearchResponse> {
+    if (USE_MOCK) {
+      const version = {
+        id: 256668,
+        model_id: 81458,
+        name: 'LCM',
+        description: 'Fast LCM variant.',
+        created_at: '2023-12-09T14:29:40.234Z',
+        updated_at: '2025-03-22T12:39:42.338Z',
+        base_model: 'SD 1.5 LCM',
+        download_url: 'https://civitai.com/api/download/models/256668',
+        trained_words: [],
+        download_count: 7370,
+        thumbs_up_count: 2206,
+        rating_count: 0,
+        rating: 0,
+        model: { name: 'AbsoluteReality', type: 'Checkpoint', nsfw: false, poi: false },
+        files: [{
+          id: 199166,
+          name: 'absolutereality_lcm.safetensors',
+          size_kb: 2083793,
+          type: 'Model',
+          primary: true,
+          download_url: 'https://civitai.com/api/download/models/256668',
+          pickle_scan_result: 'Success',
+          pickle_scan_message: 'No Pickle imports',
+          virus_scan_result: 'Success',
+          scanned_at: '2025-03-22T12:37:30.551Z',
+          hashes: null,
+          metadata: { fp: 'fp16', size: 'pruned', format: 'SafeTensor' }
+        }],
+        images: [{
+          id: 1,
+          url: 'https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/0d49eae2-c100-4683-83bf-59e4120747f6/original=true/4352035.jpeg',
+          nsfw: false,
+          width: 1024,
+          height: 1664,
+          hash: null
+        }]
+      }
+      const model: CivitaiModel = {
+        id: 81458,
+        name: 'AbsoluteReality',
+        description: 'Photorealistic checkpoint with multiple published versions.',
+        type: 'Checkpoint',
+        nsfw: false,
+        tags: ['realistic', 'photography', 'portrait'],
+        mode: null,
+        creator: {
+          username: 'Lykon',
+          image: 'https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/3b119431-445f-4b21-aba6-87a5ee9518ef/width=96/Lykon.jpeg'
+        },
+        download_count: 332249,
+        thumbs_up_count: 17295,
+        favorite_count: 0,
+        comment_count: 136,
+        rating_count: 0,
+        rating: 0,
+        matched_version_id: 256668,
+        versions: [version]
+      }
+      return {
+        query,
+        mode: 'search',
+        metadata: { total_items: 1, current_page: 1, page_size: 1, total_pages: 1 },
+        results: [model]
+      }
+    }
+
+    const params = new URLSearchParams()
+    if (query.trim()) params.set('query', query.trim())
+    if (options.username) params.set('username', options.username)
+    if (options.type) params.set('type', options.type)
+    if (options.sort) params.set('sort', options.sort)
+    if (options.period) params.set('period', options.period)
+    if (typeof options.nsfwLevel === 'number') params.set('nsfw_level', String(options.nsfwLevel))
+    if (options.limit) params.set('limit', String(options.limit))
+    if (options.page) params.set('page', String(options.page))
+
+    return fetchApi<CivitaiSearchResponse>(`/v2/workspace/civitai/search?${params}`)
+  }
+
+  async function getCivitaiModel(modelId: number): Promise<CivitaiModelResponse> {
+    if (USE_MOCK) {
+      const search = await searchCivitaiModels(String(modelId))
+      return { model: search.results[0] }
+    }
+    return fetchApi<CivitaiModelResponse>(`/v2/workspace/civitai/model/${modelId}`)
+  }
+
+  async function getCivitaiModelVersion(versionId: number): Promise<CivitaiModelVersionResponse> {
+    if (USE_MOCK) {
+      const search = await searchCivitaiModels(String(versionId))
+      const version = search.results[0].versions[0]
+      return { version, download_url: version.download_url || '' }
+    }
+    return fetchApi<CivitaiModelVersionResponse>(`/v2/workspace/civitai/model-version/${versionId}`)
+  }
+
   // Settings
   async function getConfig(workspacePath?: string): Promise<ConfigSettings> {
     if (USE_MOCK) return mockApi.getConfig()
@@ -922,6 +1390,18 @@ export function useComfyGitService() {
     }
 
     return fetchApi<{ path: string; exists: boolean }>('/v2/comfygit/debug/logs/path')
+  }
+
+  async function getEnvironmentManifest(): Promise<ManifestFileResponse> {
+    if (USE_MOCK) {
+      return {
+        path: '/mock/workspace/environments/demo/.cec/pyproject.toml',
+        exists: true,
+        content: `[project]\nname = "demo"\nversion = "0.1.0"\n`,
+      }
+    }
+
+    return fetchApi<ManifestFileResponse>('/v2/comfygit/debug/manifest')
   }
 
   async function getWorkspaceLogPath(): Promise<{ path: string; exists: boolean }> {
@@ -1023,22 +1503,27 @@ export function useComfyGitService() {
     options?: {
       beforeQueueStart?: (ui_id: string) => void | Promise<void>
     }
-  ): Promise<{ ui_id: string }> {
+  ): Promise<{
+    ui_id: string
+    result?: string
+    status?: NodeInstallQueueStatus
+  }> {
     if (USE_MOCK) {
       const ui_id = generateUUID()
       if (options?.beforeQueueStart) {
         await options.beforeQueueStart(ui_id)
       }
       await mockApi.installNode(params.id)
-      return { ui_id }
+      return {
+        ui_id,
+        result: 'success',
+        status: { status_str: 'success' }
+      }
     }
 
     const ui_id = generateUUID()
 
-    // Get client_id from ComfyUI's API if available
-    const client_id = (window as any).app?.api?.clientId ??
-                      (window as any).app?.api?.initialClientId ??
-                      'comfygit-panel'
+    const client_id = getComfyClientId()
 
     const taskParams: {
       id: string
@@ -1089,7 +1574,61 @@ export function useComfyGitService() {
       method: 'POST'
     })
 
-    return { ui_id }
+    const historyResponse = await fetchApi<{
+      history?: Record<string, {
+        result?: string
+        status?: NodeInstallQueueStatus
+      }>
+    }>('/v2/manager/queue/history')
+    const entry = historyResponse?.history?.[ui_id]
+
+    if (entry?.result === 'error' || entry?.status?.status_str === 'error') {
+      const message = entry.status?.messages?.[0] || `Failed to install ${params.id}`
+      throw new ComfyGitApiError(message, 500, entry.status || {}, '/v2/manager/queue/start')
+    }
+
+    return {
+      ui_id,
+      result: entry?.result,
+      status: entry?.status
+    }
+  }
+
+  async function previewNodeDependencyChanges(params: {
+    id: string
+    version?: string
+    selected_version?: string
+    repository?: string
+    install_source?: 'registry' | 'git'
+  }): Promise<{
+    status: 'success' | 'error'
+    identifier: string
+    preview: DependencyResolutionPreview
+  }> {
+    return fetchApi('/v2/comfygit/nodes/dependency-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    })
+  }
+
+  async function applyReviewedNodeDependencyChanges(params: {
+    id: string
+    version?: string
+    selected_version?: string
+    repository?: string
+    install_source?: 'registry' | 'git'
+    accepted_preview: {
+      baseline_fingerprint: string
+      diff_fingerprint: string
+      proposed_fingerprint: string
+    }
+  }): Promise<DependencyResolutionApplyResult> {
+    return fetchApi('/v2/comfygit/nodes/dependency-apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    })
   }
 
   async function updateNode(nodeName: string): Promise<{ status: 'success' | 'error', message?: string }> {
@@ -1100,6 +1639,21 @@ export function useComfyGitService() {
 
     return fetchApi(`/v2/comfygit/nodes/${encodeURIComponent(nodeName)}/update`, {
       method: 'POST'
+    })
+  }
+
+  async function updateNodeCriticality(
+    nodeName: string,
+    criticality: NodeCriticality
+  ): Promise<{ status: 'success' | 'error', message?: string, criticality?: NodeCriticality }> {
+    if (USE_MOCK) {
+      return { status: 'success', criticality }
+    }
+
+    return fetchApi(`/v2/comfygit/nodes/${encodeURIComponent(nodeName)}/criticality`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ criticality })
     })
   }
 
@@ -1340,11 +1894,7 @@ export function useComfyGitService() {
     const formData = new FormData()
     formData.append('file', file)
 
-    if (!window.app?.api) {
-      throw new Error('ComfyUI API not available')
-    }
-
-    const response = await window.app.api.fetchApi('/v2/workspace/import/preview', {
+    const response = await fetchComfyApi('/v2/workspace/import/preview', {
       method: 'POST',
       body: formData
       // Don't set Content-Type - browser will set multipart boundary automatically
@@ -1414,11 +1964,7 @@ export function useComfyGitService() {
     formData.append('model_strategy', modelStrategy)
     formData.append('torch_backend', torchBackend)
 
-    if (!window.app?.api) {
-      throw new Error('ComfyUI API not available')
-    }
-
-    const response = await window.app.api.fetchApi('/v2/workspace/import', {
+    const response = await fetchComfyApi('/v2/workspace/import', {
       method: 'POST',
       body: formData
     })
@@ -1447,7 +1993,30 @@ export function useComfyGitService() {
     return fetchApi<ImportProgress>('/v2/workspace/import/status')
   }
 
-  async function previewGitImport(gitUrl: string): Promise<ImportAnalysis> {
+  async function getGitImportRefs(gitUrl: string): Promise<GitRemoteRefs> {
+    if (USE_MOCK) {
+      await new Promise(resolve => setTimeout(resolve, 350))
+      return {
+        default_branch: 'main',
+        head_commit: 'a'.repeat(40),
+        branches: [
+          { name: 'main', commit: 'a'.repeat(40), is_default: true },
+          { name: 'test1', commit: 'b'.repeat(40), is_default: false }
+        ],
+        tags: [
+          { name: 'v1.0.0', commit: 'c'.repeat(40) }
+        ]
+      }
+    }
+
+    return fetchApi<GitRemoteRefs>('/v2/workspace/import/git/refs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ git_url: gitUrl })
+    })
+  }
+
+  async function previewGitImport(gitUrl: string, branch?: string): Promise<ImportAnalysis> {
     if (USE_MOCK) {
       // Return mock data for development
       await new Promise(resolve => setTimeout(resolve, 800))
@@ -1475,7 +2044,7 @@ export function useComfyGitService() {
     return fetchApi<ImportAnalysis>('/v2/workspace/import/preview/git', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ git_url: gitUrl })
+      body: JSON.stringify({ git_url: gitUrl, branch })
     })
   }
 
@@ -1483,7 +2052,8 @@ export function useComfyGitService() {
     gitUrl: string,
     name: string,
     modelStrategy: 'all' | 'required' | 'skip',
-    torchBackend: string
+    torchBackend: string,
+    branch?: string
   ): Promise<ImportResult> {
     if (USE_MOCK) {
       await new Promise(resolve => setTimeout(resolve, 300))
@@ -1504,7 +2074,8 @@ export function useComfyGitService() {
         git_url: gitUrl,
         name,
         model_strategy: modelStrategy,
-        torch_backend: torchBackend
+        torch_backend: torchBackend,
+        branch
       })
     })
   }
@@ -1535,7 +2106,26 @@ export function useComfyGitService() {
         current_environment: mockState.isManaged ? 'mock-env-1' : null,
         detected_models_dir: '/mock/ComfyUI/models',
         cli_installed: false,
-        cli_path: null
+        cli_path: null,
+        runtime_context: {
+          mode: mockState.isManaged ? 'local_managed' : 'local_unmanaged',
+          lifecycle_authority: 'manager',
+          capabilities: {
+            can_initialize_workspace: setupState.value === 'no_workspace',
+            can_create_environment: setupState.value !== 'no_workspace',
+            can_switch_environment: setupState.value === 'managed' || setupState.value === 'unmanaged',
+            can_restart_current: true,
+            can_stop_current: true,
+            can_delete_environment: setupState.value === 'managed' || setupState.value === 'unmanaged'
+          },
+          bound_workspace: mockState.hasWorkspace ? '~/comfygit' : null,
+          bound_environment: mockState.isManaged ? 'mock-env-1' : null,
+          bound_ref: null,
+          bound_commit: null,
+          cloud_session_id: null,
+          source: 'mock',
+          denial_reasons: {}
+        }
       }
     }
     return fetchApi<SetupStatus>('/v2/setup/status')
@@ -1843,12 +2433,15 @@ export function useComfyGitService() {
     validateExport,
     validateDeploy,
     exportEnvWithForce,
+    validateEnvironmentExport,
+    exportEnvironmentWithForce,
     // Git Operations
     getBranches,
     getCommitDetail,
     checkout,
     createBranch,
     switchBranch,
+    revertChanges,
     deleteBranch,
     // Environment Management
     listEnvironments,
@@ -1863,6 +2456,9 @@ export function useComfyGitService() {
     // Workflow Management
     getWorkflows,
     getWorkflowDetails,
+    getWorkflowContract,
+    saveWorkflowContract,
+    deleteWorkflowContract,
     resolveWorkflow,
     installWorkflowDeps,
     setModelImportance,
@@ -1870,10 +2466,16 @@ export function useComfyGitService() {
     getEnvironmentModels,
     getWorkspaceModels,
     getModelDetails,
+    getModelSourceCandidates,
+    getWorkflowModelSourceCandidates,
+    computeModelHashes,
+    getWorkflowSourceCandidates,
     openFileLocation,
     addModelSource,
+    applyEnvironmentModelSources,
     removeModelSource,
     deleteModel,
+    deleteModelLocation,
     downloadModel,
     scanWorkspaceModels,
     getModelsDirectory,
@@ -1881,11 +2483,24 @@ export function useComfyGitService() {
     getHuggingFaceRepoInfo,
     getModelsSubdirectories,
     searchHuggingFaceRepos,
+    searchCivitaiModels,
+    getCivitaiModel,
+    getCivitaiModelVersion,
     // Settings
     getConfig,
     updateConfig,
+    // Cloud Auth
+    getCloudAuthConfig,
+    loginToCloud,
+    signupToCloud,
+    getCloudMe,
+    logoutFromCloud,
+    getCloudEnvironments,
+    getCloudEnvironmentRevisions,
+    publishCurrentEnvironmentToCloud,
     // Debug/Logs
     getEnvironmentLogs,
+    getEnvironmentManifest,
     getWorkspaceLogs,
     getEnvironmentLogPath,
     getWorkspaceLogPath,
@@ -1897,7 +2512,10 @@ export function useComfyGitService() {
     trackNodeAsDev,
     installNode,
     queueNodeInstall,
+    previewNodeDependencyChanges,
+    applyReviewedNodeDependencyChanges,
     updateNode,
+    updateNodeCriticality,
     uninstallNode,
     // Git Remotes
     getRemotes,
@@ -1918,6 +2536,7 @@ export function useComfyGitService() {
     repairWorkflowModels,
     // Import Operations
     previewTarballImport,
+    getGitImportRefs,
     previewGitImport,
     validateEnvironmentName,
     executeImport,

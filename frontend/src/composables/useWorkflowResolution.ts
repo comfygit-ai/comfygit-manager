@@ -10,16 +10,7 @@ import type {
 } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
 import { useModelDownloadQueue } from './useModelDownloadQueue'
-
-declare global {
-  interface Window {
-    app?: {
-      api: {
-        fetchApi: (endpoint: string, options?: RequestInit) => Promise<Response>
-      }
-    }
-  }
-}
+import { fetchComfyApi } from '@/utils/comfyApi'
 
 export function useWorkflowResolution() {
   const result = ref<FullResolutionResult | null>(null)
@@ -30,11 +21,7 @@ export function useWorkflowResolution() {
   const error = ref<string | null>(null)
 
   async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    if (!window.app?.api) {
-      throw new Error('ComfyUI API not available')
-    }
-
-    const response = await window.app.api.fetchApi(endpoint, options)
+    const response = await fetchComfyApi(endpoint, options)
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
@@ -200,7 +187,12 @@ export function useWorkflowResolution() {
     phase: 'idle',
     completedFiles: [],
     nodesToInstall: [],
-    nodesInstalled: []
+    nodesInstalled: [],
+    nodesMarkedOptional: [],
+    nodesMapped: [],
+    modelsMarkedOptional: [],
+    modelDownloadIntentsChanged: [],
+    modelPathsSynced: 0
   })
 
   function resetProgress() {
@@ -213,6 +205,12 @@ export function useWorkflowResolution() {
     progress.completedFiles = []
     progress.nodesToInstall = []
     progress.nodesInstalled = []
+    progress.nodesMarkedOptional = []
+    progress.nodesMapped = []
+    progress.modelsMarkedOptional = []
+    progress.modelDownloadIntentsChanged = []
+    progress.modelPathsSynced = 0
+    progress.dependencyReviews = []
     progress.installError = undefined
     progress.needsRestart = undefined
     progress.error = undefined
@@ -273,6 +271,11 @@ export function useWorkflowResolution() {
       status: string
       message?: string
       failed?: Array<{ node_id: string; error: string }>
+      dependency_review_required?: Array<{
+        node_id: string
+        error?: string
+        dependency_review: NonNullable<ResolutionProgressState['dependencyReviews']>[number]['dependency_review']
+      }>
     }>(
       `/v2/comfygit/workflow/${workflowName}/install`,
       {
@@ -288,24 +291,29 @@ export function useWorkflowResolution() {
     if (progress.nodeInstallProgress) {
       progress.nodeInstallProgress.totalNodes = progress.nodesToInstall.length
       const failedMap = new Map(data.failed?.map(f => [f.node_id, f.error]) || [])
+      const reviewMap = new Map((data.dependency_review_required || []).map(item => [item.node_id, item]))
 
       for (let i = 0; i < progress.nodesToInstall.length; i++) {
         const nodeId = progress.nodesToInstall[i]
         const error = failedMap.get(nodeId)
+        const reviewItem = reviewMap.get(nodeId)
         progress.nodeInstallProgress.completedNodes.push({
           node_id: nodeId,
-          success: !error,
-          error
+          success: !error && !reviewItem,
+          error: error || reviewItem?.error,
+          dependency_review: reviewItem?.dependency_review
         })
       }
     }
 
     progress.nodesInstalled = data.nodes_installed
+    progress.dependencyReviews = data.dependency_review_required || []
     progress.needsRestart = data.nodes_installed.length > 0
 
     // Store install error summary if there were failures
-    if (data.failed && data.failed.length > 0) {
-      progress.installError = `${data.failed.length} package(s) failed to install`
+    const attentionCount = (data.failed?.length || 0) + (data.dependency_review_required?.length || 0)
+    if (attentionCount > 0) {
+      progress.installError = `${attentionCount} package(s) need attention`
     }
 
     return data
@@ -325,6 +333,11 @@ export function useWorkflowResolution() {
       const data = await mockApi.applyResolution(workflowName, nodeChoices, modelChoices)
       appliedResult.value = data
       progress.nodesToInstall = data.nodes_to_install
+      progress.nodesMarkedOptional = data.nodes_marked_optional || []
+      progress.nodesMapped = data.nodes_mapped || []
+      progress.modelsMarkedOptional = data.models_marked_optional || []
+      progress.modelDownloadIntentsChanged = data.model_download_intents_changed || []
+      progress.modelPathsSynced = data.model_paths_synced || 0
       progress.phase = 'complete'
       return
     }
@@ -434,6 +447,13 @@ export function useWorkflowResolution() {
 
       case 'done':
         progress.nodesToInstall = (data.nodes_to_install as string[]) || []
+        progress.nodesMarkedOptional = (data.nodes_marked_optional as string[]) || []
+        progress.nodesMapped = (
+          data.nodes_mapped as Array<{ node_type: string; package_id: string }>
+        ) || []
+        progress.modelsMarkedOptional = (data.models_marked_optional as string[]) || []
+        progress.modelDownloadIntentsChanged = (data.model_download_intents_changed as string[]) || []
+        progress.modelPathsSynced = (data.model_paths_synced as number) || 0
         if (data.download_results) {
           // Update completed files with full info
           progress.completedFiles = (data.download_results as Array<{
@@ -468,9 +488,9 @@ export function useWorkflowResolution() {
       .filter(m => m.url && m.target_path)
       .map(m => ({
         workflow: workflowName,
-        filename: m.filename,
+        filename: displayFilenameForTarget(m.target_path!, m.filename),
         url: m.url,
-        targetPath: m.target_path!,
+        targetPath: normalizeModelTargetPath(m.target_path!),
         size: m.size || 0,
         type: 'model'
       }))
@@ -480,6 +500,15 @@ export function useWorkflowResolution() {
     }
 
     return items.length
+  }
+
+  function normalizeModelTargetPath(path: string): string {
+    return path.replace(/\\/g, '/').replace(/^\/+/, '')
+  }
+
+  function displayFilenameForTarget(targetPath: string, fallback: string): string {
+    const normalized = normalizeModelTargetPath(targetPath || fallback)
+    return normalized.split('/').filter(Boolean).pop() || fallback.replace(/\\/g, '/')
   }
 
   return {

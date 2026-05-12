@@ -35,7 +35,7 @@
           >
             {{ showOnlyModels ? 'Models Only' : 'All Files' }}
           </button>
-          <button class="action-btn" @click="autoSelectModels">Auto-Select Models</button>
+          <button v-if="mode === 'download'" class="action-btn" @click="autoSelectModels">Auto-Select Models</button>
           <button class="action-btn" @click="clearSelection">Clear</button>
         </div>
       </div>
@@ -45,12 +45,14 @@
         <!-- Header row -->
         <div v-if="filteredFiles.length > 0" class="file-list-header">
           <input
+            v-if="mode === 'download'"
             type="checkbox"
             :checked="allFilteredSelected"
             :indeterminate="someFilteredSelected && !allFilteredSelected"
             class="file-checkbox"
             @change="toggleSelectAll"
           />
+          <span v-else class="file-checkbox-spacer" />
           <span class="header-name" @click="toggleSort('name')">
             Name
             <span class="sort-indicator">{{ sortKey === 'name' ? (sortAsc ? '▲' : '▼') : '' }}</span>
@@ -83,45 +85,24 @@
         </div>
       </div>
 
-      <!-- Destination Section -->
-      <div class="destination-section">
-        <h4 class="section-label">Download Destination</h4>
-        <div class="destination-row">
-          <BaseDropdown
-            v-model="destBase"
-            :options="destinationOptions"
-            placeholder="Select directory..."
-            class="dest-select"
-          />
-          <span v-if="destBase !== '__custom__'" class="path-separator">/</span>
-          <BaseInput
-            v-if="destBase !== '__custom__'"
-            v-model="destSubfolder"
-            placeholder="subfolder (optional)"
-            class="dest-subfolder"
-          />
-        </div>
-        <BaseInput
-          v-if="destBase === '__custom__'"
-          v-model="destCustom"
-          placeholder="Enter full path relative to models directory..."
-          class="dest-custom"
-          full-width
-        />
-      </div>
+      <DownloadDestinationPicker
+        v-if="mode === 'download'"
+        v-model="destination"
+        :suggested-directory="selectedParentDirectory"
+      />
 
       <!-- Summary & Action -->
       <div class="action-bar">
         <div class="summary-info">
-          <span class="summary-count">{{ selected.size }} file(s) selected</span>
+          <span class="summary-count">{{ selectedSummary }}</span>
           <span class="summary-size">{{ formatSize(totalSelectedSize) }}</span>
         </div>
         <BaseButton
           variant="primary"
-          :disabled="selected.size === 0 || !isDestinationValid"
-          @click="handleQueue"
+          :disabled="actionDisabled"
+          @click="handleAction"
         >
-          Queue Download
+          {{ actionLabel }}
         </BaseButton>
       </div>
     </template>
@@ -129,11 +110,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import BaseDropdown from '@/components/base/BaseDropdown.vue'
-import type { DropdownOption } from '@/components/base/BaseDropdown.vue'
+import DownloadDestinationPicker from '@/components/download/DownloadDestinationPicker.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import { buildHfResolveUrl } from '@/utils/huggingface'
 import type { HuggingFaceRepoFile } from '@/types/comfygit'
@@ -149,14 +129,17 @@ const props = defineProps<{
   revision: string
   initialPath?: string
   preselectedFile?: string
+  mode?: 'download' | 'source'
+  actionLabel?: string
 }>()
 
 const emit = defineEmits<{
   queue: [items: HfDownloadItem[]]
+  selectSource: [url: string]
   back: []
 }>()
 
-const { getHuggingFaceRepoInfo, getModelsSubdirectories } = useComfyGitService()
+const { getHuggingFaceRepoInfo } = useComfyGitService()
 
 // State
 const files = ref<HuggingFaceRepoFile[]>([])
@@ -171,15 +154,7 @@ const showOnlyModels = ref(false)
 const sortKey = ref<'name' | 'size'>('name')
 const sortAsc = ref(true)
 
-const destBase = ref<string>('')
-const destSubfolder = ref<string>('')
-const destCustom = ref<string>('')
-
-const directories = ref<string[]>([])
-
-// Auto-detection state: tracks whether user has manually selected a destination
-const userOverrodeDestination = ref(false)
-let autoDetectInProgress = false
+const destination = ref<string>('')
 
 // Shard detection regex: matches patterns like model-00001-of-00005.safetensors
 const SHARD_REGEX = /^(.*)-(\d{4,5})-of-(\d{4,5})(\.[^.]+)$/i
@@ -229,20 +204,8 @@ const someFilteredSelected = computed(() => {
   return filteredFiles.value.some(f => selected.value.has(f.path))
 })
 
-const destinationOptions = computed<DropdownOption[]>(() => {
-  const opts: DropdownOption[] = directories.value.map(d => ({
-    label: d,
-    value: d
-  }))
-  opts.push({ label: 'Custom path...', value: '__custom__' })
-  return opts
-})
-
 const isDestinationValid = computed(() => {
-  if (destBase.value === '__custom__') {
-    return destCustom.value.trim().length > 0
-  }
-  return destBase.value.length > 0
+  return destination.value.trim().length > 0
 })
 
 const totalSelectedSize = computed(() => {
@@ -252,6 +215,39 @@ const totalSelectedSize = computed(() => {
     if (file) total += file.size
   }
   return total
+})
+
+const selectedParentDirectory = computed(() => {
+  if (selected.value.size === 0) return null
+
+  const parentDirs = new Set<string>()
+  for (const path of selected.value) {
+    const parent = getParentDirectory(path)
+    if (parent) {
+      parentDirs.add(parent.toLowerCase())
+    }
+  }
+
+  if (parentDirs.size !== 1) return null
+  return [...parentDirs][0]
+})
+
+const mode = computed(() => props.mode || 'download')
+
+const actionLabel = computed(() => props.actionLabel || (mode.value === 'source' ? 'Use as Source' : 'Queue Download'))
+
+const selectedSummary = computed(() => {
+  if (mode.value === 'source') {
+    return selected.value.size === 1 ? '1 file selected' : `${selected.value.size} files selected`
+  }
+  return `${selected.value.size} file(s) selected`
+})
+
+const actionDisabled = computed(() => {
+  if (mode.value === 'source') {
+    return selected.value.size !== 1
+  }
+  return selected.value.size === 0 || !isDestinationValid.value
 })
 
 // Methods
@@ -276,6 +272,11 @@ function getShardGroup(path: string): string | null {
 }
 
 function toggleFile(file: HuggingFaceRepoFile) {
+  if (mode.value === 'source') {
+    selected.value = selected.value.has(file.path) ? new Set() : new Set([file.path])
+    return
+  }
+
   const newSelected = new Set(selected.value)
   const isCurrentlySelected = newSelected.has(file.path)
 
@@ -360,48 +361,8 @@ function getParentDirectory(filePath: string): string | null {
   return null
 }
 
-/**
- * Auto-detect destination based on selected files' parent directories.
- * Only runs if user hasn't manually selected a destination.
- */
-function autoDetectDestination() {
-  if (userOverrodeDestination.value) return
-  if (selected.value.size === 0) return
-
-  // Extract parent directories from all selected files
-  const parentDirs = new Set<string>()
-  for (const path of selected.value) {
-    const parent = getParentDirectory(path)
-    if (parent) {
-      parentDirs.add(parent.toLowerCase())
-    }
-  }
-
-  // Only auto-detect if ALL selected files share the same parent
-  if (parentDirs.size !== 1) return
-
-  const detectedDir = [...parentDirs][0]
-
-  // Find case-insensitive match in available directories
-  const match = directories.value.find(
-    d => d.toLowerCase() === detectedDir
-  )
-
-  if (match && match !== destBase.value) {
-    autoDetectInProgress = true
-    destBase.value = match
-    nextTick(() => { autoDetectInProgress = false })
-  }
-}
-
 function getDestinationPath(): string {
-  if (destBase.value === '__custom__') {
-    return destCustom.value.trim()
-  }
-  if (destSubfolder.value.trim()) {
-    return `${destBase.value}/${destSubfolder.value.trim()}`
-  }
-  return destBase.value
+  return destination.value.trim()
 }
 
 function handleQueue() {
@@ -422,6 +383,22 @@ function handleQueue() {
   }
 
   emit('queue', items)
+}
+
+function handleSelectSource() {
+  if (selected.value.size !== 1) return
+
+  const [path] = selected.value
+  emit('selectSource', buildHfResolveUrl(props.repoId, props.revision, path))
+}
+
+function handleAction() {
+  if (mode.value === 'source') {
+    handleSelectSource()
+    return
+  }
+
+  handleQueue()
 }
 
 async function loadRepoFiles() {
@@ -450,23 +427,6 @@ async function loadRepoFiles() {
   }
 }
 
-async function loadDirectories() {
-  try {
-    const response = await getModelsSubdirectories()
-    directories.value = response.directories
-    // Default to first directory if available
-    if (response.directories.length > 0 && !destBase.value) {
-      destBase.value = response.directories[0]
-    }
-  } catch {
-    // Fallback to common directories
-    directories.value = ['checkpoints', 'loras', 'vae', 'controlnet', 'unet']
-    if (!destBase.value) {
-      destBase.value = 'checkpoints'
-    }
-  }
-}
-
 // Watch for prop changes
 watch(() => [props.repoId, props.revision], () => {
   if (props.repoId) {
@@ -474,36 +434,8 @@ watch(() => [props.repoId, props.revision], () => {
   }
 }, { immediate: false })
 
-// Reset user override when navigating to a new repo (fresh context)
-watch(() => props.repoId, () => {
-  userOverrodeDestination.value = false
-})
-
-// Watch selection changes to auto-detect destination
-watch(selected, () => {
-  autoDetectDestination()
-}, { deep: true })
-
-// Also auto-detect when directories load (in case selection happened first due to race condition)
-watch(directories, () => {
-  if (directories.value.length > 0 && selected.value.size > 0) {
-    autoDetectDestination()
-  }
-})
-
-// Watch destBase for user-initiated changes
-watch(destBase, (newVal, oldVal) => {
-  // Skip if:
-  // - Our auto-detect is setting the value
-  // - It's the initial load (oldVal is empty)
-  if (autoDetectInProgress || oldVal === '') return
-
-  userOverrodeDestination.value = true
-})
-
 onMounted(() => {
   loadRepoFiles()
-  loadDirectories()
 })
 </script>
 
@@ -721,6 +653,11 @@ onMounted(() => {
   accent-color: var(--cg-color-accent);
 }
 
+.file-checkbox-spacer {
+  width: 13px;
+  flex-shrink: 0;
+}
+
 .file-path {
   flex: 1;
   font-family: var(--cg-font-mono);
@@ -740,44 +677,6 @@ onMounted(() => {
   text-align: center;
   color: var(--cg-color-text-muted);
   font-style: italic;
-}
-
-/* Destination Section */
-.destination-section {
-  background: var(--cg-color-bg-secondary);
-  border: 1px solid var(--cg-color-border);
-  padding: var(--cg-space-3);
-}
-
-.section-label {
-  color: var(--cg-color-accent);
-  text-transform: uppercase;
-  font-size: var(--cg-font-size-xs);
-  letter-spacing: var(--cg-letter-spacing-wide);
-  margin: 0 0 var(--cg-space-2) 0;
-}
-
-.destination-row {
-  display: flex;
-  align-items: center;
-  gap: var(--cg-space-2);
-}
-
-.dest-select {
-  min-width: 220px;
-}
-
-.path-separator {
-  color: var(--cg-color-text-muted);
-  font-family: var(--cg-font-mono);
-}
-
-.dest-subfolder {
-  flex: 1;
-}
-
-.dest-custom {
-  margin-top: var(--cg-space-2);
 }
 
 /* Action bar with summary */

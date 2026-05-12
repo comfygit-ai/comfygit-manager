@@ -397,6 +397,22 @@ class TestFetchRemoteEndpoint:
         data = await resp.json()
         assert "error" in data
 
+    async def test_error_fetch_authentication_required(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 401 when Git needs credentials for fetch."""
+        mock_environment.git_manager.fetch = Mock(
+            side_effect=OSError("fatal: could not read Username for 'https://github.com'")
+        )
+
+        resp = await client.post("/v2/comfygit/remotes/origin/fetch")
+
+        assert resp.status == 401
+        data = await resp.json()
+        assert data["reason"] == "authentication_required"
+
     async def test_error_no_environment(self, client, monkeypatch):
         """Should return 500 when no environment detected."""
         monkeypatch.setattr(
@@ -839,6 +855,47 @@ class TestPushPreviewEndpoint:
         assert data["can_push"] is False
         assert data["block_reason"] == "uncommitted_changes"
 
+    async def test_success_includes_readiness_warnings(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should include reproducibility warnings in push preview without blocking push."""
+        mock_environment.git_manager.get_sync_status = Mock(return_value={
+            "ahead": 1,
+            "behind": 0,
+            "remote_branch_exists": True
+        })
+        mock_environment.git_manager.get_version_history = Mock(return_value=[])
+        mock_environment.get_current_branch.return_value = "main"
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
+
+        mock_model_manager = Mock()
+        mock_model_manager.get_all.return_value = []
+
+        dev_node = Mock()
+        dev_node.name = "local-dev-node"
+        dev_node.source = "development"
+        dev_node.version = "dev"
+        dev_node.registry_id = None
+        dev_node.repository = None
+        dev_node.pinned_commit = None
+        dev_node.criticality = "required"
+
+        mock_environment.pyproject.models = mock_model_manager
+        mock_environment.pyproject.workflows.get_all_with_resolutions.return_value = {}
+        mock_environment.pyproject.nodes.get_existing.return_value = {
+            "local-dev-node": dev_node
+        }
+
+        resp = await client.get("/v2/comfygit/remotes/origin/push-preview")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["can_push"] is True
+        assert len(data["warnings"]["nodes_without_provenance"]) == 1
+        assert data["warnings"]["nodes_without_provenance"][0]["name"] == "local-dev-node"
+
     async def test_error_remote_not_found(
         self,
         client,
@@ -954,6 +1011,55 @@ class TestPushEndpoint:
         assert resp.status == 409
         data = await resp.json()
         assert "error" in data
+        assert data["needs_force"] is True
+
+    async def test_blocks_known_remote_ahead_without_push_attempt(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should offer force before push when known remote-tracking ref is ahead."""
+        mock_environment.push_commits = Mock(return_value="Should not push")
+        mock_environment.git_manager.get_sync_status = Mock(return_value={
+            "ahead": 1,
+            "behind": 2,
+            "remote_branch_exists": True,
+        })
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
+        mock_environment.get_current_branch.return_value = "main"
+
+        resp = await client.post(
+            "/v2/comfygit/remotes/origin/push",
+            json={}
+        )
+
+        assert resp.status == 409
+        data = await resp.json()
+        assert data["reason"] == "remote_has_new_commits"
+        assert data["needs_force"] is True
+        mock_environment.push_commits.assert_not_called()
+
+    async def test_error_push_authentication_required(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should return 401 when Git needs credentials for push."""
+        mock_environment.push_commits = Mock(
+            side_effect=OSError("fatal: could not read Username for 'https://github.com'")
+        )
+        mock_environment.git_manager.get_sync_status = Mock(return_value={"ahead": 1, "behind": 0})
+        mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
+        mock_environment.get_current_branch.return_value = "main"
+
+        resp = await client.post(
+            "/v2/comfygit/remotes/origin/push",
+            json={}
+        )
+
+        assert resp.status == 401
+        data = await resp.json()
+        assert data["reason"] == "authentication_required"
 
     async def test_error_remote_not_found(
         self,

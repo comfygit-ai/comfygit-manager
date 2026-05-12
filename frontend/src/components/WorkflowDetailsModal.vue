@@ -146,16 +146,23 @@
     </template>
 
     <template #footer>
-      <BaseButton variant="secondary" @click="emit('close')">
-        Close
-      </BaseButton>
-      <BaseButton
-        v-if="hasChanges"
-        variant="primary"
-        @click="handleSave"
-      >
-        Save Changes
-      </BaseButton>
+      <div class="details-footer">
+        <BaseButton variant="secondary" @click="emit('resolve')">
+          Review Resolution
+        </BaseButton>
+        <div class="details-footer-actions">
+          <BaseButton variant="secondary" @click="emit('close')">
+            Close
+          </BaseButton>
+          <BaseButton
+            v-if="hasChanges"
+            variant="primary"
+            @click="handleSave"
+          >
+            Save Changes
+          </BaseButton>
+        </div>
+      </div>
     </template>
   </BaseModal>
 
@@ -599,5 +606,17 @@ onMounted(loadDetails)
 .node-guidance {
   color: var(--cg-color-text-secondary);
   font-size: var(--cg-font-size-xs);
+}
+
+.details-footer {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.details-footer-actions {
+  display: flex;
+  gap: 8px;
 }
 </style>

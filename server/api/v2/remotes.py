@@ -2,6 +2,7 @@
 from aiohttp import web
 
 from cgm_core.decorators import requires_environment, logged_operation
+from cgm_core.readiness import build_environment_readiness
 from cgm_utils.async_helpers import run_sync
 from comfygit_core.utils.git import (
     git_config_get,
@@ -60,6 +61,60 @@ def _get_tracking_remote(env, branch: str | None) -> str | None:
         return remote if remote else None
     except Exception:
         return None
+
+
+def _git_operation_error_response(error: Exception, default_status: int = 500) -> web.Response:
+    """Return a user-actionable response for common git operation failures."""
+    message = str(error) or "Git operation failed"
+    normalized = message.lower()
+
+    if any(
+        phrase in normalized
+        for phrase in (
+            "could not read username",
+            "authentication failed",
+            "permission denied",
+            "terminal prompts disabled",
+        )
+    ):
+        return web.json_response(
+            {
+                "error": (
+                    "Git authentication failed. Check that this container has "
+                    "credentials for the remote, or use a remote URL it can access."
+                ),
+                "reason": "authentication_required",
+                "details": message,
+            },
+            status=401,
+        )
+
+    if any(
+        phrase in normalized
+        for phrase in (
+            "updates were rejected",
+            "non-fast-forward",
+            "fetch first",
+            "remote contains work",
+            "remote has changes",
+            "push rejected",
+            "rejected",
+        )
+    ):
+        return web.json_response(
+            {
+                "error": (
+                    "Remote has commits that are not in this environment. "
+                    "Pull first or force push to overwrite the remote branch."
+                ),
+                "reason": "remote_has_new_commits",
+                "needs_force": True,
+                "details": message,
+            },
+            status=409,
+        )
+
+    return web.json_response({"error": message}, status=default_status)
 
 
 @routes.get("/v2/comfygit/remotes")
@@ -200,7 +255,7 @@ async def fetch_remote(request: web.Request, env) -> web.Response:
         return web.json_response({"error": str(e)}, status=404)
     except OSError as e:
         # Fetch failed (network, auth, etc)
-        return web.json_response({"error": str(e)}, status=500)
+        return _git_operation_error_response(e)
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
@@ -434,6 +489,8 @@ async def get_push_preview(request: web.Request, env) -> web.Response:
     else:
         outgoing = []
 
+    readiness = await build_environment_readiness(env, include_blocking=False)
+
     return web.json_response({
         "remote": name,
         "branch": branch,
@@ -444,7 +501,8 @@ async def get_push_preview(request: web.Request, env) -> web.Response:
         "can_push": can_push,
         "needs_force": needs_force,
         "block_reason": block_reason,
-        "is_first_push": is_first_push
+        "is_first_push": is_first_push,
+        "warnings": readiness["warnings"],
     })
 
 
@@ -473,9 +531,30 @@ async def push_to_remote(request: web.Request, env) -> web.Response:
             "error": "Uncommitted changes exist. Commit your changes first."
         }, status=400)
 
-    # Get commits ahead count before pushing
-    sync_status = await run_sync(env.git_manager.get_sync_status, name, branch)
+    # Get commits ahead count before pushing.
+    try:
+        sync_status = await run_sync(env.git_manager.get_sync_status, name, branch)
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=404)
+    except OSError as e:
+        return _git_operation_error_response(e)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
     commits_ahead = sync_status["ahead"]
+
+    if sync_status.get("behind", 0) > 0 and not force:
+        return web.json_response(
+            {
+                "error": (
+                    "Remote has commits that are not in this environment. "
+                    "Pull first or force push to overwrite the remote branch."
+                ),
+                "reason": "remote_has_new_commits",
+                "needs_force": True,
+            },
+            status=409,
+        )
 
     try:
         if auth_token:
@@ -501,5 +580,4 @@ async def push_to_remote(request: web.Request, env) -> web.Response:
     except ValueError as e:
         return web.json_response({"error": str(e)}, status=404)
     except OSError as e:
-        # Push rejected - likely remote has new commits
-        return web.json_response({"error": str(e)}, status=409)
+        return _git_operation_error_response(e, default_status=409)

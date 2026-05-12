@@ -1,6 +1,7 @@
 """Integration tests for first-time setup panel endpoints."""
 import pytest
 from unittest.mock import Mock
+import json
 
 
 @pytest.mark.integration
@@ -37,6 +38,8 @@ class TestSetupStatusEndpoint:
         assert "default_path" in data
         assert data["environments"] == []
         assert data["current_environment"] is None
+        assert data["runtime_context"]["mode"] == "local_unmanaged"
+        assert data["runtime_context"]["capabilities"]["can_initialize_workspace"] is True
 
     async def test_success_empty_workspace(self, client, monkeypatch, tmp_path):
         """Should return empty_workspace when workspace exists but has no envs."""
@@ -68,6 +71,7 @@ class TestSetupStatusEndpoint:
         assert data["state"] == "empty_workspace"
         assert data["workspace_path"] == str(tmp_path)
         assert data["environments"] == []
+        assert data["runtime_context"]["capabilities"]["can_create_environment"] is True
 
     async def test_success_unmanaged(self, client, monkeypatch, tmp_path):
         """Should return unmanaged when workspace + envs exist but not managed."""
@@ -104,6 +108,7 @@ class TestSetupStatusEndpoint:
         assert data["workspace_path"] == str(tmp_path)
         assert data["environments"] == ["dev", "prod"]
         assert data["current_environment"] is None
+        assert data["runtime_context"]["capabilities"]["can_switch_environment"] is True
 
     async def test_success_managed(self, client, monkeypatch, tmp_path):
         """Should return managed when running under orchestrator."""
@@ -134,6 +139,83 @@ class TestSetupStatusEndpoint:
         assert data["workspace_path"] == str(tmp_path)
         assert data["environments"] == ["dev", "prod"]
         assert data["current_environment"] == "dev"
+        assert data["runtime_context"]["mode"] == "local_managed"
+        assert data["runtime_context"]["capabilities"]["can_switch_environment"] is True
+
+    async def test_cloud_bound_runtime_context_disables_lifecycle(self, client, monkeypatch, tmp_path):
+        """Should expose cloud-bound runtime context when launched by cloud."""
+        mock_workspace = Mock()
+        mock_workspace.path = tmp_path
+        mock_current_env = Mock()
+        mock_current_env.name = "dev"
+        mock_workspace.list_environments.return_value = [mock_current_env]
+
+        def mock_detect():
+            return (True, mock_workspace, mock_current_env)
+
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setenv("COMFYGIT_RUNTIME_MODE", "cloud_bound")
+        monkeypatch.setenv("COMFYGIT_BOUND_REF", "refs/heads/main")
+        monkeypatch.setenv("COMFYGIT_BOUND_COMMIT", "abc123")
+        monkeypatch.setenv("COMFYGIT_CLOUD_SESSION_ID", "session-1")
+
+        resp = await client.get("/v2/setup/status")
+
+        assert resp.status == 200
+        data = await resp.json()
+        runtime = data["runtime_context"]
+        assert runtime["mode"] == "cloud_bound"
+        assert runtime["lifecycle_authority"] == "cloud"
+        assert runtime["bound_environment"] == "dev"
+        assert runtime["bound_ref"] == "refs/heads/main"
+        assert runtime["bound_commit"] == "abc123"
+        assert runtime["cloud_session_id"] == "session-1"
+        assert runtime["capabilities"]["can_switch_environment"] is False
+        assert runtime["capabilities"]["can_restart_current"] is False
+
+    async def test_runtime_context_file_can_seed_cloud_bound_capabilities(
+        self,
+        client,
+        monkeypatch,
+        tmp_path
+    ):
+        """Should normalize runtime context from a launch-provided JSON file."""
+        mock_workspace = Mock()
+        mock_workspace.path = tmp_path
+        mock_current_env = Mock()
+        mock_current_env.name = "dev"
+        mock_workspace.list_environments.return_value = [mock_current_env]
+
+        def mock_detect():
+            return (True, mock_workspace, mock_current_env)
+
+        context_file = tmp_path / "runtime-context.json"
+        context_file.write_text(json.dumps({
+            "mode": "cloud_bound",
+            "bound_environment": "dev",
+            "bound_ref": "refs/heads/feature",
+            "bound_commit": "def456",
+            "cloud_session_id": "session-from-file",
+            "capabilities": {
+                "can_restart_current": True
+            }
+        }))
+
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setenv("COMFYGIT_RUNTIME_CONTEXT_FILE", str(context_file))
+
+        resp = await client.get("/v2/setup/status")
+
+        assert resp.status == 200
+        data = await resp.json()
+        runtime = data["runtime_context"]
+        assert runtime["source"] == "context_file"
+        assert runtime["mode"] == "cloud_bound"
+        assert runtime["bound_ref"] == "refs/heads/feature"
+        assert runtime["bound_commit"] == "def456"
+        assert runtime["cloud_session_id"] == "session-from-file"
+        assert runtime["capabilities"]["can_restart_current"] is True
+        assert runtime["capabilities"]["can_switch_environment"] is False
 
     async def test_detected_models_dir(self, client, monkeypatch, tmp_path):
         """Should auto-detect models directory from current ComfyUI."""
