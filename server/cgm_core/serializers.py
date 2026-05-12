@@ -32,12 +32,24 @@ def _safe_sequence(value) -> list:
     return []
 
 
+def _safe_dict(value) -> dict:
+    """Safely pass through dict values and reject placeholder objects."""
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
+def _contract_has_shape(contract) -> bool:
+    """Return True when a value looks like a workflow execution contract."""
+    return contract is not None and isinstance(getattr(contract, "contracts", None), dict)
+
+
 def _derive_contract_status(contract) -> str:
     """Derive compact contract health from durable contract state."""
-    if contract is None:
+    if contract is None or not _contract_has_shape(contract):
         return "none"
 
-    contracts = getattr(contract, "contracts", None) or {}
+    contracts = _safe_dict(getattr(contract, "contracts", None))
     if not contracts:
         return "incomplete"
 
@@ -60,14 +72,14 @@ def _derive_contract_status(contract) -> str:
 
 def serialize_workflow_contract_summary(contract) -> dict:
     """Serialize compact derived contract health for workflow list/detail payloads."""
-    contracts = getattr(contract, "contracts", None) or {}
+    contracts = _safe_dict(getattr(contract, "contracts", None))
     default_contract_name = _safe_str(getattr(contract, "default_contract", None))
     default_contract = contracts.get(default_contract_name) if default_contract_name else None
     inputs = _safe_sequence(getattr(default_contract, "inputs", None))
     outputs = _safe_sequence(getattr(default_contract, "outputs", None))
 
     return {
-        "has_contract": contract is not None,
+        "has_contract": _contract_has_shape(contract),
         "input_count": len(inputs),
         "output_count": len(outputs),
         "status": _derive_contract_status(contract),
@@ -76,11 +88,11 @@ def serialize_workflow_contract_summary(contract) -> dict:
 
 def serialize_workflow_execution_contract(contract) -> dict | None:
     """Serialize the durable workflow execution contract for manager UI use."""
-    if contract is None:
+    if contract is None or not _contract_has_shape(contract):
         return None
 
     contracts_payload = {}
-    for name, named_contract in (getattr(contract, "contracts", None) or {}).items():
+    for name, named_contract in _safe_dict(getattr(contract, "contracts", None)).items():
         inputs = []
         for item in _safe_sequence(getattr(named_contract, "inputs", None)):
             input_payload = {

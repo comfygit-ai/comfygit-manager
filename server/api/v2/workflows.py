@@ -7,7 +7,7 @@ from pathlib import Path
 import xxhash
 from aiohttp import web
 
-from comfygit_core.models.manifest import (
+from comfygit_core.models.workflow_contract import (
     NamedWorkflowContract,
     WorkflowContractInput,
     WorkflowContractOutput,
@@ -384,6 +384,14 @@ def _safe_dict(value) -> dict:
     return {}
 
 
+def _workflow_manifest_models(env, workflow_name: str) -> list:
+    """Return manifest models for a workflow, tolerating unavailable manifest data."""
+    try:
+        return _safe_sequence(env.pyproject.workflows.get_workflow_models(workflow_name))
+    except Exception:
+        return []
+
+
 def _widget_value_at(widgets_values, index: int):
     """Return a widget value from ComfyUI list-style or dict-style widget data."""
     if isinstance(widgets_values, (list, tuple)):
@@ -548,6 +556,8 @@ def _get_package_aliases(workflow_manager) -> dict[str, str]:
 def _reconstruct_optional_node_buckets(env, dependencies, workflow_name: str) -> dict[str, list]:
     """Place saved optional node mappings back into their original resolution buckets."""
     custom_map = env.pyproject.workflows.get_custom_node_map(workflow_name)
+    if not isinstance(custom_map, dict):
+        custom_map = {}
     optional_node_types = {
         node_type for node_type, mapping in custom_map.items()
         if mapping is False
@@ -808,7 +818,7 @@ def _reconstruct_saved_optional_models(env, workflow_name: str, result) -> list[
             existing_refs.add(_model_ref_key(model.reference))
 
     saved_models = []
-    for manifest_model in env.pyproject.workflows.get_workflow_models(workflow_name):
+    for manifest_model in _workflow_manifest_models(env, workflow_name):
         if manifest_model.criticality != "optional":
             continue
         if manifest_model.sources:
@@ -825,7 +835,7 @@ def _reconstruct_saved_optional_models(env, workflow_name: str, result) -> list[
 
 def _saved_optional_model_choice_map(env, workflow_name: str) -> dict[tuple[str, int | None, str], dict]:
     saved = {}
-    for manifest_model in env.pyproject.workflows.get_workflow_models(workflow_name):
+    for manifest_model in _workflow_manifest_models(env, workflow_name):
         if manifest_model.criticality != "optional":
             continue
         if manifest_model.sources:
@@ -1028,11 +1038,7 @@ def _apply_explicit_model_choices_to_manifest(env, workflow_name: str, model_cho
     if not model_choices:
         return changes
 
-    try:
-        current_models = env.pyproject.workflows.get_workflow_models(workflow_name)
-    except Exception:
-        logger.exception("Failed to read workflow models for '%s'", workflow_name)
-        return changes
+    current_models = _workflow_manifest_models(env, workflow_name)
 
     updated_models = False
     for model in current_models:
@@ -1210,8 +1216,7 @@ async def get_workflow_details(request: web.Request, env) -> web.Response:
     # Get criticality map from pyproject (filename -> criticality)
     criticality_map = {}
     try:
-        manifest_models = env.pyproject.workflows.get_workflow_models(name)
-        for model in manifest_models:
+        for model in _workflow_manifest_models(env, name):
             criticality_map[model.filename] = model.criticality or "required"
     except Exception:
         pass  # Fallback to default behavior if pyproject read fails
@@ -1550,7 +1555,7 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
         custom_node_map = {}
     resolved_nodes = [
         node for node in result.nodes_resolved
-        if not getattr(node, "is_optional", False)
+        if getattr(node, "is_optional", False) is not True
     ] + optional_buckets["resolved"]
     unresolved_nodes = list(result.nodes_unresolved) + optional_buckets["unresolved"]
     ambiguous_nodes = list(result.nodes_ambiguous) + optional_buckets["ambiguous"]
