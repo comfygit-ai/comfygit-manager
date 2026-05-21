@@ -224,14 +224,37 @@ Frontend version check:
 
 ## Version Bump Protocol
 
-When asked to "bump core and version" or similar, follow this sequence:
+Manager releases depend on the core/CLI monorepo release. The Manager package
+pins `comfygit-core==X.Y.Z` exactly, and ComfyUI registry installs consume
+`requirements.txt`, so the pinned core version must already exist on PyPI before
+publishing Manager.
 
-1. Bump `comfygit-core==X.Y.Z` in `pyproject.toml` dependencies
-2. Bump `version` in `pyproject.toml`
-3. `uv lock` - Update the lockfile
-4. `cd frontend && npm run build` - Rebuild frontend (version is injected at build time)
-5. Stage `pyproject.toml`, `uv.lock`, `js/`, `requirements.txt` and commit
-6. Push to remote
+When asked to prepare a Manager release:
+
+1. Confirm the target `comfygit-core==X.Y.Z` has been published to PyPI.
+   `uv lock` will fail, and registry installs will fail, if this is not true.
+2. Bump `comfygit-core==X.Y.Z` in `pyproject.toml` dependencies.
+3. Bump the Manager `version` in `pyproject.toml`.
+4. Run `uv run scripts/sync-requirements.py` so `requirements.txt` matches
+   `pyproject.toml`. Do not edit `requirements.txt` separately.
+5. Run `uv lock` to update `uv.lock` against the published core package.
+6. Run `cd frontend && npm run build`. The footer version shown in the bottom
+   left of the ComfyGit panel is injected from `pyproject.toml` at build time,
+   so the built `js/comfygit-panel.js` must be regenerated for the displayed
+   version to change.
+7. Run `./scripts/check-frontend-version.sh`; it must report the same version
+   in `pyproject.toml` and `js/comfygit-panel.js`.
+8. Run targeted backend/frontend tests for the changed areas.
+9. Stage `pyproject.toml`, `uv.lock`, `requirements.txt`, and generated `js/`
+   assets together, then commit.
+
+After the release commit lands on `main`, the publish workflow creates the
+ComfyUI registry release and GitHub release. Do not publish Manager before the
+matching core package is available on PyPI.
+
+For local development before core is published, use editable core overlays or
+the CI helper flow only for testing. Do not treat those local source overrides
+as a publishable Manager release state.
 
 ### Additional Documentation
 - **frontend/THEMES.md** - Theme system documentation
