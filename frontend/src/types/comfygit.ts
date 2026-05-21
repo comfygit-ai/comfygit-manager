@@ -746,6 +746,17 @@ export interface ManifestFileResponse {
   content: string
 }
 
+export interface MetadataRefreshResult {
+  status: 'success' | 'error'
+  builtins_refreshed: boolean
+  folder_paths_refreshed: boolean
+  model_loaders_refreshed: boolean
+  builtins_count: number
+  folder_mappings_count: number
+  model_loaders_count: number
+  error?: string
+}
+
 // Git Remotes Types
 export interface RemoteInfo {
   name: string

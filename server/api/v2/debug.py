@@ -228,6 +228,23 @@ async def get_environment_manifest(request: web.Request, env) -> web.Response:
     })
 
 
+@routes.post("/v2/comfygit/debug/metadata/refresh")
+@requires_environment
+async def refresh_environment_metadata(request: web.Request, env) -> web.Response:
+    """Refresh generated environment metadata extracted from ComfyUI."""
+    try:
+        result = await run_sync(env.refresh_metadata)
+    except ValueError as exc:
+        return web.json_response({"status": "error", "error": str(exc)}, status=400)
+    except Exception as exc:
+        return web.json_response({"status": "error", "error": str(exc)}, status=500)
+
+    return web.json_response({
+        "status": "success",
+        **result,
+    })
+
+
 @routes.get("/v2/workspace/debug/logs/path")
 async def get_workspace_log_path(request: web.Request) -> web.Response:
     """Get the file path to the workspace log file."""

@@ -43,6 +43,7 @@ import type {
   ConfigSettings,
   LogEntry,
   ManifestFileResponse,
+  MetadataRefreshResult,
   NodeCriticality,
   NodeInfo,
   NodeInstallQueueStatus,
@@ -1430,6 +1431,24 @@ export function useComfyGitService() {
     return fetchApi<ManifestFileResponse>('/v2/comfygit/debug/manifest')
   }
 
+  async function refreshEnvironmentMetadata(): Promise<MetadataRefreshResult> {
+    if (USE_MOCK) {
+      return {
+        status: 'success',
+        builtins_refreshed: true,
+        folder_paths_refreshed: true,
+        model_loaders_refreshed: true,
+        builtins_count: 217,
+        folder_mappings_count: 44,
+        model_loaders_count: 29,
+      }
+    }
+
+    return fetchApi<MetadataRefreshResult>('/v2/comfygit/debug/metadata/refresh', {
+      method: 'POST',
+    })
+  }
+
   async function getWorkspaceLogPath(): Promise<{ path: string; exists: boolean }> {
     if (USE_MOCK) {
       return { path: '/mock/workspace/logs/workspace/full.log', exists: true }
@@ -2529,6 +2548,7 @@ export function useComfyGitService() {
     // Debug/Logs
     getEnvironmentLogs,
     getEnvironmentManifest,
+    refreshEnvironmentMetadata,
     getWorkspaceLogs,
     getEnvironmentLogPath,
     getWorkspaceLogPath,
