@@ -384,6 +384,66 @@ class TestSerializeEnvironmentStatus:
 class TestSerializeWorkflowDetails:
     """Unit tests for serialize_workflow_details node status serialization."""
 
+    def test_includes_manifest_manual_model_without_graph_reference(self):
+        """Workflow details should include manual model dependencies from the manifest."""
+        workflow = Mock()
+        workflow.has_issues = False
+        workflow.sync_state = "synced"
+        workflow.uninstalled_nodes = []
+        workflow.dependencies = Mock()
+        workflow.dependencies.found_models = []
+        workflow.resolution = Mock()
+        workflow.resolution.models_resolved = []
+        workflow.resolution.nodes_resolved = []
+        workflow.resolution.node_guidance = {}
+        workflow.resolution.nodes_version_gated = []
+        workflow.resolution.nodes_uninstallable = []
+
+        manifest_model = Mock()
+        manifest_model.filename = "custom_loader_model.safetensors"
+        manifest_model.hash = "abc123"
+        manifest_model.category = "diffusion_models"
+        manifest_model.criticality = "required"
+        manifest_model.status = "resolved"
+        manifest_model.nodes = []
+        manifest_model.relative_path = "diffusion_models/custom_loader_model.safetensors"
+        manifest_model.declared_by = "manual"
+        manifest_model.sources = []
+
+        indexed_model = Mock()
+        indexed_model.filename = "custom_loader_model.safetensors"
+        indexed_model.hash = "abc123"
+        indexed_model.category = "diffusion_models"
+        indexed_model.file_size = 1024
+        indexed_model.relative_path = "diffusion_models/custom_loader_model.safetensors"
+        indexed_model.base_directory = "/models"
+
+        result = serialize_workflow_details(
+            workflow,
+            "test.json",
+            manifest_models=[manifest_model],
+            indexed_models=[indexed_model],
+        )
+
+        assert result["models"] == [
+            {
+                "filename": "custom_loader_model.safetensors",
+                "hash": "abc123",
+                "type": "diffusion_models",
+                "size": 1024,
+                "status": "available",
+                "used_in_workflows": ["test.json"],
+                "importance": "required",
+                "loaded_by": [],
+                "file_path": "/models/diffusion_models/custom_loader_model.safetensors",
+                "relative_path": "diffusion_models/custom_loader_model.safetensors",
+                "declared_by": "manual",
+                "has_category_mismatch": False,
+                "expected_categories": [],
+                "actual_category": None,
+            }
+        ]
+
     def test_includes_version_gated_and_uninstallable_nodes(self):
         """Workflow details should include blocked node entries with guidance text."""
         workflow = Mock()

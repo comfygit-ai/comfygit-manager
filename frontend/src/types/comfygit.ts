@@ -513,6 +513,8 @@ export interface ModelUsageInfo {
   loaded_by: Array<{ node_type: string; node_id: string }>
   line_number?: number
   file_path?: string | null
+  relative_path?: string | null
+  declared_by?: string | null
   // Deprecated - use loaded_by instead
   node_type?: string
   node_id?: string

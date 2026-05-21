@@ -917,6 +917,32 @@ export function useComfyGitService() {
     })
   }
 
+  async function addWorkflowModelDependency(
+    workflow: string,
+    payload: { hash?: string; relative_path?: string; importance?: 'required' | 'flexible' | 'optional' }
+  ): Promise<{ status: string; workflow: string; model: unknown }> {
+    if (USE_MOCK) return { status: 'success', workflow, model: payload }
+
+    return fetchApi(`/v2/comfygit/workflow/${encodeURIComponent(workflow)}/models`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+  }
+
+  async function removeWorkflowModelDependency(
+    workflow: string,
+    payload: { hash?: string; relative_path?: string }
+  ): Promise<{ status: string; workflow: string }> {
+    if (USE_MOCK) return { status: 'success', workflow }
+
+    return fetchApi(`/v2/comfygit/workflow/${encodeURIComponent(workflow)}/models`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+  }
+
   // Model Management
   async function getEnvironmentModels(): Promise<ModelInfo[]> {
     if (USE_MOCK) return mockApi.getEnvironmentModels()
@@ -2462,6 +2488,8 @@ export function useComfyGitService() {
     resolveWorkflow,
     installWorkflowDeps,
     setModelImportance,
+    addWorkflowModelDependency,
+    removeWorkflowModelDependency,
     // Model Management
     getEnvironmentModels,
     getWorkspaceModels,

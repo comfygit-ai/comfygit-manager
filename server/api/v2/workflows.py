@@ -392,6 +392,27 @@ def _workflow_manifest_models(env, workflow_name: str) -> list:
         return []
 
 
+async def _invalidate_workflow_resolution_cache(env, workflow_name: str) -> None:
+    """Invalidate cached workflow analysis after manifest-only workflow edits."""
+    try:
+        await run_sync(env.workflow_cache.invalidate, env.name, workflow_name)
+    except Exception as exc:
+        logger.debug("Unable to invalidate workflow cache for %s: %s", workflow_name, exc)
+
+
+def _serialize_workflow_manifest_model(model) -> dict:
+    """Serialize a workflow manifest model for mutation endpoint responses."""
+    return {
+        "filename": getattr(model, "filename", None),
+        "hash": getattr(model, "hash", None),
+        "category": getattr(model, "category", None),
+        "criticality": getattr(model, "criticality", None),
+        "status": getattr(model, "status", None),
+        "relative_path": getattr(model, "relative_path", None),
+        "declared_by": getattr(model, "declared_by", None),
+    }
+
+
 def _widget_value_at(widgets_values, index: int):
     """Return a widget value from ComfyUI list-style or dict-style widget data."""
     if isinstance(widgets_values, (list, tuple)):
@@ -1215,23 +1236,33 @@ async def get_workflow_details(request: web.Request, env) -> web.Response:
 
     # Get criticality map from pyproject (filename -> criticality)
     criticality_map = {}
-    try:
-        for model in _workflow_manifest_models(env, name):
-            criticality_map[model.filename] = model.criticality or "required"
-    except Exception:
-        pass  # Fallback to default behavior if pyproject read fails
+    manifest_models = _workflow_manifest_models(env, name)
+    for model in manifest_models:
+        criticality_map[model.filename] = model.criticality or "required"
+        if getattr(model, "relative_path", None):
+            criticality_map[model.relative_path] = model.criticality or "required"
 
     # Get set of available model filenames from the model index
     available_models = set()
+    all_models = []
     try:
         all_models = env.workspace.list_models()
         for model in all_models:
             available_models.add(model.filename)
+            if getattr(model, "relative_path", None):
+                available_models.add(model.relative_path)
     except Exception:
         pass  # Fallback if model index unavailable
 
     contract = env.get_workflow_execution_contract(name)
-    payload = serialize_workflow_details(workflow, name, criticality_map, available_models)
+    payload = serialize_workflow_details(
+        workflow,
+        name,
+        criticality_map,
+        available_models,
+        manifest_models=manifest_models,
+        indexed_models=all_models,
+    )
     payload["contract_summary"] = serialize_workflow_contract_summary(contract)
     payload["execution_contract"] = serialize_workflow_execution_contract(contract)
     payload["contract_context"] = _get_workflow_contract_context(env, name)
@@ -1347,6 +1378,90 @@ async def set_model_importance(request: web.Request, env) -> web.Response:
         )
 
     return web.json_response({"status": "success"})
+
+
+@routes.post("/v2/comfygit/workflow/{name}/models")
+@logged_operation("add workflow model")
+async def add_workflow_model(request: web.Request, env) -> web.Response:
+    """Declare an indexed local model as a manual workflow dependency."""
+    name = request.match_info["name"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    model_hash = body.get("hash") or body.get("model_hash")
+    relative_path = body.get("relative_path") or body.get("path")
+    criticality = body.get("criticality") or body.get("importance") or "required"
+
+    if not model_hash and not relative_path:
+        return web.json_response({"error": "Provide 'hash' or 'relative_path'"}, status=400)
+
+    if criticality not in ("required", "flexible", "optional"):
+        return web.json_response(
+            {"error": "Invalid importance value. Must be one of: required, flexible, optional"},
+            status=400
+        )
+
+    try:
+        model = await run_sync(
+            env.workflow_manager.add_existing_model_to_workflow,
+            workflow_name=name,
+            model_hash=model_hash,
+            relative_path=relative_path,
+            criticality=criticality,
+        )
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=400)
+
+    await _invalidate_workflow_resolution_cache(env, name)
+
+    return web.json_response({
+        "status": "success",
+        "workflow": name,
+        "model": _serialize_workflow_manifest_model(model),
+    })
+
+
+@routes.delete("/v2/comfygit/workflow/{name}/models")
+@logged_operation("remove workflow model")
+async def remove_workflow_model(request: web.Request, env) -> web.Response:
+    """Remove a manually declared workflow model dependency."""
+    name = request.match_info["name"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    model_hash = body.get("hash") or body.get("model_hash") or request.query.get("hash")
+    relative_path = (
+        body.get("relative_path")
+        or body.get("path")
+        or request.query.get("relative_path")
+        or request.query.get("path")
+    )
+
+    if not model_hash and not relative_path:
+        return web.json_response({"error": "Provide 'hash' or 'relative_path'"}, status=400)
+
+    try:
+        removed = await run_sync(
+            env.workflow_manager.remove_manual_model_from_workflow,
+            workflow_name=name,
+            model_hash=model_hash,
+            relative_path=relative_path,
+        )
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=400)
+
+    if not removed:
+        return web.json_response({"error": "Manual model not found"}, status=404)
+
+    await _invalidate_workflow_resolution_cache(env, name)
+
+    return web.json_response({"status": "success", "workflow": name})
 
 
 @routes.post("/v2/comfygit/workflow/{name}/resolve")

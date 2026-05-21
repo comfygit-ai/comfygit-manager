@@ -200,7 +200,9 @@ def serialize_workflow_details(
     workflow,
     name: str,
     criticality_map: dict | None = None,
-    available_models: set | None = None
+    available_models: set | None = None,
+    manifest_models: list | None = None,
+    indexed_models: list | None = None,
 ) -> dict:
     """Serialize workflow details with models and nodes.
 
@@ -209,10 +211,24 @@ def serialize_workflow_details(
         name: Workflow name
         criticality_map: Optional dict mapping filename -> criticality from pyproject
         available_models: Optional set of filenames that exist in the model index
+        manifest_models: Optional manifest model records for this workflow
+        indexed_models: Optional model index records with paths and hashes
     """
     models_map = {}
     criticality_map = criticality_map or {}
     available_models = available_models or set()
+    manifest_models = _safe_sequence(manifest_models)
+    indexed_models = _safe_sequence(indexed_models)
+
+    indexed_by_hash = {}
+    indexed_by_path = {}
+    for indexed_model in indexed_models:
+        model_hash = _safe_str(getattr(indexed_model, "hash", None))
+        relative_path = _safe_str(getattr(indexed_model, "relative_path", None))
+        if model_hash:
+            indexed_by_hash[model_hash] = indexed_model
+        if relative_path:
+            indexed_by_path[relative_path.replace("\\", "/")] = indexed_model
 
     def determine_model_status(resolved_model):
         if resolved_model.resolved_model is not None:
@@ -236,6 +252,23 @@ def serialize_workflow_details(
         """Extract filename from widget_value which may include subdirectory path."""
         # widget_value can be "checkpoints/model.safetensors" or just "model.safetensors"
         return widget_value.split("/")[-1] if "/" in widget_value else widget_value
+
+    def indexed_file_path(indexed_model) -> str | None:
+        base_dir = getattr(indexed_model, "base_directory", None)
+        rel_path = getattr(indexed_model, "relative_path", None)
+        if base_dir and rel_path and isinstance(base_dir, str) and isinstance(rel_path, str):
+            from pathlib import Path
+            return str(Path(base_dir) / rel_path)
+        return None
+
+    def indexed_for_manifest_model(manifest_model):
+        model_hash = _safe_str(getattr(manifest_model, "hash", None))
+        relative_path = _safe_str(getattr(manifest_model, "relative_path", None))
+        if model_hash and model_hash in indexed_by_hash:
+            return indexed_by_hash[model_hash]
+        if relative_path:
+            return indexed_by_path.get(relative_path.replace("\\", "/"))
+        return None
 
     # Build resolution lookup map
     resolution_map = {}
@@ -278,11 +311,7 @@ def serialize_workflow_details(
             # Get full file path for "open file location" functionality
             file_path = None
             if resolved and resolved.resolved_model:
-                base_dir = getattr(resolved.resolved_model, 'base_directory', None)
-                rel_path = getattr(resolved.resolved_model, 'relative_path', None)
-                if base_dir and rel_path and isinstance(base_dir, str) and isinstance(rel_path, str):
-                    from pathlib import Path
-                    file_path = str(Path(base_dir) / rel_path)
+                file_path = indexed_file_path(resolved.resolved_model)
 
             models_map[key] = {
                 "filename": filename,
@@ -294,6 +323,12 @@ def serialize_workflow_details(
                 "importance": importance,
                 "loaded_by": [],
                 "file_path": file_path,
+                "relative_path": (
+                    getattr(resolved.resolved_model, "relative_path", None)
+                    if resolved and resolved.resolved_model
+                    else None
+                ),
+                "declared_by": None,
                 # Category mismatch details for actionable UI
                 "has_category_mismatch": getattr(resolved, 'has_category_mismatch', False) is True if resolved else False,
                 "expected_categories": _safe_list(getattr(resolved, 'expected_categories', None)) if resolved else [],
@@ -311,6 +346,64 @@ def serialize_workflow_details(
         current_importance = models_map[key]["importance"]
         if get_importance_priority(importance) < get_importance_priority(current_importance):
             models_map[key]["importance"] = importance
+
+    # Add manually declared dependencies that do not appear in the graph parser.
+    for manifest_model in manifest_models:
+        model_nodes = _safe_sequence(getattr(manifest_model, "nodes", None))
+        declared_by = _safe_str(getattr(manifest_model, "declared_by", None))
+        if declared_by != "manual" and model_nodes:
+            continue
+
+        model_hash = _safe_str(getattr(manifest_model, "hash", None)) or ""
+        relative_path = _safe_str(getattr(manifest_model, "relative_path", None))
+        filename = _safe_str(getattr(manifest_model, "filename", None))
+        if not filename and relative_path:
+            filename = relative_path.split("/")[-1]
+        if not filename:
+            filename = model_hash or "manual model"
+
+        key = model_hash if model_hash else f"manual_{relative_path or filename}"
+        indexed_model = indexed_for_manifest_model(manifest_model)
+        sources = _safe_sequence(getattr(manifest_model, "sources", None))
+        if indexed_model is not None:
+            status = "available"
+            model_hash = _safe_str(getattr(indexed_model, "hash", None)) or model_hash
+            model_type = (
+                _safe_str(getattr(indexed_model, "category", None))
+                or _safe_str(getattr(manifest_model, "category", None))
+                or "unknown"
+            )
+            model_size = getattr(indexed_model, "file_size", 0)
+            file_path = indexed_file_path(indexed_model)
+            relative_path = _safe_str(getattr(indexed_model, "relative_path", None)) or relative_path
+        else:
+            status = "downloadable" if sources else "missing"
+            model_type = _safe_str(getattr(manifest_model, "category", None)) or "unknown"
+            model_size = 0
+            file_path = None
+
+        if key in models_map:
+            models_map[key]["declared_by"] = "manual"
+            models_map[key]["relative_path"] = models_map[key].get("relative_path") or relative_path
+            models_map[key]["file_path"] = models_map[key].get("file_path") or file_path
+            continue
+
+        models_map[key] = {
+            "filename": filename,
+            "hash": model_hash,
+            "type": model_type,
+            "size": model_size,
+            "status": status,
+            "used_in_workflows": [name],
+            "importance": getattr(manifest_model, "criticality", None) or "required",
+            "loaded_by": [],
+            "file_path": file_path,
+            "relative_path": relative_path,
+            "declared_by": "manual",
+            "has_category_mismatch": False,
+            "expected_categories": [],
+            "actual_category": None,
+        }
 
     models = list(models_map.values())
 

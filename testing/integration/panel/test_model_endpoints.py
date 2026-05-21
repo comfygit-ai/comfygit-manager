@@ -3,6 +3,7 @@ import pytest
 from unittest.mock import Mock
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 # Add helpers to path
 helpers_dir = Path(__file__).parent.parent.parent / "helpers"
@@ -169,6 +170,72 @@ class TestEnvironmentModelsEndpoint:
         shared = shared_models[0]
         assert "workflow1.json" in shared["used_in_workflows"]
         assert "workflow2.json" in shared["used_in_workflows"]
+
+    async def test_includes_manifest_declared_model_not_found_in_graph(
+        self,
+        client,
+        mock_environment,
+        mock_env_status
+    ):
+        """Should include manually declared workflow models from the manifest."""
+        mock_wf = Mock()
+        mock_wf.name = "deforum_complex.json"
+        mock_wf.resolution = create_mock_resolution(models_resolved=[])
+
+        manifest_model = SimpleNamespace(
+            filename="film_net_fp16.safetensors",
+            hash="film123",
+            category="frame_interpolation",
+            criticality="required",
+            status="resolved",
+            nodes=[],
+            sources=[],
+            relative_path="frame_interpolation/film_net_fp16.safetensors",
+            declared_by="manual",
+        )
+        global_model = SimpleNamespace(
+            filename="film_net_fp16.safetensors",
+            hash="film123",
+            category="frame_interpolation",
+            size=68882302,
+            relative_path="frame_interpolation/film_net_fp16.safetensors",
+            sources=["https://huggingface.co/Comfy-Org/frame_interpolation/resolve/main/frame_interpolation/film_net_fp16.safetensors"],
+        )
+        indexed_model = SimpleNamespace(
+            filename="film_net_fp16.safetensors",
+            hash="film123",
+            category="frame_interpolation",
+            file_size=68882302,
+            relative_path="frame_interpolation/film_net_fp16.safetensors",
+        )
+
+        mock_env_status.workflow.analyzed_workflows = [mock_wf]
+        mock_env_status.missing_models = []
+        mock_environment.status.return_value = mock_env_status
+        mock_environment.pyproject.workflows = Mock()
+        mock_environment.pyproject.workflows.get_workflow_models.return_value = [manifest_model]
+        mock_environment.pyproject.workflows.get_all_with_resolutions.return_value = {
+            "deforum_complex.json": {"models": []}
+        }
+        mock_environment.pyproject.models = Mock()
+        mock_environment.pyproject.models.get_by_hash.return_value = global_model
+        mock_environment.workspace.list_models.return_value = [indexed_model]
+        mock_environment.workspace.model_repository.get_sources.return_value = []
+
+        resp = await client.get("/v2/comfygit/models/environment")
+
+        assert resp.status == 200
+        data = await resp.json()
+        model = next((m for m in data if m["filename"] == "film_net_fp16.safetensors"), None)
+
+        assert model is not None
+        assert model["hash"] == "film123"
+        assert model["type"] == "frame_interpolation"
+        assert model["status"] == "available"
+        assert model["relative_path"] == "frame_interpolation/film_net_fp16.safetensors"
+        assert model["has_download_source"] is True
+        assert model["declared_by"] == "manual"
+        assert model["used_in_workflows"] == ["deforum_complex.json"]
 
     async def test_success_downloadable_model(
         self,
