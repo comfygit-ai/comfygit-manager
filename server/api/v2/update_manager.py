@@ -10,6 +10,7 @@ from aiohttp import web
 
 from cgm_core.decorators import logged_operation
 from cgm_utils.async_helpers import run_sync
+from .update_check import _get_cached_latest_release
 
 routes = web.RouteTableDef()
 
@@ -27,10 +28,15 @@ _MANUAL_INSTRUCTIONS = (
 async def update_manager(request: web.Request, env) -> web.Response:
     """Update comfygit-manager using comfygit-core and return restart instructions."""
     try:
+        target_version = "latest"
+        cached_release = await _get_cached_latest_release()
+        if cached_release and cached_release.latest_version:
+            target_version = cached_release.latest_version
+
         # Prefer the dedicated manager update flow (handles legacy migration).
         update_manager_fn = getattr(env, "update_manager", None)
         if callable(update_manager_fn):
-            result = await run_sync(update_manager_fn, version="latest")
+            result = await run_sync(update_manager_fn, version=target_version)
             changed = bool(getattr(result, "changed", False))
             old_version = getattr(result, "old_version", None)
             new_version = getattr(result, "new_version", None)
@@ -74,4 +80,3 @@ async def update_manager(request: web.Request, env) -> web.Response:
                 "manual_instructions": _MANUAL_INSTRUCTIONS,
             }
         )
-
