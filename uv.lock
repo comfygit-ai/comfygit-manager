@@ -401,7 +401,7 @@ wheels = [
 
 [[package]]
 name = "comfygit-core"
-version = "0.4.0"
+version = "0.4.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "blake3" },
@@ -413,14 +413,14 @@ dependencies = [
     { name = "uv" },
     { name = "xxhash" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/38/70/5e86c75b49ae7cb32ad9710a8b08ceb909bf875eafe728780b46c6671de3/comfygit_core-0.4.0.tar.gz", hash = "sha256:745f3d0e540b36f8bec9f34acf55751a18b6a99fb2b0e56654957ab554050d52", size = 707327, upload-time = "2026-05-12T00:35:36.762Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4c/01/e10c5b81906af01ff08ada40dbf60d5e7a082e81283f3eda320a1726c3f9/comfygit_core-0.4.1.tar.gz", hash = "sha256:dd8caeb1ba04c62502eff79fcac808ce09b17113b9b6d38cee4a4e090a727ab2", size = 722626, upload-time = "2026-05-21T04:05:17.84Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/33/80/cfed146e7801b117e445e366e395d37978982730331974bd306618112950/comfygit_core-0.4.0-py3-none-any.whl", hash = "sha256:66f710b17124fc25c3d3faa4742625aea7f6335af58b955238b74d45af0d3384", size = 423761, upload-time = "2026-05-12T00:35:34.939Z" },
+    { url = "https://files.pythonhosted.org/packages/9e/76/de2f922f855aee85cff0a73732df975379457321f2bacd6f4fb5610ce4a3/comfygit_core-0.4.1-py3-none-any.whl", hash = "sha256:01710de79a0245a3e5ae49dbfd287261372e724bb5e242881fea55d7e03bd3d4", size = 434808, upload-time = "2026-05-21T04:05:16.455Z" },
 ]
 
 [[package]]
 name = "comfygit-manager"
-version = "0.1.1"
+version = "0.1.2"
 source = { virtual = "." }
 dependencies = [
     { name = "comfygit-core" },
@@ -441,7 +441,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "comfygit-core", specifier = "==0.4.0" },
+    { name = "comfygit-core", specifier = "==0.4.1" },
     { name = "watchdog", specifier = ">=6.0.0" },
     { name = "xxhash", specifier = ">=3.5.0" },
     { name = "zeroconf", specifier = ">=0.131.0" },

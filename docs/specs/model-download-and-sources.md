@@ -90,14 +90,22 @@ reconnect and show current progress after reload or remount.
 This clause remains partial until the download job lifecycle is consistently
 covered by tests and reconnect behavior.
 
-### CGM-MDL-06 [PLANNED]: Manual model add and remove flows should preserve the same metadata model
-Validation: HUMAN_REVIEW
+### CGM-MDL-06 [PARTIAL]: Manual model add and remove flows should preserve the same metadata model
+Validation: MIXED
 
 When users manually add or remove model entries, those flows should use the
 same source, destination, and portability concepts as the guided download flow.
 
 Manual model management should not create a second incompatible model metadata
 shape.
+
+Current live scope: workflow details can manually add or remove existing
+indexed local models as workflow dependencies, and the environment models API
+includes those manifest-declared dependencies even when workflow graph parsing
+does not discover them.
+
+This remains partial until broader manual model acquisition and destination
+editing flows share the same source and destination model end to end.
 
 ### CGM-MDL-06A [LIVE]: Deleting a model should delete all indexed locations for that model identity
 Validation: MIXED

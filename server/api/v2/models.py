@@ -396,6 +396,257 @@ def _model_has_download_source(env, model_hash: str | None) -> bool:
         return False
 
 
+def _safe_sequence(value) -> list:
+    """Safely convert sequence-like values to a list."""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return list(value)
+    return []
+
+
+def _safe_dict(value) -> dict:
+    """Safely pass through dict values and reject placeholder objects."""
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
+def _safe_str(value) -> str | None:
+    """Return real strings only, avoiding Mock-style placeholder values."""
+    if isinstance(value, str):
+        return value
+    return None
+
+
+def _safe_int(value) -> int:
+    """Return JSON-safe integer sizes from model metadata."""
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    return 0
+
+
+def _normalized_relative_path(value: object) -> str | None:
+    relative_path = _safe_str(value)
+    if not relative_path:
+        return None
+    return relative_path.replace("\\", "/")
+
+
+def _append_workflow_usage(model_info: dict, workflow_name: str) -> None:
+    used_in_workflows = model_info.setdefault("used_in_workflows", [])
+    if workflow_name not in used_in_workflows:
+        used_in_workflows.append(workflow_name)
+
+
+def _indexed_model_maps(indexed_models: list) -> tuple[dict[str, object], dict[str, object]]:
+    """Build lookup maps for indexed model files by hash and relative path."""
+    indexed_by_hash = {}
+    indexed_by_path = {}
+
+    for indexed_model in _safe_sequence(indexed_models):
+        model_hash = _safe_str(getattr(indexed_model, "hash", None))
+        relative_path = _normalized_relative_path(getattr(indexed_model, "relative_path", None))
+        if model_hash:
+            indexed_by_hash[model_hash] = indexed_model
+        if relative_path:
+            indexed_by_path[relative_path] = indexed_model
+
+    return indexed_by_hash, indexed_by_path
+
+
+def _workflow_names_with_manifest_models(env, analyzed_workflows: list) -> list[str]:
+    """Return analyzed workflow names plus manifest-only workflow entries."""
+    workflow_names = []
+    for workflow in _safe_sequence(analyzed_workflows):
+        name = _safe_str(getattr(workflow, "name", None))
+        if name and name not in workflow_names:
+            workflow_names.append(name)
+
+    try:
+        manifest_workflows = _safe_dict(env.pyproject.workflows.get_all_with_resolutions())
+    except Exception:
+        manifest_workflows = {}
+
+    for name in manifest_workflows:
+        if isinstance(name, str) and name not in workflow_names:
+            workflow_names.append(name)
+
+    return workflow_names
+
+
+def _workflow_manifest_models(env, workflow_name: str) -> list:
+    """Return manifest models for a workflow, tolerating unavailable manifest data."""
+    try:
+        return _safe_sequence(env.pyproject.workflows.get_workflow_models(workflow_name))
+    except Exception:
+        return []
+
+
+def _global_manifest_model(env, model_hash: str | None):
+    """Return a global manifest model when the pyproject exposes one."""
+    if not model_hash:
+        return None
+    try:
+        get_by_hash = getattr(env.pyproject.models, "get_by_hash", None)
+    except Exception:
+        return None
+    if not callable(get_by_hash):
+        return None
+    try:
+        model = get_by_hash(model_hash)
+    except Exception:
+        return None
+    if _safe_str(getattr(model, "hash", None)) or _safe_str(getattr(model, "filename", None)):
+        return model
+    return None
+
+
+def _manifest_model_has_download_source(env, manifest_model, model_hash: str | None) -> bool:
+    """Check workflow, global manifest, and workspace-index source metadata."""
+    if _safe_sequence(getattr(manifest_model, "sources", None)):
+        return True
+
+    global_model = _global_manifest_model(env, model_hash)
+    if global_model is not None and _safe_sequence(getattr(global_model, "sources", None)):
+        return True
+
+    return _model_has_download_source(env, model_hash)
+
+
+def _find_indexed_manifest_model(
+    manifest_model,
+    indexed_by_hash: dict[str, object],
+    indexed_by_path: dict[str, object],
+):
+    """Find a local indexed model for a manifest model by hash or relative path."""
+    model_hash = _safe_str(getattr(manifest_model, "hash", None))
+    relative_path = _normalized_relative_path(getattr(manifest_model, "relative_path", None))
+
+    if model_hash and model_hash in indexed_by_hash:
+        return indexed_by_hash[model_hash]
+    if relative_path and relative_path in indexed_by_path:
+        return indexed_by_path[relative_path]
+    return None
+
+
+def _is_manifest_only_model(manifest_model) -> bool:
+    """Return true for manually declared or otherwise node-less manifest models."""
+    declared_by = _safe_str(getattr(manifest_model, "declared_by", None))
+    if declared_by == "manual":
+        return True
+    return not _safe_sequence(getattr(manifest_model, "nodes", None))
+
+
+def _upsert_manifest_model(
+    *,
+    env,
+    models_map: dict,
+    workflow_name: str,
+    manifest_model,
+    indexed_model,
+) -> None:
+    """Merge a manifest-declared workflow model into the environment model list."""
+    manifest_hash = _safe_str(getattr(manifest_model, "hash", None)) or ""
+    global_model = _global_manifest_model(env, manifest_hash)
+
+    model_hash = (
+        _safe_str(getattr(indexed_model, "hash", None))
+        or manifest_hash
+    )
+    relative_path = (
+        _normalized_relative_path(getattr(indexed_model, "relative_path", None))
+        or _normalized_relative_path(getattr(manifest_model, "relative_path", None))
+        or _normalized_relative_path(getattr(global_model, "relative_path", None))
+    )
+    filename = (
+        _safe_str(getattr(indexed_model, "filename", None))
+        or _safe_str(getattr(manifest_model, "filename", None))
+        or _safe_str(getattr(global_model, "filename", None))
+        or (relative_path.rsplit("/", 1)[-1] if relative_path else None)
+        or model_hash
+        or "manifest model"
+    )
+    category = (
+        _safe_str(getattr(indexed_model, "category", None))
+        or _safe_str(getattr(manifest_model, "category", None))
+        or _safe_str(getattr(global_model, "category", None))
+        or "unknown"
+    )
+    size = (
+        _safe_int(getattr(indexed_model, "file_size", None))
+        or _safe_int(getattr(global_model, "size", None))
+    )
+    has_source = _manifest_model_has_download_source(env, manifest_model, model_hash or manifest_hash)
+
+    if indexed_model is not None:
+        status = "available"
+    elif has_source:
+        status = "downloadable"
+    else:
+        status = "missing"
+
+    key = model_hash or f"manifest_{relative_path or filename}"
+
+    if key in models_map:
+        existing = models_map[key]
+        _append_workflow_usage(existing, workflow_name)
+        if has_source:
+            existing["has_download_source"] = True
+        if not existing.get("relative_path") and relative_path:
+            existing["relative_path"] = relative_path
+        if existing.get("type") in (None, "", "unknown") and category:
+            existing["type"] = category
+        if not existing.get("size") and size:
+            existing["size"] = size
+        existing["declared_by"] = getattr(manifest_model, "declared_by", None) or "manifest"
+        return
+
+    models_map[key] = {
+        "filename": filename,
+        "hash": model_hash,
+        "type": category,
+        "size": size,
+        "status": status,
+        "relative_path": relative_path,
+        "has_download_source": has_source,
+        "used_in_workflows": [workflow_name],
+        "declared_by": getattr(manifest_model, "declared_by", None) or "manifest",
+    }
+
+
+def _merge_manifest_workflow_models(
+    *,
+    env,
+    models_map: dict,
+    workflow_names: list[str],
+    indexed_models: list,
+) -> None:
+    """Include workflow manifest models not discovered by graph parsing."""
+    indexed_by_hash, indexed_by_path = _indexed_model_maps(indexed_models)
+
+    for workflow_name in workflow_names:
+        for manifest_model in _workflow_manifest_models(env, workflow_name):
+            if not _is_manifest_only_model(manifest_model):
+                continue
+            indexed_model = _find_indexed_manifest_model(
+                manifest_model,
+                indexed_by_hash,
+                indexed_by_path,
+            )
+            _upsert_manifest_model(
+                env=env,
+                models_map=models_map,
+                workflow_name=workflow_name,
+                manifest_model=manifest_model,
+                indexed_model=indexed_model,
+            )
+
+
 def _primary_model_path(env, details) -> Path:
     payload = _model_details_payload(env, details)
     for location in payload["locations"]:
@@ -585,6 +836,32 @@ async def get_environment_models(request: web.Request, env) -> web.Response:
                 # Track workflow usage
                 if wf.name not in models_map[model_hash]["used_in_workflows"]:
                     models_map[model_hash]["used_in_workflows"].append(wf.name)
+
+        workflow_names = _workflow_names_with_manifest_models(
+            env,
+            status.workflow.analyzed_workflows,
+        )
+        manifest_models_by_workflow = {
+            workflow_name: _workflow_manifest_models(env, workflow_name)
+            for workflow_name in workflow_names
+        }
+        has_manifest_only_models = any(
+            _is_manifest_only_model(model)
+            for models in manifest_models_by_workflow.values()
+            for model in models
+        )
+        if has_manifest_only_models:
+            try:
+                indexed_models = _safe_sequence(await run_sync(env.workspace.list_models))
+            except Exception:
+                indexed_models = []
+
+            _merge_manifest_workflow_models(
+                env=env,
+                models_map=models_map,
+                workflow_names=workflow_names,
+                indexed_models=indexed_models,
+            )
 
         # Process missing models from env status
         for missing_model in status.missing_models:

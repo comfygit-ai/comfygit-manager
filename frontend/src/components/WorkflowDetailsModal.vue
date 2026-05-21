@@ -10,7 +10,56 @@
         <template v-if="details">
           <!-- Models Section -->
           <section class="detail-section">
-            <BaseTitle variant="section">MODELS USED ({{ details.models.length }})</BaseTitle>
+            <div class="section-heading-row">
+              <BaseTitle variant="section">MODELS USED ({{ details.models.length }})</BaseTitle>
+              <BaseButton variant="secondary" size="sm" @click="toggleAddModelPanel">
+                {{ showAddModelPanel ? 'Cancel' : 'Add Model' }}
+              </BaseButton>
+            </div>
+            <div v-if="showAddModelPanel" class="manual-model-panel">
+              <div class="manual-model-controls">
+                <input
+                  v-model="modelSearch"
+                  class="model-search-input"
+                  type="search"
+                  placeholder="Search indexed models"
+                >
+                <BaseSelect
+                  :model-value="addModelImportance"
+                  :options="importanceOptions"
+                  @update:model-value="handleAddModelImportanceChange"
+                />
+              </div>
+              <div v-if="loadingWorkspaceModels" class="empty-message">
+                Loading indexed models...
+              </div>
+              <div v-else-if="filteredWorkspaceModels.length === 0" class="empty-message">
+                No indexed models match
+              </div>
+              <div v-else class="manual-model-list">
+                <button
+                  v-for="model in filteredWorkspaceModels"
+                  :key="workspaceModelKey(model)"
+                  :class="['manual-model-option', { selected: selectedWorkspaceModelKey === workspaceModelKey(model) }]"
+                  type="button"
+                  @click="selectedWorkspaceModelKey = workspaceModelKey(model)"
+                >
+                  <span class="manual-model-name">{{ model.filename }}</span>
+                  <span class="manual-model-path">{{ model.relative_path || model.hash }}</span>
+                </button>
+              </div>
+              <div class="manual-model-actions">
+                <BaseButton
+                  variant="primary"
+                  size="sm"
+                  :disabled="!selectedWorkspaceModel || modelMutationInProgress"
+                  :loading="modelMutationInProgress"
+                  @click="handleAddManualModel"
+                >
+                  Add
+                </BaseButton>
+              </div>
+            </div>
             <div v-if="details.models.length === 0" class="empty-message">
               No models used in this workflow
             </div>
@@ -30,6 +79,14 @@
                     {{ getStatusLabel(model.status) }}
                   </span>
                 </div>
+                <div v-if="model.declared_by === 'manual'" class="model-row">
+                  <span class="label">Declared:</span>
+                  <span class="value">Manual dependency</span>
+                </div>
+                <div v-if="model.relative_path" class="model-row">
+                  <span class="label">Path:</span>
+                  <span class="value model-path">{{ model.relative_path }}</span>
+                </div>
                 <div class="model-row">
                   <span class="label">
                     Importance:
@@ -40,9 +97,9 @@
                     />
                   </span>
                   <BaseSelect
-                    :model-value="importanceChanges[model.filename] || model.importance"
+                    :model-value="importanceChanges[getModelIdentifier(model)] || model.importance"
                     :options="importanceOptions"
-                    @update:model-value="handleImportanceChange(model.filename, $event)"
+                    @update:model-value="handleImportanceChange(getModelIdentifier(model), $event)"
                   />
                 </div>
                 <div v-if="model.loaded_by && model.loaded_by.length > 0" class="model-row model-row-nodes">
@@ -76,7 +133,7 @@
                   </span>
                 </div>
               </div>
-              <div v-if="model.status !== 'available'" class="model-actions">
+              <div v-if="model.status !== 'available' || model.declared_by === 'manual'" class="model-actions">
                 <BaseButton
                   v-if="model.status === 'downloadable'"
                   variant="primary"
@@ -94,12 +151,21 @@
                   Open File Location
                 </BaseButton>
                 <BaseButton
-                  v-else-if="model.status !== 'path_mismatch'"
+                  v-else-if="model.status !== 'path_mismatch' && model.status !== 'available'"
                   variant="secondary"
                   size="sm"
                   @click="emit('resolve')"
                 >
                   Resolve
+                </BaseButton>
+                <BaseButton
+                  v-if="model.declared_by === 'manual'"
+                  variant="danger"
+                  size="sm"
+                  :disabled="modelMutationInProgress"
+                  @click="handleRemoveManualModel(model)"
+                >
+                  Remove Manual Entry
                 </BaseButton>
               </div>
             </div>
@@ -183,9 +249,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
-import type { WorkflowDetails } from '@/types/comfygit'
+import type { ModelInfo, ModelUsageInfo, WorkflowDetails } from '@/types/comfygit'
 import BaseModal from './base/BaseModal.vue'
 import BaseButton from './base/BaseButton.vue'
 import BaseTitle from './base/BaseTitle.vue'
@@ -203,7 +269,15 @@ const emit = defineEmits<{
   refresh: []
 }>()
 
-const { getWorkflowDetails, setModelImportance, openFileLocation, queueNodeInstall } = useComfyGitService()
+const {
+  getWorkflowDetails,
+  setModelImportance,
+  addWorkflowModelDependency,
+  removeWorkflowModelDependency,
+  getWorkspaceModels,
+  openFileLocation,
+  queueNodeInstall
+} = useComfyGitService()
 
 const details = ref<WorkflowDetails | null>(null)
 const loading = ref(false)
@@ -213,12 +287,53 @@ const importanceChanges = ref<Record<string, string>>({})
 const showImportanceInfo = ref(false)
 const expandedNodeLists = ref<Set<string>>(new Set())
 const queuedNodeInstalls = ref<Set<string>>(new Set())
+const showAddModelPanel = ref(false)
+const workspaceModels = ref<ModelInfo[]>([])
+const workspaceModelsLoaded = ref(false)
+const loadingWorkspaceModels = ref(false)
+const modelMutationInProgress = ref(false)
+const modelSearch = ref('')
+const selectedWorkspaceModelKey = ref('')
+const addModelImportance = ref<'required' | 'flexible' | 'optional'>('required')
 
 const importanceOptions = [
   { label: 'Required', value: 'required' },
   { label: 'Flexible', value: 'flexible' },
   { label: 'Optional', value: 'optional' }
 ]
+
+const existingModelKeys = computed(() => {
+  const keys = new Set<string>()
+  for (const model of details.value?.models || []) {
+    if (model.hash) keys.add(`hash:${model.hash}`)
+    if (model.relative_path) keys.add(`path:${model.relative_path}`)
+  }
+  return keys
+})
+
+const filteredWorkspaceModels = computed(() => {
+  const query = modelSearch.value.trim().toLowerCase()
+  return workspaceModels.value
+    .filter((model) => {
+      if (model.hash && existingModelKeys.value.has(`hash:${model.hash}`)) return false
+      if (model.relative_path && existingModelKeys.value.has(`path:${model.relative_path}`)) return false
+      return true
+    })
+    .filter((model) => {
+      if (!query) return true
+      return [
+        model.filename,
+        model.relative_path,
+        model.hash,
+        model.type
+      ].some((value) => value?.toLowerCase().includes(query))
+    })
+    .slice(0, 50)
+})
+
+const selectedWorkspaceModel = computed(() => {
+  return workspaceModels.value.find((model) => workspaceModelKey(model) === selectedWorkspaceModelKey.value) || null
+})
 
 function getStatusClass(status: string): string {
   switch (status) {
@@ -249,6 +364,20 @@ function getStatusLabel(status: string): string {
     case 'missing':
     default:
       return '✗ Missing'
+  }
+}
+
+function workspaceModelKey(model: ModelInfo): string {
+  return model.relative_path || model.hash || model.filename
+}
+
+function getModelIdentifier(model: ModelUsageInfo): string {
+  return model.hash || model.filename
+}
+
+function handleAddModelImportanceChange(importance: string) {
+  if (importance === 'required' || importance === 'flexible' || importance === 'optional') {
+    addModelImportance.value = importance
   }
 }
 
@@ -318,6 +447,31 @@ function toggleNodeExpansion(key: string) {
   expandedNodeLists.value = new Set(expandedNodeLists.value)
 }
 
+async function loadWorkspaceModels() {
+  if (workspaceModelsLoaded.value || loadingWorkspaceModels.value) return
+
+  loadingWorkspaceModels.value = true
+  error.value = null
+  try {
+    workspaceModels.value = await getWorkspaceModels()
+    workspaceModelsLoaded.value = true
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to load indexed models'
+  } finally {
+    loadingWorkspaceModels.value = false
+  }
+}
+
+async function toggleAddModelPanel() {
+  showAddModelPanel.value = !showAddModelPanel.value
+  if (showAddModelPanel.value) {
+    await loadWorkspaceModels()
+  } else {
+    selectedWorkspaceModelKey.value = ''
+    modelSearch.value = ''
+  }
+}
+
 async function loadDetails() {
   loading.value = true
   error.value = null
@@ -327,6 +481,47 @@ async function loadDetails() {
     error.value = err instanceof Error ? err.message : 'Failed to load workflow details'
   } finally {
     loading.value = false
+  }
+}
+
+async function handleAddManualModel() {
+  const model = selectedWorkspaceModel.value
+  if (!model) return
+
+  modelMutationInProgress.value = true
+  error.value = null
+  try {
+    await addWorkflowModelDependency(props.workflowName, {
+      hash: model.hash || undefined,
+      relative_path: model.relative_path || undefined,
+      importance: addModelImportance.value
+    })
+    selectedWorkspaceModelKey.value = ''
+    modelSearch.value = ''
+    showAddModelPanel.value = false
+    await loadDetails()
+    emit('refresh')
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to add model dependency'
+  } finally {
+    modelMutationInProgress.value = false
+  }
+}
+
+async function handleRemoveManualModel(model: ModelUsageInfo) {
+  modelMutationInProgress.value = true
+  error.value = null
+  try {
+    await removeWorkflowModelDependency(props.workflowName, {
+      hash: model.hash || undefined,
+      relative_path: model.relative_path || undefined
+    })
+    await loadDetails()
+    emit('refresh')
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to remove model dependency'
+  } finally {
+    modelMutationInProgress.value = false
   }
 }
 
@@ -396,6 +591,90 @@ onMounted(loadDetails)
 
 .detail-section {
   margin-bottom: var(--cg-space-5);
+}
+
+.section-heading-row {
+  align-items: center;
+  display: flex;
+  gap: var(--cg-space-2);
+  justify-content: space-between;
+  margin-bottom: var(--cg-space-2);
+}
+
+.manual-model-panel {
+  border: 1px solid var(--cg-color-border-subtle);
+  background: var(--cg-color-bg-secondary);
+  margin-bottom: var(--cg-space-3);
+  padding: var(--cg-space-3);
+}
+
+.manual-model-controls {
+  display: grid;
+  gap: var(--cg-space-2);
+  grid-template-columns: minmax(0, 1fr) 180px;
+  margin-bottom: var(--cg-space-2);
+}
+
+.model-search-input {
+  background: var(--cg-color-bg-tertiary);
+  border: 1px solid var(--cg-color-border);
+  color: var(--cg-color-text-primary);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-sm);
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.model-search-input:focus {
+  border-color: var(--cg-color-accent);
+  box-shadow: 0 0 0 2px var(--cg-color-accent-muted);
+  outline: none;
+}
+
+.manual-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.manual-model-option {
+  align-items: flex-start;
+  background: var(--cg-color-bg-tertiary);
+  border: 1px solid var(--cg-color-border-subtle);
+  color: var(--cg-color-text-primary);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  text-align: left;
+}
+
+.manual-model-option:hover,
+.manual-model-option.selected {
+  border-color: var(--cg-color-accent);
+  background: var(--cg-color-bg-hover);
+}
+
+.manual-model-name {
+  font-size: var(--cg-font-size-sm);
+  font-weight: var(--cg-font-weight-semibold);
+}
+
+.manual-model-path,
+.model-path {
+  color: var(--cg-color-text-muted);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.manual-model-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--cg-space-2);
 }
 
 .model-card {
@@ -618,5 +897,16 @@ onMounted(loadDetails)
 .details-footer-actions {
   display: flex;
   gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .manual-model-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .section-heading-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>

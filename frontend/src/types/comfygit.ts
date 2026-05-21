@@ -513,6 +513,8 @@ export interface ModelUsageInfo {
   loaded_by: Array<{ node_type: string; node_id: string }>
   line_number?: number
   file_path?: string | null
+  relative_path?: string | null
+  declared_by?: string | null
   // Deprecated - use loaded_by instead
   node_type?: string
   node_id?: string
@@ -742,6 +744,17 @@ export interface ManifestFileResponse {
   path: string
   exists: boolean
   content: string
+}
+
+export interface MetadataRefreshResult {
+  status: 'success' | 'error'
+  builtins_refreshed: boolean
+  folder_paths_refreshed: boolean
+  model_loaders_refreshed: boolean
+  builtins_count: number
+  folder_mappings_count: number
+  model_loaders_count: number
+  error?: string
 }
 
 // Git Remotes Types

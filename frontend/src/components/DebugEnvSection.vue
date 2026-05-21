@@ -10,6 +10,15 @@
           <ActionButton
             variant="secondary"
             size="sm"
+            @click="refreshMetadata"
+            :disabled="refreshingMetadata"
+            title="Refresh generated ComfyUI metadata for this environment"
+          >
+            {{ refreshingMetadata ? 'Refreshing...' : 'Refresh Metadata' }}
+          </ActionButton>
+          <ActionButton
+            variant="secondary"
+            size="sm"
             @click="openLogFile"
             :disabled="!logFilePath || openingLogFile"
             title="Open log file in default editor"
@@ -29,6 +38,34 @@
     </template>
 
     <template #content>
+      <div v-if="embedded" class="debug-actions">
+        <ActionButton
+          variant="secondary"
+          size="sm"
+          @click="refreshMetadata"
+          :disabled="refreshingMetadata"
+          title="Refresh generated ComfyUI metadata for this environment"
+        >
+          {{ refreshingMetadata ? 'Refreshing...' : 'Refresh Metadata' }}
+        </ActionButton>
+        <ActionButton
+          variant="secondary"
+          size="sm"
+          @click="openLogFile"
+          :disabled="!logFilePath || openingLogFile"
+          title="Open log file in default editor"
+        >
+          {{ openingLogFile ? 'Opening...' : 'Open Log File' }}
+        </ActionButton>
+        <ActionButton
+          variant="secondary"
+          size="sm"
+          @click="loadLogs"
+          :disabled="loading"
+        >
+          {{ loading ? 'Loading...' : 'Refresh' }}
+        </ActionButton>
+      </div>
       <template v-if="loading">
         <LoadingState message="Loading environment logs..." />
       </template>
@@ -36,6 +73,13 @@
         <ErrorState :message="error" :retry="true" @retry="loadLogs" />
       </template>
       <template v-else>
+        <div
+          v-if="metadataRefreshMessage"
+          class="metadata-refresh-status"
+          :class="{ 'metadata-refresh-status--error': metadataRefreshError }"
+        >
+          {{ metadataRefreshMessage }}
+        </div>
         <EmptyState
           v-if="logs.length === 0"
           icon="📝"
@@ -87,7 +131,13 @@ import InfoPopover from '@/components/base/molecules/InfoPopover.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
 import LogViewer from '@/components/base/molecules/LogViewer.vue'
 
-const { getEnvironmentLogs, getStatus, getEnvironmentLogPath, openFile } = useComfyGitService()
+const {
+  getEnvironmentLogs,
+  getStatus,
+  getEnvironmentLogPath,
+  openFile,
+  refreshEnvironmentMetadata
+} = useComfyGitService()
 
 defineProps<{
   embedded?: boolean
@@ -100,6 +150,9 @@ const showPopover = ref(false)
 const environmentName = ref('production')
 const logFilePath = ref<string | null>(null)
 const openingLogFile = ref(false)
+const refreshingMetadata = ref(false)
+const metadataRefreshMessage = ref('')
+const metadataRefreshError = ref(false)
 
 async function loadLogs() {
   loading.value = true
@@ -145,8 +198,56 @@ async function openLogFile() {
   }
 }
 
+async function refreshMetadata() {
+  refreshingMetadata.value = true
+  metadataRefreshError.value = false
+  metadataRefreshMessage.value = ''
+
+  try {
+    const result = await refreshEnvironmentMetadata()
+    metadataRefreshMessage.value = [
+      `Metadata refreshed: ${result.builtins_count} builtin nodes`,
+      `${result.folder_mappings_count} folder types`,
+      `${result.model_loaders_count} model loaders`
+    ].join(', ')
+    await loadLogs()
+  } catch (err) {
+    metadataRefreshError.value = true
+    metadataRefreshMessage.value = err instanceof Error
+      ? err.message
+      : 'Failed to refresh environment metadata'
+  } finally {
+    refreshingMetadata.value = false
+  }
+}
+
 onMounted(() => {
   loadLogs()
   loadLogPath()
 })
 </script>
+
+<style scoped>
+.debug-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--cg-space-2);
+  margin-bottom: var(--cg-space-3);
+}
+
+.metadata-refresh-status {
+  margin-bottom: var(--cg-space-3);
+  padding: var(--cg-space-2) var(--cg-space-3);
+  border: 1px solid var(--cg-color-border);
+  border-radius: var(--cg-radius-sm);
+  background: var(--cg-color-bg-secondary);
+  color: var(--cg-color-text-primary);
+  font-size: var(--cg-font-size-sm);
+}
+
+.metadata-refresh-status--error {
+  border-color: var(--cg-color-error);
+  color: var(--cg-color-error);
+}
+</style>
