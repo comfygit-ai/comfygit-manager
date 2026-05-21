@@ -88,9 +88,21 @@ class TestUpdateCheckEndpoint:
 
 @pytest.mark.integration
 class TestUpdateManagerEndpoint:
-    async def test_success_update_manager(self, client, mock_environment):
+    async def test_success_update_manager(self, client, mock_environment, monkeypatch):
         """Should call env.update_manager and return restart_required=true."""
         # Arrange
+        import api.v2.update_check as update_check_module
+        monkeypatch.setattr(update_check_module, "_cached_latest", None)
+        monkeypatch.setattr(
+            update_check_module,
+            "_fetch_latest_release_from_github",
+            lambda: {
+                "latest_version": "0.0.21",
+                "release_url": "https://github.com/comfygit-ai/comfygit-manager/releases/tag/v0.0.21",
+                "changelog_summary": None,
+            },
+        )
+
         result = type(
             "ManagerUpdateResult",
             (),
@@ -101,7 +113,13 @@ class TestUpdateManagerEndpoint:
                 "message": "Updated from 0.0.20 → 0.0.21",
             },
         )()
-        mock_environment.update_manager = lambda version="latest": result
+        called = {"version": None}
+
+        def fake_update_manager(version="latest"):
+            called["version"] = version
+            return result
+
+        mock_environment.update_manager = fake_update_manager
 
         # Act
         resp = await client.post("/v2/comfygit/update")
@@ -115,9 +133,14 @@ class TestUpdateManagerEndpoint:
         assert data["new_version"] == "0.0.21"
         assert data["restart_required"] is True
         assert data["manual_instructions"] is None
+        assert called["version"] == "0.0.21"
 
-    async def test_fallback_to_update_node(self, client, mock_environment):
+    async def test_fallback_to_update_node(self, client, mock_environment, monkeypatch):
         """Should fall back to env.update_node when update_manager is unavailable."""
+        import api.v2.update_check as update_check_module
+        monkeypatch.setattr(update_check_module, "_cached_latest", None)
+        monkeypatch.setattr(update_check_module, "_fetch_latest_release_from_github", lambda: (_ for _ in ()).throw(RuntimeError("offline")))
+
         # Arrange: make update_manager non-callable
         mock_environment.update_manager = None
 
@@ -149,8 +172,12 @@ class TestUpdateManagerEndpoint:
         assert data["status"] == "success"
         assert data["changed"] is True
 
-    async def test_failure_returns_manual_instructions(self, client, mock_environment):
+    async def test_failure_returns_manual_instructions(self, client, mock_environment, monkeypatch):
         """Should return a JSON error with manual instructions on failure."""
+        import api.v2.update_check as update_check_module
+        monkeypatch.setattr(update_check_module, "_cached_latest", None)
+        monkeypatch.setattr(update_check_module, "_fetch_latest_release_from_github", lambda: (_ for _ in ()).throw(RuntimeError("offline")))
+
         def boom(version="latest"):
             raise RuntimeError("update failed")
 
@@ -161,4 +188,3 @@ class TestUpdateManagerEndpoint:
         data = await resp.json()
         assert data["status"] == "error"
         assert data["manual_instructions"]
-
