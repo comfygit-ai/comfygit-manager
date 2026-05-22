@@ -11,7 +11,6 @@ from aiohttp import web
 
 from cgm_utils.async_helpers import run_sync
 from cgm_utils.environment_name_validation import validate_environment_name as validate_environment_name_format
-from comfygit_core.utils.git import git_list_remote_refs
 import orchestrator
 
 routes = web.RouteTableDef()
@@ -281,8 +280,8 @@ async def get_git_import_refs(request: web.Request) -> web.Response:
         return web.json_response({"error": "git_url is required"}, status=400)
 
     try:
-        refs = await run_sync(git_list_remote_refs, git_url, workspace.path)
-        return web.json_response(refs)
+        refs = await run_sync(workspace.list_remote_refs, git_url)
+        return web.json_response(refs.to_dict())
     except Exception as e:
         return web.json_response({"error": str(e)}, status=400)
 

@@ -4,12 +4,6 @@ from aiohttp import web
 from cgm_core.decorators import requires_environment, logged_operation
 from cgm_core.readiness import build_environment_readiness
 from cgm_utils.async_helpers import run_sync
-from comfygit_core.utils.git import (
-    git_config_get,
-    git_fetch_with_auth,
-    git_push_with_auth,
-    git_pull_with_auth,
-)
 
 routes = web.RouteTableDef()
 
@@ -57,8 +51,7 @@ def _get_tracking_remote(env, branch: str | None) -> str | None:
         return None
 
     try:
-        remote = git_config_get(env.git_manager.repo_path, f"branch.{branch}.remote")
-        return remote if remote else None
+        return env.get_tracking_remote(branch)
     except Exception:
         return None
 
@@ -122,7 +115,7 @@ def _git_operation_error_response(error: Exception, default_status: int = 500) -
 async def list_remotes(request: web.Request, env) -> web.Response:
     """List all git remotes with consolidated fetch/push URLs."""
     # Get raw remote list
-    remote_list = await run_sync(env.git_manager.list_remotes)
+    remote_list = await run_sync(env.list_remotes)
 
     # Consolidate fetch/push entries
     remotes = _consolidate_remotes(remote_list)
@@ -163,7 +156,7 @@ async def add_remote(request: web.Request, env) -> web.Response:
         return web.json_response({"error": "url is required"}, status=400)
 
     try:
-        await run_sync(env.git_manager.add_remote, name, url)
+        await run_sync(env.add_remote, name, url)
     except OSError as e:
         # Remote already exists
         return web.json_response({"error": str(e)}, status=409)
@@ -183,7 +176,7 @@ async def remove_remote(request: web.Request, env) -> web.Response:
     name = request.match_info["name"]
 
     try:
-        await run_sync(env.git_manager.remove_remote, name)
+        await run_sync(env.remove_remote, name)
     except ValueError as e:
         # Remote not found
         return web.json_response({"error": str(e)}, status=404)
@@ -210,11 +203,11 @@ async def update_remote_url(request: web.Request, env) -> web.Response:
 
     try:
         # Update fetch URL
-        await run_sync(env.git_manager.set_remote_url, name, url, False)
+        await run_sync(env.set_remote_url, name, url, is_push=False)
 
         # Update push URL if different
         if push_url and push_url != url:
-            await run_sync(env.git_manager.set_remote_url, name, push_url, True)
+            await run_sync(env.set_remote_url, name, push_url, is_push=True)
     except ValueError as e:
         # Remote not found
         return web.json_response({"error": str(e)}, status=404)
@@ -239,17 +232,7 @@ async def fetch_remote(request: web.Request, env) -> web.Response:
     auth_token = _get_auth_token(request)
 
     try:
-        if auth_token:
-            # Use authenticated fetch
-            await run_sync(
-                git_fetch_with_auth,
-                env.git_manager.repo_path,
-                name,
-                auth_token
-            )
-        else:
-            # Standard fetch (relies on machine credentials)
-            await run_sync(env.git_manager.fetch, name)
+        await run_sync(env.fetch_remote, name, token=auth_token)
     except ValueError as e:
         # Remote not found
         return web.json_response({"error": str(e)}, status=404)
@@ -277,7 +260,7 @@ async def get_remote_sync_status(request: web.Request, env) -> web.Response:
         branch = await run_sync(env.get_current_branch)
 
     try:
-        sync_status = await run_sync(env.git_manager.get_sync_status, name, branch)
+        sync_status = await run_sync(env.get_remote_sync_status, name, branch)
     except ValueError as e:
         # Remote not found
         return web.json_response({"error": str(e)}, status=404)
@@ -305,7 +288,7 @@ async def get_pull_preview(request: web.Request, env) -> web.Response:
 
     try:
         # Get sync status (ahead/behind counts)
-        sync_status = await run_sync(env.git_manager.get_sync_status, name, branch)
+        sync_status = await run_sync(env.get_remote_sync_status, name, branch)
     except ValueError as e:
         return web.json_response({"error": str(e)}, status=404)
     except Exception as e:
@@ -324,9 +307,9 @@ async def get_pull_preview(request: web.Request, env) -> web.Response:
     if commits_behind > 0:
         try:
             incoming = await run_sync(
-                env.git_manager.get_version_history,
+                env.get_commit_history,
                 commits_behind,
-                f"HEAD..{name}/{branch}",
+                rev_range=f"HEAD..{name}/{branch}",
             )
         except Exception:
             incoming = []
@@ -389,25 +372,19 @@ async def pull_from_remote(request: web.Request, env) -> web.Response:
         # Use authenticated pull if token provided
         if auth_token:
             # Do authenticated fetch + merge manually
-            await run_sync(
-                git_pull_with_auth,
-                env.git_manager.repo_path,
-                name,
-                auth_token,
-                branch
-            )
-            # Then run repair/sync
             result = await run_sync(
-                env.repair_after_pull,
-                model_strategy
-            )
-        else:
-            # Standard pull_and_repair (relies on machine credentials)
-            result = await run_sync(
-                env.pull_and_repair,
+                env.pull_remote,
                 name,
                 branch,
-                model_strategy
+                model_strategy,
+                token=auth_token,
+            )
+        else:
+            result = await run_sync(
+                env.pull_remote,
+                name,
+                branch,
+                model_strategy,
             )
 
         # Extract sync result info
@@ -449,7 +426,7 @@ async def get_push_preview(request: web.Request, env) -> web.Response:
 
     try:
         # Get sync status (ahead/behind counts + remote_branch_exists flag)
-        sync_status = await run_sync(env.git_manager.get_sync_status, name, branch)
+        sync_status = await run_sync(env.get_remote_sync_status, name, branch)
     except ValueError as e:
         return web.json_response({"error": str(e)}, status=404)
     except Exception as e:
@@ -476,13 +453,13 @@ async def get_push_preview(request: web.Request, env) -> web.Response:
         try:
             if is_first_push:
                 outgoing = await run_sync(
-                    env.git_manager.get_version_history, commits_ahead
+                    env.get_commit_history, commits_ahead
                 )
             else:
                 outgoing = await run_sync(
-                    env.git_manager.get_version_history,
+                    env.get_commit_history,
                     commits_ahead,
-                    f"{name}/{branch}..HEAD",
+                    rev_range=f"{name}/{branch}..HEAD",
                 )
         except Exception:
             outgoing = []
@@ -533,7 +510,7 @@ async def push_to_remote(request: web.Request, env) -> web.Response:
 
     # Get commits ahead count before pushing.
     try:
-        sync_status = await run_sync(env.git_manager.get_sync_status, name, branch)
+        sync_status = await run_sync(env.get_remote_sync_status, name, branch)
     except ValueError as e:
         return web.json_response({"error": str(e)}, status=404)
     except OSError as e:
@@ -557,19 +534,13 @@ async def push_to_remote(request: web.Request, env) -> web.Response:
         )
 
     try:
-        if auth_token:
-            # Use authenticated push
-            output = await run_sync(
-                git_push_with_auth,
-                env.git_manager.repo_path,
-                name,
-                auth_token,
-                branch,
-                force
-            )
-        else:
-            # Standard push (relies on machine credentials)
-            output = await run_sync(env.push_commits, name, branch, force)
+        output = await run_sync(
+            env.push_remote,
+            name,
+            branch,
+            force=force,
+            token=auth_token,
+        )
 
         return web.json_response({
             "status": "success",

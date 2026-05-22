@@ -12,6 +12,7 @@ SERVER_ROOT = REPO_ROOT / "server"
 PUBLIC_CORE_MODULES = {
     "comfygit_core",
     "comfygit_core.assets",
+    "comfygit_core.git",
     "comfygit_core.models",
     "comfygit_core.readiness",
     "comfygit_core.runtime",
@@ -19,9 +20,6 @@ PUBLIC_CORE_MODULES = {
 }
 
 TEMPORARY_INTERNAL_CORE_IMPORTS = {
-    # Raw git helper imports remain until core exposes typed git/remote facade
-    # methods for the manager's token-aware remote operations.
-    "comfygit_core.utils.git",
     # Orchestrator bootstrap still creates its own helper venv with UVCommand.
     "comfygit_core.integrations.uv_command",
 }

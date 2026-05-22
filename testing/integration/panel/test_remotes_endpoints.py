@@ -18,7 +18,6 @@ class TestGetRemotesEndpoint:
         self,
         client,
         mock_environment,
-        monkeypatch
     ):
         """Should return list of remotes with fetch/push URLs consolidated."""
         # Setup: git_manager.list_remotes returns separate fetch/push entries
@@ -29,18 +28,7 @@ class TestGetRemotesEndpoint:
             ("upstream", "git@github.com:other/repo.git", "push"),
         ]
         mock_environment.get_current_branch.return_value = "main"
-        mock_environment.git_manager.get_current_branch.return_value = "main"
-
-        # Mock git_config_get to return tracking remote
-        def mock_config_get(repo_path, key):
-            if key == "branch.main.remote":
-                return "origin"
-            return None
-
-        monkeypatch.setattr(
-            "api.v2.remotes.git_config_get",
-            mock_config_get
-        )
+        mock_environment.get_tracking_remote.return_value = "origin"
 
         # Execute
         resp = await client.get("/v2/comfygit/remotes")
@@ -534,7 +522,7 @@ class TestPullPreviewEndpoint:
             "ahead": 0,
             "behind": 2
         })
-        mock_environment.git_manager.get_version_history = Mock(return_value=[
+        mock_environment.get_commit_history = Mock(return_value=[
             {"hash": "abc1234", "refs": "", "message": "Add new features", "date": "2025-01-15 11:00:00", "date_relative": "1 hour ago"},
             {"hash": "def5678", "refs": "", "message": "Fix bug", "date": "2025-01-15 10:00:00", "date_relative": "2 hours ago"}
         ])
@@ -553,7 +541,7 @@ class TestPullPreviewEndpoint:
         assert data["commits"][0]["message"] == "Add new features"
         assert data["can_pull"] is True
         assert data["has_uncommitted_changes"] is False
-        mock_environment.git_manager.get_version_history.assert_called_once_with(2, "HEAD..origin/main")
+        mock_environment.get_commit_history.assert_called_once_with(2, rev_range="HEAD..origin/main")
 
     async def test_blocked_by_uncommitted_changes(
         self,
@@ -769,7 +757,7 @@ class TestPushPreviewEndpoint:
             "behind": 0,
             "remote_branch_exists": True
         })
-        mock_environment.git_manager.get_version_history = Mock(return_value=[
+        mock_environment.get_commit_history = Mock(return_value=[
             {"hash": "abc1234", "refs": "", "message": "Add new feature", "date": "2025-01-15 11:00:00", "date_relative": "1 hour ago"},
             {"hash": "def5678", "refs": "", "message": "Fix bug", "date": "2025-01-15 10:00:00", "date_relative": "2 hours ago"},
         ])
@@ -802,7 +790,7 @@ class TestPushPreviewEndpoint:
             "behind": 0,
             "remote_branch_exists": False
         })
-        mock_environment.git_manager.get_version_history = Mock(return_value=[
+        mock_environment.get_commit_history = Mock(return_value=[
             {"hash": "abc1234", "refs": "HEAD -> main", "message": "Initial commit", "date": "2025-01-15 11:00:00", "date_relative": "1 hour ago"},
         ])
         mock_environment.get_current_branch.return_value = "main"
@@ -866,7 +854,7 @@ class TestPushPreviewEndpoint:
             "behind": 0,
             "remote_branch_exists": True
         })
-        mock_environment.git_manager.get_version_history = Mock(return_value=[])
+        mock_environment.get_commit_history = Mock(return_value=[])
         mock_environment.get_current_branch.return_value = "main"
         mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
 

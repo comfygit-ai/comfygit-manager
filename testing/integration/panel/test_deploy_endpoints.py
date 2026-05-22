@@ -119,26 +119,21 @@ class TestDeploySummary:
 
     async def test_returns_summary(self, client, mock_get_environment):
         """Should return environment summary with node/model/workflow counts."""
-        # Setup mock pyproject
+        # Setup manifest snapshot returned by the core Environment facade.
         mock_model_with_source = Mock()
         mock_model_with_source.sources = ["http://example.com/model.safetensors"]
         mock_model_without_source = Mock()
         mock_model_without_source.sources = []
 
-        mock_pyproject = Mock()
-        mock_pyproject.models.get_all.return_value = [mock_model_with_source, mock_model_without_source]
-        mock_pyproject.nodes.get_existing.return_value = [Mock(), Mock(), Mock()]
-        mock_pyproject.workflows.get_all_with_resolutions.return_value = {"wf1": {}, "wf2": {}}
-        # Mock load() to return proper dict for comfyui_version extraction
-        mock_pyproject.load.return_value = {
-            "tool": {
-                "comfygit": {
-                    "comfyui_version": "v0.3.50"
-                }
-            }
+        snapshot = Mock()
+        snapshot.comfyui_version = "v0.3.50"
+        snapshot.models = {
+            "hash1": mock_model_with_source,
+            "hash2": mock_model_without_source,
         }
-
-        mock_get_environment.pyproject = mock_pyproject
+        snapshot.nodes = {"node1": Mock(), "node2": Mock(), "node3": Mock()}
+        snapshot.workflows = {"wf1": Mock(), "wf2": Mock()}
+        mock_get_environment.get_manifest_snapshot.return_value = snapshot
 
         resp = await client.get("/v2/comfygit/deploy/summary")
 

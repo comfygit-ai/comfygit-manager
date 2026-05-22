@@ -181,9 +181,9 @@ async def get_commit_log(request: web.Request, env) -> web.Response:
     # Get history with extra for pagination check
     if branch:
         history = await run_sync(
-            env.git_manager.get_version_history,
+            env.get_commit_history,
             limit + offset + 1,
-            branch,
+            rev_range=branch,
         )
     else:
         history = await run_sync(env.get_commit_history, limit=limit + offset + 1)
@@ -413,7 +413,7 @@ async def revert_changes(request: web.Request, env) -> web.Response:
 @requires_environment
 async def list_branches(request: web.Request, env) -> web.Response:
     """List all git branches."""
-    branch_tuples = await run_sync(env.git_manager.list_branches)
+    branch_tuples = await run_sync(env.list_branches)
     current = await run_sync(env.get_current_branch)
 
     # Convert tuples to dicts

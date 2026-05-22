@@ -243,7 +243,7 @@ class TestLogEndpoint:
     ):
         """Should show selected branch history even when current HEAD is detached elsewhere."""
         commits = [{"hash": f"main{i}"} for i in range(4)]
-        mock_environment.git_manager.get_version_history.return_value = commits
+        mock_environment.get_commit_history.return_value = commits
         mock_environment.get_current_branch.return_value = None
 
         resp = await client.get("/v2/comfygit/log?branch=main&limit=3")
@@ -254,8 +254,7 @@ class TestLogEndpoint:
         assert data["commits"][0]["hash"] == "main0"
         assert data["has_more"] is True
         assert data["current_branch"] is None
-        mock_environment.git_manager.get_version_history.assert_called_once_with(4, "main")
-        mock_environment.get_commit_history.assert_not_called()
+        mock_environment.get_commit_history.assert_called_once_with(4, rev_range="main")
 
     async def test_error_no_environment(self, client, monkeypatch):
         """Should return 500 when no environment detected."""

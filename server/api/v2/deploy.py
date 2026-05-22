@@ -96,34 +96,20 @@ def get_runpod_console_url(pod_id: str) -> str:
 
 def _get_deploy_summary(env):
     """Get environment summary for deployment (sync helper)."""
-    pyproject = env.pyproject
+    snapshot = env.get_manifest_snapshot()
 
     # Get all models and count those with/without sources
-    all_models = list(pyproject.models.get_all())
-    models_with_sources = sum(1 for m in all_models if m.sources)
+    all_models = list(snapshot.models.values())
+    models_with_sources = sum(1 for model in all_models if model.sources)
     models_without_sources = len(all_models) - models_with_sources
 
-    # Get node count
-    nodes = list(pyproject.nodes.get_existing())
-
-    # Get workflow count
-    workflows = pyproject.workflows.get_all_with_resolutions()
-
-    # Get ComfyUI version from tool.comfygit section
-    comfyui_version = "unknown"
-    try:
-        config = pyproject.load()
-        comfyui_version = config.get('tool', {}).get('comfygit', {}).get('comfyui_version', 'unknown')
-    except Exception:
-        pass
-
     return {
-        "comfyui_version": comfyui_version,
-        "node_count": len(nodes),
+        "comfyui_version": snapshot.comfyui_version or "unknown",
+        "node_count": len(snapshot.nodes),
         "model_count": len(all_models),
         "models_with_sources": models_with_sources,
         "models_without_sources": models_without_sources,
-        "workflow_count": len(workflows),
+        "workflow_count": len(snapshot.workflows),
         "estimated_package_size_mb": 0.0,  # TODO: Calculate actual size
     }
 
@@ -146,46 +132,7 @@ def _validate_deploy(env):
     Unlike export validation, deploy validation does NOT check for uncommitted
     changes because deployments pull from git remotes, not local files.
     """
-    warnings = {
-        "models_without_sources": [],
-    }
-
-    # Check for models without sources (warning only)
-    pyproject = env.pyproject
-    models_by_hash = {
-        m.hash: m
-        for m in pyproject.models.get_all()
-        if not m.sources
-    }
-
-    if models_by_hash:
-        models_without_sources = []
-        all_workflows = pyproject.workflows.get_all_with_resolutions()
-        for workflow_name in all_workflows.keys():
-            workflow_models = pyproject.workflows.get_workflow_models(workflow_name)
-            for wf_model in workflow_models:
-                if wf_model.hash and wf_model.hash in models_by_hash:
-                    existing = next(
-                        (m for m in models_without_sources if m["hash"] == wf_model.hash),
-                        None
-                    )
-                    if existing:
-                        existing["workflows"].append(workflow_name)
-                    else:
-                        model_data = models_by_hash[wf_model.hash]
-                        models_without_sources.append({
-                            "filename": model_data.filename,
-                            "hash": wf_model.hash,
-                            "workflows": [workflow_name]
-                        })
-
-        warnings["models_without_sources"] = models_without_sources
-
-    return {
-        "can_export": True,  # Always allow deploy (pulls from remote)
-        "blocking_issues": [],
-        "warnings": warnings
-    }
+    return env.get_readiness(include_blocking=False).to_dict()
 
 
 @routes.post("/v2/comfygit/deploy/validate")
@@ -196,13 +143,15 @@ async def validate_deploy(request: web.Request, env) -> web.Response:
     Unlike export validation, this does NOT check for uncommitted changes
     because deployments pull code from git remotes, not local files.
 
-    Only checks for warnings (like models without sources) that the user
-    should be aware of before deploying.
+    Checks reproducibility warnings that the user should be aware of before
+    deploying, while leaving local git cleanliness to the remote deployment
+    source.
 
     Returns:
         can_deploy: Always true (no blocking issues for deploy)
         blocking_issues: Always empty
-        warnings: Models without download sources, etc.
+        warnings: Core readiness warnings such as models without download
+            sources and required nodes without portable provenance.
     """
     result = await run_sync(_validate_deploy, env)
     return web.json_response(result)
@@ -1081,8 +1030,6 @@ async def test_git_auth(request: web.Request, env) -> web.Response:
         status: "success" or "error"
         message: Human-readable message
     """
-    from comfygit_core.utils.git import git_ls_remote_with_auth
-
     data = await request.json()
     token = data.get("token")
 
@@ -1094,19 +1041,12 @@ async def test_git_auth(request: web.Request, env) -> web.Response:
 
     # Get origin remote URL
     try:
-        git_dir = env.env_path
-        result = await run_sync(
-            lambda: env.pyproject.git.get_remotes()
-        )
-        origin = next((r for r in result if r.get("name") == "origin"), None)
-
-        if not origin:
+        remote_url = await run_sync(env.get_remote_url, "origin")
+        if not remote_url:
             return web.json_response(
                 {"status": "error", "message": "No origin remote configured"},
                 status=400,
             )
-
-        remote_url = origin.get("url", "")
 
         # Check if SSH remote
         if remote_url.startswith("git@") or remote_url.startswith("ssh://"):
@@ -1116,7 +1056,7 @@ async def test_git_auth(request: web.Request, env) -> web.Response:
             })
 
         # Test auth by doing ls-remote
-        success = await run_sync(git_ls_remote_with_auth, git_dir, remote_url, token)
+        success = await run_sync(env.check_remote_auth, remote_url, token)
 
         if success:
             return web.json_response({

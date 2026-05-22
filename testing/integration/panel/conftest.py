@@ -4,6 +4,7 @@ import pytest
 from aiohttp import web
 from unittest.mock import Mock, MagicMock
 from pathlib import Path
+from comfygit_core.readiness import build_environment_readiness
 
 # Add server directory to path
 server_dir = Path(__file__).parent.parent.parent.parent / "server"
@@ -41,6 +42,18 @@ def mock_environment():
     mock_env.git_manager.has_uncommitted_changes = Mock(return_value=False)
     mock_env.git_manager.switch_branch = Mock()
     mock_env.git_manager.checkout = Mock()
+    mock_env.list_remotes = Mock(side_effect=lambda: mock_env.git_manager.list_remotes())
+    mock_env.add_remote = Mock(side_effect=lambda name, url: mock_env.git_manager.add_remote(name, url))
+    mock_env.remove_remote = Mock(side_effect=lambda name: mock_env.git_manager.remove_remote(name))
+    mock_env.set_remote_url = Mock(
+        side_effect=lambda name, url, is_push=False: mock_env.git_manager.set_remote_url(name, url, is_push)
+    )
+    mock_env.fetch_remote = Mock(side_effect=lambda name, token=None: mock_env.git_manager.fetch(name))
+    mock_env.get_remote_sync_status = Mock(
+        side_effect=lambda name, branch=None: mock_env.git_manager.get_sync_status(name, branch)
+    )
+    mock_env.get_remote_url = Mock(return_value=None)
+    mock_env.get_tracking_remote = Mock(return_value=None)
 
     # Common methods
     mock_env.status = Mock()
@@ -48,7 +61,7 @@ def mock_environment():
     mock_env.execute_commit = Mock()
     mock_env.get_commit_history = Mock(return_value=[])
     mock_env.get_current_branch = Mock(return_value="main")
-    mock_env.list_branches = Mock(return_value=[("main", True)])  # Returns (name, is_current) tuples
+    mock_env.list_branches = Mock(side_effect=lambda: mock_env.git_manager.list_branches())
     mock_env.resolve_workflow = Mock()
     mock_env.get_uninstalled_nodes = Mock(return_value=[])
     mock_env.install_node = Mock()
@@ -56,6 +69,23 @@ def mock_environment():
     mock_env.export_environment = Mock()
     mock_env.create_branch = Mock()
     mock_env.update_node_criticality = Mock(return_value=True)
+    mock_env.pull_remote = Mock(
+        side_effect=lambda remote, branch=None, model_strategy="skip", token=None: mock_env.pull_and_repair(
+            remote, branch, model_strategy
+        )
+    )
+    mock_env.push_remote = Mock(
+        side_effect=lambda remote, branch=None, force=False, token=None: mock_env.push_commits(
+            remote, branch, force
+        )
+    )
+    mock_env.check_remote_auth = Mock(return_value=True)
+    mock_env.get_readiness = Mock(
+        side_effect=lambda include_blocking=True: build_environment_readiness(
+            mock_env,
+            include_blocking=include_blocking,
+        )
+    )
 
     # Mock status() for sync endpoint version mismatch workaround
     mock_status = Mock()

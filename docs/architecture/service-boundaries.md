@@ -208,10 +208,15 @@ Validation: STATIC
 
 The manager backend should import reusable core behavior through documented
 facades such as `comfygit_core`, `comfygit_core.models`,
-`comfygit_core.runtime`, `comfygit_core.workflow`, and
+`comfygit_core.runtime`, `comfygit_core.workflow`, `comfygit_core.git`, and
 `comfygit_core.assets`.
 
 Direct imports from core implementation packages are allowed only as temporary
-exceptions tracked by the manager's core import-boundary test. As core exposes
-typed facade methods for git remotes, workspace configuration, and remaining
-runtime setup behavior, those temporary exceptions should be removed.
+exceptions tracked by the manager's core import-boundary test. Git remote and
+token-authenticated git operations should flow through core facade methods
+rather than direct `comfygit_core.utils.git` imports. Deployment summary and
+validation flows should consume `EnvironmentManifestSnapshot` and
+`EnvironmentReadiness` through `Environment` facade methods rather than
+`env.pyproject` internals. As core exposes facade methods for workspace
+configuration and remaining runtime setup behavior, those temporary exceptions
+should be removed.
