@@ -4,8 +4,7 @@ import pytest
 from aiohttp import web
 from unittest.mock import Mock, MagicMock
 from pathlib import Path
-from comfygit_core.readiness import build_environment_readiness
-from comfygit_core.models import GitBranch, GitSyncStatus
+from comfygit_core.models import EnvironmentReadiness, GitBranch, GitSyncStatus
 
 # Add server directory to path
 server_dir = Path(__file__).parent.parent.parent.parent / "server"
@@ -77,12 +76,7 @@ def mock_environment():
         )
     )
     mock_env.check_remote_auth = Mock(return_value=True)
-    mock_env.get_readiness = Mock(
-        side_effect=lambda include_blocking=True: build_environment_readiness(
-            mock_env,
-            include_blocking=include_blocking,
-        )
-    )
+    mock_env.get_readiness = Mock(return_value=EnvironmentReadiness())
 
     # Mock status() for sync endpoint version mismatch workaround
     mock_status = Mock()

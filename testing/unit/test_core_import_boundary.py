@@ -14,7 +14,6 @@ PUBLIC_CORE_MODULES = {
     "comfygit_core.assets",
     "comfygit_core.git",
     "comfygit_core.models",
-    "comfygit_core.readiness",
     "comfygit_core.runtime",
     "comfygit_core.workflow",
 }

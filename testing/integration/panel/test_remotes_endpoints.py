@@ -4,7 +4,14 @@ from unittest.mock import Mock
 import sys
 from pathlib import Path
 
-from comfygit_core.models import GitCommitSummary, GitRemote, GitSyncStatus
+from comfygit_core.models import (
+    EnvironmentReadiness,
+    GitCommitSummary,
+    GitRemote,
+    GitSyncStatus,
+    NodeProvenanceWarning,
+    ReadinessWarnings,
+)
 
 # Add helpers to path
 helpers_dir = Path(__file__).parent.parent.parent / "helpers"
@@ -906,23 +913,19 @@ class TestPushPreviewEndpoint:
         mock_environment.get_current_branch.return_value = "main"
         mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
 
-        mock_model_manager = Mock()
-        mock_model_manager.get_all.return_value = []
-
-        dev_node = Mock()
-        dev_node.name = "local-dev-node"
-        dev_node.source = "development"
-        dev_node.version = "dev"
-        dev_node.registry_id = None
-        dev_node.repository = None
-        dev_node.pinned_commit = None
-        dev_node.criticality = "required"
-
-        mock_environment.pyproject.models = mock_model_manager
-        mock_environment.pyproject.workflows.get_all_with_resolutions.return_value = {}
-        mock_environment.pyproject.nodes.get_existing.return_value = {
-            "local-dev-node": dev_node
-        }
+        mock_environment.get_readiness.return_value = EnvironmentReadiness(
+            warnings=ReadinessWarnings(
+                nodes_without_provenance=[
+                    NodeProvenanceWarning(
+                        name="local-dev-node",
+                        source="development",
+                        criticality="required",
+                        reason="Development node is missing portable git repository and pinned commit metadata.",
+                        version="dev",
+                    )
+                ]
+            )
+        )
 
         resp = await client.get("/v2/comfygit/remotes/origin/push-preview")
 
