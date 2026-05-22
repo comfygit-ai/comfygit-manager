@@ -102,7 +102,7 @@ def get_environment_from_cwd():
     if _environment is not None:
         return _environment
 
-    from comfygit_core.core.workspace import Workspace, WorkspacePaths
+    from comfygit_core import Workspace
 
     cwd = Path.cwd()
 
@@ -114,11 +114,9 @@ def get_environment_from_cwd():
 
         if environments_path.name == 'environments':
             workspace_root = environments_path.parent
-            workspace_paths = WorkspacePaths(workspace_root)
-
-            if workspace_paths.exists():
+            if Workspace.exists(workspace_root):
                 try:
-                    _workspace = Workspace(workspace_paths)
+                    _workspace = Workspace.from_path(workspace_root)
                     # Use workspace.get_environment() which handles initialization properly
                     # Pass auto_sync=False to avoid slow sync on every request
                     _environment = _workspace.get_environment(env_name, auto_sync=False)
@@ -126,12 +124,11 @@ def get_environment_from_cwd():
                     return _environment
                 except Exception as e:
                     print(f"[ComfyGit] Direct environment creation failed: {e}")
-                    # Fall through to WorkspaceFactory fallback
+                    # Fall through to standard workspace discovery.
 
     # Fallback: try standard workspace discovery
     try:
-        from comfygit_core.factories.workspace_factory import WorkspaceFactory
-        _workspace = WorkspaceFactory.find()
+        _workspace = Workspace.open()
         _environment = _workspace.get_active_environment()
         if _environment:
             print(f"[ComfyGit] Using active environment '{_environment.name}'")
@@ -614,7 +611,7 @@ def _extract_uv_stderr(exc: Exception) -> str | None:
 
     Walks the exception chain looking for UVCommandError to get full stderr.
     """
-    from comfygit_core.models.exceptions import UVCommandError
+    from comfygit_core.models import UVCommandError
 
     current = exc
     while current is not None:

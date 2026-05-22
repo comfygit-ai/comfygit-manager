@@ -253,7 +253,7 @@ def mock_comfyui_args() -> list[str]:
 
 @pytest.fixture
 def mock_workspace_factory(mocker, temp_dir):
-    """Mock WorkspaceFactory for tests that don't need real workspace."""
+    """Mock Workspace.open for tests that don't need real workspace."""
     # Use temp directory so mkdir works
     test_workspace = temp_dir / "test_workspace"
     test_workspace.mkdir()
@@ -264,7 +264,7 @@ def mock_workspace_factory(mocker, temp_dir):
     mock_workspace_obj.paths = mocker.Mock()
     mock_workspace_obj.paths.metadata = test_workspace / ".metadata"
 
-    mocker.patch("server.orchestrator.WorkspaceFactory.find", return_value=mock_workspace_obj)
+    mocker.patch("server.orchestrator.Workspace.open", return_value=mock_workspace_obj)
     # Also mock the control server to avoid port binding issues in tests
     mocker.patch("server.orchestrator.Orchestrator._start_control_server")
     return mock_workspace_obj

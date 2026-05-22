@@ -289,7 +289,7 @@ async def switch_branch(request: web.Request, env) -> web.Response:
     """Switch to a different branch. Requires restart to take effect."""
     import os
     import asyncio
-    from comfygit_core.models.exceptions import CDEnvironmentError
+    from comfygit_core.models import CDEnvironmentError
 
     json_data = await request.json()
     branch = json_data.get("branch")
@@ -337,7 +337,7 @@ async def checkout_commit(request: web.Request, env) -> web.Response:
     """Checkout a specific commit or ref."""
     import os
     import asyncio
-    from comfygit_core.models.exceptions import CDEnvironmentError
+    from comfygit_core.models import CDEnvironmentError
 
     json_data = await request.json()
     ref = json_data.get("ref")
@@ -382,7 +382,7 @@ async def revert_changes(request: web.Request, env) -> web.Response:
     """Discard uncommitted changes on the current branch and restart."""
     import os
     import asyncio
-    from comfygit_core.models.exceptions import CDEnvironmentError
+    from comfygit_core.models import CDEnvironmentError
 
     try:
         await run_sync(env.reset, "HEAD", mode="hard", strategy=None, force=True)

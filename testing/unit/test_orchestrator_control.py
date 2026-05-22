@@ -486,7 +486,7 @@ class TestOrchestratorInitialization:
         """Should load workspace config during init."""
         from server.orchestrator import Orchestrator, DEFAULT_CONFIG
 
-        with patch('server.orchestrator.WorkspaceFactory.find') as mock_factory:
+        with patch('server.orchestrator.Workspace.open') as mock_factory:
             mock_workspace = Mock()
             mock_workspace.path = metadata_dir.parent
             mock_factory.return_value = mock_workspace
@@ -507,7 +507,7 @@ class TestOrchestratorInitialization:
         """Should initialize command coordination flags."""
         from server.orchestrator import Orchestrator, DEFAULT_CONFIG
 
-        with patch('server.orchestrator.WorkspaceFactory.find') as mock_factory:
+        with patch('server.orchestrator.Workspace.open') as mock_factory:
             mock_workspace = Mock()
             mock_workspace.path = metadata_dir.parent
             mock_factory.return_value = mock_workspace
@@ -537,7 +537,7 @@ class TestOrchestratorInitialization:
         # Create stale temp files
         (metadata_dir / ".cmd.tmp.old").write_text("{}")
 
-        with patch('server.orchestrator.WorkspaceFactory.find') as mock_factory:
+        with patch('server.orchestrator.Workspace.open') as mock_factory:
             mock_workspace = Mock()
             mock_workspace.path = metadata_dir.parent
             mock_factory.return_value = mock_workspace
@@ -562,7 +562,7 @@ class TestOrchestratorInitialization:
         """Should start control server if enabled in config."""
         from server.orchestrator import Orchestrator, DEFAULT_CONFIG
 
-        with patch('server.orchestrator.WorkspaceFactory.find') as mock_factory:
+        with patch('server.orchestrator.Workspace.open') as mock_factory:
             mock_workspace = Mock()
             mock_workspace.path = metadata_dir.parent
             mock_factory.return_value = mock_workspace

@@ -7,7 +7,7 @@ ComfyUI's same-origin API (works with cloud proxies like RunPod).
 import aiohttp
 from aiohttp import web, ClientTimeout
 
-from comfygit_core.lifecycle.switch_observer import read_switch_status
+from comfygit_core.runtime import read_switch_status
 
 import orchestrator
 

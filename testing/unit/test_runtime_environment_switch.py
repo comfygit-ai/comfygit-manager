@@ -136,17 +136,28 @@ class TestRuntimeEnvironmentSwitch:
 
         mocker.patch.object(orch.workspace, 'get_environment', side_effect=lambda n, **kw: env1 if n == "env1" else env2)
 
-        # Track status updates
+        # Track status updates written through the orchestrator boundary.
         status_updates = []
-        metadata_dir / ".switch_status.json"
+        import server.orchestrator as orchestrator_module
 
-        original_write = json.dump
-        def capture_status_writes(data, f, **kwargs):
-            if hasattr(f, 'name') and '.switch_status.json' in f.name:
-                status_updates.append(data.copy())
-            return original_write(data, f, **kwargs)
+        original_write_status = orchestrator_module.write_switch_status
 
-        mocker.patch('json.dump', side_effect=capture_status_writes)
+        def capture_status_writes(metadata_dir_arg, state, progress=0, message="", **kwargs):
+            status_updates.append({
+                "state": state,
+                "progress": progress,
+                "message": message,
+                **kwargs,
+            })
+            return original_write_status(
+                metadata_dir_arg,
+                state=state,
+                progress=progress,
+                message=message,
+                **kwargs,
+            )
+
+        mocker.patch("server.orchestrator.write_switch_status", side_effect=capture_status_writes)
 
         # Mock processes
         proc1 = Mock(spec=subprocess.Popen)

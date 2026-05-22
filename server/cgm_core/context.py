@@ -1,7 +1,6 @@
 """Request context utilities for accessing workspace and environment."""
 from aiohttp import web
-from comfygit_core.core.environment import Environment
-from comfygit_core.core.workspace import Workspace
+from comfygit_core import Environment, Workspace
 
 
 def get_environment_from_request(request: web.Request) -> Environment | None:

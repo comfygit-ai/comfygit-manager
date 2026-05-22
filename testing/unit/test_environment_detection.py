@@ -197,13 +197,13 @@ class TestEnvironmentDetection:
         assert not pid_file.exists()
 
     def test_detect_environment_workspace_factory_error(self, mock_workspace, monkeypatch, mocker):
-        """Should return unmanaged when WorkspaceFactory.find() raises error."""
+        """Should return unmanaged when Workspace.open() raises error."""
         from server.orchestrator import detect_environment_type
         from comfygit_core.models.exceptions import CDWorkspaceNotFoundError
 
         # Set up location but make factory fail
         monkeypatch.setenv("COMFYGIT_HOME", str(mock_workspace))
-        mocker.patch("server.orchestrator.WorkspaceFactory.find",
+        mocker.patch("server.orchestrator.Workspace.open",
                     side_effect=CDWorkspaceNotFoundError("Invalid workspace"))
 
         is_managed, workspace, environment = detect_environment_type()
@@ -225,7 +225,7 @@ class TestEnvironmentDetection:
         mock_workspace_obj.path = mock_workspace
         mock_workspace_obj.get_environment.side_effect = CDEnvironmentNotFoundError("env1")
 
-        mocker.patch("server.orchestrator.WorkspaceFactory.find", return_value=mock_workspace_obj)
+        mocker.patch("server.orchestrator.Workspace.open", return_value=mock_workspace_obj)
 
         is_managed, workspace, environment = detect_environment_type()
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from comfygit_core.models.exceptions import CDDependencyConflictError
+from comfygit_core.models import CDDependencyConflictError
 
 
 REVIEWABLE_CONFLICT_KINDS = {"constraint_conflict", "resolution_conflict"}

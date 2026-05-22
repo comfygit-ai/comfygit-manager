@@ -208,7 +208,7 @@ class TestConfigurationInOrchestrator:
         mock_ws_obj.paths = Mock()
         mock_ws_obj.paths.metadata = metadata_dir
 
-        with patch('server.orchestrator.WorkspaceFactory.find') as mock_factory:
+        with patch('server.orchestrator.Workspace.open') as mock_factory:
             mock_factory.return_value = mock_ws_obj
 
             orch = Orchestrator(
@@ -243,7 +243,7 @@ class TestConfigurationInOrchestrator:
         mock_ws_obj.paths = Mock()
         mock_ws_obj.paths.metadata = metadata_dir
 
-        with patch('server.orchestrator.WorkspaceFactory.find') as mock_factory:
+        with patch('server.orchestrator.Workspace.open') as mock_factory:
             mock_factory.return_value = mock_ws_obj
 
             with patch.object(Orchestrator, '_start_control_server') as mock_start:
@@ -281,7 +281,7 @@ class TestConfigurationInOrchestrator:
         mock_ws_obj.paths = Mock()
         mock_ws_obj.paths.metadata = metadata_dir
 
-        with patch('server.orchestrator.WorkspaceFactory.find') as mock_factory:
+        with patch('server.orchestrator.Workspace.open') as mock_factory:
             mock_factory.return_value = mock_ws_obj
 
             with patch.object(Orchestrator, '_start_control_server') as mock_start:

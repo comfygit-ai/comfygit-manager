@@ -54,6 +54,11 @@ Core should not own:
 - UI-workflow-to-API-prompt conversion
 - cloud deployment semantics
 
+Manager adapters should use core's documented public facades for cross-package
+calls. Imports from core managers, repositories, analyzers, factories,
+lifecycle modules, and generic utilities are implementation coupling unless
+they are explicitly covered by a temporary boundary-test allowlist.
+
 ## Cloud Dashboard
 
 The cloud dashboard owns:
@@ -197,3 +202,16 @@ For cloud-bound sessions:
 
 This preserves the local orchestrator as a local adoption tool while preventing
 cloud sessions from becoming detached from the outer cloud control plane.
+
+### CGM-SB-10 [PARTIAL]: Manager should consume ComfyGit Core through public facades
+Validation: STATIC
+
+The manager backend should import reusable core behavior through documented
+facades such as `comfygit_core`, `comfygit_core.models`,
+`comfygit_core.runtime`, `comfygit_core.workflow`, and
+`comfygit_core.assets`.
+
+Direct imports from core implementation packages are allowed only as temporary
+exceptions tracked by the manager's core import-boundary test. As core exposes
+typed facade methods for git remotes, workspace configuration, and remaining
+runtime setup behavior, those temporary exceptions should be removed.

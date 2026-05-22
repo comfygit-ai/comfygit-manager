@@ -1,8 +1,10 @@
 """Node management API."""
 from collections import defaultdict
 from aiohttp import web
-from comfygit_core.models.dependency_resolution import DependencyResolutionAcceptance
-from comfygit_core.models.exceptions import CDDependencyPreviewStaleError
+from comfygit_core.models import (
+    CDDependencyPreviewStaleError,
+    DependencyResolutionAcceptance,
+)
 
 from cgm_core.dependency_preview import (
     build_install_identifier,

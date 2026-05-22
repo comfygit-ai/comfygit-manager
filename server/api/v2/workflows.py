@@ -7,19 +7,23 @@ from pathlib import Path
 import xxhash
 from aiohttp import web
 
-from comfygit_core.models.workflow_contract import (
+from comfygit_core.assets import DownloadRequest
+from comfygit_core.models import (
+    BatchDownloadCallbacks,
+    ManifestModel,
+    ManifestWorkflowModel,
+    ModelResolutionContext,
     NamedWorkflowContract,
+    NodeResolutionContext,
+    ResolvedModel,
+    ResolvedNodePackage,
+    Workflow,
     WorkflowContractInput,
     WorkflowContractOutput,
     WorkflowExecutionContract,
+    WorkflowNodeWidgetRef,
 )
-from comfygit_core.strategies.auto import AutoNodeStrategy, AutoModelStrategy
-from comfygit_core.models.workflow import (
-    NodeResolutionContext, ModelResolutionContext,
-    ResolvedNodePackage, ResolvedModel, WorkflowNodeWidgetRef,
-    BatchDownloadCallbacks, Workflow,
-)
-from comfygit_core.analyzers.workflow_dependency_parser import WorkflowDependencyParser
+from comfygit_core.workflow import AutoModelStrategy, AutoNodeStrategy, WorkflowDependencyParser
 
 from cgm_core.decorators import requires_environment, logged_operation
 from cgm_core.dependency_preview import dependency_review_response
@@ -2183,8 +2187,6 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
 
     # Write property_download_intent models to pyproject (they're in models_resolved, not processed by fix_resolution)
     try:
-        from comfygit_core.models.manifest import ManifestWorkflowModel
-
         existing_models = env.pyproject.workflows.get_workflow_models(name)
         existing_filenames = {m.filename for m in existing_models if m.sources}
 
@@ -2681,8 +2683,6 @@ async def download_model_stream(request: web.Request, env) -> web.StreamResponse
 
     async def run_download():
         """Run download in thread pool."""
-        from comfygit_core.services.model_downloader import DownloadRequest
-
         downloader = env.workflow_manager.downloader
         models_dir = downloader.models_dir
         full_target = models_dir / target_path
@@ -2773,8 +2773,6 @@ async def _finalize_download(env, workflow_name: str, filename: str, model_hash:
 
     Finds the workflow model by filename and updates it to resolved status.
     """
-    from comfygit_core.models.manifest import ManifestModel
-
     models = env.pyproject.workflows.get_workflow_models(workflow_name)
 
     for model in models:

@@ -16,10 +16,13 @@ from huggingface_hub import HfApi
 
 from cgm_core.decorators import requires_environment, logged_operation
 from cgm_utils.async_helpers import run_sync
-from comfygit_core.caching.api_cache import APICacheManager
-from comfygit_core.clients.civitai_client import CivitAIClient, CivitAIError
-from comfygit_core.configs.model_config import ModelConfig
-from comfygit_core.services.huggingface_url import parse_huggingface_url
+from comfygit_core.assets import (
+    APICacheManager,
+    CivitAIClient,
+    CivitAIError,
+    ModelConfig,
+    parse_huggingface_url,
+)
 
 routes = web.RouteTableDef()
 

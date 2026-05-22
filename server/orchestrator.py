@@ -21,22 +21,18 @@ import venv
 from pathlib import Path
 from typing import Optional
 
-from comfygit_core.core.environment import Environment
-from comfygit_core.core.workspace import Workspace
-from comfygit_core.factories.workspace_factory import WorkspaceFactory
-from comfygit_core.lifecycle.switch_observer import (
+from comfygit_core import Environment, Workspace
+from comfygit_core.runtime import (
     SWITCH_STATUS_FILE,
     SwitchObserverServer,
     append_switch_log,
     cleanup_switch_status as core_cleanup_switch_status,
     read_switch_status as core_read_switch_status,
-    write_switch_status as core_write_switch_status,
-)
-from comfygit_core.lifecycle.comfyui_readiness import (
     resolve_comfyui_endpoint,
     wait_for_comfyui_ready,
+    write_switch_status as core_write_switch_status,
 )
-from comfygit_core.models.exceptions import CDEnvironmentNotFoundError, CDWorkspaceNotFoundError
+from comfygit_core.models import CDEnvironmentNotFoundError, CDWorkspaceNotFoundError
 
 
 # ============================================================================
@@ -142,7 +138,7 @@ def detect_environment_type() -> tuple[bool, Optional[Workspace], Optional[Envir
 
     # Step 2: Load workspace
     try:
-        workspace = WorkspaceFactory.find(workspace_root)
+        workspace = Workspace.open(workspace_root)
     except CDWorkspaceNotFoundError:
         return (False, None, None)
 
@@ -675,7 +671,7 @@ class Orchestrator:
         self.comfyui_args = args
 
         # Load workspace
-        self.workspace = WorkspaceFactory.find(workspace_root)
+        self.workspace = Workspace.open(workspace_root)
 
         # State files
         self.metadata_dir = self.workspace.path / ".metadata"

@@ -3,8 +3,8 @@ import json
 from aiohttp import web
 from pathlib import Path
 
-from comfygit_core.models.exceptions import ComfyDockError
-from comfygit_core.core.workspace import Workspace, WorkspacePaths
+from comfygit_core import Workspace
+from comfygit_core.models import ComfyDockError
 from cgm_core.context import get_environment_from_request
 
 routes = web.RouteTableDef()
@@ -26,8 +26,7 @@ def _get_workspace_from_request(request: web.Request) -> Workspace | None:
     # Fallback: get workspace_path from query param
     workspace_path = request.query.get('workspace_path')
     if workspace_path:
-        paths = WorkspacePaths(Path(workspace_path))
-        return Workspace(paths)
+        return Workspace.from_path(Path(workspace_path))
 
     return None
 

@@ -18,12 +18,12 @@ class TestSetupStatusEndpoint:
 
         monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
 
-        # Mock WorkspaceFactory.find to raise not found
+        # Mock Workspace.open to raise not found
         def mock_find(*args, **kwargs):
             raise CDWorkspaceNotFoundError("No workspace found")
 
         monkeypatch.setattr(
-            "api.v2.setup.WorkspaceFactory.find",
+            "api.v2.setup.Workspace.open",
             mock_find
         )
 
@@ -49,7 +49,7 @@ class TestSetupStatusEndpoint:
 
         monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
 
-        # Mock WorkspaceFactory.find to return workspace with no envs
+        # Mock Workspace.open to return workspace with no envs
         mock_workspace = Mock()
         mock_workspace.path = tmp_path
         mock_workspace.list_environments.return_value = []
@@ -58,7 +58,7 @@ class TestSetupStatusEndpoint:
             return mock_workspace
 
         monkeypatch.setattr(
-            "api.v2.setup.WorkspaceFactory.find",
+            "api.v2.setup.Workspace.open",
             mock_find
         )
 
@@ -94,7 +94,7 @@ class TestSetupStatusEndpoint:
             return mock_workspace
 
         monkeypatch.setattr(
-            "api.v2.setup.WorkspaceFactory.find",
+            "api.v2.setup.Workspace.open",
             mock_find
         )
 
@@ -233,7 +233,7 @@ class TestSetupStatusEndpoint:
         def mock_find(*args, **kwargs):
             raise CDWorkspaceNotFoundError("No workspace")
 
-        monkeypatch.setattr("api.v2.setup.WorkspaceFactory.find", mock_find)
+        monkeypatch.setattr("api.v2.setup.Workspace.open", mock_find)
 
         # Mock Path.cwd() to return tmp_path
         monkeypatch.setattr("api.v2.setup.Path.cwd", lambda: tmp_path)
@@ -290,11 +290,11 @@ class TestValidatePathEndpoint:
         new_dir = tmp_path / "comfygit"
         new_dir.mkdir()
 
-        # Mock WorkspaceFactory.find to raise not found
+        # Mock Workspace.open to raise not found
         def mock_find(*args, **kwargs):
             raise CDWorkspaceNotFoundError("Not found")
 
-        monkeypatch.setattr("api.v2.setup.WorkspaceFactory.find", mock_find)
+        monkeypatch.setattr("api.v2.setup.Workspace.open", mock_find)
 
         resp = await client.post("/v2/setup/validate_path", json={
             "path": str(new_dir),
@@ -307,13 +307,13 @@ class TestValidatePathEndpoint:
 
     async def test_workspace_path_already_exists(self, client, monkeypatch, tmp_path):
         """Should return invalid when workspace already exists."""
-        # Mock WorkspaceFactory.find to return workspace
+        # Mock Workspace.open to return workspace
         mock_workspace = Mock()
 
         def mock_find(*args, **kwargs):
             return mock_workspace
 
-        monkeypatch.setattr("api.v2.setup.WorkspaceFactory.find", mock_find)
+        monkeypatch.setattr("api.v2.setup.Workspace.open", mock_find)
 
         resp = await client.post("/v2/setup/validate_path", json={
             "path": str(tmp_path),
@@ -335,7 +335,7 @@ class TestValidatePathEndpoint:
         def mock_find(*args, **kwargs):
             raise CDWorkspaceNotFoundError("Not found")
 
-        monkeypatch.setattr("api.v2.setup.WorkspaceFactory.find", mock_find)
+        monkeypatch.setattr("api.v2.setup.Workspace.open", mock_find)
 
         resp = await client.post("/v2/setup/validate_path", json={
             "path": str(tmp_path),
@@ -714,12 +714,12 @@ class TestSystemNodeSelfInstallation:
     """Tests for comfygit-manager self-installation into system_nodes."""
 
     def test_install_self_as_system_node_with_real_workspace(self, tmp_path):
-        """Should copy comfygit-manager using real WorkspaceFactory."""
-        from comfygit_core.factories.workspace_factory import WorkspaceFactory
+        """Should copy comfygit-manager using real Workspace."""
+        from comfygit_core import Workspace
         from api.v2.setup import _install_self_as_system_node
 
         # Create real workspace
-        workspace = WorkspaceFactory.create(tmp_path / "test-workspace")
+        workspace = Workspace.create(tmp_path / "test-workspace")
 
         # Verify system_nodes path is correct
         assert workspace.paths.system_nodes == tmp_path / "test-workspace" / ".metadata" / "system_nodes"
@@ -815,7 +815,7 @@ class TestSystemNodeSelfInstallation:
 
         monkeypatch.setattr(setup_module, "_install_self_as_system_node", mock_install)
 
-        # Mock WorkspaceFactory.create
+        # Mock Workspace.create
         system_nodes_path = tmp_path / ".metadata" / "system_nodes"
         mock_workspace = Mock()
         mock_workspace.paths = Mock()
@@ -825,7 +825,7 @@ class TestSystemNodeSelfInstallation:
             return mock_workspace
 
         monkeypatch.setattr(
-            "api.v2.setup.WorkspaceFactory.create",
+            "api.v2.setup.Workspace.create",
             mock_create
         )
 
@@ -843,13 +843,13 @@ class TestSystemNodeSelfInstallation:
         This tests the symlink creation without creating a full environment.
         The full E2E flow (with real env creation) is tested separately as a slow test.
         """
-        from comfygit_core.factories.workspace_factory import WorkspaceFactory
+        from comfygit_core import Workspace
         from comfygit_core.managers.system_node_symlink_manager import SystemNodeSymlinkManager
         from comfygit_core.utils.symlink_utils import is_link
         from api.v2.setup import _install_self_as_system_node
 
         # Create workspace and install system node
-        workspace = WorkspaceFactory.create(tmp_path / "test-workspace")
+        workspace = Workspace.create(tmp_path / "test-workspace")
         _install_self_as_system_node(workspace)
 
         system_node_path = workspace.paths.system_nodes / "comfygit-manager"
@@ -884,13 +884,13 @@ class TestSystemNodeSelfInstallation:
         This tests the complete system nodes architecture flow with real environment creation.
         Marked as slow because it installs ComfyUI and creates a venv.
         """
-        from comfygit_core.factories.workspace_factory import WorkspaceFactory
+        from comfygit_core import Workspace
         from comfygit_core.factories.environment_factory import EnvironmentFactory
         from comfygit_core.utils.symlink_utils import is_link
         from api.v2.setup import _install_self_as_system_node
 
         # Step 1: Create workspace
-        workspace = WorkspaceFactory.create(tmp_path / "test-workspace")
+        workspace = Workspace.create(tmp_path / "test-workspace")
 
         # Step 2: Install comfygit-manager as system node
         _install_self_as_system_node(workspace)
