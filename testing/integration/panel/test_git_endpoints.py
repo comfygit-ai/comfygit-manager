@@ -2,6 +2,25 @@
 import pytest
 from unittest.mock import Mock
 
+from comfygit_core.models import GitBranch, GitCommitSummary
+
+
+def _commit(
+    hash: str,
+    message: str = "Test commit",
+    *,
+    refs: str = "",
+    date: str = "2025-01-22",
+    date_relative: str = "1 hour ago",
+) -> GitCommitSummary:
+    return GitCommitSummary(
+        hash=hash,
+        refs=refs,
+        message=message,
+        date=date,
+        date_relative=date_relative,
+    )
+
 
 @pytest.mark.integration
 class TestCommitEndpoint:
@@ -176,15 +195,7 @@ class TestLogEndpoint:
     ):
         """Should return commit history with default pagination."""
         # Setup
-        commits = [
-            {
-                "hash": f"abc{i}",
-                "message": f"Commit {i}",
-                "author": "test@test.com",
-                "date": "2025-01-22"
-            }
-            for i in range(10)
-        ]
+        commits = [_commit(f"abc{i}", f"Commit {i}") for i in range(10)]
         mock_environment.get_commit_history.return_value = commits
         mock_environment.get_current_branch.return_value = "main"
 
@@ -206,7 +217,7 @@ class TestLogEndpoint:
     ):
         """Should respect limit parameter."""
         # Setup: Return 25 commits (limit=10 + 1 for pagination check)
-        commits = [{"hash": f"abc{i}"} for i in range(25)]
+        commits = [_commit(f"abc{i}") for i in range(25)]
         mock_environment.get_commit_history.return_value = commits
         mock_environment.get_current_branch.return_value = "main"
 
@@ -225,7 +236,7 @@ class TestLogEndpoint:
     ):
         """Should respect offset parameter."""
         # Setup
-        commits = [{"hash": f"abc{i}"} for i in range(30)]
+        commits = [_commit(f"abc{i}") for i in range(30)]
         mock_environment.get_commit_history.return_value = commits
         mock_environment.get_current_branch.return_value = "main"
 
@@ -242,7 +253,7 @@ class TestLogEndpoint:
         mock_environment,
     ):
         """Should show selected branch history even when current HEAD is detached elsewhere."""
-        commits = [{"hash": f"main{i}"} for i in range(4)]
+        commits = [_commit(f"main{i}") for i in range(4)]
         mock_environment.get_commit_history.return_value = commits
         mock_environment.get_current_branch.return_value = None
 
@@ -277,11 +288,11 @@ class TestBranchesEndpoint:
         mock_environment
     ):
         """Should return list of branches."""
-        # Setup: git_manager.list_branches returns list of (name, is_current) tuples
-        mock_environment.git_manager.list_branches.return_value = [
-            ("main", True),
-            ("dev", False),
-            ("feature/test", False)
+        # Setup: environment returns typed branch entries.
+        mock_environment.list_branches.return_value = [
+            GitBranch(name="main", is_current=True),
+            GitBranch(name="dev"),
+            GitBranch(name="feature/test"),
         ]
         mock_environment.get_current_branch.return_value = "main"
 

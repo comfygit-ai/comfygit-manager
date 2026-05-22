@@ -5,6 +5,7 @@ from aiohttp import web
 from unittest.mock import Mock, MagicMock
 from pathlib import Path
 from comfygit_core.readiness import build_environment_readiness
+from comfygit_core.models import GitBranch, GitSyncStatus
 
 # Add server directory to path
 server_dir = Path(__file__).parent.parent.parent.parent / "server"
@@ -42,16 +43,12 @@ def mock_environment():
     mock_env.git_manager.has_uncommitted_changes = Mock(return_value=False)
     mock_env.git_manager.switch_branch = Mock()
     mock_env.git_manager.checkout = Mock()
-    mock_env.list_remotes = Mock(side_effect=lambda: mock_env.git_manager.list_remotes())
-    mock_env.add_remote = Mock(side_effect=lambda name, url: mock_env.git_manager.add_remote(name, url))
-    mock_env.remove_remote = Mock(side_effect=lambda name: mock_env.git_manager.remove_remote(name))
-    mock_env.set_remote_url = Mock(
-        side_effect=lambda name, url, is_push=False: mock_env.git_manager.set_remote_url(name, url, is_push)
-    )
-    mock_env.fetch_remote = Mock(side_effect=lambda name, token=None: mock_env.git_manager.fetch(name))
-    mock_env.get_remote_sync_status = Mock(
-        side_effect=lambda name, branch=None: mock_env.git_manager.get_sync_status(name, branch)
-    )
+    mock_env.list_remotes = Mock(return_value=[])
+    mock_env.add_remote = Mock()
+    mock_env.remove_remote = Mock()
+    mock_env.set_remote_url = Mock()
+    mock_env.fetch_remote = Mock()
+    mock_env.get_remote_sync_status = Mock(return_value=GitSyncStatus())
     mock_env.get_remote_url = Mock(return_value=None)
     mock_env.get_tracking_remote = Mock(return_value=None)
 
@@ -61,7 +58,7 @@ def mock_environment():
     mock_env.execute_commit = Mock()
     mock_env.get_commit_history = Mock(return_value=[])
     mock_env.get_current_branch = Mock(return_value="main")
-    mock_env.list_branches = Mock(side_effect=lambda: mock_env.git_manager.list_branches())
+    mock_env.list_branches = Mock(return_value=[GitBranch(name="main", is_current=True)])
     mock_env.resolve_workflow = Mock()
     mock_env.get_uninstalled_nodes = Mock(return_value=[])
     mock_env.install_node = Mock()

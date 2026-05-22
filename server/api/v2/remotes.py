@@ -17,43 +17,9 @@ def _get_auth_token(request: web.Request) -> str | None:
     return request.headers.get("X-Git-Auth-Token")
 
 
-def _consolidate_remotes(remote_list: list[tuple[str, str, str]]) -> list[dict]:
-    """
-    Consolidate git remote -v output into RemoteInfo structures.
-
-    Args:
-        remote_list: List of (name, url, type) tuples where type is 'fetch' or 'push'
-
-    Returns:
-        List of dicts with name, fetch_url, push_url
-    """
-    remotes = {}
-    for name, url, remote_type in remote_list:
-        if name not in remotes:
-            remotes[name] = {"name": name, "fetch_url": "", "push_url": ""}
-
-        if remote_type == "fetch":
-            remotes[name]["fetch_url"] = url
-        elif remote_type == "push":
-            remotes[name]["push_url"] = url
-
-    # If push_url is empty, default to fetch_url
-    for remote in remotes.values():
-        if not remote["push_url"]:
-            remote["push_url"] = remote["fetch_url"]
-
-    return list(remotes.values())
-
-
-def _get_tracking_remote(env, branch: str | None) -> str | None:
-    """Get the remote that the given branch tracks."""
-    if not branch:
-        return None
-
-    try:
-        return env.get_tracking_remote(branch)
-    except Exception:
-        return None
+def _commits_to_dict(commits) -> list[dict]:
+    """Serialize typed core commit summaries for JSON responses."""
+    return [commit.to_dict() for commit in commits]
 
 
 def _git_operation_error_response(error: Exception, default_status: int = 500) -> web.Response:
@@ -114,19 +80,15 @@ def _git_operation_error_response(error: Exception, default_status: int = 500) -
 @requires_environment
 async def list_remotes(request: web.Request, env) -> web.Response:
     """List all git remotes with consolidated fetch/push URLs."""
-    # Get raw remote list
-    remote_list = await run_sync(env.list_remotes)
-
-    # Consolidate fetch/push entries
-    remotes = _consolidate_remotes(remote_list)
+    remote_entries = await run_sync(env.list_remotes)
+    remotes = [remote.to_dict() for remote in remote_entries]
 
     # Get current branch and tracking info
     current_branch = await run_sync(env.get_current_branch)
-    tracking_remote = _get_tracking_remote(env, current_branch)
-
-    # Mark default remote
-    for remote in remotes:
-        remote["is_default"] = remote["name"] == tracking_remote
+    tracking_remote = next(
+        (remote.name for remote in remote_entries if remote.is_default),
+        None,
+    )
 
     # Build tracking info
     tracking_info = None
@@ -270,8 +232,8 @@ async def get_remote_sync_status(request: web.Request, env) -> web.Response:
     return web.json_response({
         "remote": name,
         "branch": branch,
-        "ahead": sync_status["ahead"],
-        "behind": sync_status["behind"]
+        "ahead": sync_status.ahead,
+        "behind": sync_status.behind,
     })
 
 
@@ -303,7 +265,7 @@ async def get_pull_preview(request: web.Request, env) -> web.Response:
     block_reason = "uncommitted_changes" if has_uncommitted else None
 
     # Fetch incoming commits
-    commits_behind = sync_status["behind"]
+    commits_behind = sync_status.behind
     if commits_behind > 0:
         try:
             incoming = await run_sync(
@@ -327,7 +289,7 @@ async def get_pull_preview(request: web.Request, env) -> web.Response:
         "remote": name,
         "branch": branch,
         "commits_behind": commits_behind,
-        "commits": incoming,
+        "commits": _commits_to_dict(incoming),
         "changes": changes,
         "has_uncommitted_changes": has_uncommitted,
         "can_pull": can_pull,
@@ -437,10 +399,10 @@ async def get_push_preview(request: web.Request, env) -> web.Response:
     has_uncommitted = status.git.has_changes
 
     # First push = remote branch doesn't exist yet
-    is_first_push = not sync_status.get("remote_branch_exists", True)
+    is_first_push = not sync_status.remote_branch_exists
 
     # Determine if force is needed (remote has new commits)
-    remote_has_new = sync_status["behind"] > 0
+    remote_has_new = sync_status.behind > 0
     needs_force = remote_has_new
 
     # Build response
@@ -448,7 +410,7 @@ async def get_push_preview(request: web.Request, env) -> web.Response:
     block_reason = "uncommitted_changes" if has_uncommitted else None
 
     # Fetch outgoing commits
-    commits_ahead = sync_status["ahead"]
+    commits_ahead = sync_status.ahead
     if commits_ahead > 0:
         try:
             if is_first_push:
@@ -472,7 +434,7 @@ async def get_push_preview(request: web.Request, env) -> web.Response:
         "remote": name,
         "branch": branch,
         "commits_ahead": commits_ahead,
-        "commits": outgoing,
+        "commits": _commits_to_dict(outgoing),
         "has_uncommitted_changes": has_uncommitted,
         "remote_has_new_commits": remote_has_new,
         "can_push": can_push,
@@ -518,9 +480,9 @@ async def push_to_remote(request: web.Request, env) -> web.Response:
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
-    commits_ahead = sync_status["ahead"]
+    commits_ahead = sync_status.ahead
 
-    if sync_status.get("behind", 0) > 0 and not force:
+    if sync_status.behind > 0 and not force:
         return web.json_response(
             {
                 "error": (
