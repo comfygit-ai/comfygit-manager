@@ -324,7 +324,7 @@ def serialize_workflow_details(
                 "loaded_by": [],
                 "file_path": file_path,
                 "relative_path": (
-                    getattr(resolved.resolved_model, "relative_path", None)
+                    _safe_str(getattr(resolved.resolved_model, "relative_path", None))
                     if resolved and resolved.resolved_model
                     else None
                 ),

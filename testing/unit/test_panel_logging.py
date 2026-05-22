@@ -206,6 +206,9 @@ def mock_env_for_operations(tmp_path):
     mock_env.pyproject = Mock()
     mock_env.pyproject.nodes = Mock()
     mock_env.pyproject.nodes.get_existing = Mock(return_value={})
+    mock_env.list_manifest_nodes = Mock(
+        side_effect=lambda: mock_env.pyproject.nodes.get_existing()
+    )
     return mock_env
 
 

@@ -23,6 +23,7 @@ def mock_env(tmp_path):
     env.pyproject = Mock()
     env.pyproject.nodes = Mock()
     env.pyproject.nodes.get_existing.return_value = {}
+    env.list_manifest_nodes = Mock(side_effect=lambda: env.pyproject.nodes.get_existing())
     env.node_manager = Mock()
     env.node_manager.add_node = Mock()
     env.node_manager.update_node = Mock()

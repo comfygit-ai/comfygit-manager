@@ -470,12 +470,7 @@ def _workflow_names_with_manifest_models(env, analyzed_workflows: list) -> list[
         if name and name not in workflow_names:
             workflow_names.append(name)
 
-    try:
-        manifest_workflows = _safe_dict(env.pyproject.workflows.get_all_with_resolutions())
-    except Exception:
-        manifest_workflows = {}
-
-    for name in manifest_workflows:
+    for name in env.list_manifest_workflows():
         if isinstance(name, str) and name not in workflow_names:
             workflow_names.append(name)
 
@@ -484,26 +479,14 @@ def _workflow_names_with_manifest_models(env, analyzed_workflows: list) -> list[
 
 def _workflow_manifest_models(env, workflow_name: str) -> list:
     """Return manifest models for a workflow, tolerating unavailable manifest data."""
-    try:
-        return _safe_sequence(env.pyproject.workflows.get_workflow_models(workflow_name))
-    except Exception:
-        return []
+    return list(env.get_workflow_manifest_models(workflow_name))
 
 
 def _global_manifest_model(env, model_hash: str | None):
     """Return a global manifest model when the pyproject exposes one."""
     if not model_hash:
         return None
-    try:
-        get_by_hash = getattr(env.pyproject.models, "get_by_hash", None)
-    except Exception:
-        return None
-    if not callable(get_by_hash):
-        return None
-    try:
-        model = get_by_hash(model_hash)
-    except Exception:
-        return None
+    model = env.get_manifest_model(model_hash)
     if _safe_str(getattr(model, "hash", None)) or _safe_str(getattr(model, "filename", None)):
         return model
     return None

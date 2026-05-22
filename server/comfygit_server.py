@@ -154,7 +154,7 @@ def find_node_by_id_or_name(env, node_id: str):
     Returns:
         tuple: (identifier, NodeInfo) or (None, None) if not found
     """
-    existing_nodes = env.pyproject.nodes.get_existing()
+    existing_nodes = env.list_manifest_nodes()
     node_id_lower = node_id.lower()
 
     for identifier, node_info in existing_nodes.items():
@@ -171,7 +171,7 @@ def get_installed_packs() -> dict[str, dict]:
         return {}
 
     try:
-        existing_nodes = env.pyproject.nodes.get_existing()
+        existing_nodes = env.list_manifest_nodes()
         packs = {}
 
         for identifier, node_info in existing_nodes.items():
@@ -231,7 +231,7 @@ def get_node_mappings() -> dict[str, list]:
 
     try:
         mappings = {}
-        existing_nodes = env.pyproject.nodes.get_existing()
+        existing_nodes = env.list_manifest_nodes()
 
         for identifier, node_info in existing_nodes.items():
             pack_ids = []
@@ -369,7 +369,7 @@ async def update_all(request):
     if not env:
         return web.json_response({"message": "No ComfyGit environment detected"}, status=500)
 
-    existing_nodes = env.pyproject.nodes.get_existing()
+    existing_nodes = env.list_manifest_nodes()
     ui_id = request.query.get("ui_id")
     client_id = request.query.get("client_id")
 
@@ -703,7 +703,7 @@ async def process_install(env, params: dict) -> dict:
         )
 
     # Check if already installed
-    existing_nodes = env.pyproject.nodes.get_existing()
+    existing_nodes = env.list_manifest_nodes()
     is_installed = pack_id in existing_nodes
 
     # If installed, check if it's disabled (needs re-enabling, not re-installing)

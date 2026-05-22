@@ -74,10 +74,7 @@ def _get_manager_runtime_info(request: web.Request) -> dict[str, str | None]:
             "manager_commit": None,
         }
 
-    try:
-        node = env.pyproject.nodes.get_existing().get("comfygit-manager")
-    except Exception:
-        node = None
+    node = env.get_manifest_node("comfygit-manager")
 
     if not node:
         return {

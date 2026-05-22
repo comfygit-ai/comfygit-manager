@@ -172,7 +172,7 @@ async def get_nodes(request: web.Request, env) -> web.Response:
     try:
         # Get installed nodes (from list_nodes) and environment status
         installed_nodes = await run_sync(env.list_nodes)
-        tracked_nodes = env.pyproject.nodes.get_existing()
+        tracked_nodes = env.list_manifest_nodes()
         status = await run_sync(env.status)
 
         # Build workflow usage map
@@ -325,7 +325,7 @@ async def update_node_criticality(request: web.Request, env) -> web.Response:
             "error": "Invalid criticality. Must be 'required' or 'optional'."
         }, status=400)
 
-    tracked_nodes = env.pyproject.nodes.get_existing()
+    tracked_nodes = env.list_manifest_nodes()
     identifier, _node = _find_tracked_node(tracked_nodes, node_name)
     if not identifier:
         return web.json_response({

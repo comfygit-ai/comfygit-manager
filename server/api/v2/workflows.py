@@ -390,10 +390,7 @@ def _safe_dict(value) -> dict:
 
 def _workflow_manifest_models(env, workflow_name: str) -> list:
     """Return manifest models for a workflow, tolerating unavailable manifest data."""
-    try:
-        return _safe_sequence(env.pyproject.workflows.get_workflow_models(workflow_name))
-    except Exception:
-        return []
+    return list(env.get_workflow_manifest_models(workflow_name))
 
 
 async def _invalidate_workflow_resolution_cache(env, workflow_name: str) -> None:
@@ -580,9 +577,7 @@ def _get_package_aliases(workflow_manager) -> dict[str, str]:
 
 def _reconstruct_optional_node_buckets(env, dependencies, workflow_name: str) -> dict[str, list]:
     """Place saved optional node mappings back into their original resolution buckets."""
-    custom_map = env.pyproject.workflows.get_custom_node_map(workflow_name)
-    if not isinstance(custom_map, dict):
-        custom_map = {}
+    custom_map = dict(env.get_workflow_custom_node_map(workflow_name))
     optional_node_types = {
         node_type for node_type, mapping in custom_map.items()
         if mapping is False
@@ -590,7 +585,7 @@ def _reconstruct_optional_node_buckets(env, dependencies, workflow_name: str) ->
     if not optional_node_types:
         return {"unresolved": [], "ambiguous": [], "uninstallable": [], "resolved": []}
 
-    installed = env.pyproject.nodes.get_existing()
+    installed = env.list_manifest_nodes()
     resolver = env.workflow_manager.global_node_resolver
     node_context = NodeResolutionContext(
         installed_packages=installed,
@@ -732,8 +727,8 @@ async def _apply_explicit_node_mapping_choices(
     node_choices: dict[str, dict],
 ) -> dict[str, list]:
     """Persist explicit per-workflow node mapping choices before resolution."""
-    custom_map = await run_sync(env.pyproject.workflows.get_custom_node_map, workflow_name)
-    before = dict(custom_map) if isinstance(custom_map, dict) else {}
+    custom_map = await run_sync(env.get_workflow_custom_node_map, workflow_name)
+    before = dict(custom_map)
 
     changes = {
         "nodes_marked_optional": [],
@@ -1669,9 +1664,7 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
     package_aliases = _get_package_aliases(env.workflow_manager)
     optional_buckets = _reconstruct_optional_node_buckets(env, dependencies, name)
     saved_optional_choice = {"action": "optional"}
-    custom_node_map = env.pyproject.workflows.get_custom_node_map(name)
-    if not isinstance(custom_node_map, dict):
-        custom_node_map = {}
+    custom_node_map = dict(env.get_workflow_custom_node_map(name))
     resolved_nodes = [
         node for node in result.nodes_resolved
         if getattr(node, "is_optional", False) is not True
@@ -1858,7 +1851,7 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
 
     # Determine uninstalled nodes (same logic as analyze_workflow lines 641-648)
     # For unsaved workflows, check against environment's installed packages
-    installed_packages = set(env.pyproject.nodes.get_existing().keys())
+    installed_packages = set(env.list_manifest_nodes().keys())
     uninstalled_set = {
         n.package_id for n in result.nodes_resolved
         if n.package_id and n.package_id not in installed_packages
@@ -1996,7 +1989,7 @@ async def search_nodes(request: web.Request, env) -> web.Response:
         return web.json_response({"results": [], "total": 0})
 
     # Get installed packages for marking
-    installed = env.pyproject.nodes.get_existing()
+    installed = env.list_manifest_nodes()
 
     # Search using core library
     matches = await run_sync(
@@ -2067,8 +2060,7 @@ async def search_models(request: web.Request, env) -> web.Response:
     # Get global models for download source info
     global_models = {}
     try:
-        all_global = env.pyproject.models.get_all()
-        for m in all_global:
+        for m in env.list_manifest_models().values():
             global_models[m.hash] = m
     except Exception:
         pass
@@ -2155,7 +2147,7 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
 
     # Collect what needs to be installed (excluding user-skipped packages)
     nodes_to_install = []
-    installed = env.pyproject.nodes.get_existing()
+    installed = env.list_manifest_nodes()
     explicit_registry_package_ids = _explicit_registry_install_package_ids(node_choices)
     for node in result.nodes_resolved:
         if node.package_id and node.match_type != "optional":
@@ -2187,7 +2179,7 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
 
     # Write property_download_intent models to pyproject (they're in models_resolved, not processed by fix_resolution)
     try:
-        existing_models = env.pyproject.workflows.get_workflow_models(name)
+        existing_models = list(env.get_workflow_manifest_models(name))
         existing_filenames = {m.filename for m in existing_models if m.sources}
 
         for model in result.models_resolved:
@@ -2264,13 +2256,11 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
     # Also check pyproject.toml for any unresolved models with sources
     # (in case they weren't picked up from resolution result)
     try:
-        all_workflows = env.pyproject.workflows.get_all_with_resolutions()
-        workflow_data = all_workflows.get(name, {})
-        for manifest_model in workflow_data.get("models", []):
-            if manifest_model.get("status") == "unresolved" and manifest_model.get("sources"):
-                sources = manifest_model.get("sources", [])
-                filename = manifest_model.get("filename")
-                rel_path = manifest_model.get("relative_path")
+        for manifest_model in env.get_workflow_manifest_models(name):
+            if manifest_model.status == "unresolved" and manifest_model.sources:
+                sources = manifest_model.sources
+                filename = manifest_model.filename
+                rel_path = manifest_model.relative_path
 
                 # Check if user cancelled this download
                 choice = model_choices.get(filename)
@@ -2409,7 +2399,7 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
 
             # Collect nodes to install
             nodes_to_install = []
-            installed = env.pyproject.nodes.get_existing()
+            installed = env.list_manifest_nodes()
             explicit_registry_package_ids = _explicit_registry_install_package_ids(node_choices)
             for node in result.nodes_resolved:
                 if node.package_id and node.match_type != "optional":
@@ -2509,18 +2499,14 @@ async def get_pending_downloads(request: web.Request, env) -> web.Response:
     pending_downloads = []
 
     try:
-        # Read directly from pyproject.toml - more reliable than resolution flow
-        all_workflows = env.pyproject.workflows.get_all_with_resolutions()
-
-        for workflow_name, workflow_data in all_workflows.items():
-            models = workflow_data.get("models", [])
-
-            for model in models:
+        # Read from manifest snapshot, which is more reliable than resolution flow.
+        for workflow_name, workflow_data in env.list_manifest_workflows().items():
+            for model in workflow_data.models:
                 # Check for unresolved models with sources (download URLs)
-                if model.get("status") == "unresolved" and model.get("sources"):
-                    sources = model.get("sources", [])
+                if model.status == "unresolved" and model.sources:
+                    sources = model.sources
                     if sources:
-                        target_path = model.get("relative_path")
+                        target_path = model.relative_path
                         if target_path:
                             models_dir = env.workspace.workspace_config_manager.get_models_directory()
                             normalized_target = str(target_path).replace("\\", "/").lstrip("/")
@@ -2529,7 +2515,7 @@ async def get_pending_downloads(request: web.Request, env) -> web.Response:
 
                         pending_downloads.append({
                             "workflow": workflow_name,
-                            "filename": model.get("filename", "unknown"),
+                            "filename": model.filename or "unknown",
                             "url": sources[0],  # Use first source URL
                             "target_path": target_path,
                             "size": 0  # Unknown until download starts
@@ -2773,7 +2759,7 @@ async def _finalize_download(env, workflow_name: str, filename: str, model_hash:
 
     Finds the workflow model by filename and updates it to resolved status.
     """
-    models = env.pyproject.workflows.get_workflow_models(workflow_name)
+    models = list(env.get_workflow_manifest_models(workflow_name))
 
     for model in models:
         if model.filename == filename and model.status == "unresolved" and model.sources:

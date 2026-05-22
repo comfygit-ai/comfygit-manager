@@ -1,6 +1,7 @@
 """Panel API test fixtures."""
 import sys
 import pytest
+from collections.abc import Mapping
 from aiohttp import web
 from unittest.mock import Mock, MagicMock
 from pathlib import Path
@@ -17,10 +18,14 @@ def mock_environment():
     """Mock Environment object with common methods stubbed."""
     mock_env = Mock()
     mock_env.name = "test-env"
+    mock_env.cec_path = Path("/tmp/test-workspace/environments/test-env/.cec")
 
     # Mock workspace
     mock_workspace = Mock()
     mock_workspace.path = Path("/tmp/test-workspace")
+    mock_workspace.list_models = Mock(return_value=[])
+    mock_workspace.model_repository = Mock()
+    mock_workspace.model_repository.get_sources = Mock(return_value=[])
     mock_env.workspace = mock_workspace
 
     # Mock custom_nodes_path for legacy manager detection
@@ -28,12 +33,20 @@ def mock_environment():
 
     # Mock workflow manager
     mock_env.workflow_manager = Mock()
+    mock_env.workflow_manager.builtin_versions_repository = None
 
     # Mock pyproject manifest helpers
     mock_env.pyproject = Mock()
     mock_env.pyproject.nodes = Mock()
     mock_env.pyproject.nodes.get_existing = Mock(return_value={})
     mock_env.pyproject.nodes.set_criticality = Mock(return_value=True)
+    mock_env.pyproject.workflows = Mock()
+    mock_env.pyproject.workflows.get_all_with_resolutions = Mock(return_value={})
+    mock_env.pyproject.workflows.get_workflow_models = Mock(return_value=[])
+    mock_env.pyproject.workflows.get_custom_node_map = Mock(return_value={})
+    mock_env.pyproject.models = Mock()
+    mock_env.pyproject.models.get_all = Mock(return_value=[])
+    mock_env.pyproject.models.get_by_hash = Mock(return_value=None)
 
     # Mock git manager
     mock_env.git_manager = Mock()
@@ -76,7 +89,82 @@ def mock_environment():
         )
     )
     mock_env.check_remote_auth = Mock(return_value=True)
-    mock_env.get_readiness = Mock(return_value=EnvironmentReadiness())
+
+    def _get_readiness(*, include_blocking=True):
+        try:
+            from comfygit_core.services.environment_readiness import (
+                build_environment_readiness,
+            )
+
+            return build_environment_readiness(
+                mock_env,
+                include_blocking=include_blocking,
+            )
+        except Exception:
+            return EnvironmentReadiness()
+
+    mock_env.get_readiness = Mock(side_effect=_get_readiness)
+    mock_env.get_workflow_execution_contract = Mock(return_value=None)
+    mock_env.get_manifest_snapshot = Mock()
+
+    def _manifest_nodes():
+        nodes = getattr(getattr(mock_env.pyproject, "nodes", None), "get_existing", lambda: {})()
+        return nodes if isinstance(nodes, Mapping) else {}
+
+    def _manifest_workflows():
+        workflows = getattr(
+            getattr(mock_env.pyproject, "workflows", None),
+            "get_all_with_resolutions",
+            lambda: {},
+        )()
+        return workflows if isinstance(workflows, Mapping) else {}
+
+    def _workflow_manifest_models(name):
+        models = getattr(
+            getattr(mock_env.pyproject, "workflows", None),
+            "get_workflow_models",
+            lambda _name: [],
+        )(name)
+        return tuple(models) if isinstance(models, list | tuple | set) else ()
+
+    def _workflow_custom_node_map(name):
+        custom_map = getattr(
+            getattr(mock_env.pyproject, "workflows", None),
+            "get_custom_node_map",
+            lambda _name: {},
+        )(name)
+        return custom_map if isinstance(custom_map, Mapping) else {}
+
+    def _manifest_models():
+        models = getattr(getattr(mock_env.pyproject, "models", None), "get_all", lambda: [])()
+        if not isinstance(models, list | tuple | set):
+            return {}
+        return {
+            getattr(model, "hash", None): model
+            for model in models
+            if getattr(model, "hash", None)
+        }
+
+    def _manifest_model(model_hash):
+        model = getattr(
+            getattr(mock_env.pyproject, "models", None),
+            "get_by_hash",
+            lambda _hash: None,
+        )(model_hash)
+        return model if getattr(model, "hash", None) or getattr(model, "filename", None) else None
+
+    mock_env.list_manifest_nodes = Mock(side_effect=_manifest_nodes)
+    mock_env.get_manifest_node = Mock(
+        side_effect=lambda identifier: mock_env.list_manifest_nodes().get(identifier)
+    )
+    mock_env.list_manifest_workflows = Mock(side_effect=_manifest_workflows)
+    mock_env.get_manifest_workflow = Mock(
+        side_effect=lambda name: mock_env.list_manifest_workflows().get(name)
+    )
+    mock_env.list_manifest_models = Mock(side_effect=_manifest_models)
+    mock_env.get_manifest_model = Mock(side_effect=_manifest_model)
+    mock_env.get_workflow_manifest_models = Mock(side_effect=_workflow_manifest_models)
+    mock_env.get_workflow_custom_node_map = Mock(side_effect=_workflow_custom_node_map)
 
     # Mock status() for sync endpoint version mismatch workaround
     mock_status = Mock()
