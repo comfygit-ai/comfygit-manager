@@ -333,14 +333,7 @@ async def update_node_criticality(request: web.Request, env) -> web.Response:
         }, status=404)
 
     try:
-        if hasattr(env, "update_node_criticality"):
-            success = await run_sync(env.update_node_criticality, identifier, criticality)
-        elif hasattr(env.pyproject.nodes, "set_criticality"):
-            success = await run_sync(env.pyproject.nodes.set_criticality, identifier, criticality)
-        else:
-            return web.json_response({
-                "error": "Installed comfygit-core does not support node criticality updates"
-            }, status=501)
+        success = await run_sync(env.update_node_criticality, identifier, criticality)
 
         if not success:
             return web.json_response({

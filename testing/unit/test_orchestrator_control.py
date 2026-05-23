@@ -381,7 +381,7 @@ class TestProcessTracking:
         orch._used_extra_args = False
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = "/usr/bin/python"
+        mock_env.get_runtime_python.return_value = "/usr/bin/python"
         mock_env.comfyui_path = Path("/tmp/comfyui")
 
         with patch('subprocess.Popen') as mock_popen:
@@ -408,7 +408,7 @@ class TestProcessTracking:
         orch._used_extra_args = False
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = "/usr/bin/python"
+        mock_env.get_runtime_python.return_value = "/usr/bin/python"
         mock_env.comfyui_path = Path("/tmp/comfyui")
 
         with patch('subprocess.Popen'):

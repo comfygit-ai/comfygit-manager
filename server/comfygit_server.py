@@ -728,7 +728,7 @@ async def process_install(env, params: dict) -> dict:
         if is_installed and (not version or version == "latest"):
             await loop.run_in_executor(
                 None,
-                lambda: env.node_manager.update_node(pack_id)
+                lambda: env.update_node(pack_id)
             )
             return {
                 "status_str": "success",
@@ -763,7 +763,7 @@ async def process_install(env, params: dict) -> dict:
 
         await loop.run_in_executor(
             None,
-            lambda: env.node_manager.add_node(identifier, force=is_installed)
+            lambda: env.add_node(identifier, force=is_installed)
         )
 
         return {
@@ -796,7 +796,7 @@ async def process_uninstall(env, params: dict) -> dict:
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(
             None,
-            lambda: env.node_manager.remove_node(node_name)
+            lambda: env.remove_node(node_name)
         )
 
         return {
@@ -820,7 +820,7 @@ async def process_update(env, params: dict) -> dict:
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(
             None,
-            lambda: env.node_manager.update_node(node_name, no_test=False)
+            lambda: env.update_node(node_name, no_test=False)
         )
 
         return {

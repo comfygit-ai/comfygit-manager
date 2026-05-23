@@ -31,13 +31,13 @@ class TestRuntimeEnvironmentSwitch:
         env1.name = "env1"
         env1.sync = Mock()
         env1.comfyui_path = Path("/env1/ComfyUI")
-        env1.uv_manager.python_executable = Path("/env1/python")
+        env1.get_runtime_python.return_value = Path("/env1/python")
 
         env2 = Mock()
         env2.name = "env2"
         env2.sync = Mock()
         env2.comfyui_path = Path("/env2/ComfyUI")
-        env2.uv_manager.python_executable = Path("/env2/python")
+        env2.get_runtime_python.return_value = Path("/env2/python")
 
         def get_env_side_effect(name, auto_sync=False):
             return env1 if name == "env1" else env2
@@ -126,13 +126,13 @@ class TestRuntimeEnvironmentSwitch:
         env1.name = "env1"
         env1.sync = Mock()
         env1.comfyui_path = Path("/env1")
-        env1.uv_manager.python_executable = Path("/env1/python")
+        env1.get_runtime_python.return_value = Path("/env1/python")
 
         env2 = Mock()
         env2.name = "env2"
         env2.sync = Mock()
         env2.comfyui_path = Path("/env2")
-        env2.uv_manager.python_executable = Path("/env2/python")
+        env2.get_runtime_python.return_value = Path("/env2/python")
 
         mocker.patch.object(orch.workspace, 'get_environment', side_effect=lambda n, **kw: env1 if n == "env1" else env2)
 
@@ -218,13 +218,13 @@ class TestRuntimeEnvironmentSwitch:
         env1.name = "env1"
         env1.sync = Mock()
         env1.comfyui_path = Path("/env1")
-        env1.uv_manager.python_executable = Path("/env1/python")
+        env1.get_runtime_python.return_value = Path("/env1/python")
 
         env2 = Mock()
         env2.name = "env2"
         env2.sync = Mock()
         env2.comfyui_path = Path("/env2")
-        env2.uv_manager.python_executable = Path("/env2/python")
+        env2.get_runtime_python.return_value = Path("/env2/python")
 
         mocker.patch.object(orch.workspace, 'get_environment', side_effect=lambda n, **kw: env1 if n == "env1" else env2)
 
@@ -294,13 +294,13 @@ class TestRuntimeEnvironmentSwitch:
         env1.name = "env1"
         env1.sync = Mock()
         env1.comfyui_path = Path("/env1")
-        env1.uv_manager.python_executable = Path("/env1/python")
+        env1.get_runtime_python.return_value = Path("/env1/python")
 
         env2 = Mock()
         env2.name = "env2"
         env2.sync = Mock()
         env2.comfyui_path = Path("/env2")
-        env2.uv_manager.python_executable = Path("/env2/python")
+        env2.get_runtime_python.return_value = Path("/env2/python")
 
         mocker.patch.object(orch.workspace, 'get_environment', side_effect=lambda n, **kw: env1 if n == "env1" else env2)
 

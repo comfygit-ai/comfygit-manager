@@ -138,3 +138,39 @@ def test_panel_api_uses_environment_workflow_facades() -> None:
         "Manager API modules should use Environment workflow facades. "
         "Unexpected workflow reach-throughs:\n" + "\n".join(violations)
     )
+
+
+def test_manager_backend_uses_environment_node_facades() -> None:
+    """Manager backend should not reach through Environment into node internals."""
+    forbidden = (
+        "env.node_manager",
+        "env.pyproject.nodes",
+    )
+    violations: list[str] = []
+
+    for path in _server_python_files():
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if any(token in line for token in forbidden):
+                rel = path.relative_to(REPO_ROOT)
+                violations.append(f"{rel}:{lineno}: {line.strip()}")
+
+    assert not violations, (
+        "Manager backend should use Environment node facades. "
+        "Unexpected node reach-throughs:\n" + "\n".join(violations)
+    )
+
+
+def test_manager_backend_uses_environment_runtime_facades() -> None:
+    """Manager backend should not reach through Environment into uv internals."""
+    violations: list[str] = []
+
+    for path in _server_python_files():
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if "env.uv_manager" in line:
+                rel = path.relative_to(REPO_ROOT)
+                violations.append(f"{rel}:{lineno}: {line.strip()}")
+
+    assert not violations, (
+        "Manager backend should use Environment runtime facades. "
+        "Unexpected uv reach-throughs:\n" + "\n".join(violations)
+    )

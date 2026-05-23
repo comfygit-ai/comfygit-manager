@@ -923,19 +923,10 @@ class Orchestrator:
             List of flags (e.g., ["--cpu"]) or empty list
         """
         try:
-            # Get torch version from the environment's venv
-            pip_show_output = env.uv_manager.show_package(
-                "torch", env.uv_manager.python_executable
-            )
-
-            # Extract version from output (e.g., "Version: 2.9.0+cu128")
-            import re
-            match = re.search(r'^Version:\s*(.+)$', pip_show_output, re.MULTILINE)
-            if not match:
+            version = env.get_runtime_package_version("torch")
+            if not version:
                 print("[Orchestrator] Could not parse torch version, defaulting to --cpu")
                 return ["--cpu"]
-
-            version = match.group(1).strip()
 
             # Check for backend suffix (e.g., +cu128, +rocm6.3)
             if '+' in version:
@@ -968,7 +959,7 @@ class Orchestrator:
         self.config = load_workspace_config(self.metadata_dir)
 
         # Use environment's UV-managed Python
-        python_exe = env.uv_manager.python_executable
+        python_exe = env.get_runtime_python()
         main_py = env.comfyui_path / "main.py"
 
         # Detect backend-specific flags
@@ -1207,7 +1198,7 @@ class Orchestrator:
     def _get_recovery_command(self, env_name: str) -> str:
         """Generate manual recovery command."""
         env = self.workspace.get_environment(env_name, auto_sync=False)
-        python_exe = env.uv_manager.python_executable
+        python_exe = env.get_runtime_python()
         main_py = env.comfyui_path / "main.py"
         args = ' '.join(self.comfyui_args)
 

@@ -215,7 +215,8 @@ class TestOrchestratorLoop:
 
         # Mock environment
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = Path("/env1/.venv/bin/python")
+        mock_env.get_runtime_python.return_value = Path("/env1/.venv/bin/python")
+        mock_env.get_runtime_package_version.return_value = "2.9.0+cu128"
         mock_env.comfyui_path = Path("/env1/ComfyUI")
 
         orch._start_comfyui(mock_env)
@@ -239,7 +240,8 @@ class TestOrchestratorLoop:
         )
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = Path("/python")
+        mock_env.get_runtime_python.return_value = Path("/python")
+        mock_env.get_runtime_package_version.return_value = "2.9.0+cu128"
         mock_env.comfyui_path = Path("/ComfyUI")
 
         orch._start_comfyui(mock_env)
@@ -263,7 +265,8 @@ class TestOrchestratorLoop:
         )
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = Path("/python")
+        mock_env.get_runtime_python.return_value = Path("/python")
+        mock_env.get_runtime_package_version.return_value = "2.9.0+cu128"
         mock_env.comfyui_path = Path("/ComfyUI")
 
         orch._start_comfyui(mock_env)
@@ -450,13 +453,13 @@ class TestOrchestratorLoop:
         mock_env1.name = "env1"
         mock_env1.sync = Mock()
         mock_env1.comfyui_path = mock_workspace / "environments" / "env1" / "ComfyUI"
-        mock_env1.uv_manager.python_executable = mock_workspace / "bin" / "python"
+        mock_env1.get_runtime_python.return_value = mock_workspace / "bin" / "python"
 
         mock_env2 = Mock()
         mock_env2.name = "env2"
         mock_env2.sync = Mock()
         mock_env2.comfyui_path = mock_workspace / "environments" / "env2" / "ComfyUI"
-        mock_env2.uv_manager.python_executable = mock_workspace / "bin" / "python"
+        mock_env2.get_runtime_python.return_value = mock_workspace / "bin" / "python"
 
         mocker.patch.object(Orchestrator, "_sync_environment")
         mocker.patch.object(Orchestrator, "_start_comfyui", side_effect=[mock_proc1, mock_proc2])
