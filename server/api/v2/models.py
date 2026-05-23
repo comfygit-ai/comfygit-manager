@@ -200,7 +200,7 @@ def _scan_workflow_source_candidates(
     candidates_by_key = {}
     for workflow_name in workflow_names:
         try:
-            workflow_path = env.workflow_manager.get_workflow_path(workflow_name)
+            workflow_path = env.get_existing_workflow_path(workflow_name)
         except Exception:
             continue
 
@@ -260,7 +260,7 @@ def _scan_workflow_download_candidates(env) -> list[dict]:
     candidates_by_key = {}
     for workflow_name in workflow_names:
         try:
-            workflow_path = env.workflow_manager.get_workflow_path(workflow_name)
+            workflow_path = env.get_existing_workflow_path(workflow_name)
         except Exception:
             continue
 

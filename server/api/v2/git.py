@@ -138,7 +138,7 @@ async def create_commit(request: web.Request, env) -> web.Response:
         })
 
     # Get workflow status
-    workflow_status = await run_sync(env.workflow_manager.get_workflow_status)
+    workflow_status = await run_sync(env.get_workflow_status)
 
     # Check commit safety
     if not workflow_status.is_commit_safe and not allow_issues:

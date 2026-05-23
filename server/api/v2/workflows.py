@@ -10,7 +10,6 @@ from aiohttp import web
 from comfygit_core.assets import DownloadRequest
 from comfygit_core.models import (
     BatchDownloadCallbacks,
-    ManifestModel,
     ManifestWorkflowModel,
     ModelResolutionContext,
     NamedWorkflowContract,
@@ -23,7 +22,7 @@ from comfygit_core.models import (
     WorkflowExecutionContract,
     WorkflowNodeWidgetRef,
 )
-from comfygit_core.workflow import AutoModelStrategy, AutoNodeStrategy, WorkflowDependencyParser
+from comfygit_core.workflow import AutoModelStrategy, AutoNodeStrategy
 
 from cgm_core.decorators import requires_environment, logged_operation
 from cgm_core.dependency_preview import dependency_review_response
@@ -396,7 +395,7 @@ def _workflow_manifest_models(env, workflow_name: str) -> list:
 async def _invalidate_workflow_resolution_cache(env, workflow_name: str) -> None:
     """Invalidate cached workflow analysis after manifest-only workflow edits."""
     try:
-        await run_sync(env.workflow_cache.invalidate, env.name, workflow_name)
+        await run_sync(env.invalidate_workflow_resolution_cache, workflow_name)
     except Exception as exc:
         logger.debug("Unable to invalidate workflow cache for %s: %s", workflow_name, exc)
 
@@ -441,7 +440,7 @@ def _iter_widget_values(widgets_values):
 def _get_workflow_contract_context(env, workflow_name: str) -> dict | None:
     """Build lightweight contract-authoring context from the current workflow file."""
     try:
-        workflow_path = env.workflow_manager.get_workflow_path(workflow_name)
+        workflow_path = env.get_existing_workflow_path(workflow_name)
     except FileNotFoundError:
         return None
 
@@ -564,15 +563,6 @@ def _parse_execution_contract_payload(data: dict) -> WorkflowExecutionContract:
         comfyui_version=_safe_str(data.get("comfyui_version")),
         manager_version=_safe_str(data.get("manager_version")),
     )
-
-
-def _get_package_aliases(workflow_manager) -> dict[str, str]:
-    """Return package alias metadata when available."""
-    resolver = getattr(workflow_manager, "global_node_resolver", None)
-    repository = getattr(resolver, "repository", None)
-    global_mappings = getattr(repository, "global_mappings", None)
-    aliases = getattr(global_mappings, "package_aliases", None)
-    return _safe_dict(aliases)
 
 
 def _reconstruct_optional_node_buckets(env, dependencies, workflow_name: str) -> dict[str, list]:
@@ -746,7 +736,7 @@ async def _apply_explicit_node_mapping_choices(
             if not package_id or before.get(node_type) == package_id:
                 continue
             await run_sync(
-                env.pyproject.workflows.set_custom_node_mapping,
+                env.set_workflow_custom_node_mapping,
                 workflow_name,
                 node_type,
                 package_id,
@@ -761,7 +751,7 @@ async def _apply_explicit_node_mapping_choices(
             if before.get(node_type) is False:
                 continue
             await run_sync(
-                env.pyproject.workflows.set_custom_node_mapping,
+                env.set_workflow_custom_node_mapping,
                 workflow_name,
                 node_type,
                 None,
@@ -771,7 +761,7 @@ async def _apply_explicit_node_mapping_choices(
 
         if action == "skip" and node_type in before:
             removed = await run_sync(
-                env.pyproject.workflows.remove_custom_node_mapping,
+                env.remove_workflow_custom_node_mapping,
                 workflow_name,
                 node_type,
             )
@@ -1147,7 +1137,7 @@ def _apply_explicit_model_choices_to_manifest(env, workflow_name: str, model_cho
 
     if updated_models:
         try:
-            env.pyproject.workflows.set_workflow_models(workflow_name, current_models)
+            env.set_workflow_manifest_models(workflow_name, current_models)
         except Exception:
             logger.exception("Failed to write workflow model choices for '%s'", workflow_name)
 
@@ -1364,10 +1354,10 @@ async def set_model_importance(request: web.Request, env) -> web.Response:
 
     # Call core library
     success = await run_sync(
-        env.workflow_manager.update_model_criticality,
+        env.update_workflow_model_criticality,
         name,
         model,
-        importance
+        importance,
     )
 
     if not success:
@@ -1405,7 +1395,7 @@ async def add_workflow_model(request: web.Request, env) -> web.Response:
 
     try:
         model = await run_sync(
-            env.workflow_manager.add_existing_model_to_workflow,
+            env.add_workflow_model_dependency,
             workflow_name=name,
             model_hash=model_hash,
             relative_path=relative_path,
@@ -1447,7 +1437,7 @@ async def remove_workflow_model(request: web.Request, env) -> web.Response:
 
     try:
         removed = await run_sync(
-            env.workflow_manager.remove_manual_model_from_workflow,
+            env.remove_workflow_model_dependency,
             workflow_name=name,
             model_hash=model_hash,
             relative_path=relative_path,
@@ -1628,15 +1618,15 @@ async def install_workflow(request: web.Request, env) -> web.Response:
 async def analyze_workflow(request: web.Request, env) -> web.Response:
     """Analyze workflow for interactive resolution wizard.
 
-    Uses workflow_manager.analyze_and_resolve_workflow directly to avoid
+    Uses the environment analysis facade directly to avoid
     triggering any pending downloads - we just want the analysis data.
     """
     name = request.match_info["name"]
 
-    # Call analyze_and_resolve_workflow directly (NOT env.resolve_workflow)
+    # Analyze directly (NOT env.resolve_workflow)
     # This gives us analysis + resolution WITHOUT executing downloads
     dependencies, result = await run_sync(
-        env.workflow_manager.analyze_and_resolve_workflow,
+        env.analyze_workflow_dependencies,
         name
     )
 
@@ -1661,7 +1651,7 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
     version_gated_nodes = _safe_sequence(getattr(result, "nodes_version_gated", None))
     uninstallable_nodes = _safe_sequence(getattr(result, "nodes_uninstallable", None))
     node_guidance = _safe_dict(getattr(result, "node_guidance", None))
-    package_aliases = _get_package_aliases(env.workflow_manager)
+    package_aliases = env.get_workflow_package_aliases()
     optional_buckets = _reconstruct_optional_node_buckets(env, dependencies, name)
     saved_optional_choice = {"action": "optional"}
     custom_node_map = dict(env.get_workflow_custom_node_map(name))
@@ -1826,22 +1816,10 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
         )
 
     try:
-        # Parse workflow JSON into Workflow object
-        workflow_obj = Workflow.from_json(workflow_data)
-
-        # Analyze using the Workflow object directly (no temp file needed)
-        parser = WorkflowDependencyParser(
-            workflow=workflow_obj,
+        dependencies, result = await run_sync(
+            env.analyze_workflow_json,
+            workflow_data,
             workflow_name=workflow_name,
-            cec_path=env.cec_path,
-            builtin_versions_repository=getattr(env.workflow_manager, "builtin_versions_repository", None),
-        )
-        dependencies = parser.analyze_dependencies()
-
-        # Use the same resolution logic as analyze_workflow
-        result = await run_sync(
-            env.workflow_manager.resolve_workflow,
-            dependencies
         )
     except Exception as e:
         return web.json_response(
@@ -1865,7 +1843,7 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
     version_gated_nodes = _safe_sequence(getattr(result, "nodes_version_gated", None))
     uninstallable_nodes = _safe_sequence(getattr(result, "nodes_uninstallable", None))
     node_guidance = _safe_dict(getattr(result, "node_guidance", None))
-    package_aliases = _get_package_aliases(env.workflow_manager)
+    package_aliases = env.get_workflow_package_aliases()
     needs_user_input = bool(
         result.nodes_unresolved or result.nodes_ambiguous or
         result.models_unresolved or result.models_ambiguous
@@ -1993,11 +1971,10 @@ async def search_nodes(request: web.Request, env) -> web.Response:
 
     # Search using core library
     matches = await run_sync(
-        env.workflow_manager.global_node_resolver.search_packages,
+        env.search_workflow_node_packages,
         query,
-        installed,
-        True,  # include_registry
-        limit
+        include_registry=True,
+        limit=limit,
     )
 
     # Normalize scores to 0.0-1.0 range for frontend display
@@ -2051,10 +2028,10 @@ async def search_models(request: web.Request, env) -> web.Response:
 
     # Search using core library
     matches = await run_sync(
-        env.workflow_manager.search_models,
+        env.search_workflow_models,
         query,
-        None,  # node_type filter
-        limit
+        node_type=None,
+        limit=limit,
     )
 
     # Get global models for download source info
@@ -2115,11 +2092,11 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
         workflow_name=name,
         node_choices=node_choices,
     )
-    await run_sync(env.workflow_cache.invalidate, env.name, name)
+    await run_sync(env.invalidate_workflow_resolution_cache, name)
 
     # Get current resolution state (does NOT execute downloads)
     _, result = await run_sync(
-        env.workflow_manager.analyze_and_resolve_workflow,
+        env.analyze_workflow_dependencies,
         name
     )
     model_paths_to_sync = sum(
@@ -2131,7 +2108,7 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
     # Apply strategies to fix unresolved issues (writes to pyproject.toml)
     if result.has_issues:
         result = await run_sync(
-            env.workflow_manager.fix_resolution,
+            env.fix_workflow_resolution,
             result,
             node_strategy,
             model_strategy
@@ -2139,7 +2116,7 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
         model_paths_synced = model_paths_to_sync
     elif model_paths_to_sync > 0:
         model_paths_synced = await run_sync(
-            env.workflow_manager.update_workflow_model_paths,
+            env.update_workflow_model_paths,
             result
         )
 
@@ -2215,7 +2192,7 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
                     sources=[url],
                     relative_path=target_path
                 )
-                env.pyproject.workflows.add_workflow_model(name, manifest_model)
+                env.add_workflow_manifest_model(name, manifest_model)
     except Exception:
         pass  # Continue even if write fails - downloads will still work
 
@@ -2379,7 +2356,7 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
                 workflow_name=name,
                 node_choices=node_choices,
             )
-            await run_sync(env.workflow_cache.invalidate, env.name, name)
+            await run_sync(env.invalidate_workflow_resolution_cache, name)
 
             result = await run_sync(
                 env.resolve_workflow,
@@ -2755,36 +2732,10 @@ async def download_model_stream(request: web.Request, env) -> web.StreamResponse
 
 
 async def _finalize_download(env, workflow_name: str, filename: str, model_hash: str):
-    """Update pyproject.toml after successful download.
-
-    Finds the workflow model by filename and updates it to resolved status.
-    """
-    models = list(env.get_workflow_manifest_models(workflow_name))
-
-    for model in models:
-        if model.filename == filename and model.status == "unresolved" and model.sources:
-            # Get model from workspace index
-            resolved_model = env.workspace.get_indexed_model(model_hash)
-            if not resolved_model:
-                return  # Model not indexed yet - skip update
-
-            # Create global table entry with download source preserved
-            manifest_model = ManifestModel(
-                hash=model_hash,
-                filename=resolved_model.filename,
-                relative_path=resolved_model.relative_path,
-                category=model.category,
-                size=resolved_model.file_size,
-                sources=model.sources  # Preserve download URL
-            )
-            env.pyproject.models.add_model(manifest_model)
-
-            # Update workflow model to resolved
-            model.hash = model_hash
-            model.status = "resolved"
-            model.sources = []
-            model.relative_path = None
-
-            # Save changes
-            env.pyproject.workflows.set_workflow_models(workflow_name, models)
-            return
+    """Update manifest state after a workflow model download succeeds."""
+    await run_sync(
+        env.mark_workflow_model_download_resolved,
+        workflow_name,
+        filename=filename,
+        model_hash=model_hash,
+    )

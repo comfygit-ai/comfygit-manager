@@ -2411,33 +2411,17 @@ class TestAnalyzeWorkflowJsonEndpoint:
         assert "match_confidence" in resolved_model
         assert "has_download_source" in resolved_model
 
-    async def test_analyze_json_passes_builtin_versions_repository(
+    async def test_analyze_json_delegates_to_environment_facade(
         self,
         client,
         mock_environment,
-        monkeypatch
     ):
-        """Parser for analyze-json should receive builtin_versions_repository."""
-        import api.v2.workflows as workflow_api
-
-        captured_kwargs = {}
-        fake_dependencies = Mock()
-
-        class FakeParser:
-            def __init__(self, **kwargs):
-                captured_kwargs.update(kwargs)
-
-            def analyze_dependencies(self):
-                return fake_dependencies
-
-        builtin_repo = object()
-        mock_environment.workflow_manager.builtin_versions_repository = builtin_repo
-        mock_environment.workflow_manager.resolve_workflow = Mock(return_value=create_mock_resolution())
-        mock_environment.pyproject = Mock()
-        mock_environment.pyproject.nodes = Mock()
-        mock_environment.pyproject.nodes.get_existing.return_value = {}
-
-        monkeypatch.setattr(workflow_api, "WorkflowDependencyParser", FakeParser)
+        """Analyze-json should call core's unsaved workflow analysis facade."""
+        mock_environment.analyze_workflow_json.side_effect = None
+        mock_environment.analyze_workflow_json.return_value = (
+            Mock(workflow_name="test"),
+            create_mock_resolution(),
+        )
 
         resp = await client.post(
             "/v2/comfygit/workflow/analyze-json",
@@ -2445,8 +2429,10 @@ class TestAnalyzeWorkflowJsonEndpoint:
         )
 
         assert resp.status == 200
-        assert captured_kwargs["builtin_versions_repository"] is builtin_repo
-        assert captured_kwargs["workflow_name"] == "test"
+        mock_environment.analyze_workflow_json.assert_called_once_with(
+            {"nodes": {}},
+            workflow_name="test",
+        )
 
     async def test_analyze_json_version_gated_and_uninstallable_require_action_not_user_input(
         self,

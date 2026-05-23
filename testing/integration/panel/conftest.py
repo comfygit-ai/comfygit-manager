@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from aiohttp import web
 from unittest.mock import Mock, MagicMock
 from pathlib import Path
-from comfygit_core.models import EnvironmentReadiness, GitBranch, GitSyncStatus
+from comfygit_core.models import EnvironmentReadiness, GitBranch, GitSyncStatus, Workflow
 
 # Add server directory to path
 server_dir = Path(__file__).parent.parent.parent.parent / "server"
@@ -24,6 +24,7 @@ def mock_environment():
     mock_workspace = Mock()
     mock_workspace.path = Path("/tmp/test-workspace")
     mock_workspace.list_models = Mock(return_value=[])
+    mock_workspace.model_has_sources = Mock(return_value=False)
     mock_workspace.model_repository = Mock()
     mock_workspace.model_repository.get_sources = Mock(return_value=[])
     mock_env.workspace = mock_workspace
@@ -165,6 +166,96 @@ def mock_environment():
     mock_env.get_manifest_model = Mock(side_effect=_manifest_model)
     mock_env.get_workflow_manifest_models = Mock(side_effect=_workflow_manifest_models)
     mock_env.get_workflow_custom_node_map = Mock(side_effect=_workflow_custom_node_map)
+    mock_env.get_workflow_status = Mock(
+        side_effect=lambda: mock_env.workflow_manager.get_workflow_status()
+    )
+    mock_env.get_existing_workflow_path = Mock(
+        side_effect=lambda name: mock_env.workflow_manager.get_workflow_path(name)
+    )
+    mock_env.invalidate_workflow_resolution_cache = Mock(
+        side_effect=lambda name: mock_env.workflow_cache.invalidate(mock_env.name, name)
+        if hasattr(mock_env, "workflow_cache")
+        else None
+    )
+    mock_env.set_workflow_manifest_models = Mock(
+        side_effect=lambda name, models: mock_env.pyproject.workflows.set_workflow_models(name, models)
+    )
+    mock_env.add_workflow_manifest_model = Mock(
+        side_effect=lambda name, model: mock_env.pyproject.workflows.add_workflow_model(name, model)
+    )
+    mock_env.add_manifest_model = Mock(
+        side_effect=lambda model: mock_env.pyproject.models.add_model(model)
+    )
+    mock_env.set_workflow_custom_node_mapping = Mock(
+        side_effect=lambda name, node_type, package_id: mock_env.pyproject.workflows.set_custom_node_mapping(
+            name, node_type, package_id
+        )
+    )
+    mock_env.remove_workflow_custom_node_mapping = Mock(
+        side_effect=lambda name, node_type: mock_env.pyproject.workflows.remove_custom_node_mapping(
+            name, node_type
+        )
+    )
+    mock_env.update_workflow_model_criticality = Mock(
+        side_effect=lambda name, model, criticality: mock_env.workflow_manager.update_model_criticality(
+            name, model, criticality
+        )
+    )
+    mock_env.add_workflow_model_dependency = Mock(
+        side_effect=lambda **kwargs: mock_env.workflow_manager.add_existing_model_to_workflow(**kwargs)
+    )
+    mock_env.remove_workflow_model_dependency = Mock(
+        side_effect=lambda **kwargs: mock_env.workflow_manager.remove_manual_model_from_workflow(**kwargs)
+    )
+    mock_env.analyze_workflow_dependencies = Mock(
+        side_effect=lambda name: mock_env.workflow_manager.analyze_and_resolve_workflow(name)
+    )
+    def _analyze_workflow_json(workflow_data, workflow_name="unsaved"):
+        if isinstance(workflow_data.get("nodes"), str):
+            raise ValueError("Invalid workflow format")
+        Workflow.from_json(workflow_data)
+        return (
+            Mock(workflow_name=workflow_name),
+            mock_env.workflow_manager.resolve_workflow(Mock(workflow_name=workflow_name)),
+        )
+
+    mock_env.analyze_workflow_json = Mock(side_effect=_analyze_workflow_json)
+    mock_env.resolve_workflow_dependencies = Mock(
+        side_effect=lambda dependencies: mock_env.workflow_manager.resolve_workflow(dependencies)
+    )
+    mock_env.fix_workflow_resolution = Mock(
+        side_effect=lambda result, node_strategy=None, model_strategy=None: mock_env.workflow_manager.fix_resolution(
+            result, node_strategy, model_strategy
+        )
+    )
+    mock_env.update_workflow_model_paths = Mock(
+        side_effect=lambda result: mock_env.workflow_manager.update_workflow_model_paths(result)
+    )
+    mock_env.search_workflow_node_packages = Mock(
+        side_effect=lambda query, include_registry=True, limit=10: mock_env.workflow_manager.global_node_resolver.search_packages(
+            query,
+            mock_env.list_manifest_nodes(),
+            include_registry,
+            limit,
+        )
+    )
+    mock_env.search_workflow_models = Mock(
+        side_effect=lambda query, node_type=None, limit=9: mock_env.workflow_manager.search_models(
+            query,
+            node_type,
+            limit,
+        )
+    )
+
+    def _workflow_package_aliases():
+        resolver = getattr(mock_env.workflow_manager, "global_node_resolver", None)
+        repository = getattr(resolver, "repository", None)
+        global_mappings = getattr(repository, "global_mappings", None)
+        aliases = getattr(global_mappings, "package_aliases", None)
+        return aliases if isinstance(aliases, Mapping) else {}
+
+    mock_env.get_workflow_package_aliases = Mock(side_effect=_workflow_package_aliases)
+    mock_env.mark_workflow_model_download_resolved = Mock(return_value=True)
 
     # Mock status() for sync endpoint version mismatch workaround
     mock_status = Mock()

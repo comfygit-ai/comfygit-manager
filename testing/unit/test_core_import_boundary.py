@@ -107,3 +107,34 @@ def test_panel_api_uses_workspace_model_index_facades() -> None:
         "Manager API modules should use Workspace model-index facades. "
         "Unexpected model repository reach-throughs:\n" + "\n".join(violations)
     )
+
+
+def test_panel_api_uses_environment_workflow_facades() -> None:
+    """Panel APIs should use Environment workflow facades for stable workflow operations."""
+    api_root = SERVER_ROOT / "api" / "v2"
+    forbidden = (
+        "env.pyproject.workflows",
+        "env.workflow_cache",
+        "env.workflow_manager.get_workflow_path",
+        "env.workflow_manager.get_workflow_status",
+        "env.workflow_manager.analyze_and_resolve_workflow",
+        "env.workflow_manager.resolve_workflow",
+        "env.workflow_manager.fix_resolution",
+        "env.workflow_manager.update_workflow_model_paths",
+        "env.workflow_manager.search_models",
+        "env.workflow_manager.update_model_criticality",
+        "env.workflow_manager.add_existing_model_to_workflow",
+        "env.workflow_manager.remove_manual_model_from_workflow",
+    )
+    violations: list[str] = []
+
+    for path in sorted(api_root.rglob("*.py")):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if any(token in line for token in forbidden):
+                rel = path.relative_to(REPO_ROOT)
+                violations.append(f"{rel}:{lineno}: {line.strip()}")
+
+    assert not violations, (
+        "Manager API modules should use Environment workflow facades. "
+        "Unexpected workflow reach-throughs:\n" + "\n".join(violations)
+    )
