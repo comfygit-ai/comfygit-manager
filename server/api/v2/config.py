@@ -117,20 +117,18 @@ async def get_config(request: web.Request) -> web.Response:
             "error": "No environment detected"
         }, status=500)
 
-    config_manager = workspace.workspace_config_manager
-
     # Get models directory (may not be set)
     models_path = None
     try:
-        models_dir = config_manager.get_models_directory()
+        models_dir = workspace.get_models_directory()
         models_path = str(models_dir)
     except ComfyDockError:
         # Models directory not configured yet
         pass
 
     # Get API credentials
-    civitai_token = config_manager.get_civitai_token()
-    hf_token = config_manager.get_huggingface_token()
+    civitai_token = workspace.get_civitai_token()
+    hf_token = workspace.get_huggingface_token()
 
     # Get orchestrator config for extra_args
     orch_config = _load_orchestrator_config(workspace.path)
@@ -188,8 +186,6 @@ async def update_config(request: web.Request) -> web.Response:
             "error": "Invalid JSON"
         }, status=400)
 
-    config_manager = workspace.workspace_config_manager
-
     # Update models directory if provided
     if "models_path" in data:
         models_path = data["models_path"]
@@ -204,12 +200,12 @@ async def update_config(request: web.Request) -> web.Response:
     # Update CivitAI token if provided
     if "civitai_api_key" in data:
         token = data["civitai_api_key"]
-        config_manager.set_civitai_token(token)
+        workspace.set_civitai_token(token)
 
     # Update HuggingFace token if provided
     if "huggingface_token" in data:
         token = data["huggingface_token"]
-        config_manager.set_huggingface_token(token)
+        workspace.set_huggingface_token(token)
 
     # Update ComfyUI extra args if provided
     if "comfyui_extra_args" in data:

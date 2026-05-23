@@ -1569,8 +1569,7 @@ class TestApplyResolutionEndpoint:
 
         # Mock workspace for models_dir check
         mock_environment.workspace = Mock()
-        mock_environment.workspace.workspace_config_manager = Mock()
-        mock_environment.workspace.workspace_config_manager.get_models_directory.return_value = None
+        mock_environment.workspace.get_models_directory.return_value = None
 
         # Mock resolution result (empty - all resolution happens via Path 2)
         mock_result = create_mock_resolution(

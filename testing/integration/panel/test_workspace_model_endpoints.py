@@ -302,7 +302,7 @@ class TestWorkspaceModelDeleteEndpoint:
             "relative_path": "checkpoints/model.safetensors",
         }]
         mock_environment.workspace.get_model_details.return_value = mock_details
-        mock_environment.workspace.workspace_config_manager.get_models_directory.return_value = tmp_path
+        mock_environment.workspace.get_models_directory.return_value = tmp_path
         mock_model_repo = Mock()
         mock_model_repo.get_locations.return_value = []
         mock_environment.workspace.model_repository = mock_model_repo
@@ -452,7 +452,7 @@ class TestWorkspaceModelDetailsEndpoint:
         mock_environment.workspace.get_model_details.return_value = mock_details
 
         # Mock the models directory
-        mock_environment.workspace.workspace_config_manager.get_models_directory.return_value = Path("/workspace/models")
+        mock_environment.workspace.get_models_directory.return_value = Path("/workspace/models")
 
         # Act
         resp = await client.get("/v2/workspace/models/details/abc12345")
@@ -555,7 +555,7 @@ class TestWorkspaceModelsDirectoryEndpoint:
 
     async def test_get_directory_success(self, client, mock_environment):
         """Should return current models directory path."""
-        mock_environment.workspace.workspace_config_manager.get_models_directory.return_value = Path("/workspace/models")
+        mock_environment.workspace.get_models_directory.return_value = Path("/workspace/models")
 
         resp = await client.get("/v2/workspace/models/directory")
 

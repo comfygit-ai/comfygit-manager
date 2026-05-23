@@ -709,8 +709,8 @@ class TestModelsSubdirectoriesEndpoint:
         (models_dir / "custom_models").mkdir()  # Non-standard existing dir
         (models_dir / "loras").mkdir()
 
-        # Mock workspace config manager to return our temp dir
-        mock_environment.workspace.workspace_config_manager.get_models_directory.return_value = models_dir
+        # Mock workspace facade to return our temp dir
+        mock_environment.workspace.get_models_directory.return_value = models_dir
 
         # Execute
         resp = await client.get("/v2/workspace/models/subdirectories")
@@ -752,7 +752,7 @@ class TestModelsSubdirectoriesEndpoint:
         models_dir = tmp_path / "models"
         models_dir.mkdir()
 
-        mock_environment.workspace.workspace_config_manager.get_models_directory.return_value = models_dir
+        mock_environment.workspace.get_models_directory.return_value = models_dir
 
         # Execute
         resp = await client.get("/v2/workspace/models/subdirectories")
@@ -779,7 +779,7 @@ class TestModelsSubdirectoriesEndpoint:
         )
 
         # Return None for models directory
-        mock_environment.workspace.workspace_config_manager.get_models_directory.return_value = None
+        mock_environment.workspace.get_models_directory.return_value = None
 
         # Execute
         resp = await client.get("/v2/workspace/models/subdirectories")
@@ -812,7 +812,7 @@ class TestModelsSubdirectoriesEndpoint:
         (models_dir / ".hidden").mkdir()  # Should be ignored
         (models_dir / ".cache").mkdir()  # Should be ignored
 
-        mock_environment.workspace.workspace_config_manager.get_models_directory.return_value = models_dir
+        mock_environment.workspace.get_models_directory.return_value = models_dir
 
         # Execute
         resp = await client.get("/v2/workspace/models/subdirectories")

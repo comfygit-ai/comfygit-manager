@@ -220,3 +220,8 @@ validation flows should consume `EnvironmentManifestSnapshot` and
 `env.pyproject` internals. As core exposes facade methods for workspace
 configuration and remaining runtime setup behavior, those temporary exceptions
 should be removed.
+
+Non-deploy manager APIs now use Workspace facade methods for workspace
+configuration such as model directory and Civitai/Hugging Face credentials.
+Retired provider-specific deployment endpoints remain a separate cleanup area
+and are excluded from that workspace-config guardrail.

@@ -330,7 +330,7 @@ def _model_details_payload(env, details) -> dict:
         except Exception:
             pass
 
-    models_dir = env.workspace.workspace_config_manager.get_models_directory()
+    models_dir = env.workspace.get_models_directory()
     primary_path = str(models_dir / model.relative_path) if models_dir and model.relative_path else model.relative_path
 
     locations = []
@@ -1176,7 +1176,7 @@ async def scan_workspace_models(request: web.Request, env) -> web.Response:
 async def get_models_directory(request: web.Request, env) -> web.Response:
     """Get the current models directory path."""
     try:
-        models_dir = env.workspace.workspace_config_manager.get_models_directory()
+        models_dir = env.workspace.get_models_directory()
         return web.json_response({
             "path": str(models_dir) if models_dir else None,
         })
@@ -1640,7 +1640,7 @@ def _civitai_client(env) -> CivitAIClient:
     cache_manager = APICacheManager(cache_base_path=env.workspace.paths.cache)
     return CivitAIClient(
         cache_manager=cache_manager,
-        workspace_config=env.workspace.workspace_config_manager,
+        api_key=env.workspace.get_civitai_token(),
     )
 
 
@@ -1885,7 +1885,7 @@ async def workspace_models_subdirectories(request: web.Request, env) -> web.Resp
 
     models_dir = None
     try:
-        models_dir = env.workspace.workspace_config_manager.get_models_directory()
+        models_dir = env.workspace.get_models_directory()
     except Exception:
         pass
 

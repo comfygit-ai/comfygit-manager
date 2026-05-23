@@ -2220,7 +2220,7 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
         pass  # Continue even if write fails - downloads will still work
 
     # Get models directory for checking if files already exist
-    models_dir = env.workspace.workspace_config_manager.get_models_directory()
+    models_dir = env.workspace.get_models_directory()
 
     # Collect models that need downloading (download_intent/property_download_intent with model_source)
     # Skip models where user chose to cancel/optional, or file already exists
@@ -2508,7 +2508,7 @@ async def get_pending_downloads(request: web.Request, env) -> web.Response:
                     if sources:
                         target_path = model.relative_path
                         if target_path:
-                            models_dir = env.workspace.workspace_config_manager.get_models_directory()
+                            models_dir = env.workspace.get_models_directory()
                             normalized_target = str(target_path).replace("\\", "/").lstrip("/")
                             if models_dir and (models_dir / normalized_target).exists():
                                 continue
