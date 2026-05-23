@@ -223,5 +223,8 @@ should be removed.
 
 Non-deploy manager APIs now use Workspace facade methods for workspace
 configuration such as model directory and Civitai/Hugging Face credentials.
+Model-index routes also use Workspace facade methods for source management,
+hash completion, indexed lookup, and model file/location deletion instead of
+touching model repositories directly.
 Retired provider-specific deployment endpoints remain a separate cleanup area
 and are excluded from that workspace-config guardrail.

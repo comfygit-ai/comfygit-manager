@@ -122,16 +122,8 @@ class TestWorkspaceModelSourceEndpoint:
     """POST /v2/workspace/models/{identifier}/source - Add source to workspace model index."""
 
     async def test_success_add_source(self, client, mock_environment):
-        """Should add source directly to workspace model repository."""
-        # Arrange: Mock workspace.model_repository and model_downloader
-        mock_model_repo = Mock()
-        mock_model_repo.has_model.return_value = True
-        mock_model_repo.add_source.return_value = None
-        mock_environment.workspace.model_repository = mock_model_repo
-
-        mock_downloader = Mock()
-        mock_downloader.detect_url_type.return_value = "civitai"
-        mock_environment.workspace.model_downloader = mock_downloader
+        """Should add source through the workspace facade."""
+        mock_environment.workspace.add_indexed_model_source.return_value = "civitai"
 
         # Act
         resp = await client.post(
@@ -145,8 +137,10 @@ class TestWorkspaceModelSourceEndpoint:
         assert data["status"] == "success"
         assert data["source_type"] == "civitai"
 
-        # Verify workspace.model_repository.add_source was called
-        mock_model_repo.add_source.assert_called_once()
+        mock_environment.workspace.add_indexed_model_source.assert_called_once_with(
+            "abc12345",
+            "https://civitai.com/api/download/models/12345",
+        )
 
     async def test_error_missing_source_url(self, client, mock_environment):
         """Should return 400 when source_url is missing."""
@@ -161,10 +155,7 @@ class TestWorkspaceModelSourceEndpoint:
 
     async def test_error_model_not_in_index(self, client, mock_environment):
         """Should return 404 when model hash not found in workspace index."""
-        # Setup: Model not in repository
-        mock_model_repo = Mock()
-        mock_model_repo.has_model.return_value = False
-        mock_environment.workspace.model_repository = mock_model_repo
+        mock_environment.workspace.add_indexed_model_source.side_effect = KeyError("not found")
 
         resp = await client.post(
             "/v2/workspace/models/nonexistent/source",
@@ -292,20 +283,15 @@ class TestWorkspaceModelDeleteEndpoint:
         mock_model = create_mock_model(filename="model.safetensors", hash_val="abc12345")
         mock_model.relative_path = "checkpoints/model.safetensors"
 
-        # Mock get_model_details to return model with path
-        mock_details = Mock()
-        mock_details.model = mock_model
-        mock_details.all_locations = [{
-            "id": 10,
-            "path": str(model_file),
-            "base_directory": str(tmp_path),
-            "relative_path": "checkpoints/model.safetensors",
-        }]
-        mock_environment.workspace.get_model_details.return_value = mock_details
-        mock_environment.workspace.get_models_directory.return_value = tmp_path
-        mock_model_repo = Mock()
-        mock_model_repo.get_locations.return_value = []
-        mock_environment.workspace.model_repository = mock_model_repo
+        mock_environment.workspace.delete_model.return_value = SimpleNamespace(
+            status="success",
+            filename=mock_model.filename,
+            model_hash=mock_model.hash,
+            deleted_paths=[str(model_file)],
+            missing_paths=[],
+            errors=[],
+            remaining_locations=0,
+        )
 
         # Act
         resp = await client.delete("/v2/workspace/models/abc12345")
@@ -314,8 +300,8 @@ class TestWorkspaceModelDeleteEndpoint:
         assert resp.status == 200
         data = await resp.json()
         assert data["status"] == "success"
-        assert not model_file.exists()
-        mock_model_repo.remove_location_by_id.assert_called_once_with(10)
+        assert data["deleted_paths"] == [str(model_file)]
+        mock_environment.workspace.delete_model.assert_called_once_with("abc12345")
 
     async def test_success_delete_single_model_location(self, client, mock_environment, tmp_path):
         """Should delete only the selected indexed model location."""
@@ -332,26 +318,15 @@ class TestWorkspaceModelDeleteEndpoint:
             category="text_encoders",
             relative_path="text_encoders/model.safetensors",
         )
-        mock_details = Mock()
-        mock_details.model = mock_model
-        mock_details.all_locations = [
-            {
-                "id": 1,
-                "path": str(keep_file),
-                "base_directory": str(tmp_path),
-                "relative_path": "text_encoders/model.safetensors",
-            },
-            {
-                "id": 2,
-                "path": str(delete_file),
-                "base_directory": str(tmp_path),
-                "relative_path": "split_files/text_encoders/model.safetensors",
-            },
-        ]
-        mock_environment.workspace.get_model_details.return_value = mock_details
-        mock_model_repo = Mock()
-        mock_model_repo.get_locations.return_value = [mock_details.all_locations[0]]
-        mock_environment.workspace.model_repository = mock_model_repo
+        mock_environment.workspace.delete_model_location.return_value = SimpleNamespace(
+            status="success",
+            filename=mock_model.filename,
+            model_hash=mock_model.hash,
+            deleted_paths=[str(delete_file)],
+            missing_paths=[],
+            errors=[],
+            remaining_locations=1,
+        )
 
         resp = await client.delete(
             "/v2/workspace/models/abc12345/locations",
@@ -363,9 +338,13 @@ class TestWorkspaceModelDeleteEndpoint:
         assert data["status"] == "success"
         assert data["deleted_paths"] == [str(delete_file)]
         assert data["remaining_locations"] == 1
-        assert keep_file.exists()
-        assert not delete_file.exists()
-        mock_model_repo.remove_location_by_id.assert_called_once_with(2)
+        mock_environment.workspace.delete_model_location.assert_called_once_with(
+            "abc12345",
+            location_id=2,
+            base_directory=None,
+            relative_path=None,
+            path=None,
+        )
 
     async def test_error_delete_single_model_location_unknown(self, client, mock_environment, tmp_path):
         """Should reject deleting a location that is not in the model index."""
@@ -373,16 +352,7 @@ class TestWorkspaceModelDeleteEndpoint:
         model_file.parent.mkdir(parents=True)
         model_file.write_bytes(b"fake model data")
 
-        mock_model = create_mock_model(filename="model.safetensors", hash_val="abc12345")
-        mock_details = Mock()
-        mock_details.model = mock_model
-        mock_details.all_locations = [{
-            "id": 10,
-            "path": str(model_file),
-            "base_directory": str(tmp_path),
-            "relative_path": "checkpoints/model.safetensors",
-        }]
-        mock_environment.workspace.get_model_details.return_value = mock_details
+        mock_environment.workspace.delete_model_location.side_effect = KeyError("Indexed model location not found")
 
         resp = await client.delete(
             "/v2/workspace/models/abc12345/locations",
@@ -394,7 +364,7 @@ class TestWorkspaceModelDeleteEndpoint:
 
     async def test_error_model_not_found(self, client, mock_environment):
         """Should return 404 when model identifier not found."""
-        mock_environment.workspace.get_model_details.side_effect = KeyError("Not found")
+        mock_environment.workspace.delete_model.side_effect = KeyError("Not found")
 
         resp = await client.delete("/v2/workspace/models/nonexistent")
 
@@ -404,7 +374,7 @@ class TestWorkspaceModelDeleteEndpoint:
 
     async def test_error_ambiguous_identifier(self, client, mock_environment):
         """Should return 400 when identifier matches multiple models."""
-        mock_environment.workspace.get_model_details.side_effect = ValueError("Multiple matches")
+        mock_environment.workspace.delete_model.side_effect = ValueError("Multiple matches")
 
         resp = await client.delete("/v2/workspace/models/amb")
 

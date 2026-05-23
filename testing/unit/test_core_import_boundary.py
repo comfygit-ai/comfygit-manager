@@ -85,3 +85,25 @@ def test_non_deploy_panel_api_uses_workspace_config_facades() -> None:
         "Non-deploy Manager API modules should use Workspace config facades. "
         "Unexpected config repository reach-throughs:\n" + "\n".join(violations)
     )
+
+
+def test_panel_api_uses_workspace_model_index_facades() -> None:
+    """Panel APIs should not reach into model repositories or download managers."""
+    api_root = SERVER_ROOT / "api" / "v2"
+    forbidden = (
+        "workspace.model_repository",
+        "workflow_manager.model_repository",
+        "workspace.model_downloader",
+    )
+    violations: list[str] = []
+
+    for path in sorted(api_root.rglob("*.py")):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if any(token in line for token in forbidden):
+                rel = path.relative_to(REPO_ROOT)
+                violations.append(f"{rel}:{lineno}: {line.strip()}")
+
+    assert not violations, (
+        "Manager API modules should use Workspace model-index facades. "
+        "Unexpected model repository reach-throughs:\n" + "\n".join(violations)
+    )

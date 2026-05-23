@@ -2763,8 +2763,8 @@ async def _finalize_download(env, workflow_name: str, filename: str, model_hash:
 
     for model in models:
         if model.filename == filename and model.status == "unresolved" and model.sources:
-            # Get model from repository
-            resolved_model = env.workflow_manager.model_repository.get_model(model_hash)
+            # Get model from workspace index
+            resolved_model = env.workspace.get_indexed_model(model_hash)
             if not resolved_model:
                 return  # Model not indexed yet - skip update
 

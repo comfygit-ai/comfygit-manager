@@ -220,7 +220,7 @@ class TestEnvironmentModelsEndpoint:
         mock_environment.pyproject.models = Mock()
         mock_environment.pyproject.models.get_by_hash.return_value = global_model
         mock_environment.workspace.list_models.return_value = [indexed_model]
-        mock_environment.workspace.model_repository.get_sources.return_value = []
+        mock_environment.workspace.model_has_sources.return_value = False
 
         resp = await client.get("/v2/comfygit/models/environment")
 
@@ -304,17 +304,8 @@ class TestWorkspaceModelSourceEndpoint:
     """POST /v2/workspace/models/{identifier}/source - Add source to workspace model index."""
 
     async def test_add_source_success(self, client, mock_environment):
-        """Should add source directly to workspace model repository."""
-        # Setup: Mock the model_repository on workspace
-        mock_model_repo = Mock()
-        mock_model_repo.has_model.return_value = True
-        mock_model_repo.add_source.return_value = None
-        mock_environment.workspace.model_repository = mock_model_repo
-
-        # Mock model_downloader for source type detection
-        mock_downloader = Mock()
-        mock_downloader.detect_url_type.return_value = "huggingface"
-        mock_environment.workspace.model_downloader = mock_downloader
+        """Should add source through the workspace facade."""
+        mock_environment.workspace.add_indexed_model_source.return_value = "huggingface"
 
         # Execute
         resp = await client.post(
@@ -328,19 +319,14 @@ class TestWorkspaceModelSourceEndpoint:
         assert data["status"] == "success"
         assert data["source_type"] == "huggingface"
 
-        # Should have called workspace.model_repository.add_source directly
-        mock_model_repo.add_source.assert_called_once()
-        call_args = mock_model_repo.add_source.call_args
-        assert call_args[1]["model_hash"] == "abc123def456"
-        assert call_args[1]["source_type"] == "huggingface"
-        assert "huggingface.co" in call_args[1]["source_url"]
+        mock_environment.workspace.add_indexed_model_source.assert_called_once_with(
+            "abc123def456",
+            "https://huggingface.co/org/model/resolve/main/file.safetensors",
+        )
 
     async def test_add_source_model_not_in_index(self, client, mock_environment):
         """Should return 404 when model hash not found in workspace index."""
-        # Setup: Model not in repository
-        mock_model_repo = Mock()
-        mock_model_repo.has_model.return_value = False
-        mock_environment.workspace.model_repository = mock_model_repo
+        mock_environment.workspace.add_indexed_model_source.side_effect = KeyError("not found")
 
         # Execute
         resp = await client.post(
@@ -366,13 +352,7 @@ class TestWorkspaceModelSourceEndpoint:
 
     async def test_add_source_detects_civitai_type(self, client, mock_environment):
         """Should auto-detect CivitAI source type."""
-        mock_model_repo = Mock()
-        mock_model_repo.has_model.return_value = True
-        mock_environment.workspace.model_repository = mock_model_repo
-
-        mock_downloader = Mock()
-        mock_downloader.detect_url_type.return_value = "civitai"
-        mock_environment.workspace.model_downloader = mock_downloader
+        mock_environment.workspace.add_indexed_model_source.return_value = "civitai"
 
         resp = await client.post(
             "/v2/workspace/models/abc123/source",
@@ -403,11 +383,8 @@ class TestWorkspaceModelSourceRemoveEndpoint:
     """DELETE /v2/workspace/models/{identifier}/source - Remove source from workspace model index."""
 
     async def test_remove_source_success(self, client, mock_environment):
-        """Should remove source from workspace model repository."""
-        # Setup: Mock the model_repository on workspace
-        mock_model_repo = Mock()
-        mock_model_repo.remove_source.return_value = True  # Successfully removed
-        mock_environment.workspace.model_repository = mock_model_repo
+        """Should remove source through the workspace facade."""
+        mock_environment.workspace.remove_indexed_model_source.return_value = True
 
         # Execute
         resp = await client.delete(
@@ -420,17 +397,14 @@ class TestWorkspaceModelSourceRemoveEndpoint:
         data = await resp.json()
         assert data["status"] == "success"
 
-        # Should have called workspace.model_repository.remove_source
-        mock_model_repo.remove_source.assert_called_once_with(
+        mock_environment.workspace.remove_indexed_model_source.assert_called_once_with(
             "abc123def456",
             "https://huggingface.co/org/model/resolve/main/file.safetensors"
         )
 
     async def test_remove_source_not_found(self, client, mock_environment):
         """Should return 404 when source URL doesn't exist for model."""
-        mock_model_repo = Mock()
-        mock_model_repo.remove_source.return_value = False  # Source not found
-        mock_environment.workspace.model_repository = mock_model_repo
+        mock_environment.workspace.remove_indexed_model_source.return_value = False
 
         resp = await client.delete(
             "/v2/workspace/models/abc123/source",
