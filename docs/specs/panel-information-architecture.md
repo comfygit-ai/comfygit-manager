@@ -166,8 +166,8 @@ surfaces.
 ### CGM-IA-10 [LIVE]: Provider-target and deployment controls should not remain first-class local panel destinations
 Validation: HUMAN_REVIEW
 
-RunPod, custom worker, and other provider-specific deployment controls are not
-the intended long-term primary job of the local panel.
+Provider-specific deployment controls are not the intended long-term primary job
+of the local panel.
 
 The local panel should prefer:
 - local commits
@@ -179,8 +179,8 @@ Cloud should own the actual deployment and runtime-management workflow.
 
 The current panel maps old `Deploy`, `Publish`, and `Account` navigation state
 to Version Control rather than keeping the retired Cloud domain active. Legacy
-deploy components may still exist in the codebase as reference or unused code,
-but they are not part of the active panel information architecture.
+provider-deploy components and endpoints have been removed from the manager
+codebase.
 
 ### CGM-IA-11 [RETIRED]: Blocked publish flows should route users to `Account` rather than embedding a second full auth surface inside `Publish`
 Validation: HUMAN_REVIEW

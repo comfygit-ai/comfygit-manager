@@ -24,9 +24,8 @@ def mock_env(tmp_path):
     env.pyproject.nodes = Mock()
     env.pyproject.nodes.get_existing.return_value = {}
     env.list_manifest_nodes = Mock(side_effect=lambda: env.pyproject.nodes.get_existing())
-    env.node_manager = Mock()
-    env.node_manager.add_node = Mock()
-    env.node_manager.update_node = Mock()
+    env.add_node = Mock()
+    env.update_node = Mock()
     return env
 
 
@@ -42,8 +41,8 @@ async def test_process_install_defaults_to_registry_source_when_repository_prese
 
     result = await comfygit_server.process_install(mock_env, params)
 
-    mock_env.node_manager.add_node.assert_called_once_with("comfyui-impact-pack@1.2.3", force=False)
-    mock_env.node_manager.update_node.assert_not_called()
+    mock_env.add_node.assert_called_once_with("comfyui-impact-pack@1.2.3", force=False)
+    mock_env.update_node.assert_not_called()
     assert result["status_str"] == "success"
 
 
@@ -60,11 +59,11 @@ async def test_process_install_uses_repository_for_explicit_git_source(mock_env)
 
     result = await comfygit_server.process_install(mock_env, params)
 
-    mock_env.node_manager.add_node.assert_called_once_with(
+    mock_env.add_node.assert_called_once_with(
         "https://github.com/kijai/ComfyUI-KJNodes",
         force=False,
     )
-    mock_env.node_manager.update_node.assert_not_called()
+    mock_env.update_node.assert_not_called()
     assert result["status_str"] == "success"
 
 

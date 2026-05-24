@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CORE_PATH="${COMFYGIT_CORE_PATH:-"$ROOT/../comfygit/packages/core"}"
+
+if [[ ! -f "$CORE_PATH/pyproject.toml" ]]; then
+  echo "Could not find local comfygit-core at: $CORE_PATH" >&2
+  echo "Set COMFYGIT_CORE_PATH=/path/to/comfygit/packages/core" >&2
+  exit 1
+fi
+
+if [[ "$#" -eq 0 ]]; then
+  set -- testing/unit -q
+fi
+
+cd "$ROOT"
+
+COMFYGIT_DEV_CORE_PATH="$CORE_PATH" \
+  uv run --with-editable "$CORE_PATH" pytest "$@"

@@ -203,7 +203,7 @@ For cloud-bound sessions:
 This preserves the local orchestrator as a local adoption tool while preventing
 cloud sessions from becoming detached from the outer cloud control plane.
 
-### CGM-SB-10 [PARTIAL]: Manager should consume ComfyGit Core through public facades
+### CGM-SB-10 [LIVE]: Manager should consume ComfyGit Core through public facades
 Validation: STATIC
 
 The manager backend should import reusable core behavior through documented
@@ -211,20 +211,14 @@ facades such as `comfygit_core`, `comfygit_core.models`,
 `comfygit_core.runtime`, `comfygit_core.workflow`, `comfygit_core.git`, and
 `comfygit_core.assets`.
 
-Direct imports from core implementation packages are allowed only as temporary
-exceptions tracked by the manager's core import-boundary test. Git remote and
-token-authenticated git operations should flow through core facade methods
-rather than direct `comfygit_core.utils.git` imports. Deployment summary and
-validation flows should consume `EnvironmentManifestSnapshot` and
-`EnvironmentReadiness` through `Environment` facade methods rather than
-`env.pyproject` internals. As core exposes facade methods for workspace
-configuration and remaining runtime setup behavior, those temporary exceptions
-should be removed.
+Direct imports from core implementation packages are not part of the supported
+manager boundary. Git remote and token-authenticated git operations should flow
+through core facade methods rather than direct `comfygit_core.utils.git`
+imports. Runtime setup should use `comfygit_core.runtime` helpers instead of
+importing core integration internals.
 
-Non-deploy manager APIs now use Workspace facade methods for workspace
-configuration such as model directory and Civitai/Hugging Face credentials.
-Model-index routes also use Workspace facade methods for source management,
-hash completion, indexed lookup, and model file/location deletion instead of
-touching model repositories directly.
-Retired provider-specific deployment endpoints remain a separate cleanup area
-and are excluded from that workspace-config guardrail.
+Manager APIs use Workspace facade methods for workspace configuration such as
+model directory and Civitai/Hugging Face credentials. Model-index routes also
+use Workspace facade methods for source management, hash completion, indexed
+lookup, and model file/location deletion instead of touching model repositories
+directly.

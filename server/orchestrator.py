@@ -546,7 +546,7 @@ def _get_venv_executables(venv_path: Path) -> tuple[Path, Path]:
 
 def _create_venv_with_uv(venv_path: Path, python_exe: Path) -> bool:
     """
-    Create venv using UVCommand from comfygit-core.
+    Create venv using comfygit-core's public uv runtime helper.
 
     Uses bundled uv binary which creates symlinks on macOS,
     avoiding the @executable_path dylib issue.
@@ -554,23 +554,27 @@ def _create_venv_with_uv(venv_path: Path, python_exe: Path) -> bool:
     Returns True on success, False if uv unavailable.
     """
     try:
-        from comfygit_core.integrations.uv_command import UVCommand
-
-        uv = UVCommand()
-        uv.venv(venv_path, python="3.12")
+        from comfygit_core.runtime import create_uv_venv
 
         # Install comfygit-core using uv pip (doesn't need pip in venv)
         dev_core_path = os.environ.get("COMFYGIT_DEV_CORE_PATH")
         if dev_core_path:
             print(f"[ComfyGit] Dev mode: installing core from {dev_core_path}")
-            uv.pip_install(["-e", dev_core_path], python=python_exe)
+            install_packages = ["-e", dev_core_path]
         else:
-            uv.pip_install(["comfygit-core"], python=python_exe)
+            install_packages = ["comfygit-core"]
+
+        create_uv_venv(
+            venv_path,
+            python="3.12",
+            install_packages=install_packages,
+            install_python=python_exe,
+        )
 
         return True
 
     except ImportError:
-        print("[ComfyGit] UVCommand not available, falling back to venv module")
+        print("[ComfyGit] uv runtime helper not available, falling back to venv module")
         return False
     except Exception as e:
         print(f"[ComfyGit] uv venv failed ({e}), falling back to venv module")

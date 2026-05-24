@@ -126,16 +126,27 @@ sections from committed `pyproject.toml` files.
 Helper used by hooks/filtering to avoid committing machine-local uv source
 overrides.
 
+### `test-local-core`
+
+Runs backend tests against a local editable `comfygit-core` checkout without
+changing the tracked `pyproject.toml` dependency pin:
+
+```bash
+./scripts/test-local-core
+./scripts/test-local-core testing/unit/test_readiness.py -q
+```
+
+By default it uses the sibling checkout at `../comfygit/packages/core`. Set
+`COMFYGIT_CORE_PATH=/path/to/comfygit/packages/core` for a different local core
+repo.
+
 ## Legacy and specialized helpers
 
 These scripts predate the manager-owned Docker dev stack and are still useful
 for narrower workflows:
 
-- `comfygit-dev`: older local/simulator-oriented manager dev launcher.
 - `comfygit-worktree.sh`: creates a manager git worktree paired with a ComfyGit
   environment.
-- `pull-runpod-image.sh` and `start-simulator.sh`: older RunPod/local simulator
-  helpers.
 - `sync-requirements.py`: syncs dependency metadata from project files.
 - `check-frontend-version.sh`: checks bundled frontend/version state.
 

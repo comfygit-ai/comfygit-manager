@@ -104,6 +104,52 @@ async def list_remotes(request: web.Request, env) -> web.Response:
     })
 
 
+@routes.post("/v2/comfygit/remotes/test-git-auth")
+@requires_environment
+async def test_git_auth(request: web.Request, env) -> web.Response:
+    """Test GitHub PAT authentication against the origin remote."""
+    data = await request.json()
+    token = data.get("token")
+
+    if not token:
+        return web.json_response(
+            {"status": "error", "message": "Token is required"},
+            status=400,
+        )
+
+    try:
+        remote_url = await run_sync(env.get_remote_url, "origin")
+        if not remote_url:
+            return web.json_response(
+                {"status": "error", "message": "No origin remote configured"},
+                status=400,
+            )
+
+        if remote_url.startswith("git@") or remote_url.startswith("ssh://"):
+            return web.json_response({
+                "status": "error",
+                "message": "SSH remotes do not support PAT authentication. Convert to HTTPS.",
+            })
+
+        success = await run_sync(env.check_remote_auth, remote_url, token)
+        if success:
+            return web.json_response({
+                "status": "success",
+                "message": "GitHub authentication successful",
+            })
+
+        return web.json_response({
+            "status": "error",
+            "message": "Authentication failed. Check your token has repo access.",
+        })
+
+    except Exception as e:
+        return web.json_response({
+            "status": "error",
+            "message": f"Test failed: {str(e)}",
+        })
+
+
 @routes.post("/v2/comfygit/remotes")
 @logged_operation("add remote")
 async def add_remote(request: web.Request, env) -> web.Response:

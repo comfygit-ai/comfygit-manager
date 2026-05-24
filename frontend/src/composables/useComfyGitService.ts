@@ -69,24 +69,6 @@ import type {
   InitializeProgress,
   ValidatePathRequest,
   ValidatePathResult,
-  DataCenter,
-  EnvironmentDeploySummary,
-  NetworkVolume,
-  RunPodGpuType,
-  RunPodInstance,
-  RunPodConnectionResult,
-  RunPodKeyStatus,
-  DeployResult,
-  DeployPackageResult,
-  DeployConfig,
-  DeploymentStatus,
-  CustomWorkersResponse,
-  AddWorkerRequest,
-  WorkerScanResponse,
-  WorkerTestResult,
-  CustomWorkerSystemInfo,
-  WorkerInstancesResponse,
-  DeployToWorkerRequest,
   HuggingFaceRepoInfoResponse,
   HuggingFaceSearchResponse,
   ModelsSubdirectoriesResponse,
@@ -496,25 +478,6 @@ export function useComfyGitService() {
     if (USE_MOCK) return mockApi.validateExport()
 
     return fetchApi<ExportValidationResult>('/v2/comfygit/export/validate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
-    })
-  }
-
-  async function validateDeploy(): Promise<ExportValidationResult> {
-    // Deploy validation doesn't check for uncommitted changes
-    // because deploys pull from git remotes, not local files
-    if (USE_MOCK) {
-      // Mock always allows deploy
-      return {
-        can_export: true,
-        blocking_issues: [],
-        warnings: { models_without_sources: [], nodes_without_provenance: [] }
-      }
-    }
-
-    return fetchApi<ExportValidationResult>('/v2/comfygit/deploy/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({})
@@ -2280,177 +2243,7 @@ export function useComfyGitService() {
     })
   }
 
-  // Deploy Operations
-  async function getDeploySummary(): Promise<EnvironmentDeploySummary> {
-    if (USE_MOCK) return mockApi.getDeploySummary()
-    return fetchApi<EnvironmentDeploySummary>('/v2/comfygit/deploy/summary')
-  }
-
-  async function getDataCenters(): Promise<{ data_centers: DataCenter[] }> {
-    if (USE_MOCK) return mockApi.getDataCenters()
-    return fetchApi<{ data_centers: DataCenter[] }>('/v2/comfygit/deploy/runpod/data-centers')
-  }
-
-  async function testRunPodConnection(apiKey: string, saveKey: boolean): Promise<RunPodConnectionResult> {
-    if (USE_MOCK) return mockApi.testRunPodConnection(apiKey, saveKey)
-    return fetchApi<RunPodConnectionResult>('/v2/comfygit/deploy/runpod/test', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: apiKey, save_key: saveKey })
-    })
-  }
-
-  async function getNetworkVolumes(): Promise<{ volumes: NetworkVolume[] }> {
-    if (USE_MOCK) return mockApi.getNetworkVolumes()
-    return fetchApi<{ volumes: NetworkVolume[] }>('/v2/comfygit/deploy/runpod/volumes')
-  }
-
-  async function getRunPodGpuTypes(dataCenterId?: string): Promise<{ gpu_types: RunPodGpuType[] }> {
-    if (USE_MOCK) return mockApi.getRunPodGpuTypes()
-    const url = dataCenterId
-      ? `/v2/comfygit/deploy/runpod/gpu-types?data_center_id=${encodeURIComponent(dataCenterId)}`
-      : '/v2/comfygit/deploy/runpod/gpu-types'
-    return fetchApi<{ gpu_types: RunPodGpuType[] }>(url)
-  }
-
-  async function deployToRunPod(config: DeployConfig): Promise<DeployResult> {
-    if (USE_MOCK) return mockApi.deployToRunPod(config)
-    return fetchApi<DeployResult>('/v2/comfygit/deploy/runpod', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(config)
-    })
-  }
-
-  async function getRunPodPods(): Promise<{ pods: RunPodInstance[] }> {
-    if (USE_MOCK) return mockApi.getRunPodPods()
-    return fetchApi<{ pods: RunPodInstance[] }>('/v2/comfygit/deploy/runpod/pods')
-  }
-
-  async function terminateRunPodPod(podId: string): Promise<{ status: 'success' | 'error'; message: string }> {
-    if (USE_MOCK) return mockApi.terminateRunPodPod(podId)
-    return fetchApi(`/v2/comfygit/deploy/runpod/${encodeURIComponent(podId)}`, {
-      method: 'DELETE'
-    })
-  }
-
-  async function stopRunPodPod(podId: string): Promise<{ status: 'success' | 'error'; message: string }> {
-    if (USE_MOCK) return mockApi.stopRunPodPod(podId)
-    return fetchApi(`/v2/comfygit/deploy/runpod/${encodeURIComponent(podId)}/stop`, {
-      method: 'POST'
-    })
-  }
-
-  async function startRunPodPod(podId: string): Promise<{ status: 'success' | 'error'; message: string; cost_per_hour?: number }> {
-    if (USE_MOCK) return mockApi.startRunPodPod(podId)
-    return fetchApi(`/v2/comfygit/deploy/runpod/${encodeURIComponent(podId)}/start`, {
-      method: 'POST'
-    })
-  }
-
-  async function getDeploymentStatus(podId: string): Promise<DeploymentStatus> {
-    if (USE_MOCK) return mockApi.getDeploymentStatus(podId)
-    return fetchApi<DeploymentStatus>(`/v2/comfygit/deploy/runpod/${encodeURIComponent(podId)}/status`)
-  }
-
-  async function exportDeployPackage(outputPath?: string): Promise<DeployPackageResult> {
-    if (USE_MOCK) return mockApi.exportDeployPackage(outputPath)
-    return fetchApi<DeployPackageResult>('/v2/comfygit/deploy/package', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ output_path: outputPath })
-    })
-  }
-
-  async function getStoredRunPodKey(verify = false): Promise<RunPodKeyStatus> {
-    if (USE_MOCK) return mockApi.getStoredRunPodKey()
-    const url = verify
-      ? '/v2/comfygit/deploy/runpod/key?verify=true'
-      : '/v2/comfygit/deploy/runpod/key'
-    return fetchApi<RunPodKeyStatus>(url)
-  }
-
-  async function clearRunPodKey(): Promise<{ status: 'success' }> {
-    if (USE_MOCK) return mockApi.clearRunPodKey()
-    return fetchApi('/v2/comfygit/deploy/runpod/key', {
-      method: 'DELETE'
-    })
-  }
-
-  // Custom Worker Operations
-  async function getCustomWorkers(): Promise<CustomWorkersResponse> {
-    if (USE_MOCK) {
-      return { workers: [] }
-    }
-    return fetchApi<CustomWorkersResponse>('/v2/comfygit/deploy/custom/workers')
-  }
-
-  async function addCustomWorker(request: AddWorkerRequest): Promise<{ status: 'success' }> {
-    return fetchApi('/v2/comfygit/deploy/custom/workers', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request)
-    })
-  }
-
-  async function removeCustomWorker(name: string): Promise<{ status: 'success' }> {
-    return fetchApi(`/v2/comfygit/deploy/custom/workers/${encodeURIComponent(name)}`, {
-      method: 'DELETE'
-    })
-  }
-
-  async function testWorkerConnection(params: { host: string; port: number; api_key: string }): Promise<WorkerTestResult> {
-    return fetchApi<WorkerTestResult>('/v2/comfygit/deploy/custom/test', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params)
-    })
-  }
-
-  async function scanForWorkers(): Promise<WorkerScanResponse> {
-    if (USE_MOCK) {
-      return { discovered: [] }
-    }
-    return fetchApi<WorkerScanResponse>('/v2/comfygit/deploy/custom/scan', {
-      method: 'POST'
-    })
-  }
-
-  async function getWorkerSystemInfo(workerName: string): Promise<CustomWorkerSystemInfo> {
-    return fetchApi<CustomWorkerSystemInfo>(`/v2/comfygit/deploy/custom/${encodeURIComponent(workerName)}/info`)
-  }
-
-  async function getWorkerInstances(workerName: string): Promise<WorkerInstancesResponse> {
-    return fetchApi<WorkerInstancesResponse>(`/v2/comfygit/deploy/custom/${encodeURIComponent(workerName)}/instances`)
-  }
-
-  async function deployToWorker(workerName: string, request: DeployToWorkerRequest): Promise<DeployResult> {
-    return fetchApi<DeployResult>(`/v2/comfygit/deploy/custom/${encodeURIComponent(workerName)}/instances`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request)
-    })
-  }
-
-  async function startWorkerInstance(workerName: string, instanceId: string): Promise<{ status: 'success' }> {
-    return fetchApi(`/v2/comfygit/deploy/custom/${encodeURIComponent(workerName)}/instances/${encodeURIComponent(instanceId)}/start`, {
-      method: 'POST'
-    })
-  }
-
-  async function stopWorkerInstance(workerName: string, instanceId: string): Promise<{ status: 'success' }> {
-    return fetchApi(`/v2/comfygit/deploy/custom/${encodeURIComponent(workerName)}/instances/${encodeURIComponent(instanceId)}/stop`, {
-      method: 'POST'
-    })
-  }
-
-  async function terminateWorkerInstance(workerName: string, instanceId: string): Promise<{ status: 'success' }> {
-    return fetchApi(`/v2/comfygit/deploy/custom/${encodeURIComponent(workerName)}/instances/${encodeURIComponent(instanceId)}`, {
-      method: 'DELETE'
-    })
-  }
-
-  // Git Authentication (for cloud deployments)
+  // Git Authentication
   async function testGitAuth(token: string): Promise<{ status: 'success' | 'error'; message: string }> {
     if (USE_MOCK) {
       // Mock: simulate token validation
@@ -2460,7 +2253,7 @@ export function useComfyGitService() {
       }
       return { status: 'error', message: 'Invalid token format' }
     }
-    return fetchApi<{ status: 'success' | 'error'; message: string }>('/v2/comfygit/deploy/test-git-auth', {
+    return fetchApi<{ status: 'success' | 'error'; message: string }>('/v2/comfygit/remotes/test-git-auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token })
@@ -2476,7 +2269,6 @@ export function useComfyGitService() {
     getBranchHistory,
     exportEnv,
     validateExport,
-    validateDeploy,
     exportEnvWithForce,
     validateEnvironmentExport,
     exportEnvironmentWithForce,
@@ -2598,33 +2390,6 @@ export function useComfyGitService() {
     initializeWorkspace,
     getInitializeProgress,
     validatePath,
-    // Deploy Operations
-    getDeploySummary,
-    getDataCenters,
-    testRunPodConnection,
-    getNetworkVolumes,
-    getRunPodGpuTypes,
-    deployToRunPod,
-    getRunPodPods,
-    terminateRunPodPod,
-    stopRunPodPod,
-    startRunPodPod,
-    getDeploymentStatus,
-    exportDeployPackage,
-    getStoredRunPodKey,
-    clearRunPodKey,
-    // Custom Worker Operations
-    getCustomWorkers,
-    addCustomWorker,
-    removeCustomWorker,
-    testWorkerConnection,
-    scanForWorkers,
-    getWorkerSystemInfo,
-    getWorkerInstances,
-    deployToWorker,
-    startWorkerInstance,
-    stopWorkerInstance,
-    terminateWorkerInstance,
     // Git Authentication
     testGitAuth
   }

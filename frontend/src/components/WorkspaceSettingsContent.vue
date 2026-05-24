@@ -55,7 +55,7 @@
 
           <SettingRow
             label="GitHub Personal Access Token"
-            description="Client-side token used for private Git remote access during deploy and remote operations"
+            description="Client-side token used for private Git remote access during remote operations"
             stacked
           >
             <div class="token-setting">

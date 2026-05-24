@@ -161,12 +161,17 @@ uv run pytest integration/panel
 Backend tests that need unreleased local `comfygit-core` changes:
 
 ```bash
-PYTHONPATH=<path-to-comfygit-repo>/packages/core/src .venv/bin/python -m pytest testing/unit/test_readiness.py
+./scripts/test-local-core
+./scripts/test-local-core testing/unit/test_readiness.py -q
 ```
 
-Run that command from the manager repo root. Use this only for cross-repo
-development where manager code intentionally depends on local core changes that
-have not been released to PyPI yet.
+Run that script from the manager repo root. It keeps `pyproject.toml` pinned to
+the released `comfygit-core` package, but uses uv's `--with-editable` overlay to
+test against the sibling local core checkout. By default it expects the core repo
+at `../comfygit/packages/core`; set `COMFYGIT_CORE_PATH=/path/to/comfygit/packages/core`
+when using a different checkout location. Use this for cross-repo development
+where manager code intentionally depends on local core changes that have not
+been released to PyPI yet.
 
 Script checks:
 

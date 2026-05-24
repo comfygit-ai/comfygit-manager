@@ -2,7 +2,7 @@
 
 These routes proxy requests to the orchestrator's control server,
 allowing the frontend to communicate with the orchestrator through
-ComfyUI's same-origin API (works with cloud proxies like RunPod).
+ComfyUI's same-origin API (works with cloud proxies).
 """
 import aiohttp
 from aiohttp import web, ClientTimeout

@@ -3,7 +3,7 @@
  * Token is stored client-side only and passed with each git remote operation.
  */
 
-const STORAGE_KEY = 'ComfyGit.Deploy.GitHubPAT'
+const STORAGE_KEY = 'ComfyGit.GitHubPAT'
 
 /**
  * Check if a remote URL uses SSH format (won't work with PAT auth)

@@ -8,12 +8,10 @@ dependencies = [
     "comfygit-core==0.4.2",
     "watchdog>=6.0.0",
     "xxhash>=3.5.0",
-    "zeroconf>=0.131.0",
 ]
 
 [dependency-groups]
 dev = [
-    "docker>=7.1.0",
     "pytest>=9.0.3",
     "pytest-aiohttp>=1.1.0",
     "pytest-mock>=3.15.1",

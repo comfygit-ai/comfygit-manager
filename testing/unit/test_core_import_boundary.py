@@ -18,11 +18,6 @@ PUBLIC_CORE_MODULES = {
     "comfygit_core.workflow",
 }
 
-TEMPORARY_INTERNAL_CORE_IMPORTS = {
-    # Orchestrator bootstrap still creates its own helper venv with UVCommand.
-    "comfygit_core.integrations.uv_command",
-}
-
 
 def _server_python_files() -> list[Path]:
     ignored_parts = {".orchestrator_venv", "__pycache__"}
@@ -56,8 +51,6 @@ def test_manager_backend_uses_core_public_facades() -> None:
         for lineno, module_name in _core_import_modules(path):
             if module_name in PUBLIC_CORE_MODULES:
                 continue
-            if module_name in TEMPORARY_INTERNAL_CORE_IMPORTS:
-                continue
             rel = path.relative_to(REPO_ROOT)
             violations.append(f"{rel}:{lineno}: {module_name}")
 
@@ -67,22 +60,19 @@ def test_manager_backend_uses_core_public_facades() -> None:
     )
 
 
-def test_non_deploy_panel_api_uses_workspace_config_facades() -> None:
-    """Non-deploy panel APIs should not reach into Workspace config internals."""
+def test_panel_api_uses_workspace_config_facades() -> None:
+    """Panel APIs should not reach into Workspace config internals."""
     api_root = SERVER_ROOT / "api" / "v2"
     violations: list[str] = []
 
     for path in sorted(api_root.rglob("*.py")):
-        if path.name == "deploy.py":
-            continue
-
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             if "workspace_config_manager" in line:
                 rel = path.relative_to(REPO_ROOT)
                 violations.append(f"{rel}:{lineno}: {line.strip()}")
 
     assert not violations, (
-        "Non-deploy Manager API modules should use Workspace config facades. "
+        "Manager API modules should use Workspace config facades. "
         "Unexpected config repository reach-throughs:\n" + "\n".join(violations)
     )
 

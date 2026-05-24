@@ -1,9 +1,15 @@
 """Unit tests for manager readiness warning collection."""
 
 from dataclasses import dataclass
-from types import SimpleNamespace
+from pathlib import Path
 
-from comfygit_core.models.readiness import NodeProvenanceWarning
+from comfygit_core.models.manifest import (
+    EnvironmentManifestSnapshot,
+    ManifestProjectSnapshot,
+    ManifestUVSnapshot,
+)
+from comfygit_core.models.readiness import NodeProvenanceWarning, ReadinessContext
+from comfygit_core.models.shared import NodeInfo
 from comfygit_core.services.environment_readiness import collect_node_provenance_warnings
 
 
@@ -19,24 +25,38 @@ class FakeNode:
     branch: str | None = None
 
 
-class FakeNodesManager:
-    def __init__(self, nodes):
-        self._nodes = nodes
-
-    def get_existing(self):
-        return {node.name: node for node in self._nodes}
-
-
-def make_env(nodes):
-    return SimpleNamespace(
-        pyproject=SimpleNamespace(
-            nodes=FakeNodesManager(nodes),
+def make_context(nodes):
+    manifest_nodes = {
+        node.name: NodeInfo(
+            name=node.name,
+            source=node.source,
+            criticality=node.criticality,
+            version=node.version,
+            repository=node.repository,
+            registry_id=node.registry_id,
+            pinned_commit=node.pinned_commit,
+            branch=node.branch,
         )
+        for node in nodes
+    }
+    manifest = EnvironmentManifestSnapshot(
+        project=ManifestProjectSnapshot(),
+        schema_version=1,
+        comfyui_version=None,
+        python_version=None,
+        manifest_state="local",
+        sync_extras=(),
+        dependency_groups={},
+        uv=ManifestUVSnapshot(),
+        nodes=manifest_nodes,
+        workflows={},
+        models={},
     )
+    return ReadinessContext(manifest=manifest, manifest_dir=Path("."))
 
 
 def test_optional_dev_nodes_are_excluded_from_provenance_warnings():
-    env = make_env([
+    context = make_context([
         FakeNode(
             name="local-dev-node",
             source="development",
@@ -46,11 +66,11 @@ def test_optional_dev_nodes_are_excluded_from_provenance_warnings():
         )
     ])
 
-    assert collect_node_provenance_warnings(env) == []
+    assert collect_node_provenance_warnings(context) == []
 
 
 def test_required_dev_nodes_without_portable_source_are_reported():
-    env = make_env([
+    context = make_context([
         FakeNode(
             name="local-dev-node",
             source="development",
@@ -60,7 +80,7 @@ def test_required_dev_nodes_without_portable_source_are_reported():
         )
     ])
 
-    warnings = collect_node_provenance_warnings(env)
+    warnings = collect_node_provenance_warnings(context)
 
     assert warnings == [
         NodeProvenanceWarning(
