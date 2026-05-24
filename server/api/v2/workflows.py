@@ -576,7 +576,6 @@ def _reconstruct_optional_node_buckets(env, dependencies, workflow_name: str) ->
         return {"unresolved": [], "ambiguous": [], "uninstallable": [], "resolved": []}
 
     installed = env.list_manifest_nodes()
-    resolver = env.workflow_manager.global_node_resolver
     node_context = NodeResolutionContext(
         installed_packages=installed,
         custom_mappings={
@@ -597,7 +596,7 @@ def _reconstruct_optional_node_buckets(env, dependencies, workflow_name: str) ->
 
     buckets = {"unresolved": [], "ambiguous": [], "uninstallable": [], "resolved": []}
     for node in unique_nodes.values():
-        resolved_packages = resolver.resolve_single_node_with_context(node, node_context)
+        resolved_packages = env.resolve_workflow_node_packages(node, node_context)
         if resolved_packages is None:
             buckets["unresolved"].append(node)
             continue
@@ -2646,8 +2645,7 @@ async def download_model_stream(request: web.Request, env) -> web.StreamResponse
 
     async def run_download():
         """Run download in thread pool."""
-        downloader = env.workflow_manager.downloader
-        models_dir = downloader.models_dir
+        models_dir = env.get_model_download_directory()
         full_target = models_dir / target_path
 
         request_obj = DownloadRequest(
@@ -2656,7 +2654,7 @@ async def download_model_stream(request: web.Request, env) -> web.StreamResponse
             workflow_name=workflow_name
         )
 
-        return await run_sync(downloader.download, request_obj, broadcast_progress)
+        return await run_sync(env.download_model_request, request_obj, broadcast_progress)
 
     # Add our queue to subscribers
     my_queue: asyncio.Queue = asyncio.Queue()

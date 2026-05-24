@@ -218,7 +218,7 @@ async def get_environment_log_path(request: web.Request, env) -> web.Response:
 @requires_environment
 async def get_environment_manifest(request: web.Request, env) -> web.Response:
     """Get the live environment manifest text for read-only inspection."""
-    manifest_path = env.pyproject.path
+    manifest_path = env.get_manifest_path()
     content = await run_sync(read_text_file, manifest_path)
 
     return web.json_response({
