@@ -179,6 +179,21 @@ The manager API should support explicit full-hash computation for a known local
 model file or model index entry. The operation may be long-running or
 asynchronous, but it should make progress/failure visible to the frontend.
 
+### CGM-API-10E [LIVE]: Git remote PATs are user-scoped request credentials
+Validation: STATIC
+
+GitHub personal access tokens used for HTTPS git remote operations represent the
+browser user's git identity. The manager frontend may store a PAT in browser
+localStorage for that user's convenience, but the manager backend must not save
+that PAT to workspace configuration. The frontend should send it to the backend
+only for explicit authenticated git actions such as auth tests, fetch, pull, or
+push. Backend remote endpoints should treat it as request-scoped credential
+material and pass it to core git facade methods without persisting it.
+
+This differs from CivitAI and Hugging Face credentials, which may be stored as
+machine-local workspace configuration because backend model search and download
+operations need server-side provider access.
+
 Computed Blake3 and SHA256 values should be persisted in the model index so
 future source discovery, export/push readiness, and cloud dependency-proof
 flows can reuse them without repeatedly rescanning the same model file.
