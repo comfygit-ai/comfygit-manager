@@ -29,6 +29,9 @@
             :placeholder="placeholder"
           />
           <div class="help-text">
+            {{ storageHelpText }}
+          </div>
+          <div class="help-text">
             <a :href="helpUrl" target="_blank" rel="noopener">
               {{ helpLinkText }}
             </a>
@@ -103,6 +106,12 @@ const helpLinkText = computed(() =>
   props.provider === 'huggingface'
     ? 'Get your HuggingFace token →'
     : 'Get your CivitAI API key →'
+)
+
+const storageHelpText = computed(() =>
+  props.provider === 'huggingface'
+    ? 'Saved in the local workspace config file for server-side Hugging Face requests.'
+    : 'Required for CivitAI search and downloads; saved in the local workspace config file.'
 )
 
 async function handleSave() {

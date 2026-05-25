@@ -118,6 +118,41 @@ class TestEnvironmentModelsEndpoint:
         assert missing["hash"] == ""
         assert len(missing["used_in_workflows"]) == 2
 
+
+@pytest.mark.integration
+class TestCivitaiEndpoints:
+    """CivitAI provider endpoints."""
+
+    async def test_search_requires_configured_api_key(self, client, mock_environment):
+        mock_environment.workspace.get_civitai_token.return_value = None
+
+        resp = await client.get(
+            "/v2/workspace/civitai/search",
+            params={"query": "absolute reality"},
+        )
+
+        assert resp.status == 401
+        data = await resp.json()
+        assert "api key" in data["error"].lower()
+
+    async def test_model_detail_requires_configured_api_key(self, client, mock_environment):
+        mock_environment.workspace.get_civitai_token.return_value = None
+
+        resp = await client.get("/v2/workspace/civitai/model/123")
+
+        assert resp.status == 401
+        data = await resp.json()
+        assert "api key" in data["error"].lower()
+
+    async def test_model_version_requires_configured_api_key(self, client, mock_environment):
+        mock_environment.workspace.get_civitai_token.return_value = None
+
+        resp = await client.get("/v2/workspace/civitai/model-version/123")
+
+        assert resp.status == 401
+        data = await resp.json()
+        assert "api key" in data["error"].lower()
+
     async def test_success_model_used_in_multiple_workflows(
         self,
         client,

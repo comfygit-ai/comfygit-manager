@@ -1465,6 +1465,11 @@ def _civitai_client(env) -> CivitAIClient:
     )
 
 
+def _require_civitai_token(env) -> str | None:
+    """Return the configured CivitAI token, if model browsing may proceed."""
+    return env.workspace.get_civitai_token()
+
+
 def _shard_group(path: str) -> str | None:
     """Detect sharded model files like model-00001-of-00003.safetensors"""
     m = re.match(r"^(.*)-(\d{4,5})-of-(\d{4,5})(\.[^.]+)$", path, flags=re.IGNORECASE)
@@ -1502,6 +1507,12 @@ async def workspace_civitai_search(request: web.Request, env) -> web.Response:
         page = max(int(request.query.get("page", 1)), 1)
     except (ValueError, TypeError):
         return web.json_response({"error": "Page must be a valid integer"}, status=400)
+
+    if not _require_civitai_token(env):
+        return web.json_response(
+            {"error": "Configure a CivitAI API key before searching or downloading CivitAI models."},
+            status=401,
+        )
 
     client = _civitai_client(env)
 
@@ -1603,6 +1614,12 @@ async def workspace_civitai_model(request: web.Request, env) -> web.Response:
     except (KeyError, ValueError):
         return web.json_response({"error": "Invalid model ID"}, status=400)
 
+    if not _require_civitai_token(env):
+        return web.json_response(
+            {"error": "Configure a CivitAI API key before loading CivitAI model details."},
+            status=401,
+        )
+
     client = _civitai_client(env)
     try:
         model = await run_sync(client.get_model, model_id)
@@ -1622,6 +1639,12 @@ async def workspace_civitai_model_version(request: web.Request, env) -> web.Resp
         version_id = int(request.match_info["version_id"])
     except (KeyError, ValueError):
         return web.json_response({"error": "Invalid model version ID"}, status=400)
+
+    if not _require_civitai_token(env):
+        return web.json_response(
+            {"error": "Configure a CivitAI API key before loading CivitAI model versions."},
+            status=401,
+        )
 
     client = _civitai_client(env)
     try:
