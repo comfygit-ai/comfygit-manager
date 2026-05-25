@@ -199,7 +199,7 @@ class TestEnvironmentDetection:
     def test_detect_environment_workspace_factory_error(self, mock_workspace, monkeypatch, mocker):
         """Should return unmanaged when Workspace.open() raises error."""
         from server.orchestrator import detect_environment_type
-        from comfygit_core.models.exceptions import CDWorkspaceNotFoundError
+        from comfygit_core.models import CDWorkspaceNotFoundError
 
         # Set up location but make factory fail
         monkeypatch.setenv("COMFYGIT_HOME", str(mock_workspace))
@@ -215,7 +215,7 @@ class TestEnvironmentDetection:
     def test_detect_environment_get_environment_error(self, mock_workspace, mock_environment, monkeypatch, mocker):
         """Should return unmanaged when workspace.get_environment() fails."""
         from server.orchestrator import detect_environment_type
-        from comfygit_core.models.exceptions import CDEnvironmentNotFoundError
+        from comfygit_core.models import CDEnvironmentNotFoundError
 
         comfyui_path = mock_environment / "ComfyUI"
         monkeypatch.chdir(comfyui_path)

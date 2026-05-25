@@ -3,14 +3,13 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from comfygit_core.models.manifest import (
+from comfygit_core.models import (
     EnvironmentManifestSnapshot,
     ManifestProjectSnapshot,
     ManifestUVSnapshot,
 )
-from comfygit_core.models.readiness import NodeProvenanceWarning, ReadinessContext
-from comfygit_core.models.shared import NodeInfo
-from comfygit_core.services.environment_readiness import collect_node_provenance_warnings
+from comfygit_core.models import NodeInfo, NodeProvenanceWarning, ReadinessContext
+from comfygit_core.readiness import collect_node_provenance_warnings
 
 
 @dataclass

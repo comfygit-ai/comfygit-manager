@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import Mock, MagicMock
 import json
 from pathlib import Path
-from comfygit_core.models.exceptions import CDEnvironmentNotFoundError
+from comfygit_core.models import CDEnvironmentNotFoundError
 import api.v2.environments as env_module
 
 
@@ -290,7 +290,7 @@ class TestSwitchEnvironmentEndpoint:
     async def test_error_target_env_not_found(self, client, monkeypatch):
         """Should return 404 when target environment doesn't exist."""
         # Setup
-        from comfygit_core.models.exceptions import CDEnvironmentNotFoundError
+        from comfygit_core.models import CDEnvironmentNotFoundError
 
         mock_workspace = Mock()
         mock_current_env = Mock()
@@ -721,7 +721,7 @@ class TestCreateEnvironmentEndpoint:
 
     async def test_error_workspace_path_not_found(self, client, monkeypatch):
         """Should return 404 when explicit workspace_path doesn't exist."""
-        from comfygit_core.models.exceptions import CDWorkspaceNotFoundError
+        from comfygit_core.models import CDWorkspaceNotFoundError
 
         def mock_find(path):
             raise CDWorkspaceNotFoundError(f"Workspace not found at {path}")

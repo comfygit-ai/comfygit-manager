@@ -93,7 +93,7 @@ def mock_environment():
 
     def _get_readiness(*, include_blocking=True):
         try:
-            from comfygit_core.services.environment_readiness import (
+            from comfygit_core.readiness import (
                 build_environment_readiness,
             )
 

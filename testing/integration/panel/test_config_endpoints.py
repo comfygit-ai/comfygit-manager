@@ -159,7 +159,7 @@ class TestGetConfigEndpoint:
         mock_env.workspace = mock_workspace
 
         # Simulate ComfyDockError when models directory not set
-        from comfygit_core.models.exceptions import ComfyDockError
+        from comfygit_core.models import ComfyDockError
         mock_workspace.get_models_directory.side_effect = ComfyDockError("No models directory set")
         mock_workspace.get_civitai_token.return_value = None
         mock_workspace.get_huggingface_token.return_value = None
@@ -360,7 +360,7 @@ class TestUpdateConfigEndpoint:
         mock_workspace.path = Path("/workspace")
 
         # Mock set_models_directory to raise error for invalid path
-        from comfygit_core.models.exceptions import ComfyDockError
+        from comfygit_core.models import ComfyDockError
         mock_workspace.set_models_directory.side_effect = ComfyDockError("Directory does not exist")
         mock_env.workspace = mock_workspace
 

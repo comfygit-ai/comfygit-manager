@@ -10,7 +10,7 @@ class TestSetupStatusEndpoint:
 
     async def test_success_no_workspace(self, client, monkeypatch, tmp_path):
         """Should return no_workspace state when no workspace exists."""
-        from comfygit_core.models.exceptions import CDWorkspaceNotFoundError
+        from comfygit_core.models import CDWorkspaceNotFoundError
 
         # Mock orchestrator to return not managed
         def mock_detect():
@@ -219,7 +219,7 @@ class TestSetupStatusEndpoint:
 
     async def test_detected_models_dir(self, client, monkeypatch, tmp_path):
         """Should auto-detect models directory from current ComfyUI."""
-        from comfygit_core.models.exceptions import CDWorkspaceNotFoundError
+        from comfygit_core.models import CDWorkspaceNotFoundError
 
         # Create models directory structure
         models_dir = tmp_path / "models"
@@ -284,7 +284,7 @@ class TestValidatePathEndpoint:
 
     async def test_workspace_path_valid(self, client, monkeypatch, tmp_path):
         """Should return valid for valid workspace path."""
-        from comfygit_core.models.exceptions import CDWorkspaceNotFoundError
+        from comfygit_core.models import CDWorkspaceNotFoundError
 
         # New empty directory
         new_dir = tmp_path / "comfygit"
@@ -327,7 +327,7 @@ class TestValidatePathEndpoint:
 
     async def test_workspace_path_not_empty(self, client, monkeypatch, tmp_path):
         """Should return invalid when directory is not empty."""
-        from comfygit_core.models.exceptions import CDWorkspaceNotFoundError
+        from comfygit_core.models import CDWorkspaceNotFoundError
 
         # Create non-empty directory
         (tmp_path / "some_file.txt").write_text("content")
@@ -837,15 +837,13 @@ class TestSystemNodeSelfInstallation:
         assert len(install_called) == 1, "_install_self_as_system_node should be called"
         assert install_called[0] == mock_workspace
 
-    def test_system_node_symlink_manager_creates_links(self, tmp_path):
-        """Test that SystemNodeSymlinkManager creates symlinks correctly.
+    def test_environment_links_system_nodes(self, tmp_path):
+        """Test that environment facade links workspace system nodes.
 
         This tests the symlink creation without creating a full environment.
         The full E2E flow (with real env creation) is tested separately as a slow test.
         """
-        from comfygit_core import Workspace
-        from comfygit_core.managers.system_node_symlink_manager import SystemNodeSymlinkManager
-        from comfygit_core.utils.symlink_utils import is_link
+        from comfygit_core import Environment, Workspace
         from api.v2.setup import _install_self_as_system_node
 
         # Create workspace and install system node
@@ -861,23 +859,21 @@ class TestSystemNodeSelfInstallation:
         custom_nodes_path = comfyui_path / "custom_nodes"
         custom_nodes_path.mkdir(parents=True)
 
-        # Use SystemNodeSymlinkManager directly
-        manager = SystemNodeSymlinkManager(comfyui_path, workspace.paths.system_nodes)
-        linked = manager.create_symlinks()
+        env = Environment.from_path(env_path, workspace, name="test-env")
+        linked = env.ensure_system_node_links()
 
         # Verify symlink was created
         assert "comfygit-manager" in linked, "comfygit-manager should be linked"
 
         symlink_path = custom_nodes_path / "comfygit-manager"
         assert symlink_path.exists(), "Symlink should exist"
-        assert is_link(symlink_path), "Should be a symlink/junction"
 
         # Verify symlink points to system_nodes
         resolved = symlink_path.resolve()
         assert resolved == system_node_path.resolve(), f"Should point to system_nodes, got {resolved}"
 
     @pytest.mark.slow
-    @pytest.mark.skip(reason="Requires comfygit-core to auto-symlink system nodes during EnvironmentFactory.create; currently installs manager as tracked node instead")
+    @pytest.mark.skip(reason="Requires full ComfyUI environment creation")
     def test_end_to_end_system_node_symlink_flow(self, tmp_path):
         """Full integration: workspace → system node install → env creation → symlink.
 
@@ -885,8 +881,6 @@ class TestSystemNodeSelfInstallation:
         Marked as slow because it installs ComfyUI and creates a venv.
         """
         from comfygit_core import Workspace
-        from comfygit_core.factories.environment_factory import EnvironmentFactory
-        from comfygit_core.utils.symlink_utils import is_link
         from api.v2.setup import _install_self_as_system_node
 
         # Step 1: Create workspace
@@ -899,11 +893,8 @@ class TestSystemNodeSelfInstallation:
         assert system_node_path.exists(), "System node should be installed"
 
         # Step 3: Create environment with CPU backend (faster, no CUDA download)
-        env_path = workspace.paths.environments / "test-env"
-        env = EnvironmentFactory.create(
+        env = workspace.create_environment(
             "test-env",
-            env_path,
-            workspace,
             torch_backend="cpu"
         )
 
@@ -912,7 +903,6 @@ class TestSystemNodeSelfInstallation:
         symlink_path = custom_nodes_path / "comfygit-manager"
 
         assert symlink_path.exists(), "Symlink should exist in custom_nodes"
-        assert is_link(symlink_path), "Should be a symlink/junction"
 
         # Verify symlink points to system_nodes
         resolved = symlink_path.resolve()

@@ -334,27 +334,22 @@ def _model_details_payload(env, details) -> dict:
 
     locations = []
     for loc in details.all_locations:
-        path = (
-            loc.get("path") or
-            loc.get("full_path") or
-            loc.get("relative_path") or
-            ""
-        )
+        path = loc.full_path or loc.relative_path or ""
         if path and not path.startswith("/") and models_dir:
             path = str(models_dir / path)
         if not path:
             path = primary_path
 
         loc_info = {"path": path}
-        if loc.get("id") is not None:
-            loc_info["id"] = loc.get("id")
-        if loc.get("base_directory"):
-            loc_info["base_directory"] = loc.get("base_directory")
-        if loc.get("relative_path"):
-            loc_info["relative_path"] = loc.get("relative_path")
-        if "mtime" in loc:
+        if loc.id is not None:
+            loc_info["id"] = loc.id
+        if loc.base_directory:
+            loc_info["base_directory"] = loc.base_directory
+        if loc.relative_path:
+            loc_info["relative_path"] = loc.relative_path
+        if loc.mtime:
             try:
-                loc_info["modified"] = datetime.fromtimestamp(loc["mtime"]).strftime("%Y-%m-%d %H:%M:%S")
+                loc_info["modified"] = datetime.fromtimestamp(loc.mtime).strftime("%Y-%m-%d %H:%M:%S")
             except Exception:
                 pass
         locations.append(loc_info)
@@ -371,8 +366,8 @@ def _model_details_payload(env, details) -> dict:
     sources = []
     for src in details.sources:
         sources.append({
-            "type": src.get("type", "unknown"),
-            "url": src.get("url", ""),
+            "type": src.type or "unknown",
+            "url": src.url,
         })
 
     return {

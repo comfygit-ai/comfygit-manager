@@ -413,11 +413,24 @@ class TestWorkspaceModelDetailsEndpoint:
 
         mock_details = Mock()
         mock_details.model = mock_model
+        from comfygit_core.models import ModelIndexSource, ModelLocation
+
         mock_details.all_locations = [
-            {"path": "/workspace/models/checkpoints/model.safetensors", "mtime": 1699000000}
+            ModelLocation(
+                model_hash="abc12345",
+                base_directory="/workspace/models",
+                relative_path="checkpoints/model.safetensors",
+                filename="model.safetensors",
+                mtime=1699000000,
+                last_seen=1700000000,
+            )
         ]
         mock_details.sources = [
-            {"type": "civitai", "url": "https://civitai.com/api/download/models/12345"}
+            ModelIndexSource(
+                model_hash="abc12345",
+                type="civitai",
+                url="https://civitai.com/api/download/models/12345",
+            )
         ]
         mock_environment.workspace.get_model_details.return_value = mock_details
 

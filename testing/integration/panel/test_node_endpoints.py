@@ -742,7 +742,7 @@ class TestUninstallNodeEndpoint:
         mock_environment
     ):
         """Should return 500 when node not found anywhere."""
-        from comfygit_core.models.exceptions import CDNodeNotFoundError
+        from comfygit_core.models import CDNodeNotFoundError
 
         mock_environment.remove_node.side_effect = CDNodeNotFoundError(
             "Node 'nonexistent' not found in environment"

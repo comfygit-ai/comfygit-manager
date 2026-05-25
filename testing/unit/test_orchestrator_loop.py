@@ -407,7 +407,7 @@ class TestOrchestratorLoop:
     def test_workspace_get_environment_failure_exits(self, mock_workspace, mocker):
         """Should exit if environment cannot be loaded from workspace."""
         from server.orchestrator import Orchestrator
-        from comfygit_core.models.exceptions import CDEnvironmentNotFoundError
+        from comfygit_core.models import CDEnvironmentNotFoundError
 
         orch = Orchestrator(
             workspace_root=mock_workspace,

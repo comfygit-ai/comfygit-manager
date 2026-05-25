@@ -14,6 +14,7 @@ PUBLIC_CORE_MODULES = {
     "comfygit_core.assets",
     "comfygit_core.git",
     "comfygit_core.models",
+    "comfygit_core.readiness",
     "comfygit_core.runtime",
     "comfygit_core.workflow",
 }
@@ -56,6 +57,26 @@ def test_manager_backend_uses_core_public_facades() -> None:
 
     assert not violations, (
         "Manager backend should import ComfyGit Core through public facades. "
+        "Unexpected internal imports:\n" + "\n".join(violations)
+    )
+
+
+def test_manager_tests_use_core_public_facades() -> None:
+    """Manager tests should exercise the same public core API as Manager code."""
+    ignored_parts = {".venv", "__pycache__"}
+    violations: list[str] = []
+
+    for path in sorted((REPO_ROOT / "testing").rglob("*.py")):
+        if not ignored_parts.isdisjoint(path.parts):
+            continue
+        for lineno, module_name in _core_import_modules(path):
+            if module_name in PUBLIC_CORE_MODULES:
+                continue
+            rel = path.relative_to(REPO_ROOT)
+            violations.append(f"{rel}:{lineno}: {module_name}")
+
+    assert not violations, (
+        "Manager tests should import ComfyGit Core through public facades. "
         "Unexpected internal imports:\n" + "\n".join(violations)
     )
 

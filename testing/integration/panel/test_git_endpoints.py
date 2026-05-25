@@ -587,7 +587,7 @@ class TestSwitchBranchEndpoint:
         mock_environment
     ):
         """Should return 400 when env.switch_branch() raises CDEnvironmentError."""
-        from comfygit_core.models.exceptions import CDEnvironmentError
+        from comfygit_core.models import CDEnvironmentError
 
         # Setup: Mock orchestrator method to raise conflict error
         mock_environment.switch_branch = Mock(
