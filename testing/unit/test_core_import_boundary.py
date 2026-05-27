@@ -13,6 +13,7 @@ PUBLIC_CORE_MODULES = {
     "comfygit_core",
     "comfygit_core.assets",
     "comfygit_core.git",
+    "comfygit_core.imports",
     "comfygit_core.models",
     "comfygit_core.readiness",
     "comfygit_core.runtime",

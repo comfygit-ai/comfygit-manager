@@ -13,6 +13,7 @@ dependencies = [
     "aiohttp>=3.9.0",
     "watchdog>=6.0.0",
     "comfygit-core",
+    "comfygit-studio",
 ]
 
 [tool.setuptools]
@@ -50,4 +51,5 @@ exclude_lines = [
 ]
 
 [tool.uv.sources]
-comfygit-core = { path = "../../comfygit/packages/core" }
+comfygit-core = { path = "../../comfygit/packages/core", editable = true }
+comfygit-studio = { path = "../../comfygit/packages/studio-runtime", editable = true }

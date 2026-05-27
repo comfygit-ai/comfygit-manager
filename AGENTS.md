@@ -123,7 +123,7 @@ Behavior to know:
   it.
 - The dev container mounts this repo, the sibling `comfygit` repo, and the
   ComfyGit workspace.
-- `comfygit-core` local editable paths are configured through
+- `comfygit-core` and `comfygit-studio` local editable paths are configured through
   `.cec/overlays/.local.toml`.
 - Do not rely on direct `uv pip install -e` mutations inside an environment venv
   for persistent dev setup; `cg sync` and `cg run` own that venv.
@@ -158,7 +158,8 @@ uv run pytest
 uv run pytest integration/panel
 ```
 
-Backend tests that need unreleased local `comfygit-core` changes:
+Backend tests that need unreleased local `comfygit-core` or `comfygit-studio`
+changes:
 
 ```bash
 ./scripts/test-local-core
@@ -166,12 +167,14 @@ Backend tests that need unreleased local `comfygit-core` changes:
 ```
 
 Run that script from the manager repo root. It keeps `pyproject.toml` pinned to
-the released `comfygit-core` package, but uses uv's `--with-editable` overlay to
-test against the sibling local core checkout. By default it expects the core repo
-at `../comfygit/packages/core`; set `COMFYGIT_CORE_PATH=/path/to/comfygit/packages/core`
-when using a different checkout location. Use this for cross-repo development
-where manager code intentionally depends on local core changes that have not
-been released to PyPI yet.
+the released ComfyGit packages, but runs the repo-local testing project with
+editable sources for sibling local core and Studio runtime checkouts. By default
+it expects the monorepo at `../comfygit`; set
+`COMFYGIT_CORE_PATH=/path/to/comfygit/packages/core` and
+`COMFYGIT_STUDIO_PATH=/path/to/comfygit/packages/studio-runtime` when using a
+different checkout location. Use this for cross-repo development where manager
+code intentionally depends on local ComfyGit changes that have not been released
+to PyPI yet.
 
 Script checks:
 
@@ -225,24 +228,26 @@ Frontend version check:
 
 ## Dependencies
 
-- **Pin comfygit-core to exact versions** - Always use `==X.Y.Z` (not `>=`) for the core dependency in pyproject.toml. This ensures reproducible builds and prevents unexpected breakage from core updates.
+- **Pin ComfyGit dependencies to exact versions** - Always use `==X.Y.Z` (not `>=`) for `comfygit-core` and `comfygit-studio` dependencies in pyproject.toml. This ensures reproducible builds and prevents unexpected breakage from core or Studio runtime updates.
 
 ## Version Bump Protocol
 
 Manager releases depend on the core/CLI monorepo release. The Manager package
-pins `comfygit-core==X.Y.Z` exactly, and ComfyUI registry installs consume
-`requirements.txt`, so the pinned core version must already exist on PyPI before
-publishing Manager.
+pins `comfygit-core==X.Y.Z` and `comfygit-studio==X.Y.Z` exactly, and ComfyUI
+registry installs consume `requirements.txt`, so the pinned core and Studio
+runtime versions must already exist on PyPI before publishing Manager.
 
 When asked to prepare a Manager release:
 
-1. Confirm the target `comfygit-core==X.Y.Z` has been published to PyPI.
+1. Confirm the target `comfygit-core==X.Y.Z` and `comfygit-studio==X.Y.Z` have
+   been published to PyPI.
    `uv lock` will fail, and registry installs will fail, if this is not true.
-2. Bump `comfygit-core==X.Y.Z` in `pyproject.toml` dependencies.
+2. Bump `comfygit-core==X.Y.Z` and `comfygit-studio==X.Y.Z` in `pyproject.toml`
+   dependencies.
 3. Bump the Manager `version` in `pyproject.toml`.
 4. Run `uv run scripts/sync-requirements.py` so `requirements.txt` matches
    `pyproject.toml`. Do not edit `requirements.txt` separately.
-5. Run `uv lock` to update `uv.lock` against the published core package.
+5. Run `uv lock` to update `uv.lock` against the published ComfyGit packages.
 6. Run `cd frontend && npm run build`. The footer version shown in the bottom
    left of the ComfyGit panel is injected from `pyproject.toml` at build time,
    so the built `js/comfygit-panel.js` must be regenerated for the displayed
@@ -255,9 +260,10 @@ When asked to prepare a Manager release:
 
 After the release commit lands on `main`, the publish workflow creates the
 ComfyUI registry release and GitHub release. Do not publish Manager before the
-matching core package is available on PyPI.
+matching core and Studio runtime packages are available on PyPI.
 
-For local development before core is published, use editable core overlays or
+For local development before core or Studio runtime is published, use editable
+ComfyGit overlays or
 the CI helper flow only for testing. Do not treat those local source overrides
 as a publishable Manager release state.
 

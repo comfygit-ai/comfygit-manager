@@ -857,13 +857,10 @@ export function useComfyGitService() {
     if (USE_MOCK) {
       return {
         status: 'running',
-        url: 'http://127.0.0.1:8190/',
+        url: '/api/v2/comfygit/studio/ui/',
         env_name: 'mock-env',
-        pid: 12345,
         started: true,
         reused: false,
-        bind_host: '127.0.0.1',
-        port: 8190,
         comfy_url: 'http://127.0.0.1:8188',
       }
     }

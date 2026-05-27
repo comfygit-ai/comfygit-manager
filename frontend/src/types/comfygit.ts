@@ -562,6 +562,7 @@ export interface StudioLaunchResult {
   comfy_url?: string | null
   log_path?: string | null
   message?: string | null
+  mode?: 'embedded' | 'process' | string
 }
 
 export interface WorkflowResolutionPlan {

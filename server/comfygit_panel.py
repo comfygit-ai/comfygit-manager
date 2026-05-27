@@ -5,10 +5,18 @@ Provides /v2/comfygit/ endpoints for git operations, status, and environment man
 
 import atexit
 import logging
+from typing import Any, cast
 
-from server import PromptServer
+from server import PromptServer as _PromptServer  # type: ignore[attr-defined]
 
 from comfygit_server import get_environment_from_cwd
+from comfygit_studio.embedded import (
+    close_embedded_studio,
+    configure_embedded_studio_app,
+    create_embedded_studio_routes,
+)
+
+PromptServer = cast(Any, _PromptServer)
 
 
 def get_workspace_from_cwd():
@@ -67,6 +75,11 @@ PromptServer.instance.app.middlewares.append(error_handler_middleware)
 # Setup app state for context access
 PromptServer.instance.app['get_environment'] = get_environment_from_cwd
 PromptServer.instance.app['get_workspace'] = get_workspace_from_cwd
+configure_embedded_studio_app(
+    PromptServer.instance.app,
+    public_api_base_path=studio.STUDIO_PUBLIC_API_BASE_PATH,
+)
+PromptServer.instance.app.on_cleanup.append(close_embedded_studio)
 
 # Register all routes (iterate since PromptServer routes don't have add_routes)
 for route_def in [
@@ -87,12 +100,17 @@ for route_def in [
     update_check.routes,
     update_manager.routes,
     cloud.routes,
+    create_embedded_studio_routes(
+        route_api_prefix=studio.STUDIO_ROUTE_API_PREFIX,
+        route_ui_prefix=studio.STUDIO_ROUTE_UI_PREFIX,
+    ),
 ]:
     for route in route_def:
         # Route is a tuple-like (method, path, handler)
-        method = route.method
-        path = route.path
-        handler = route.handler
+        route_info = cast(Any, route)
+        method = route_info.method
+        path = route_info.path
+        handler = route_info.handler
 
         # Register with PromptServer routes
         if method == 'GET':

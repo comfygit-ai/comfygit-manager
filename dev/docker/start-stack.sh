@@ -68,37 +68,43 @@ configure_ssh_client() {
 
 install_dev_comfygit() {
   local core_pkg="$COMFYGIT_DEV_REPO_PATH/packages/core"
+  local studio_pkg="$COMFYGIT_DEV_REPO_PATH/packages/studio-runtime"
   local cli_pkg="$COMFYGIT_DEV_REPO_PATH/packages/cli"
 
-  if [ ! -d "$core_pkg" ] || [ ! -d "$cli_pkg" ]; then
+  if [ ! -d "$core_pkg" ] || [ ! -d "$studio_pkg" ] || [ ! -d "$cli_pkg" ]; then
     log "Dev comfygit repo not found at $COMFYGIT_DEV_REPO_PATH"
     exit 1
   fi
 
-  log "Installing dev comfygit core/cli from mounted repo"
-  uv pip install --python "$VIRTUAL_ENV/bin/python" -e "$core_pkg" -e "$cli_pkg"
+  log "Installing dev comfygit core/studio/cli from mounted repo"
+  uv pip install --python "$VIRTUAL_ENV/bin/python" -e "$core_pkg" -e "$studio_pkg" -e "$cli_pkg"
 }
 
 configure_dev_core_overlay() {
   local core_pkg="$COMFYGIT_DEV_REPO_PATH/packages/core"
+  local studio_pkg="$COMFYGIT_DEV_REPO_PATH/packages/studio-runtime"
   local cec_path="$WORKSPACE/environments/$ENV_NAME/.cec"
   local overlay_path="$cec_path/overlays/.local.toml"
   local gitignore_path="$cec_path/.gitignore"
 
-  if [ ! -d "$core_pkg" ] || [ ! -d "$cec_path" ]; then
+  if [ ! -d "$core_pkg" ] || [ ! -d "$studio_pkg" ] || [ ! -d "$cec_path" ]; then
     return
   fi
 
-  log "Configuring dev comfygit-core local overlay"
+  log "Configuring dev comfygit-core/comfygit-studio local overlay"
   mkdir -p "$(dirname "$overlay_path")"
-  python3 - "$overlay_path" "$core_pkg" <<'PY'
+  python3 - "$overlay_path" "$core_pkg" "$studio_pkg" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 overlay_path = Path(sys.argv[1])
 core_path = sys.argv[2]
-source_line = f"comfygit-core = {{ path = {json.dumps(core_path)}, editable = true }}"
+studio_path = sys.argv[3]
+source_lines = [
+    f"comfygit-core = {{ path = {json.dumps(core_path)}, editable = true }}",
+    f"comfygit-studio = {{ path = {json.dumps(studio_path)}, editable = true }}",
+]
 
 if overlay_path.exists():
     lines = overlay_path.read_text(encoding="utf-8").splitlines()
@@ -121,25 +127,28 @@ for line in lines:
 
     if is_section:
         if in_sources and not inserted:
-            result.append(source_line)
+            result.extend(source_lines)
             inserted = True
         in_sources = stripped == "[sources]"
         sources_found = sources_found or in_sources
         result.append(line)
         continue
 
-    if in_sources and stripped.startswith("comfygit-core"):
+    if in_sources and (
+        stripped.startswith("comfygit-core")
+        or stripped.startswith("comfygit-studio")
+    ):
         continue
 
     result.append(line)
 
 if sources_found:
     if in_sources and not inserted:
-        result.append(source_line)
+        result.extend(source_lines)
 else:
     if result and result[-1].strip():
         result.append("")
-    result.extend(["[sources]", source_line])
+    result.extend(["[sources]", *source_lines])
 
 overlay_path.write_text("\n".join(result).rstrip() + "\n", encoding="utf-8")
 PY
