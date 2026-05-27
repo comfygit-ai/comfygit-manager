@@ -601,6 +601,9 @@ const currentImportPreviewData = computed(() => {
       branch: node.branch ?? null,
       pinned_commit: node.pinned_commit ?? null,
       dependency_sources: null,
+      provenance_detail: node.provenance_detail ?? null,
+      warning: node.warning ?? null,
+      requires_review: node.requires_review ?? false,
       is_dev_node: node.source_type === 'local' || node.source_type === 'development'
     })),
     gitBranch: preview.comfyui_version || undefined,
@@ -911,7 +914,7 @@ function currentModelReferencesForPreview(preview: CurrentEnvironmentImportPrevi
     const filename = modelRef.filename
     if (!filename) continue
 
-    const relativePath = modelReferenceRelativePath(filename, modelRef.category)
+    const relativePath = modelRef.relative_path || modelReferenceRelativePath(filename, modelRef.category)
     const key = relativePath || filename
     const existing = grouped.get(key)
     if (existing) {

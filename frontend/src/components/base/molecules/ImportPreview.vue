@@ -188,6 +188,7 @@
             <div class="row-chips">
               <span class="chip">{{ nodeSourceLabel(node) }}</span>
               <span v-if="node.version" class="chip muted">{{ node.version }}</span>
+              <span v-if="node.requires_review" class="chip warning">review</span>
             </div>
             <div class="detail-grid">
               <div class="detail-line">
@@ -218,6 +219,13 @@
             <div v-if="node.repository" class="detail-stack">
               <span class="detail-label">Repository</span>
               <a class="source-link" :href="node.repository" target="_blank" rel="noreferrer">{{ node.repository }}</a>
+            </div>
+            <div v-if="node.provenance_detail" class="detail-stack">
+              <span class="detail-label">Provenance</span>
+              <span>{{ node.provenance_detail }}</span>
+            </div>
+            <div v-if="node.warning" class="node-warning">
+              {{ node.warning }}
             </div>
             <div v-if="node.dependency_sources?.length" class="detail-stack">
               <span class="detail-label">Dependency sources</span>
@@ -590,6 +598,15 @@ function formatSize(bytes: number): string {
   margin: 0;
   padding-left: var(--cg-space-5);
   color: var(--cg-color-text-secondary);
+  font-size: var(--cg-font-size-sm);
+}
+
+.node-warning {
+  margin-top: var(--cg-space-2);
+  padding: var(--cg-space-2);
+  color: var(--cg-color-warning);
+  background: var(--cg-color-warning-muted);
+  border: 1px solid var(--cg-color-warning);
   font-size: var(--cg-font-size-sm);
 }
 

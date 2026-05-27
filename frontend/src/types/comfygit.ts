@@ -1284,6 +1284,9 @@ export interface NodeAnalysis {
   branch?: string | null
   pinned_commit?: string | null
   dependency_sources?: string[] | null
+  provenance_detail?: string | null
+  warning?: string | null
+  requires_review?: boolean
   is_dev_node: boolean
 }
 
@@ -1380,6 +1383,8 @@ export interface CurrentEnvironmentModelReferenceScan {
   filename: string
   workflow: string
   category?: string | null
+  relative_path?: string | null
+  widget_value?: string | null
   node_type?: string | null
   widget_index?: number | null
   source_url?: string | null
@@ -1397,6 +1402,7 @@ export interface CurrentEnvironmentCustomNodeScan {
   pinned_commit?: string | null
   warning?: string | null
   provenance_detail?: string | null
+  requires_review?: boolean
 }
 
 export interface CurrentEnvironmentImportPreview {
