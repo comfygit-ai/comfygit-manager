@@ -405,3 +405,16 @@ should direct users to ComfyUI logs for the import error.
 Runtime import failures are warnings, not export, push, or commit blockers.
 They may be included in readiness warning payloads so shared review surfaces can
 mention them, but they must not be treated as portable provenance failures.
+
+### CGM-API-17 [LIVE]: Local Studio launch should reuse the ComfyGit serve adapter
+Validation: TEST
+
+When the panel opens Studio for the current managed environment, the manager
+API should start or reuse a local `cg serve` process rather than reimplementing
+contract execution routes inside the custom-node backend.
+
+The launch response should return browser-facing process metadata such as URL,
+port, environment name, PID, and log path. The backend may derive the public
+host from the current request, but it should keep lifecycle ownership narrow:
+this is a local child serve process for testing and Studio use, not a cloud
+deployment, cloud publication, or environment-switch authority.

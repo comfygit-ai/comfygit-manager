@@ -57,6 +57,16 @@
               >
                 Contract
               </ActionButton>
+              <ActionButton
+                v-if="canOpenStudio(wf)"
+                variant="primary"
+                size="sm"
+                :loading="studioLaunchingWorkflow === wf.name"
+                :disabled="studioLaunchingWorkflow !== null"
+                @click="handleOpenStudio(wf.name)"
+              >
+                Studio
+              </ActionButton>
             </template>
           </ItemCard>
         </SectionGroup>
@@ -90,6 +100,16 @@
               >
                 Contract
               </ActionButton>
+              <ActionButton
+                v-if="canOpenStudio(wf)"
+                variant="primary"
+                size="sm"
+                :loading="studioLaunchingWorkflow === wf.name"
+                :disabled="studioLaunchingWorkflow !== null"
+                @click="handleOpenStudio(wf.name)"
+              >
+                Studio
+              </ActionButton>
             </template>
           </ItemCard>
         </SectionGroup>
@@ -122,6 +142,16 @@
                 @click="handleContract(wf.name)"
               >
                 Contract
+              </ActionButton>
+              <ActionButton
+                v-if="canOpenStudio(wf)"
+                variant="primary"
+                size="sm"
+                :loading="studioLaunchingWorkflow === wf.name"
+                :disabled="studioLaunchingWorkflow !== null"
+                @click="handleOpenStudio(wf.name)"
+              >
+                Studio
               </ActionButton>
             </template>
           </ItemCard>
@@ -158,6 +188,16 @@
                 @click="handleContract(wf.name)"
               >
                 Contract
+              </ActionButton>
+              <ActionButton
+                v-if="canOpenStudio(wf)"
+                variant="primary"
+                size="sm"
+                :loading="studioLaunchingWorkflow === wf.name"
+                :disabled="studioLaunchingWorkflow !== null"
+                @click="handleOpenStudio(wf.name)"
+              >
+                Studio
               </ActionButton>
             </template>
           </ItemCard>
@@ -227,7 +267,7 @@ const emit = defineEmits<{
   refresh: [options?: { refreshWorkflows?: boolean }]
 }>()
 
-const { getWorkflows } = useComfyGitService()
+const { getWorkflows, openStudio } = useComfyGitService()
 const orchestratorService = useOrchestratorService()
 
 const workflows = ref<WorkflowInfo[]>([])
@@ -239,6 +279,7 @@ const showAllSynced = ref(false)
 const showDetailsModal = ref(false)
 const showResolveModal = ref(false)
 const selectedWorkflow = ref<string | null>(null)
+const studioLaunchingWorkflow = ref<string | null>(null)
 
 // Computed filters
 const brokenWorkflows = computed(() =>
@@ -319,6 +360,10 @@ function handleResolve(name: string) {
   showResolveModal.value = true
 }
 
+function canOpenStudio(wf: WorkflowInfo): boolean {
+  return wf.contract_summary?.status === 'valid'
+}
+
 async function handleContract(name: string) {
   selectedWorkflow.value = name
   try {
@@ -333,6 +378,23 @@ async function handleContract(name: string) {
     detail: { workflowName: name }
   }))
   window.dispatchEvent(new CustomEvent('comfygit:close-panel'))
+}
+
+async function handleOpenStudio(name: string) {
+  studioLaunchingWorkflow.value = name
+  error.value = null
+  try {
+    const result = await openStudio()
+    if (!result.url) {
+      throw new Error(result.message || 'Studio server did not return a URL')
+    }
+    window.open(result.url, '_blank', 'noopener,noreferrer')
+  } catch (err) {
+    console.error('[ComfyGit] Failed to open Studio:', err)
+    error.value = err instanceof Error ? err.message : 'Failed to open Studio'
+  } finally {
+    studioLaunchingWorkflow.value = null
+  }
 }
 
 function handleOpenWorkflowContract(event: Event) {

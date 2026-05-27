@@ -30,6 +30,7 @@ import type {
   WorkflowDetails,
   WorkflowExecutionContract,
   WorkflowContractResponse,
+  StudioLaunchResult,
   WorkflowResolutionPlan,
   ModelInfo,
   ModelDetails,
@@ -850,6 +851,40 @@ export function useComfyGitService() {
     return fetchApi<{ status: string; workflow: string }>(`/v2/comfygit/workflow/${encodeURIComponent(name)}/contract`, {
       method: 'DELETE',
     })
+  }
+
+  async function openStudio(): Promise<StudioLaunchResult> {
+    if (USE_MOCK) {
+      return {
+        status: 'running',
+        url: 'http://127.0.0.1:8190/',
+        env_name: 'mock-env',
+        pid: 12345,
+        started: true,
+        reused: false,
+        bind_host: '127.0.0.1',
+        port: 8190,
+        comfy_url: 'http://127.0.0.1:8188',
+      }
+    }
+
+    return fetchApi<StudioLaunchResult>('/v2/comfygit/studio/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+  }
+
+  async function getStudioStatus(): Promise<StudioLaunchResult> {
+    if (USE_MOCK) {
+      return {
+        status: 'stopped',
+        url: null,
+        env_name: 'mock-env',
+      }
+    }
+
+    return fetchApi<StudioLaunchResult>('/v2/comfygit/studio/status')
   }
 
   async function resolveWorkflow(name: string): Promise<WorkflowResolutionPlan> {
@@ -2366,6 +2401,8 @@ export function useComfyGitService() {
     getWorkflowContract,
     saveWorkflowContract,
     deleteWorkflowContract,
+    openStudio,
+    getStudioStatus,
     resolveWorkflow,
     installWorkflowDeps,
     setModelImportance,

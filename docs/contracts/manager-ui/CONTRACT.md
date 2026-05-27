@@ -436,3 +436,15 @@ separate incompatible modal stacks.
 The current export and push warning flows open the shared readiness review
 surface. This remains partial until Status owns the compact readiness summary
 and future cloud/build/deploy gates use the same review surface.
+
+### CGM-UI-22 [LIVE]: Valid workflow contracts should expose a local Studio action
+Validation: MIXED
+
+Workflow rows with a valid saved execution contract may expose an explicit
+`Studio` action near the contract action. Activating it should ask the manager
+API to start or reuse the local Studio server for the current environment and
+then open the returned URL in a separate browser tab.
+
+The local Studio action should not appear as a deployment action and should not
+try to create cloud state. Workflows without a valid contract should continue
+to route users to contract authoring first.

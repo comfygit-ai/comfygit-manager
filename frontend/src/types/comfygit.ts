@@ -550,6 +550,20 @@ export interface WorkflowContractResponse {
   contract_context: WorkflowContractContext | null
 }
 
+export interface StudioLaunchResult {
+  status: 'running' | 'stopped'
+  url: string | null
+  env_name: string
+  pid?: number | null
+  started?: boolean
+  reused?: boolean
+  bind_host?: string | null
+  port?: number | null
+  comfy_url?: string | null
+  log_path?: string | null
+  message?: string | null
+}
+
 export interface WorkflowResolutionPlan {
   workflow: string
   nodes: {

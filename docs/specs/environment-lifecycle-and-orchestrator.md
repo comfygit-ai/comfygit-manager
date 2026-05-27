@@ -259,3 +259,17 @@ preserved.
 This remains partial until both supervisor modes are covered by automated
 handoff tests and the switch modal consumes them without falling back to noisy
 failed polling during normal handoff.
+
+### CGM-ENV-15 [LIVE]: Local Studio serving is a child runtime, not lifecycle authority
+Validation: TEST
+
+The manager may launch a local `cg serve` Studio process for the current
+managed environment so users can test saved workflow contracts in the shared
+Studio UI. That process should reuse ComfyGit CLI serve behavior and should be
+tracked separately from environment switching, workspace setup, and ComfyUI
+orchestrator supervision.
+
+Starting Studio must not mutate the selected environment, switch the running
+ComfyUI process, or imply cloud deployment. It is a local runtime adapter over
+the currently running ComfyUI API endpoint and the current environment's saved
+workflow contracts.
