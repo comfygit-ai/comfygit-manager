@@ -88,6 +88,10 @@ class ServerImportProgress:
             _import_task_state["message"] = description
             _append_import_log_locked(description)
 
+    def on_log(self, message: str) -> None:
+        with _import_task_lock:
+            _append_import_log_locked(message)
+
     def on_dependency_group_start(self, group_name: str, is_optional: bool) -> None:
         with _import_task_lock:
             _import_task_state["message"] = f"Installing {group_name}..."

@@ -65,6 +65,30 @@ class FakeWorkspace:
         return self.environment
 
 
+class FakeCallbacks:
+    def __init__(self) -> None:
+        self.phases: list[tuple[str, str]] = []
+        self.logs: list[str] = []
+        self.errors: list[str] = []
+        self.workflows: list[str] = []
+        self.nodes: list[str] = []
+
+    def on_phase(self, phase: str, description: str) -> None:
+        self.phases.append((phase, description))
+
+    def on_log(self, message: str) -> None:
+        self.logs.append(message)
+
+    def on_error(self, error: str) -> None:
+        self.errors.append(error)
+
+    def on_workflow_copied(self, workflow_name: str) -> None:
+        self.workflows.append(workflow_name)
+
+    def on_node_installed(self, node_name: str) -> None:
+        self.nodes.append(node_name)
+
+
 class FakeRegistryVersion:
     def __init__(self, version: str, download_url: str = "https://example.com/node.zip") -> None:
         self.version = version
@@ -123,6 +147,22 @@ def test_scan_current_environment_reads_comfyui_version_file(temp_dir: Path) -> 
     preview = scan_current_environment(source)
 
     assert preview.comfyui_version == "0.22.0"
+
+
+def test_import_current_environment_normalizes_bare_comfyui_release_tag(temp_dir: Path) -> None:
+    source = _make_comfyui_source(temp_dir / "source")
+    (source / "comfyui_version.py").write_text('__version__ = "0.22.0"\n')
+    workspace = FakeWorkspace(temp_dir / "workspace")
+
+    import_current_environment(
+        workspace,
+        name="managed-copy",
+        source_path=source,
+        torch_backend="cpu",
+    )
+
+    assert workspace.created is not None
+    assert workspace.created["comfyui_version"] == "v0.22.0"
 
 
 def test_scan_current_environment_reads_pyproject_version_when_version_file_missing(temp_dir: Path) -> None:
@@ -317,6 +357,28 @@ def test_import_current_environment_tracks_symlinked_manager_as_dev_node(temp_di
     assert workspace.environment.linked_nodes == [
         ("comfygit-manager", manager_repo.resolve()),
     ]
+
+
+def test_import_current_environment_forwards_create_progress_and_logs(temp_dir: Path) -> None:
+    source = _make_comfyui_source(temp_dir / "source")
+    workspace = FakeWorkspace(temp_dir / "workspace")
+    callbacks = FakeCallbacks()
+
+    import_current_environment(
+        workspace,
+        name="managed-copy",
+        source_path=source,
+        torch_backend="cpu",
+        callbacks=callbacks,
+    )
+
+    assert workspace.created is not None
+    progress = workspace.created["progress"]
+    progress.on_phase("install_dependencies", "Installing dependencies", 40)
+    progress.on_log("Downloading torch (1.1GiB)")
+
+    assert ("install_dependencies", "Installing dependencies") in callbacks.phases
+    assert "Downloading torch (1.1GiB)" in callbacks.logs
 
 
 def test_import_current_environment_installs_registry_nodes_and_tracks_workflows(temp_dir: Path) -> None:

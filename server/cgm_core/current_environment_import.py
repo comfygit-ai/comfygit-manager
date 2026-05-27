@@ -64,6 +64,8 @@ MODEL_NODE_WIDGET_FALLBACKS = {
     "ControlNetLoader": [(0, "controlnet")],
 }
 
+BARE_COMFYUI_RELEASE_RE = re.compile(r"^\d+(?:\.\d+)+(?:[-+][A-Za-z0-9._-]+)?$")
+
 
 class CurrentEnvironmentImportCallbacks(Protocol):
     """Subset of existing import callbacks used by current-environment import."""
@@ -240,12 +242,15 @@ def import_current_environment(
     warnings = list(preview.warnings)
 
     _phase(callbacks, "clone_comfyui", f"Creating managed environment '{name}'...")
-    env = workspace.create_environment(
-        name=name,
-        python_version=preview.python_version,
-        comfyui_version=preview.comfyui_version,
-        torch_backend=torch_backend,
-    )
+    create_kwargs: dict[str, Any] = {
+        "name": name,
+        "python_version": preview.python_version,
+        "comfyui_version": _comfyui_create_version(preview.comfyui_version),
+        "torch_backend": torch_backend,
+    }
+    if callbacks:
+        create_kwargs["progress"] = _EnvironmentCreateProgressAdapter(callbacks)
+    env = workspace.create_environment(**create_kwargs)
     _link_running_manager_dev_node(Path(preview.source_path), env, warnings, callbacks)
 
     workflows_copied = 0
@@ -841,6 +846,15 @@ def _detect_comfyui_version(comfyui_path: Path) -> tuple[str | None, str | None]
     return version, commit
 
 
+def _comfyui_create_version(version: str | None) -> str | None:
+    """Return a ComfyUI Git ref suitable for core environment creation."""
+    if not version:
+        return None
+    if BARE_COMFYUI_RELEASE_RE.match(version):
+        return f"v{version}"
+    return version
+
+
 def _read_comfyui_version_py(comfyui_path: Path) -> str | None:
     version_path = comfyui_path / "comfyui_version.py"
     if not version_path.is_file():
@@ -913,3 +927,22 @@ def _phase(callbacks: CurrentEnvironmentImportCallbacks | None, phase: str, mess
 def _warn(callbacks: CurrentEnvironmentImportCallbacks | None, message: str) -> None:
     if callbacks:
         callbacks.on_error(message)
+
+
+class _EnvironmentCreateProgressAdapter:
+    """Bridge core environment creation progress into current-import callbacks."""
+
+    def __init__(self, callbacks: CurrentEnvironmentImportCallbacks):
+        self.callbacks = callbacks
+
+    def on_phase(self, phase: str, description: str, progress_pct: int) -> None:
+        self.callbacks.on_phase(phase, description)
+
+    def on_phase_complete(self, phase: str, success: bool, error: str | None = None) -> None:
+        if not success and error:
+            self.callbacks.on_error(f"{phase} failed: {error}")
+
+    def on_log(self, message: str) -> None:
+        on_log = getattr(self.callbacks, "on_log", None)
+        if callable(on_log):
+            on_log(message)
