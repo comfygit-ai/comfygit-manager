@@ -9,13 +9,15 @@ from pathlib import Path
 
 from aiohttp import web
 
-from cgm_core.current_environment_import import (
-    import_current_environment,
-    scan_current_environment,
-)
 from cgm_utils.async_helpers import run_sync
 from cgm_utils.environment_name_validation import validate_environment_name as validate_environment_name_format
 from comfygit_core import Workspace
+from comfygit_core.imports import (
+    UnmanagedDevelopmentNodeLink,
+    detect_unmanaged_comfyui_path,
+    import_unmanaged_comfyui_environment,
+    scan_unmanaged_comfyui,
+)
 from comfygit_core.models import CDWorkspaceNotFoundError
 import orchestrator
 
@@ -286,12 +288,14 @@ def _run_import_current_environment(
             _reset_import_task(f"Importing current ComfyUI as '{name}'...", name)
 
         progress = ServerImportProgress()
-        result = import_current_environment(
+        result = import_unmanaged_comfyui_environment(
             workspace,
             name=name,
             source_path=source_path,
             torch_backend=torch_backend,
             callbacks=progress,
+            ignored_custom_node_names=_manager_ignored_custom_node_names(),
+            development_node_links=_manager_development_node_links(source_path),
         )
 
         with _import_task_lock:
@@ -329,6 +333,35 @@ def _get_workspace_for_import(workspace_path: str | None):
     if not workspace:
         raise FileNotFoundError("Not in workspace")
     return workspace
+
+
+def _manager_ignored_custom_node_names() -> tuple[str, ...]:
+    return ("comfygit-manager",)
+
+
+def _manager_development_node_links(source_path: str | None) -> tuple[UnmanagedDevelopmentNodeLink, ...]:
+    """Preserve a symlinked in-development manager node without hard-coding it in core."""
+    try:
+        comfyui_path = detect_unmanaged_comfyui_path(source_path)
+    except Exception:
+        return ()
+
+    manager_path = comfyui_path / "custom_nodes" / "comfygit-manager"
+    if not manager_path.is_symlink():
+        return ()
+
+    try:
+        source = manager_path.resolve(strict=True)
+    except OSError:
+        return ()
+
+    return (
+        UnmanagedDevelopmentNodeLink(
+            identifier="comfygit-manager",
+            source_path=source,
+            name="comfygit-manager",
+        ),
+    )
 
 
 @routes.post("/v2/workspace/import/git/refs")
@@ -388,9 +421,10 @@ async def preview_current_import(request: web.Request) -> web.Response:
 
     try:
         preview = await run_sync(
-            scan_current_environment,
+            scan_unmanaged_comfyui,
             source_path,
             node_registry_lookup,
+            _manager_ignored_custom_node_names(),
         )
         return web.json_response(preview.to_dict())
     except Exception as e:
