@@ -345,17 +345,17 @@
               Importing current ComfyUI as <strong>{{ envName }}</strong>...
             </p>
 
-            <TaskProgressDisplay
+            <LifecycleProgressDisplay
+              :state="currentImportProgress.phase || 'importing'"
               :progress="currentImportProgress.progress"
-              :message="currentImportProgress.message"
-              :current-phase="currentImportProgress.phase"
-              :show-steps="true"
-              :steps="currentImportSteps"
+              :state-label="currentImportProgress.message"
+              :steps="currentImportLifecycleSteps"
+              :logs="currentImportLogs"
+              log-title="Import log"
+              active-message="This may take several minutes. Please wait..."
+              complete-message="Environment import completed. Copy logs if needed before closing."
+              error-message="Environment import failed. Review logs for details."
             />
-
-            <p class="progress-warning">
-              This may take several minutes. Please wait...
-            </p>
           </div>
         </div>
         </template>
@@ -439,10 +439,12 @@ import { useComfyGitService } from '@/composables/useComfyGitService'
 import BaseModal from './base/BaseModal.vue'
 import BaseButton from './base/BaseButton.vue'
 import TaskProgressDisplay from './base/molecules/TaskProgressDisplay.vue'
+import LifecycleProgressDisplay from './base/molecules/LifecycleProgressDisplay.vue'
 import SocialButtons from './base/molecules/SocialButtons.vue'
 import FooterInfo from './base/atoms/FooterInfo.vue'
 import ImportFlow from './ImportFlow.vue'
 import WorkspaceSettingsModal from './WorkspaceSettingsModal.vue'
+import type { SwitchLogEntry } from '@/types/comfygit'
 
 const props = defineProps<{
   defaultPath: string
@@ -516,6 +518,7 @@ const isCreatingEnvironment = ref(false)
 const initProgress = ref({ progress: 0, message: '' })
 const createProgress = ref<{ progress: number; message: string; phase?: string }>({ progress: 0, message: '' })
 const currentImportProgress = ref<{ progress: number; message: string; phase?: string }>({ progress: 0, message: '' })
+const currentImportLogs = ref<SwitchLogEntry[]>([])
 const currentImportPreview = ref<CurrentEnvironmentImportPreview | null>(null)
 const currentImportError = ref<string | null>(null)
 const isLoadingCurrentImportPreview = ref(false)
@@ -539,6 +542,12 @@ const currentImportSteps = [
   { id: 'resolve_models', label: 'Resolve copied workflows', progressThreshold: 85 },
   { id: 'finalize', label: 'Finalize environment', progressThreshold: 100 },
 ]
+
+const currentImportLifecycleSteps = currentImportSteps.map(step => ({
+  state: step.id,
+  label: step.label,
+  progressThreshold: step.progressThreshold,
+}))
 
 // Polling safeguards
 const MAX_FAILURES = 10
@@ -858,6 +867,7 @@ async function handleStartCurrentImport() {
     message: `Importing current ComfyUI as '${envName.value.trim()}'...`,
     phase: ''
   }
+  currentImportLogs.value = []
 
   try {
     const request = {
@@ -897,6 +907,7 @@ function resumeCurrentImportPolling(requestedName: string) {
         message: progress.message,
         phase: progress.phase || undefined
       }
+      currentImportLogs.value = progress.logs || currentImportLogs.value
 
       if (progress.state === 'complete') {
         clearInterval(poll)

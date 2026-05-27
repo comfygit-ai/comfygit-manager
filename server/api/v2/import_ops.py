@@ -371,9 +371,23 @@ async def preview_current_import(request: web.Request) -> web.Response:
         data = {}
 
     source_path = data.get("source_path") if isinstance(data, dict) else None
+    workspace_path = data.get("workspace_path") if isinstance(data, dict) else None
+    node_registry_lookup = None
 
     try:
-        preview = await run_sync(scan_current_environment, source_path)
+        workspace = _get_workspace_for_import(workspace_path)
+        node_registry_lookup = getattr(workspace, "node_mapping_repository", None)
+    except Exception:
+        # Preview still works without registry metadata; unresolved provenance is
+        # surfaced as warnings and rechecked during the actual import.
+        node_registry_lookup = None
+
+    try:
+        preview = await run_sync(
+            scan_current_environment,
+            source_path,
+            node_registry_lookup,
+        )
         return web.json_response(preview.to_dict())
     except Exception as e:
         return web.json_response({"error": str(e)}, status=400)

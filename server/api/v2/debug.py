@@ -1,4 +1,5 @@
 """Debug and logging endpoints."""
+import json
 import re
 from pathlib import Path
 
@@ -8,6 +9,37 @@ from cgm_core.decorators import requires_environment
 from cgm_utils.async_helpers import run_sync
 
 routes = web.RouteTableDef()
+
+
+def get_workspace_from_request_context():
+    """Resolve the workspace for debug endpoints, including unmanaged startup."""
+    from comfygit_server import get_environment_from_cwd
+    import orchestrator
+
+    env = get_environment_from_cwd()
+    if env:
+        return env.workspace
+
+    _, workspace, _ = orchestrator.detect_environment_type()
+    return workspace
+
+
+def get_lifecycle_log_file(workspace_path: Path) -> Path:
+    """Return the most relevant lifecycle/switch log file for this workspace."""
+    metadata_dir = workspace_path / ".metadata"
+    supervisor_log = metadata_dir / "supervisor-switch.log"
+    orchestrator_log = metadata_dir / "orchestrator.log"
+
+    if supervisor_log.exists():
+        if not orchestrator_log.exists():
+            return supervisor_log
+        try:
+            if supervisor_log.stat().st_mtime >= orchestrator_log.stat().st_mtime:
+                return supervisor_log
+        except OSError:
+            return supervisor_log
+
+    return orchestrator_log
 
 
 def read_text_file(path: Path) -> str | None:
@@ -42,6 +74,21 @@ def parse_raw_log_file(log_file: Path, lines: int = 500) -> list[dict]:
             line = line.rstrip('\n\r')
             if not line:
                 continue
+
+            try:
+                parsed = json.loads(line)
+                if isinstance(parsed, dict) and "message" in parsed:
+                    entries.append({
+                        'timestamp': parsed.get('timestamp', ''),
+                        'name': parsed.get('name', 'orchestrator'),
+                        'level': str(parsed.get('level', 'INFO')).upper(),
+                        'func': parsed.get('func', ''),
+                        'line': parsed.get('line', 0),
+                        'message': parsed.get('message', ''),
+                    })
+                    continue
+            except json.JSONDecodeError:
+                pass
 
             # Detect log level from common patterns
             level = 'INFO'
@@ -185,16 +232,13 @@ async def get_workspace_logs(request: web.Request) -> web.Response:
         - level: Filter by log level (ERROR, WARNING, INFO, DEBUG)
         - lines: Number of lines to return (default: 100)
     """
-    from comfygit_server import get_environment_from_cwd
-
     level = request.query.get('level')
     lines = int(request.query.get('lines', '100'))
 
-    env = get_environment_from_cwd()
-    if not env:
-        return web.json_response({"error": "No environment detected"}, status=500)
+    workspace = get_workspace_from_request_context()
+    if not workspace:
+        return web.json_response({"error": "No workspace detected"}, status=500)
 
-    workspace = env.workspace
     log_file = workspace.path / "logs" / "workspace" / "full.log"
 
     logs = await run_sync(parse_log_file, log_file, level, lines)
@@ -248,13 +292,11 @@ async def refresh_environment_metadata(request: web.Request, env) -> web.Respons
 @routes.get("/v2/workspace/debug/logs/path")
 async def get_workspace_log_path(request: web.Request) -> web.Response:
     """Get the file path to the workspace log file."""
-    from comfygit_server import get_environment_from_cwd
+    workspace = get_workspace_from_request_context()
+    if not workspace:
+        return web.json_response({"error": "No workspace detected"}, status=500)
 
-    env = get_environment_from_cwd()
-    if not env:
-        return web.json_response({"error": "No environment detected"}, status=500)
-
-    log_file = env.workspace.path / "logs" / "workspace" / "full.log"
+    log_file = workspace.path / "logs" / "workspace" / "full.log"
 
     return web.json_response({
         "path": str(log_file),
@@ -272,15 +314,13 @@ async def get_orchestrator_logs(request: web.Request) -> web.Response:
     Query params:
         - lines: Number of lines to return (default: 500)
     """
-    from comfygit_server import get_environment_from_cwd
-
     lines = int(request.query.get('lines', '500'))
 
-    env = get_environment_from_cwd()
-    if not env:
-        return web.json_response({"error": "No environment detected"}, status=500)
+    workspace = get_workspace_from_request_context()
+    if not workspace:
+        return web.json_response({"error": "No workspace detected"}, status=500)
 
-    log_file = env.workspace.path / ".metadata" / "orchestrator.log"
+    log_file = get_lifecycle_log_file(workspace.path)
 
     logs = await run_sync(parse_raw_log_file, log_file, lines)
 
@@ -290,13 +330,11 @@ async def get_orchestrator_logs(request: web.Request) -> web.Response:
 @routes.get("/v2/workspace/debug/orchestrator-logs/path")
 async def get_orchestrator_log_path(request: web.Request) -> web.Response:
     """Get the file path to the orchestrator log file."""
-    from comfygit_server import get_environment_from_cwd
+    workspace = get_workspace_from_request_context()
+    if not workspace:
+        return web.json_response({"error": "No workspace detected"}, status=500)
 
-    env = get_environment_from_cwd()
-    if not env:
-        return web.json_response({"error": "No environment detected"}, status=500)
-
-    log_file = env.workspace.path / ".metadata" / "orchestrator.log"
+    log_file = get_lifecycle_log_file(workspace.path)
 
     return web.json_response({
         "path": str(log_file),

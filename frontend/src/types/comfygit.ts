@@ -1378,10 +1378,14 @@ export interface CurrentEnvironmentCustomNodeScan {
   name: string
   path: string
   source_type: 'git' | 'local' | string
+  registry_id?: string | null
+  version?: string | null
+  install_spec?: string | null
   repository?: string | null
   branch?: string | null
   pinned_commit?: string | null
   warning?: string | null
+  provenance_detail?: string | null
 }
 
 export interface CurrentEnvironmentImportPreview {

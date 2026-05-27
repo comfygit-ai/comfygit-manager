@@ -598,6 +598,45 @@ def _create_venv_with_stdlib(venv_path: Path, pip_exe: Path) -> None:
         subprocess.run([str(pip_exe), "install", "comfygit-core", "--quiet"], check=True)
 
 
+def _orchestrator_venv_is_current(venv_path: Path, python_exe: Path) -> bool:
+    """Return true when the existing orchestrator venv can import required core APIs."""
+    if not (venv_path.exists() and python_exe.exists()):
+        return False
+
+    check_script = """
+import importlib.util
+import os
+from pathlib import Path
+
+spec = importlib.util.find_spec("comfygit_core.runtime")
+if spec is None:
+    raise SystemExit(1)
+
+dev_core_path = os.environ.get("COMFYGIT_DEV_CORE_PATH")
+if dev_core_path:
+    import comfygit_core
+
+    core_file = Path(comfygit_core.__file__).resolve()
+    expected = Path(dev_core_path).resolve()
+    try:
+        core_file.relative_to(expected)
+    except ValueError:
+        raise SystemExit(2)
+"""
+
+    try:
+        result = subprocess.run(
+            [str(python_exe), "-c", check_script],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except Exception:
+        return False
+
+    return result.returncode == 0
+
+
 def ensure_orchestrator_venv(venv_path: Path) -> None:
     """
     Create dedicated virtual environment for orchestrator.
@@ -608,7 +647,7 @@ def ensure_orchestrator_venv(venv_path: Path) -> None:
     """
     python_exe, pip_exe = _get_venv_executables(venv_path)
 
-    if venv_path.exists() and python_exe.exists():
+    if _orchestrator_venv_is_current(venv_path, python_exe):
         return  # Already set up
 
     if venv_path.exists():
