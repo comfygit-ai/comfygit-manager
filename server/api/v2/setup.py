@@ -1,4 +1,5 @@
 """First-time setup API."""
+import importlib.util
 import logging
 import os
 import shutil
@@ -27,6 +28,13 @@ _init_task_state = {
     "models_found": None,
     "error": None
 }
+
+
+def _has_comfyui_manager(cwd: Path) -> bool:
+    """Return whether upstream ComfyUI Manager is available."""
+    if (cwd / "custom_nodes" / "ComfyUI-Manager").is_dir():
+        return True
+    return importlib.util.find_spec("comfyui_manager") is not None
 
 
 def _update_init_state(state: str, progress: int, message: str, **kwargs):
@@ -89,8 +97,9 @@ async def get_setup_status(request: web.Request) -> web.Response:
     if potential_models.exists() and potential_models.is_dir():
         detected_models_dir = str(potential_models)
 
-    # Check if ComfyUI-Manager is installed in custom_nodes
-    has_comfyui_manager = (cwd / "custom_nodes" / "ComfyUI-Manager").is_dir()
+    # Check if ComfyUI-Manager is installed as the current package-based
+    # manager or as the older custom node directory.
+    has_comfyui_manager = _has_comfyui_manager(cwd)
 
     # CLI detection
     cli_path = shutil.which('comfygit') or shutil.which('cg')
