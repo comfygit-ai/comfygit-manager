@@ -1355,6 +1355,40 @@ export interface ImportProgress {
   logs?: SwitchLogEntry[]
 }
 
+export interface CurrentEnvironmentWorkflowScan {
+  name: string
+  path: string
+}
+
+export interface CurrentEnvironmentCustomNodeScan {
+  name: string
+  path: string
+  source_type: 'git' | 'local' | string
+  repository?: string | null
+  branch?: string | null
+  pinned_commit?: string | null
+  warning?: string | null
+}
+
+export interface CurrentEnvironmentImportPreview {
+  source_path: string
+  python_version: string
+  comfyui_version?: string | null
+  comfyui_commit?: string | null
+  workflows: CurrentEnvironmentWorkflowScan[]
+  custom_nodes: CurrentEnvironmentCustomNodeScan[]
+  warnings: string[]
+  total_workflows: number
+  total_custom_nodes: number
+}
+
+export interface CurrentEnvironmentImportRequest {
+  name: string
+  workspace_path?: string | null
+  source_path?: string | null
+  torch_backend?: string
+}
+
 // First-Time Setup Types
 export type SetupState = 'no_workspace' | 'empty_workspace' | 'unmanaged' | 'managed'
 

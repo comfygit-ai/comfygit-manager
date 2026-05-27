@@ -145,6 +145,20 @@
             <span class="option-arrow">▸</span>
           </button>
 
+          <!-- Import Current Button (unmanaged local adoption path) -->
+          <button
+            v-if="props.setupState === 'unmanaged'"
+            class="landing-option"
+            @click="openCurrentImport"
+          >
+            <span class="option-icon">↳</span>
+            <div class="option-content">
+              <span class="option-title">Import Current Environment</span>
+              <span class="option-description">Create a managed copy from this running ComfyUI install</span>
+            </div>
+            <span class="option-arrow">▸</span>
+          </button>
+
           <!-- Existing Environments (if any) -->
           <template v-if="props.existingEnvironments?.length">
             <div class="landing-divider">
@@ -253,6 +267,97 @@
             @source-cleared="handleImportCleared"
           />
         </div>
+
+        <!-- Import Current Mode -->
+        <div v-else-if="wizardMode === 'import-current'" class="env-import-current">
+          <p class="wizard-intro">
+            Create a managed ComfyGit environment from the ComfyUI process you are using right now.
+          </p>
+
+          <div v-if="isLoadingCurrentImportPreview" class="progress-check-loading">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Scanning current ComfyUI install...</div>
+          </div>
+
+          <template v-else-if="!isImporting">
+            <div v-if="currentImportPreview" class="current-import-summary">
+              <div class="summary-row">
+                <span>Source</span>
+                <code>{{ currentImportPreview.source_path }}</code>
+              </div>
+              <div class="summary-grid">
+                <div>
+                  <span class="summary-value">{{ currentImportPreview.total_workflows }}</span>
+                  <span class="summary-label">workflows</span>
+                </div>
+                <div>
+                  <span class="summary-value">{{ currentImportPreview.total_custom_nodes }}</span>
+                  <span class="summary-label">custom nodes</span>
+                </div>
+                <div>
+                  <span class="summary-value">{{ currentImportPreview.python_version }}</span>
+                  <span class="summary-label">Python</span>
+                </div>
+              </div>
+              <div v-if="currentImportPreview.warnings.length" class="current-import-warnings">
+                <div class="warning-title">Review after import</div>
+                <ul>
+                  <li v-for="warning in currentImportPreview.warnings.slice(0, 4)" :key="warning">
+                    {{ warning }}
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div v-if="currentImportError" class="form-error">
+              {{ currentImportError }}
+            </div>
+
+            <div class="form-field">
+              <label class="form-label">Environment Name</label>
+              <input
+                v-model="envName"
+                type="text"
+                class="form-input"
+                placeholder="imported-comfyui"
+              />
+            </div>
+
+            <div class="form-field">
+              <label class="form-label">PyTorch Backend</label>
+              <select v-model="torchBackend" class="form-select">
+                <option v-for="b in TORCH_BACKENDS" :key="b" :value="b">
+                  {{ b }}{{ b === 'auto' ? ' (detect GPU)' : '' }}
+                </option>
+              </select>
+            </div>
+
+            <div class="form-field form-field--checkbox">
+              <label class="form-checkbox">
+                <input type="checkbox" v-model="switchAfter" />
+                <span>Switch to this environment after import</span>
+              </label>
+            </div>
+          </template>
+
+          <div v-else class="env-creating">
+            <p class="creating-intro">
+              Importing current ComfyUI as <strong>{{ envName }}</strong>...
+            </p>
+
+            <TaskProgressDisplay
+              :progress="currentImportProgress.progress"
+              :message="currentImportProgress.message"
+              :current-phase="currentImportProgress.phase"
+              :show-steps="true"
+              :steps="currentImportSteps"
+            />
+
+            <p class="progress-warning">
+              This may take several minutes. Please wait...
+            </p>
+          </div>
+        </div>
         </template>
       </div>
     </template>
@@ -304,6 +409,14 @@
             </BaseButton>
 
             <!-- Import mode has its own buttons in ImportFlow -->
+            <BaseButton
+              v-if="wizardMode === 'import-current' && !isImporting"
+              variant="primary"
+              :disabled="!canStartCurrentImport"
+              @click="handleStartCurrentImport"
+            >
+              {{ switchAfter ? 'Import & Switch' : 'Import Current Environment' }}
+            </BaseButton>
           </template>
         </div>
       </div>
@@ -320,7 +433,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import type { ComfyUIRelease, CreateEnvironmentRequest, SetupState } from '@/types/comfygit'
+import type { ComfyUIRelease, CreateEnvironmentRequest, CurrentEnvironmentImportPreview, SetupState } from '@/types/comfygit'
 import { PYTHON_VERSIONS, DEFAULT_PYTHON_VERSION, TORCH_BACKENDS, DEFAULT_TORCH_BACKEND } from '@/constants/environment'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import BaseModal from './base/BaseModal.vue'
@@ -355,6 +468,8 @@ const {
   createEnvironment,
   getCreateProgress,
   getImportProgress,
+  previewCurrentEnvironmentImport,
+  executeCurrentEnvironmentImport,
   getComfyUIReleases
 } = useComfyGitService()
 
@@ -363,7 +478,7 @@ const currentStep = ref(props.initialStep || 1)
 const selectedEnv = ref<string | null>(null)
 
 // Wizard mode for Step 2
-type WizardMode = 'landing' | 'create' | 'import'
+type WizardMode = 'landing' | 'create' | 'import' | 'import-current'
 const wizardMode = ref<WizardMode>('landing')
 const showSettingsModal = ref(false)
 const isImporting = ref(false)
@@ -400,6 +515,10 @@ const isCreatingWorkspace = ref(false)
 const isCreatingEnvironment = ref(false)
 const initProgress = ref({ progress: 0, message: '' })
 const createProgress = ref<{ progress: number; message: string; phase?: string }>({ progress: 0, message: '' })
+const currentImportProgress = ref<{ progress: number; message: string; phase?: string }>({ progress: 0, message: '' })
+const currentImportPreview = ref<CurrentEnvironmentImportPreview | null>(null)
+const currentImportError = ref<string | null>(null)
+const isLoadingCurrentImportPreview = ref(false)
 
 // Environment creation steps (matches core library phases)
 const environmentCreationSteps = [
@@ -410,6 +529,14 @@ const environmentCreationSteps = [
   { id: 'configure_environment', label: 'Configure environment', progressThreshold: 40 },
   { id: 'install_dependencies', label: 'Install PyTorch and dependencies', progressThreshold: 85 },
   { id: 'install_manager', label: 'Install ComfyGit manager', progressThreshold: 90 },
+  { id: 'finalize', label: 'Finalize environment', progressThreshold: 100 },
+]
+
+const currentImportSteps = [
+  { id: 'clone_comfyui', label: 'Create managed environment', progressThreshold: 10 },
+  { id: 'copy_workflows', label: 'Copy workflows', progressThreshold: 40 },
+  { id: 'sync_nodes', label: 'Copy and register custom nodes', progressThreshold: 70 },
+  { id: 'resolve_models', label: 'Resolve copied workflows', progressThreshold: 85 },
   { id: 'finalize', label: 'Finalize environment', progressThreshold: 100 },
 ]
 
@@ -432,6 +559,15 @@ const canProceedStep1 = computed(() => {
 
 const canProceedStep2 = computed(() => {
   return envName.value?.trim()
+})
+
+const canStartCurrentImport = computed(() => {
+  return Boolean(
+    currentImportPreview.value &&
+    envName.value?.trim() &&
+    !currentImportError.value &&
+    !isLoadingCurrentImportPreview.value
+  )
 })
 
 // Show settings button when workspace exists (step 2, empty_workspace, unmanaged, or after workspace created in step 1)
@@ -688,12 +824,106 @@ function handleSwitchToExisting() {
 }
 
 function handleBack() {
-  if (wizardMode.value === 'create' || wizardMode.value === 'import') {
+  if (wizardMode.value === 'create' || wizardMode.value === 'import' || wizardMode.value === 'import-current') {
     wizardMode.value = 'landing'
   } else if (currentStep.value === 2 && props.setupState === 'no_workspace') {
     currentStep.value = 1
   }
   // For empty_workspace/unmanaged at landing - nothing to go back to
+}
+
+async function openCurrentImport() {
+  wizardMode.value = 'import-current'
+  currentImportPreview.value = null
+  currentImportError.value = null
+  isLoadingCurrentImportPreview.value = true
+  envName.value = 'imported-comfyui'
+
+  try {
+    currentImportPreview.value = await previewCurrentEnvironmentImport()
+  } catch (err) {
+    currentImportError.value = err instanceof Error ? err.message : 'Failed to scan current ComfyUI install'
+  } finally {
+    isLoadingCurrentImportPreview.value = false
+  }
+}
+
+async function handleStartCurrentImport() {
+  if (!envName.value.trim()) return
+
+  isImporting.value = true
+  currentImportError.value = null
+  currentImportProgress.value = {
+    progress: 0,
+    message: `Importing current ComfyUI as '${envName.value.trim()}'...`,
+    phase: ''
+  }
+
+  try {
+    const request = {
+      name: envName.value.trim(),
+      workspace_path: createdWorkspacePath.value || undefined,
+      torch_backend: torchBackend.value
+    }
+    const result = await executeCurrentEnvironmentImport(request)
+    if (result.status !== 'started') {
+      throw new Error(result.message || 'Failed to start import')
+    }
+
+    resumeCurrentImportPolling(request.name)
+  } catch (err) {
+    isImporting.value = false
+    currentImportError.value = err instanceof Error ? err.message : 'Failed to import current environment'
+  }
+}
+
+function resumeCurrentImportPolling(requestedName: string) {
+  step2FailureCount.value = 0
+  step2StartTime.value = Date.now()
+
+  const poll = setInterval(async () => {
+    if (step2StartTime.value && Date.now() - step2StartTime.value > STEP2_TIMEOUT_MS) {
+      clearInterval(poll)
+      isImporting.value = false
+      currentImportError.value = 'Environment import timed out. Check server logs for details.'
+      return
+    }
+
+    try {
+      const progress = await getImportProgress()
+      step2FailureCount.value = 0
+      currentImportProgress.value = {
+        progress: progress.progress ?? 0,
+        message: progress.message,
+        phase: progress.phase || undefined
+      }
+
+      if (progress.state === 'complete') {
+        clearInterval(poll)
+        isImporting.value = false
+        const completedEnvName = progress.environment_name || requestedName
+        if (switchAfter.value) {
+          emit('complete', completedEnvName, createdWorkspacePath.value)
+        } else {
+          emit('environment-created-no-switch', completedEnvName)
+          wizardMode.value = 'landing'
+        }
+      } else if (progress.state === 'error') {
+        clearInterval(poll)
+        isImporting.value = false
+        currentImportError.value = progress.error || progress.message || 'Environment import failed'
+      }
+    } catch (err) {
+      step2FailureCount.value++
+      console.warn(`Polling failure ${step2FailureCount.value}/${MAX_FAILURES}:`, err)
+
+      if (step2FailureCount.value >= MAX_FAILURES) {
+        clearInterval(poll)
+        isImporting.value = false
+        currentImportError.value = 'Lost connection to server. Please refresh and try again.'
+      }
+    }
+  }, 2000)
 }
 
 function handleImportComplete(envName: string, switchRequested: boolean) {
@@ -1169,9 +1399,83 @@ async function resumeCreationPolling() {
 
 /* Create/Import modes */
 .env-create,
-.env-import {
+.env-import,
+.env-import-current {
   display: flex;
   flex-direction: column;
+  gap: var(--cg-space-4);
+}
+
+.current-import-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-3);
+  padding: var(--cg-space-4);
+  background: var(--cg-color-bg-secondary);
+  border: 1px solid var(--cg-color-border-subtle);
+  border-radius: var(--cg-radius-sm);
+}
+
+.summary-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-1);
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-sm);
+}
+
+.summary-row code {
+  color: var(--cg-color-text-primary);
+  font-size: var(--cg-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--cg-space-3);
+}
+
+.summary-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-1);
+  padding: var(--cg-space-3);
+  background: var(--cg-color-bg-primary);
+  border: 1px solid var(--cg-color-border-subtle);
+  border-radius: var(--cg-radius-sm);
+}
+
+.summary-value {
+  color: var(--cg-color-text-primary);
+  font-size: var(--cg-font-size-lg);
+  font-weight: var(--cg-font-weight-semibold);
+}
+
+.summary-label {
+  color: var(--cg-color-text-muted);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+}
+
+.current-import-warnings {
+  padding: var(--cg-space-3);
+  background: var(--cg-color-warning-muted);
+  border: 1px solid var(--cg-color-warning);
+  border-radius: var(--cg-radius-sm);
+}
+
+.warning-title {
+  color: var(--cg-color-text-primary);
+  font-weight: var(--cg-font-weight-semibold);
+  margin-bottom: var(--cg-space-2);
+}
+
+.current-import-warnings ul {
+  margin: 0;
+  padding-left: var(--cg-space-5);
+  color: var(--cg-color-text-secondary);
+  font-size: var(--cg-font-size-sm);
 }
 
 /* Creating progress state */

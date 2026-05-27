@@ -62,6 +62,8 @@ import type {
   ValidateNameResult,
   ImportResult,
   ImportProgress,
+  CurrentEnvironmentImportPreview,
+  CurrentEnvironmentImportRequest,
   SetupStatus,
   UpdateCheckResponse,
   UpdateManagerResponse,
@@ -2001,6 +2003,74 @@ export function useComfyGitService() {
     return fetchApi<ImportProgress>('/v2/workspace/import/status')
   }
 
+  async function previewCurrentEnvironmentImport(sourcePath?: string | null): Promise<CurrentEnvironmentImportPreview> {
+    if (USE_MOCK) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return {
+        source_path: sourcePath || '/mock/ComfyUI',
+        python_version: '3.12',
+        comfyui_version: 'v0.4.2',
+        comfyui_commit: 'a'.repeat(40),
+        total_workflows: 2,
+        total_custom_nodes: 3,
+        workflows: [
+          { name: 'portrait-api', path: '/mock/ComfyUI/user/default/workflows/portrait-api.json' },
+          { name: 'upscale', path: '/mock/ComfyUI/user/default/workflows/upscale.json' }
+        ],
+        custom_nodes: [
+          {
+            name: 'rgthree-comfy',
+            path: '/mock/ComfyUI/custom_nodes/rgthree-comfy',
+            source_type: 'git',
+            repository: 'https://github.com/rgthree/rgthree-comfy.git',
+            branch: 'main',
+            pinned_commit: 'b'.repeat(40)
+          },
+          {
+            name: 'ComfyUI-KJNodes',
+            path: '/mock/ComfyUI/custom_nodes/ComfyUI-KJNodes',
+            source_type: 'git',
+            repository: 'https://github.com/kijai/ComfyUI-KJNodes.git',
+            branch: 'main',
+            pinned_commit: 'c'.repeat(40)
+          },
+          {
+            name: 'local-experiment-node',
+            path: '/mock/ComfyUI/custom_nodes/local-experiment-node',
+            source_type: 'local',
+            warning: 'No Git remote detected; copied as a local development node.'
+          }
+        ],
+        warnings: ['Custom node local-experiment-node has no Git remote and will need manual provenance review.']
+      }
+    }
+
+    return fetchApi<CurrentEnvironmentImportPreview>('/v2/workspace/import/current/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_path: sourcePath || undefined })
+    })
+  }
+
+  async function executeCurrentEnvironmentImport(request: CurrentEnvironmentImportRequest): Promise<ImportResult> {
+    if (USE_MOCK) {
+      await new Promise(resolve => setTimeout(resolve, 300))
+      mockImportState.state = 'importing'
+      mockImportState.phase = null
+      mockImportState.progress = 0
+      mockImportState.message = `Importing current ComfyUI as '${request.name}'...`
+      mockImportState.startTime = Date.now()
+      mockImportState.envName = request.name
+      return { status: 'started', message: `Importing current ComfyUI as '${request.name}'...` }
+    }
+
+    return fetchApi<ImportResult>('/v2/workspace/import/current', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request)
+    })
+  }
+
   async function getGitImportRefs(gitUrl: string): Promise<GitRemoteRefs> {
     if (USE_MOCK) {
       await new Promise(resolve => setTimeout(resolve, 350))
@@ -2381,6 +2451,8 @@ export function useComfyGitService() {
     validateEnvironmentName,
     executeImport,
     executeGitImport,
+    previewCurrentEnvironmentImport,
+    executeCurrentEnvironmentImport,
     getImportProgress,
     // First-Time Setup
     getSetupStatus,

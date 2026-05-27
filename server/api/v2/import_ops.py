@@ -9,8 +9,14 @@ from pathlib import Path
 
 from aiohttp import web
 
+from cgm_core.current_environment_import import (
+    import_current_environment,
+    scan_current_environment,
+)
 from cgm_utils.async_helpers import run_sync
 from cgm_utils.environment_name_validation import validate_environment_name as validate_environment_name_format
+from comfygit_core import Workspace
+from comfygit_core.models import CDWorkspaceNotFoundError
 import orchestrator
 
 routes = web.RouteTableDef()
@@ -26,7 +32,18 @@ _import_task_state = {
     "environment_name": None,
     "error": None,
     "logs": []
-}
+    }
+
+
+def _reset_import_task(message: str, environment_name: str | None = None) -> None:
+    _import_task_state["state"] = "importing"
+    _import_task_state["phase"] = None
+    _import_task_state["progress"] = 0
+    _import_task_state["message"] = message
+    _import_task_state["environment_name"] = environment_name
+    _import_task_state["error"] = None
+    _import_task_state["logs"] = []
+    _append_import_log_locked(message)
 
 
 def _append_import_log_locked(message: str, level: str = "info") -> None:
@@ -251,6 +268,65 @@ def _run_import_from_git(
         print(f"[ComfyGit] Git environment import failed: {e}")
 
 
+def _run_import_current_environment(
+    workspace,
+    name: str,
+    source_path: str | None,
+    torch_backend: str,
+):
+    """Background thread function to import the currently running ComfyUI install."""
+    global _import_task_state
+
+    try:
+        with _import_task_lock:
+            _reset_import_task(f"Importing current ComfyUI as '{name}'...", name)
+
+        progress = ServerImportProgress()
+        result = import_current_environment(
+            workspace,
+            name=name,
+            source_path=source_path,
+            torch_backend=torch_backend,
+            callbacks=progress,
+        )
+
+        with _import_task_lock:
+            _import_task_state["state"] = "complete"
+            _import_task_state["phase"] = "complete"
+            _import_task_state["progress"] = 100
+            _import_task_state["message"] = (
+                f"Environment '{name}' imported successfully "
+                f"({result.workflows_copied} workflows, {result.custom_nodes_copied} custom nodes)"
+            )
+            _import_task_state["environment_name"] = result.environment_name
+            _import_task_state["error"] = None
+            for warning in result.warnings:
+                _append_import_log_locked(warning, "warning")
+            _append_import_log_locked(f"Environment '{name}' imported successfully")
+
+    except Exception as e:
+        with _import_task_lock:
+            _import_task_state["state"] = "error"
+            _import_task_state["message"] = "Failed to import current environment"
+            _import_task_state["error"] = str(e)
+            _append_import_log_locked(f"Failed to import current environment: {e}", "error")
+        print(f"[ComfyGit] Current environment import failed: {e}")
+        traceback.print_exc()
+
+
+def _get_workspace_for_import(workspace_path: str | None):
+    if workspace_path:
+        try:
+            return Workspace.open(Path(workspace_path).expanduser())
+        except CDWorkspaceNotFoundError:
+            raise FileNotFoundError(f"Workspace not found at {workspace_path}") from None
+
+    _, workspace, _ = orchestrator.detect_environment_type()
+    if not workspace:
+        raise FileNotFoundError("Not in workspace")
+    return workspace
+
+
 @routes.post("/v2/workspace/import/git/refs")
 async def get_git_import_refs(request: web.Request) -> web.Response:
     """Discover remote refs for a git environment import.
@@ -282,6 +358,23 @@ async def get_git_import_refs(request: web.Request) -> web.Response:
     try:
         refs = await run_sync(workspace.list_remote_refs, git_url)
         return web.json_response(refs.to_dict())
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=400)
+
+
+@routes.post("/v2/workspace/import/current/preview")
+async def preview_current_import(request: web.Request) -> web.Response:
+    """Preview best-effort import of the currently running unmanaged ComfyUI install."""
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+
+    source_path = data.get("source_path") if isinstance(data, dict) else None
+
+    try:
+        preview = await run_sync(scan_current_environment, source_path)
+        return web.json_response(preview.to_dict())
     except Exception as e:
         return web.json_response({"error": str(e)}, status=400)
 
@@ -494,6 +587,63 @@ async def import_environment(request: web.Request) -> web.Response:
     return web.json_response({
         "status": "started",
         "message": f"Importing environment '{name}'..."
+    })
+
+
+@routes.post("/v2/workspace/import/current")
+async def import_current(request: web.Request) -> web.Response:
+    """Import the currently running unmanaged ComfyUI install as a managed environment."""
+    global _import_task_state
+
+    with _import_task_lock:
+        if _import_task_state["state"] == "importing":
+            return web.json_response({
+                "status": "error",
+                "message": "Another import is already in progress"
+            }, status=409)
+
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"status": "error", "message": "Invalid JSON"}, status=400)
+
+    name = (data.get("name") or "").strip()
+    source_path = data.get("source_path")
+    workspace_path = data.get("workspace_path")
+    torch_backend = data.get("torch_backend", "auto")
+
+    if not name:
+        return web.json_response({"status": "error", "message": "name is required"}, status=400)
+
+    is_valid, error = _validate_env_name(name)
+    if not is_valid:
+        return web.json_response({"status": "error", "message": error}, status=400)
+
+    try:
+        workspace = _get_workspace_for_import(workspace_path)
+    except FileNotFoundError as e:
+        return web.json_response({"status": "error", "message": str(e)}, status=404)
+
+    try:
+        existing_envs = await run_sync(workspace.list_environments)
+        if any(env.name == name for env in existing_envs):
+            return web.json_response({
+                "status": "error",
+                "message": f"Environment '{name}' already exists"
+            }, status=400)
+    except Exception as e:
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+    thread = threading.Thread(
+        target=_run_import_current_environment,
+        args=(workspace, name, source_path, torch_backend),
+        daemon=True,
+    )
+    thread.start()
+
+    return web.json_response({
+        "status": "started",
+        "message": f"Importing current ComfyUI as '{name}'..."
     })
 
 

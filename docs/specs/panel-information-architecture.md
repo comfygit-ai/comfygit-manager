@@ -73,6 +73,11 @@ without leaving the environment-management context.
 Import should remain a workspace-level action because it creates a new
 environment rather than mutating the current one.
 
+In unmanaged local bootstrap mode, the setup flow may also expose an `Import
+Current Environment` action. That action belongs beside create/import choices
+because it creates a new managed environment from the currently running ComfyUI
+install instead of operating on a current managed environment.
+
 ### CGM-IA-05 [LIVE]: Environment export should be initiated from environment cards or details rather than a top-level sidebar destination
 Validation: HUMAN_REVIEW
 

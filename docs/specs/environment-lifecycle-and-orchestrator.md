@@ -169,6 +169,27 @@ environment-specific data sources used by the panel shell and the environments
 section so the imported environment is reflected in navigation without relying
 on unrelated status refreshes.
 
+### CGM-ENV-11C [PARTIAL]: Unmanaged local ComfyUI installs should have a best-effort adoption path
+Validation: MIXED
+
+When the manager is running inside an unmanaged local ComfyUI install and a
+ComfyGit workspace exists, the setup flow should offer an `Import Current
+Environment` path. This path should scan the currently running ComfyUI
+directory, create a normal managed ComfyGit environment in the selected
+workspace, copy discoverable workflow files and custom-node checkouts into that
+environment, and then let the user switch to it through the existing local
+orchestrator flow.
+
+This adoption path is best-effort. It should not claim that every dependency is
+fully portable merely because it was present in the unmanaged runtime. Unknown
+custom-node provenance, Python package drift, and unresolved model sources
+should remain visible through the normal ComfyGit status, readiness, and
+resolution surfaces after import.
+
+The unmanaged source ComfyUI directory must not be converted in place. Import
+current environment creates a sibling managed environment and leaves the
+original runtime available until the user explicitly switches.
+
 ### CGM-ENV-12 [LIVE]: Manager-created environments should use supported ComfyUI releases
 Validation: TEST
 
