@@ -24,7 +24,7 @@
       </div>
 
       <!-- Model Strategy -->
-      <div class="config-field">
+      <div v-if="showModelStrategy" class="config-field">
         <Label>Model Download Strategy</Label>
         <div class="strategy-options">
           <label
@@ -87,13 +87,16 @@ import SectionTitle from '@/components/base/atoms/SectionTitle.vue'
 import Label from '@/components/base/atoms/Label.vue'
 import { TORCH_BACKENDS } from '@/constants/environment'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   name: string
   modelStrategy: 'all' | 'required' | 'skip'
   torchBackend: string
   switchAfterImport: boolean
   nameError: string | null
-}>()
+  showModelStrategy?: boolean
+}>(), {
+  showModelStrategy: true
+})
 
 const emit = defineEmits<{
   'update:name': [value: string]

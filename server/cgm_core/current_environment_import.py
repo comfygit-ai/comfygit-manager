@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -25,6 +26,43 @@ WORKFLOW_SOURCE_DIRS = (
     Path("user") / "default" / "workflows",
     Path("workflows"),
 )
+
+MODEL_FILE_EXTENSIONS = (
+    ".safetensors",
+    ".sft",
+    ".ckpt",
+    ".pt",
+    ".pth",
+    ".gguf",
+    ".bin",
+    ".onnx",
+)
+
+MODEL_WIDGET_CATEGORY_HINTS = {
+    "ckpt": "checkpoints",
+    "checkpoint": "checkpoints",
+    "unet": "diffusion_models",
+    "diffusion_model": "diffusion_models",
+    "clip": "text_encoders",
+    "text_encoder": "text_encoders",
+    "vae": "vae",
+    "lora": "loras",
+    "control_net": "controlnet",
+    "controlnet": "controlnet",
+}
+
+MODEL_NODE_WIDGET_FALLBACKS = {
+    "CheckpointLoaderSimple": [(0, "checkpoints")],
+    "CheckpointLoader": [(0, "checkpoints")],
+    "UNETLoader": [(0, "diffusion_models")],
+    "DualCLIPLoader": [(0, "text_encoders"), (1, "text_encoders")],
+    "TripleCLIPLoader": [(0, "text_encoders"), (1, "text_encoders"), (2, "text_encoders")],
+    "CLIPLoader": [(0, "text_encoders")],
+    "VAELoader": [(0, "vae")],
+    "LoraLoader": [(0, "loras")],
+    "LoraLoaderModelOnly": [(0, "loras")],
+    "ControlNetLoader": [(0, "controlnet")],
+}
 
 
 class CurrentEnvironmentImportCallbacks(Protocol):
@@ -57,6 +95,21 @@ class CustomNodePyprojectMetadata:
 class CurrentWorkflowScan:
     name: str
     path: str
+    models_required: int = 0
+    models_optional: int = 0
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class CurrentModelReferenceScan:
+    filename: str
+    workflow: str
+    category: str | None = None
+    node_type: str | None = None
+    widget_index: int | None = None
+    source_url: str | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -87,6 +140,8 @@ class CurrentEnvironmentPreview:
     comfyui_version: str | None
     comfyui_commit: str | None
     workflows: list[CurrentWorkflowScan] = field(default_factory=list)
+    model_references: list[CurrentModelReferenceScan] = field(default_factory=list)
+    models_scanned: bool = True
     custom_nodes: list[CurrentCustomNodeScan] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -98,9 +153,14 @@ class CurrentEnvironmentPreview:
     def total_custom_nodes(self) -> int:
         return len(self.custom_nodes)
 
+    @property
+    def total_model_references(self) -> int:
+        return len(self.model_references)
+
     def to_dict(self) -> dict:
         data = asdict(self)
         data["total_workflows"] = self.total_workflows
+        data["total_model_references"] = self.total_model_references
         data["total_custom_nodes"] = self.total_custom_nodes
         return data
 
@@ -144,9 +204,9 @@ def scan_current_environment(
     comfyui_path = detect_current_comfyui_path(source_path)
     warnings: list[str] = []
 
-    workflows = _scan_workflows(comfyui_path)
+    workflows, model_references, models_scanned = _scan_workflows(comfyui_path, warnings)
     custom_nodes = _scan_custom_nodes(comfyui_path, warnings, node_registry_lookup)
-    tag, commit = _detect_comfyui_git_version(comfyui_path)
+    version, commit = _detect_comfyui_version(comfyui_path)
 
     if not workflows:
         warnings.append("No saved workflow JSON files were found.")
@@ -156,9 +216,11 @@ def scan_current_environment(
     return CurrentEnvironmentPreview(
         source_path=str(comfyui_path),
         python_version=f"{sys.version_info.major}.{sys.version_info.minor}",
-        comfyui_version=tag,
+        comfyui_version=version,
         comfyui_commit=commit,
         workflows=workflows,
+        model_references=model_references,
+        models_scanned=models_scanned,
         custom_nodes=custom_nodes,
         warnings=warnings,
     )
@@ -282,9 +344,14 @@ def _looks_like_comfyui_root(path: Path) -> bool:
     )
 
 
-def _scan_workflows(comfyui_path: Path) -> list[CurrentWorkflowScan]:
+def _scan_workflows(
+    comfyui_path: Path,
+    warnings: list[str],
+) -> tuple[list[CurrentWorkflowScan], list[CurrentModelReferenceScan], bool]:
     seen: set[str] = set()
     workflows: list[CurrentWorkflowScan] = []
+    model_references: list[CurrentModelReferenceScan] = []
+    models_scanned = True
 
     for relative_dir in WORKFLOW_SOURCE_DIRS:
         workflow_dir = comfyui_path / relative_dir
@@ -294,9 +361,165 @@ def _scan_workflows(comfyui_path: Path) -> list[CurrentWorkflowScan]:
             if path.name in seen:
                 continue
             seen.add(path.name)
-            workflows.append(CurrentWorkflowScan(name=path.stem, path=str(path)))
+            refs, scanned = _scan_workflow_model_references(path)
+            if not scanned:
+                models_scanned = False
+                warnings.append(f"Could not scan model references for workflow '{path.stem}'.")
+            model_references.extend(refs)
+            workflows.append(
+                CurrentWorkflowScan(
+                    name=path.stem,
+                    path=str(path),
+                    models_required=len(refs),
+                    models_optional=0,
+                )
+            )
 
-    return workflows
+    return workflows, model_references, models_scanned
+
+
+def _scan_workflow_model_references(path: Path) -> tuple[list[CurrentModelReferenceScan], bool]:
+    """Return model references from a saved workflow without resolving availability."""
+    try:
+        import importlib
+
+        workflow_module = importlib.import_module("comfygit_core.workflow")
+        parser_cls = getattr(workflow_module, "WorkflowDependencyParser")
+        dependencies = parser_cls(
+            path,
+            workflow_name=path.stem,
+            version_agnostic=True,
+        ).analyze_dependencies()
+    except Exception:
+        return _scan_workflow_model_references_from_json(path)
+
+    refs: list[CurrentModelReferenceScan] = []
+    seen: set[tuple[str, str | None, str | None, int | None]] = set()
+    for ref in dependencies.found_models:
+        filename = _string_value(getattr(ref, "widget_value", None))
+        if not filename:
+            continue
+        category = _string_value(getattr(ref, "property_directory", None))
+        node_type = _string_value(getattr(ref, "node_type", None))
+        widget_index = getattr(ref, "widget_index", None)
+        widget_index = widget_index if isinstance(widget_index, int) else None
+        source_url = _string_value(getattr(ref, "property_url", None))
+        key = (filename, category, node_type, widget_index)
+        if key in seen:
+            continue
+        seen.add(key)
+        refs.append(
+            CurrentModelReferenceScan(
+                filename=filename,
+                workflow=path.stem,
+                category=category,
+                node_type=node_type,
+                widget_index=widget_index,
+                source_url=source_url,
+            )
+        )
+
+    return refs, True
+
+
+def _scan_workflow_model_references_from_json(path: Path) -> tuple[list[CurrentModelReferenceScan], bool]:
+    """Fallback scanner for older core installs or partial workflow metadata."""
+    import json
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return [], False
+
+    refs: list[CurrentModelReferenceScan] = []
+    ref_index: dict[tuple[str, str | None, str | None], int] = {}
+
+    def add_ref(filename: str, category: str | None, node_type: str | None, source_url: str | None = None) -> None:
+        key = (filename, category, node_type)
+        if key in ref_index:
+            existing_index = ref_index[key]
+            existing = refs[existing_index]
+            if source_url and not existing.source_url:
+                refs[existing_index] = CurrentModelReferenceScan(
+                    filename=existing.filename,
+                    workflow=existing.workflow,
+                    category=existing.category,
+                    node_type=existing.node_type,
+                    widget_index=existing.widget_index,
+                    source_url=source_url,
+                )
+            return
+        ref_index[key] = len(refs)
+        refs.append(
+            CurrentModelReferenceScan(
+                filename=filename,
+                workflow=path.stem,
+                category=category,
+                node_type=node_type,
+                source_url=source_url,
+            )
+        )
+
+    def walk(value: Any, *, key: str | None = None, node_type: str | None = None) -> None:
+        if isinstance(value, dict):
+            current_node_type = _string_value(value.get("type")) or _string_value(value.get("class_type")) or node_type
+            widgets_values = value.get("widgets_values") or value.get("widget_values")
+            if current_node_type and isinstance(widgets_values, list):
+                for widget_index, category in MODEL_NODE_WIDGET_FALLBACKS.get(current_node_type, []):
+                    if widget_index >= len(widgets_values):
+                        continue
+                    widget_value = widgets_values[widget_index]
+                    if isinstance(widget_value, str) and _looks_like_model_value(widget_value):
+                        add_ref(widget_value, category, current_node_type)
+
+            property_models = value.get("models")
+            if key == "properties" and isinstance(property_models, list):
+                for model_entry in property_models:
+                    if not isinstance(model_entry, dict):
+                        continue
+                    name = _string_value(model_entry.get("name"))
+                    if name and _looks_like_model_value(name):
+                        add_ref(
+                            name,
+                            _string_value(model_entry.get("directory")) or _category_for_model_key(name),
+                            current_node_type,
+                            _string_value(model_entry.get("url")),
+                        )
+            for child_key, child_value in value.items():
+                walk(child_value, key=str(child_key), node_type=current_node_type)
+            return
+
+        if isinstance(value, list):
+            for item in value:
+                walk(item, key=key, node_type=node_type)
+            return
+
+        if isinstance(value, str) and key:
+            category = _category_for_model_key(key)
+            if category and _looks_like_model_value(value):
+                add_ref(value, category, node_type)
+
+    walk(data)
+    return refs, True
+
+
+def _category_for_model_key(key: str) -> str | None:
+    normalized = key.lower().replace("-", "_")
+    for hint, category in MODEL_WIDGET_CATEGORY_HINTS.items():
+        if hint in normalized:
+            return category
+    return None
+
+
+def _looks_like_model_value(value: str) -> bool:
+    stripped = value.strip()
+    if not stripped or stripped.startswith(("http://", "https://")):
+        return False
+    return (
+        stripped.lower().endswith(MODEL_FILE_EXTENSIONS)
+        or "/" in stripped
+        or "\\" in stripped
+    )
 
 
 def _scan_custom_nodes(
@@ -608,10 +831,42 @@ def _link_running_manager_dev_node(
         _warn(callbacks, message)
 
 
-def _detect_comfyui_git_version(comfyui_path: Path) -> tuple[str | None, str | None]:
-    tag = _git_output(comfyui_path, "describe", "--tags", "--exact-match", "HEAD")
+def _detect_comfyui_version(comfyui_path: Path) -> tuple[str | None, str | None]:
+    version = (
+        _read_comfyui_version_py(comfyui_path)
+        or _read_project_version(comfyui_path)
+        or _git_output(comfyui_path, "describe", "--tags", "--exact-match", "HEAD")
+    )
     commit = _git_output(comfyui_path, "rev-parse", "HEAD")
-    return tag, commit
+    return version, commit
+
+
+def _read_comfyui_version_py(comfyui_path: Path) -> str | None:
+    version_path = comfyui_path / "comfyui_version.py"
+    if not version_path.is_file():
+        return None
+    try:
+        content = version_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return None
+    match = re.search(r"^__version__\s*=\s*['\"]([^'\"]+)['\"]", content, flags=re.MULTILINE)
+    return _string_value(match.group(1)) if match else None
+
+
+def _read_project_version(path: Path) -> str | None:
+    pyproject_path = path / "pyproject.toml"
+    if not pyproject_path.is_file():
+        return None
+    try:
+        with pyproject_path.open("rb") as handle:
+            data = tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+
+    project = data.get("project") if isinstance(data, dict) else None
+    if not isinstance(project, dict):
+        return None
+    return _string_value(project.get("version"))
 
 
 def _is_git_checkout(path: Path) -> bool:

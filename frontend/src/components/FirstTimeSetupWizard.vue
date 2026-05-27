@@ -270,9 +270,16 @@
 
         <!-- Import Current Mode -->
         <div v-else-if="wizardMode === 'import-current'" class="env-import-current">
-          <p class="wizard-intro">
-            Create a managed ComfyGit environment from the ComfyUI process you are using right now.
-          </p>
+          <div v-if="!isImporting" class="import-stepper" aria-label="Import current environment steps">
+            <div :class="['import-step', { active: currentImportStep === 'review', complete: currentImportStep === 'configure' }]">
+              <span class="step-index">1</span>
+              <span>Review</span>
+            </div>
+            <div :class="['import-step', { active: currentImportStep === 'configure' }]">
+              <span class="step-index">2</span>
+              <span>Configure</span>
+            </div>
+          </div>
 
           <div v-if="isLoadingCurrentImportPreview" class="progress-check-loading">
             <div class="loading-spinner"></div>
@@ -280,64 +287,56 @@
           </div>
 
           <template v-else-if="!isImporting">
-            <div v-if="currentImportPreview" class="current-import-summary">
-              <div class="summary-row">
-                <span>Source</span>
-                <code>{{ currentImportPreview.source_path }}</code>
-              </div>
-              <div class="summary-grid">
-                <div>
-                  <span class="summary-value">{{ currentImportPreview.total_workflows }}</span>
-                  <span class="summary-label">workflows</span>
-                </div>
-                <div>
-                  <span class="summary-value">{{ currentImportPreview.total_custom_nodes }}</span>
-                  <span class="summary-label">custom nodes</span>
-                </div>
-                <div>
-                  <span class="summary-value">{{ currentImportPreview.python_version }}</span>
-                  <span class="summary-label">Python</span>
-                </div>
-              </div>
-              <div v-if="currentImportPreview.warnings.length" class="current-import-warnings">
-                <div class="warning-title">Review after import</div>
-                <ul>
-                  <li v-for="warning in currentImportPreview.warnings.slice(0, 4)" :key="warning">
-                    {{ warning }}
-                  </li>
-                </ul>
-              </div>
-            </div>
+            <template v-if="currentImportStep === 'review'">
+              <ImportPreview
+                v-if="currentImportPreview"
+                :source-environment="currentImportPreviewData.sourceEnvironment"
+                :source-path="currentImportPreviewData.sourcePath"
+                :workflows="currentImportPreviewData.workflows"
+                :models="currentImportPreviewData.models"
+                :nodes="currentImportPreviewData.nodes"
+                :git-branch="currentImportPreviewData.gitBranch"
+                :git-commit="currentImportPreviewData.gitCommit"
+                :warnings="currentImportPreviewData.warnings"
+                :models-unavailable="currentImportPreviewData.modelsUnavailable"
+                :model-availability-unavailable="true"
+                :panel-scroll="false"
+                :show-manifest="false"
+              />
+            </template>
 
             <div v-if="currentImportError" class="form-error">
               {{ currentImportError }}
             </div>
 
-            <div class="form-field">
-              <label class="form-label">Environment Name</label>
-              <input
-                v-model="envName"
-                type="text"
-                class="form-input"
-                placeholder="imported-comfyui"
-              />
-            </div>
+            <template v-if="currentImportStep === 'configure' && currentImportPreview">
+              <div class="current-import-configure-frame">
+                <div class="current-import-summary">
+                  <div>
+                    <span class="summary-label">Source</span>
+                    <span class="summary-value">{{ currentImportPreview.source_path }}</span>
+                  </div>
+                  <div>
+                    <span class="summary-label">Preview</span>
+                    <span class="summary-value">
+                      {{ currentImportPreview.total_workflows }} workflows,
+                      {{ currentImportPreview.total_custom_nodes }} custom nodes,
+                      {{ currentImportPreview.total_model_references ?? currentImportPreview.model_references?.length ?? 0 }} model refs
+                    </span>
+                  </div>
+                </div>
 
-            <div class="form-field">
-              <label class="form-label">PyTorch Backend</label>
-              <select v-model="torchBackend" class="form-select">
-                <option v-for="b in TORCH_BACKENDS" :key="b" :value="b">
-                  {{ b }}{{ b === 'auto' ? ' (detect GPU)' : '' }}
-                </option>
-              </select>
-            </div>
-
-            <div class="form-field form-field--checkbox">
-              <label class="form-checkbox">
-                <input type="checkbox" v-model="switchAfter" />
-                <span>Switch to this environment after import</span>
-              </label>
-            </div>
+                <ImportConfigForm
+                  v-model:name="envName"
+                  v-model:model-strategy="currentImportModelStrategy"
+                  v-model:torch-backend="torchBackend"
+                  v-model:switch-after-import="switchAfter"
+                  :name-error="currentImportNameError"
+                  :show-model-strategy="false"
+                  @validate-name="handleValidateCurrentImportName"
+                />
+              </div>
+            </template>
           </template>
 
           <div v-else class="env-creating">
@@ -410,7 +409,16 @@
 
             <!-- Import mode has its own buttons in ImportFlow -->
             <BaseButton
-              v-if="wizardMode === 'import-current' && !isImporting"
+              v-if="wizardMode === 'import-current' && !isImporting && currentImportStep === 'review'"
+              variant="primary"
+              :disabled="!canContinueCurrentImportReview"
+              @click="currentImportStep = 'configure'"
+            >
+              Continue
+            </BaseButton>
+
+            <BaseButton
+              v-if="wizardMode === 'import-current' && !isImporting && currentImportStep === 'configure'"
               variant="primary"
               :disabled="!canStartCurrentImport"
               @click="handleStartCurrentImport"
@@ -443,8 +451,10 @@ import LifecycleProgressDisplay from './base/molecules/LifecycleProgressDisplay.
 import SocialButtons from './base/molecules/SocialButtons.vue'
 import FooterInfo from './base/atoms/FooterInfo.vue'
 import ImportFlow from './ImportFlow.vue'
+import ImportPreview from './base/molecules/ImportPreview.vue'
+import ImportConfigForm from './base/molecules/ImportConfigForm.vue'
 import WorkspaceSettingsModal from './WorkspaceSettingsModal.vue'
-import type { SwitchLogEntry } from '@/types/comfygit'
+import type { ModelAnalysis, NodeAnalysis, SwitchLogEntry, WorkflowAnalysis } from '@/types/comfygit'
 
 const props = defineProps<{
   defaultPath: string
@@ -467,6 +477,7 @@ const {
   initializeWorkspace,
   getInitializeProgress,
   validatePath,
+  validateEnvironmentName,
   createEnvironment,
   getCreateProgress,
   getImportProgress,
@@ -481,7 +492,9 @@ const selectedEnv = ref<string | null>(null)
 
 // Wizard mode for Step 2
 type WizardMode = 'landing' | 'create' | 'import' | 'import-current'
+type CurrentImportStep = 'review' | 'configure'
 const wizardMode = ref<WizardMode>('landing')
+const currentImportStep = ref<CurrentImportStep>('review')
 const showSettingsModal = ref(false)
 const isImporting = ref(false)
 const cliWarningDismissed = ref(false)
@@ -521,6 +534,8 @@ const currentImportProgress = ref<{ progress: number; message: string; phase?: s
 const currentImportLogs = ref<SwitchLogEntry[]>([])
 const currentImportPreview = ref<CurrentEnvironmentImportPreview | null>(null)
 const currentImportError = ref<string | null>(null)
+const currentImportNameError = ref<string | null>(null)
+const currentImportModelStrategy = ref<'all' | 'required' | 'skip'>('skip')
 const isLoadingCurrentImportPreview = ref(false)
 
 // Environment creation steps (matches core library phases)
@@ -549,6 +564,52 @@ const currentImportLifecycleSteps = currentImportSteps.map(step => ({
   progressThreshold: step.progressThreshold,
 }))
 
+const currentImportPreviewData = computed(() => {
+  const preview = currentImportPreview.value
+  if (!preview) {
+    return {
+      sourceEnvironment: '',
+      sourcePath: '',
+      workflows: [] as WorkflowAnalysis[],
+      models: [] as ModelAnalysis[],
+      nodes: [] as NodeAnalysis[],
+      gitBranch: undefined as string | undefined,
+      gitCommit: undefined as string | undefined,
+      warnings: [] as string[],
+      modelsUnavailable: true
+    }
+  }
+
+  const versionLabel = preview.comfyui_version || 'unknown version'
+  const models = currentModelReferencesForPreview(preview)
+  return {
+    sourceEnvironment: `Current ComfyUI (${versionLabel})`,
+    sourcePath: preview.source_path,
+    workflows: preview.workflows.map(workflow => ({
+      name: workflow.name,
+      models_required: workflow.models_required ?? modelReferenceCountForWorkflow(preview, workflow.name),
+      models_optional: workflow.models_optional ?? 0
+    })),
+    models,
+    nodes: preview.custom_nodes.map(node => ({
+      name: node.name,
+      source: nodeSourceForPreview(node.source_type),
+      install_spec: node.install_spec ?? null,
+      registry_id: node.registry_id ?? null,
+      repository: node.repository ?? null,
+      version: node.version ?? null,
+      branch: node.branch ?? null,
+      pinned_commit: node.pinned_commit ?? null,
+      dependency_sources: null,
+      is_dev_node: node.source_type === 'local' || node.source_type === 'development'
+    })),
+    gitBranch: preview.comfyui_version || undefined,
+    gitCommit: preview.comfyui_commit || undefined,
+    warnings: preview.warnings,
+    modelsUnavailable: preview.models_scanned === false
+  }
+})
+
 // Polling safeguards
 const MAX_FAILURES = 10
 const STEP1_TIMEOUT_MS = 10 * 60 * 1000  // 10 minutes
@@ -570,11 +631,20 @@ const canProceedStep2 = computed(() => {
   return envName.value?.trim()
 })
 
+const canContinueCurrentImportReview = computed(() => {
+  return Boolean(
+    currentImportPreview.value &&
+    !currentImportError.value &&
+    !isLoadingCurrentImportPreview.value
+  )
+})
+
 const canStartCurrentImport = computed(() => {
   return Boolean(
     currentImportPreview.value &&
     envName.value?.trim() &&
     !currentImportError.value &&
+    !currentImportNameError.value &&
     !isLoadingCurrentImportPreview.value
   )
 })
@@ -652,7 +722,8 @@ async function handleStep1Next() {
   await validateWorkspacePath()
 
   // Defensive: if workspace already exists at this path, skip forward to step 2
-  if (workspaceError.value?.includes('already exists')) {
+  const workspaceValidationError = String(workspaceError.value ?? '')
+  if (workspaceValidationError.includes('already exists')) {
     workspaceError.value = null
     createdWorkspacePath.value = workspacePath.value?.trim() || props.defaultPath
     currentStep.value = 2
@@ -827,12 +898,80 @@ async function loadReleases() {
   }
 }
 
+function nodeSourceForPreview(sourceType: string): string {
+  if (sourceType === 'registry') return 'registry'
+  if (sourceType === 'git') return 'git'
+  if (sourceType === 'local') return 'development'
+  return sourceType
+}
+
+function currentModelReferencesForPreview(preview: CurrentEnvironmentImportPreview): ModelAnalysis[] {
+  const grouped = new Map<string, ModelAnalysis>()
+  for (const modelRef of preview.model_references || []) {
+    const filename = modelRef.filename
+    if (!filename) continue
+
+    const relativePath = modelReferenceRelativePath(filename, modelRef.category)
+    const key = relativePath || filename
+    const existing = grouped.get(key)
+    if (existing) {
+      if (modelRef.workflow && !existing.workflows.includes(modelRef.workflow)) {
+        existing.workflows.push(modelRef.workflow)
+      }
+      if (modelRef.source_url && !existing.sources.includes(modelRef.source_url)) {
+        existing.sources.push(modelRef.source_url)
+      }
+      continue
+    }
+
+    grouped.set(key, {
+      filename,
+      hash: null,
+      size: null,
+      sources: modelRef.source_url ? [modelRef.source_url] : [],
+      relative_path: relativePath,
+      locally_available: false,
+      needs_download: false,
+      workflows: modelRef.workflow ? [modelRef.workflow] : []
+    })
+  }
+  return [...grouped.values()]
+}
+
+function modelReferenceRelativePath(filename: string, category?: string | null): string {
+  if (!category || filename.includes('/')) return filename
+  return `${category}/${filename}`
+}
+
+function modelReferenceCountForWorkflow(preview: CurrentEnvironmentImportPreview, workflowName: string): number {
+  return (preview.model_references || [])
+    .filter(modelRef => modelRef.workflow === workflowName)
+    .length
+}
+
+async function handleValidateCurrentImportName(name: string) {
+  if (!name) {
+    currentImportNameError.value = 'Environment name is required'
+    return
+  }
+  try {
+    const result = await validateEnvironmentName(name)
+    currentImportNameError.value = result.valid ? null : (result.error || 'Invalid name')
+  } catch {
+    currentImportNameError.value = 'Failed to validate name'
+  }
+}
+
 function handleSwitchToExisting() {
   if (!selectedEnv.value) return
   emit('switch-environment', selectedEnv.value, createdWorkspacePath.value)
 }
 
 function handleBack() {
+  if (wizardMode.value === 'import-current' && currentImportStep.value === 'configure' && !isImporting.value) {
+    currentImportStep.value = 'review'
+    return
+  }
   if (wizardMode.value === 'create' || wizardMode.value === 'import' || wizardMode.value === 'import-current') {
     wizardMode.value = 'landing'
   } else if (currentStep.value === 2 && props.setupState === 'no_workspace') {
@@ -843,8 +982,10 @@ function handleBack() {
 
 async function openCurrentImport() {
   wizardMode.value = 'import-current'
+  currentImportStep.value = 'review'
   currentImportPreview.value = null
   currentImportError.value = null
+  currentImportNameError.value = null
   isLoadingCurrentImportPreview.value = true
   envName.value = 'imported-comfyui'
 
@@ -1417,50 +1558,67 @@ async function resumeCreationPolling() {
   gap: var(--cg-space-4);
 }
 
-.current-import-summary {
+.env-import-current {
+  --current-import-step-height: calc(min(580px, 62vh) + 155px);
+}
+
+.import-stepper {
+  display: flex;
+  gap: var(--cg-space-2);
+  padding-bottom: var(--cg-space-3);
+  border-bottom: 1px solid var(--cg-color-border-subtle);
+}
+
+.import-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  color: var(--cg-color-text-muted);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+}
+
+.import-step.active {
+  color: var(--cg-color-accent);
+}
+
+.import-step.complete {
+  color: var(--cg-color-success);
+}
+
+.step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.current-import-configure-frame {
   display: flex;
   flex-direction: column;
+  gap: var(--cg-space-4);
+  height: var(--current-import-step-height);
+  min-height: 580px;
+  overflow-y: auto;
+}
+
+.current-import-summary {
+  display: grid;
+  grid-template-columns: 1fr;
   gap: var(--cg-space-3);
-  padding: var(--cg-space-4);
+  padding: var(--cg-space-3);
   background: var(--cg-color-bg-secondary);
   border: 1px solid var(--cg-color-border-subtle);
-  border-radius: var(--cg-radius-sm);
 }
 
-.summary-row {
+.current-import-summary > div {
   display: flex;
   flex-direction: column;
   gap: var(--cg-space-1);
-  color: var(--cg-color-text-muted);
-  font-size: var(--cg-font-size-sm);
-}
-
-.summary-row code {
-  color: var(--cg-color-text-primary);
-  font-size: var(--cg-font-size-xs);
-  overflow-wrap: anywhere;
-}
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--cg-space-3);
-}
-
-.summary-grid > div {
-  display: flex;
-  flex-direction: column;
-  gap: var(--cg-space-1);
-  padding: var(--cg-space-3);
-  background: var(--cg-color-bg-primary);
-  border: 1px solid var(--cg-color-border-subtle);
-  border-radius: var(--cg-radius-sm);
-}
-
-.summary-value {
-  color: var(--cg-color-text-primary);
-  font-size: var(--cg-font-size-lg);
-  font-weight: var(--cg-font-weight-semibold);
 }
 
 .summary-label {
@@ -1469,24 +1627,11 @@ async function resumeCreationPolling() {
   text-transform: uppercase;
 }
 
-.current-import-warnings {
-  padding: var(--cg-space-3);
-  background: var(--cg-color-warning-muted);
-  border: 1px solid var(--cg-color-warning);
-  border-radius: var(--cg-radius-sm);
-}
-
-.warning-title {
+.summary-value {
   color: var(--cg-color-text-primary);
-  font-weight: var(--cg-font-weight-semibold);
-  margin-bottom: var(--cg-space-2);
-}
-
-.current-import-warnings ul {
-  margin: 0;
-  padding-left: var(--cg-space-5);
-  color: var(--cg-color-text-secondary);
+  font-family: var(--cg-font-mono);
   font-size: var(--cg-font-size-sm);
+  overflow-wrap: anywhere;
 }
 
 /* Creating progress state */

@@ -1372,6 +1372,17 @@ export interface ImportProgress {
 export interface CurrentEnvironmentWorkflowScan {
   name: string
   path: string
+  models_required?: number
+  models_optional?: number
+}
+
+export interface CurrentEnvironmentModelReferenceScan {
+  filename: string
+  workflow: string
+  category?: string | null
+  node_type?: string | null
+  widget_index?: number | null
+  source_url?: string | null
 }
 
 export interface CurrentEnvironmentCustomNodeScan {
@@ -1394,9 +1405,12 @@ export interface CurrentEnvironmentImportPreview {
   comfyui_version?: string | null
   comfyui_commit?: string | null
   workflows: CurrentEnvironmentWorkflowScan[]
+  model_references?: CurrentEnvironmentModelReferenceScan[]
+  models_scanned?: boolean
   custom_nodes: CurrentEnvironmentCustomNodeScan[]
   warnings: string[]
   total_workflows: number
+  total_model_references?: number
   total_custom_nodes: number
 }
 

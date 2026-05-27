@@ -116,6 +116,79 @@ def test_scan_current_environment_reports_workflows_and_nodes(temp_dir: Path) ->
     assert "manual provenance review" in " ".join(preview.warnings)
 
 
+def test_scan_current_environment_reads_comfyui_version_file(temp_dir: Path) -> None:
+    source = _make_comfyui_source(temp_dir / "source")
+    (source / "comfyui_version.py").write_text('__version__ = "0.22.0"\n')
+
+    preview = scan_current_environment(source)
+
+    assert preview.comfyui_version == "0.22.0"
+
+
+def test_scan_current_environment_reads_pyproject_version_when_version_file_missing(temp_dir: Path) -> None:
+    source = _make_comfyui_source(temp_dir / "source")
+    (source / "pyproject.toml").write_text(
+        "\n".join([
+            "[project]",
+            'name = "comfyui"',
+            'version = "0.21.3"',
+            "",
+        ])
+    )
+
+    preview = scan_current_environment(source)
+
+    assert preview.comfyui_version == "0.21.3"
+
+
+def test_scan_current_environment_reports_workflow_model_references(temp_dir: Path) -> None:
+    source = _make_comfyui_source(temp_dir / "source")
+    workflow_path = source / "user" / "default" / "workflows" / "demo.json"
+    workflow_path.write_text(json.dumps({
+        "nodes": [
+            {
+                "id": 1,
+                "type": "CheckpointLoaderSimple",
+                "widgets_values": ["sdxl_base.safetensors"],
+                "inputs": [
+                    {
+                        "name": "ckpt_name",
+                        "type": "COMBO",
+                        "widget": {"name": "ckpt_name"},
+                    }
+                ],
+            },
+            {
+                "id": 2,
+                "type": "VAELoader",
+                "properties": {
+                    "models": [
+                        {
+                            "name": "vae-ft-mse.safetensors",
+                            "directory": "vae",
+                            "url": "https://huggingface.co/example/vae/resolve/main/vae-ft-mse.safetensors",
+                        }
+                    ]
+                },
+                "widgets_values": ["vae-ft-mse.safetensors"],
+            },
+        ],
+        "links": [],
+    }))
+
+    preview = scan_current_environment(source)
+
+    assert preview.models_scanned is True
+    assert preview.total_model_references == 2
+    assert preview.workflows[0].models_required == 2
+
+    refs = {ref.filename: ref for ref in preview.model_references}
+    assert refs["sdxl_base.safetensors"].category == "checkpoints"
+    assert refs["sdxl_base.safetensors"].node_type == "CheckpointLoaderSimple"
+    assert refs["vae-ft-mse.safetensors"].category == "vae"
+    assert refs["vae-ft-mse.safetensors"].source_url == "https://huggingface.co/example/vae/resolve/main/vae-ft-mse.safetensors"
+
+
 def test_scan_current_environment_does_not_inherit_parent_comfyui_git_remote(temp_dir: Path) -> None:
     source = _make_comfyui_source(temp_dir / "source")
     _make_local_node(source / "custom_nodes" / "nested-node")
