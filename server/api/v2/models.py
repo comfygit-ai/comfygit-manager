@@ -112,7 +112,8 @@ def _model_filename_terms(filename: str | None) -> tuple[str, str, str, str]:
 def _score_source_candidate(url: str, context: str, model_info: dict) -> tuple[int, list[str]]:
     score = 0
     reasons = []
-    haystacks = [context.lower(), url.lower()]
+    url_haystack = url.lower()
+    context_haystack = context.lower()
     filename, stem, basename, basename_stem = _model_filename_terms(model_info.get("filename"))
     category = (model_info.get("category") or "").lower()
     hashes = [
@@ -121,26 +122,43 @@ def _score_source_candidate(url: str, context: str, model_info: dict) -> tuple[i
         str(model_info.get("sha256") or "").lower(),
     ]
 
-    if filename and any(filename in haystack for haystack in haystacks):
-        score += 60
-        reasons.append("filename match")
-    elif basename and any(basename in haystack for haystack in haystacks):
-        score += 55
-        reasons.append("filename match")
-    elif stem and any(stem in haystack for haystack in haystacks):
+    if filename and filename in url_haystack:
+        score += 85
+        reasons.append("filename in URL")
+    elif basename and basename in url_haystack:
+        score += 80
+        reasons.append("filename in URL")
+    elif stem and stem in url_haystack:
+        score += 65
+        reasons.append("model name in URL")
+    elif basename_stem and basename_stem in url_haystack:
+        score += 65
+        reasons.append("model name in URL")
+    elif filename and filename in context_haystack:
+        score += 40
+        reasons.append("filename nearby")
+    elif basename and basename in context_haystack:
         score += 35
-        reasons.append("model name match")
-    elif basename_stem and any(basename_stem in haystack for haystack in haystacks):
-        score += 35
-        reasons.append("model name match")
+        reasons.append("filename nearby")
+    elif stem and stem in context_haystack:
+        score += 25
+        reasons.append("model name nearby")
+    elif basename_stem and basename_stem in context_haystack:
+        score += 25
+        reasons.append("model name nearby")
 
     for model_hash in hashes:
-        if model_hash and len(model_hash) >= 8 and any(model_hash in haystack for haystack in haystacks):
-            score += 50
-            reasons.append("hash match")
-            break
+        if model_hash and len(model_hash) >= 8:
+            if model_hash in url_haystack:
+                score += 80
+                reasons.append("hash in URL")
+                break
+            if model_hash in context_haystack:
+                score += 50
+                reasons.append("hash nearby")
+                break
 
-    if category and category != "unknown" and category in context.lower():
+    if category and category != "unknown" and category in context_haystack:
         score += 10
         reasons.append("category nearby")
 
@@ -216,7 +234,14 @@ def _scan_workflow_source_candidates(
             context = _candidate_context(text, match.start(), match.end())
             score, reasons = _score_source_candidate(url, context, model_info)
             has_identity_match = any(
-                reason in {"filename match", "model name match", "hash match"}
+                reason in {
+                    "filename in URL",
+                    "model name in URL",
+                    "filename nearby",
+                    "model name nearby",
+                    "hash in URL",
+                    "hash nearby",
+                }
                 for reason in reasons
             )
             if require_identity_match and not has_identity_match:
