@@ -16,6 +16,7 @@ from comfygit_core import Workspace
 from comfygit_core.runtime import (
     SWITCH_STATUS_ROUTE,
     build_switch_observer_payload,
+    cleanup_supervisor_advertisement,
     read_supervisor_advertisement,
     read_switch_status,
 )
@@ -513,6 +514,7 @@ async def switch_environment(request: web.Request) -> web.Response:
         # under a lifecycle authority. The request must exist before spawn so
         # the new process cannot miss the initial handoff state.
         if orchestrator.should_spawn_orchestrator_for_switch():
+            cleanup_supervisor_advertisement(workspace.path)
             spawn_orchestrator(target_env_obj, target_env)
 
         observer = _wait_for_supervisor_observer(workspace, request)

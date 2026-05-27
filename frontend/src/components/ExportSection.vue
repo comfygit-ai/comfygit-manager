@@ -246,7 +246,7 @@ const readinessWarningCount = computed(() =>
 )
 
 const hasCurrentReadinessWarnings = computed(() =>
-  Boolean(validationResult.value?.can_export) && readinessWarningCount.value > 0
+  Boolean(validationResult.value) && readinessWarningCount.value > 0
 )
 
 async function validateReadiness(): Promise<ExportValidationResult | null> {
