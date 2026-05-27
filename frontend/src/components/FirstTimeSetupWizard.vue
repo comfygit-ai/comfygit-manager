@@ -147,7 +147,7 @@
 
           <!-- Import Current Button (unmanaged local adoption path) -->
           <button
-            v-if="props.setupState === 'unmanaged'"
+            v-if="props.setupState === 'unmanaged' || props.setupState === 'empty_workspace'"
             class="landing-option"
             @click="openCurrentImport"
           >

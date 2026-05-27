@@ -24992,7 +24992,7 @@ const uT = { class: "remote-url-display" }, cT = ["title"], dT = ["title"], fT =
                     ], -1),
                     t("span", { class: "option-arrow" }, "▸", -1)
                   ])]),
-                  n.setupState === "unmanaged" ? (o(), l("button", {
+                  n.setupState === "unmanaged" || n.setupState === "empty_workspace" ? (o(), l("button", {
                     key: 0,
                     class: "landing-option",
                     onClick: st
@@ -25277,7 +25277,7 @@ const uT = { class: "remote-url-display" }, cT = ["title"], dT = ["title"], fT =
       }, null, 8, ["workspace-path"])) : g("", !0)
     ], 64));
   }
-}), aD = /* @__PURE__ */ Ee(oD, [["__scopeId", "data-v-14fa5a4b"]]), lD = { class: "update-banner" }, iD = { class: "update-banner__left" }, rD = { class: "update-banner__title" }, uD = {
+}), aD = /* @__PURE__ */ Ee(oD, [["__scopeId", "data-v-65b00788"]]), lD = { class: "update-banner" }, iD = { class: "update-banner__left" }, rD = { class: "update-banner__title" }, uD = {
   key: 0,
   class: "update-banner__summary"
 }, cD = { class: "update-banner__actions" }, dD = ["disabled"], fD = ["disabled"], mD = ["disabled"], vD = /* @__PURE__ */ xe({
