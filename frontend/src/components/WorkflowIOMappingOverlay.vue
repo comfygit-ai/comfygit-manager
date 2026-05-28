@@ -634,11 +634,40 @@ function inferWidgetEnumValues(widget: any): string[] {
   return rawValues.map((value: unknown) => String(value)).filter(Boolean)
 }
 
+const UNBOUNDED_NUMERIC_BOUND_ABS = 1_000_000_000_000_000
+
+function readNestedValue(source: any, path: string[]): unknown {
+  let current = source
+  for (const segment of path) {
+    if (current == null || typeof current !== 'object') return undefined
+    current = current[segment]
+  }
+  return current
+}
+
+function firstPresentWidgetValue(widget: any, paths: string[][]): unknown {
+  for (const path of paths) {
+    const value = readNestedValue(widget, path)
+    if (value != null && value !== '') return value
+  }
+  return undefined
+}
+
 function inferWidgetNumericBound(widget: any, key: 'min' | 'max'): number | undefined {
-  const value = widget?.options?.[key]
-  if (value == null || value === '') return undefined
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : undefined
+  const paths = [
+    ['options', key],
+    ['input', key],
+    [key],
+  ]
+  for (const path of paths) {
+    const value = readNestedValue(widget, path)
+    if (value == null || value === '') continue
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed)) continue
+    if (Math.abs(parsed) >= UNBOUNDED_NUMERIC_BOUND_ABS) continue
+    return parsed
+  }
+  return undefined
 }
 
 function slugifyName(value: string, fallback: string): string {
@@ -670,6 +699,42 @@ function normalizeType(value: unknown): string {
   if (normalized.includes('combo') || normalized.includes('enum')) return 'enum'
   if (normalized.includes('string') || normalized.includes('text')) return 'string'
   return 'file'
+}
+
+function normalizeWidgetType(widget: any): string {
+  const explicitType = firstPresentWidgetValue(widget, [
+    ['input', 'type'],
+    ['input', 'widget', 'type'],
+    ['options', 'type'],
+    ['options', 'inputType'],
+    ['type'],
+  ])
+  const normalized = normalizeType(explicitType)
+  if (normalized !== 'number') return normalized
+
+  const precision = firstPresentWidgetValue(widget, [
+    ['options', 'precision'],
+    ['input', 'precision'],
+    ['precision'],
+  ])
+  if (precision != null && Number(precision) === 0) {
+    return 'integer'
+  }
+
+  const step = firstPresentWidgetValue(widget, [
+    ['options', 'step'],
+    ['input', 'step'],
+    ['step'],
+  ])
+  const parsedStep = Number(step)
+  if (Number.isFinite(parsedStep) && Number.isInteger(parsedStep)) {
+    const defaultValue = widget?.value
+    if (defaultValue == null || Number.isInteger(Number(defaultValue))) {
+      return 'integer'
+    }
+  }
+
+  return normalized
 }
 
 function getInputCardKey(input: WorkflowContractInput, index: number): string {
@@ -1040,7 +1105,7 @@ function addOrSelectInput(node: any, widget: any | null, source: 'widget' | 'med
   const nextInput: WorkflowContractInput = {
     name: slugifyName(String(nameSource), `input_${activeContract.value.inputs.length + 1}`),
     display_name: displayName,
-    type: isMediaLoaderSource ? media.type : normalizeType(widget?.type),
+    type: isMediaLoaderSource ? media.type : normalizeWidgetType(widget),
     node_id: String(node.id),
     widget_idx: widgetIndex >= 0 ? widgetIndex : undefined,
     field_key: fieldKey,
