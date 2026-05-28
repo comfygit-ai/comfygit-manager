@@ -107,6 +107,17 @@
         </ActionButton>
       </div>
 
+      <div v-if="importAnalysis" class="import-stepper" aria-label="Import steps">
+        <div :class="['import-step', { active: importStep === 'review', complete: importStep === 'configure' }]">
+          <span class="step-index">1</span>
+          <span>Review</span>
+        </div>
+        <div :class="['import-step', { active: importStep === 'configure' }]">
+          <span class="step-index">2</span>
+          <span>Configure</span>
+        </div>
+      </div>
+
       <!-- Loading Preview -->
       <div v-if="isLoadingPreview" class="preview-loading">
         <div class="loading-spinner"></div>
@@ -123,7 +134,7 @@
 
       <!-- Preview (from API) -->
       <ImportPreview
-        v-else-if="importAnalysis"
+        v-else-if="importAnalysis && importStep === 'review'"
         :source-environment="previewData.sourceEnvironment"
         :workflows="previewData.workflows"
         :models="previewData.models"
@@ -132,11 +143,12 @@
         :git-commit="previewData.gitCommit"
         :git-url="previewData.gitUrl"
         :manifest-toml="previewData.manifestToml"
+        :panel-scroll="false"
       />
 
       <!-- Configuration -->
       <ImportConfigForm
-        v-if="importAnalysis"
+        v-if="importAnalysis && importStep === 'configure'"
         v-model:name="importConfig.name"
         v-model:model-strategy="importConfig.modelStrategy"
         v-model:torch-backend="importConfig.torchBackend"
@@ -147,7 +159,7 @@
 
       <!-- Warning if skipping models -->
       <IssueCard
-        v-if="importConfig.modelStrategy === 'skip' && importAnalysis?.models_needing_download"
+        v-if="importStep === 'configure' && importConfig.modelStrategy === 'skip' && importAnalysis?.models_needing_download"
         type="warning"
         title="Models Will Not Be Downloaded"
         :details="[
@@ -159,6 +171,15 @@
       <!-- Action buttons -->
       <div class="import-actions">
         <ActionButton
+          v-if="importAnalysis && importStep === 'configure'"
+          variant="secondary"
+          size="md"
+          @click="importStep = 'review'"
+        >
+          Back
+        </ActionButton>
+        <ActionButton
+          v-else
           variant="secondary"
           size="md"
           @click="handleClearSource"
@@ -166,6 +187,15 @@
           Cancel
         </ActionButton>
         <ActionButton
+          v-if="importAnalysis && importStep === 'review'"
+          variant="primary"
+          size="md"
+          @click="importStep = 'configure'"
+        >
+          Continue
+        </ActionButton>
+        <ActionButton
+          v-else-if="importAnalysis && importStep === 'configure'"
           variant="primary"
           size="md"
           :disabled="!canImport"
@@ -299,6 +329,7 @@ const gitPreviewError = ref<string | null>(null)
 
 // Import analysis from API
 const importAnalysis = ref<ImportAnalysis | null>(null)
+const importStep = ref<'review' | 'configure'>('review')
 
 // Import configuration - initialize name from prop if resuming
 const importConfig = ref({
@@ -392,6 +423,7 @@ async function handleFileSelected(file: File) {
   isLoadingPreview.value = true
   previewError.value = null
   importAnalysis.value = null
+  importStep.value = 'review'
 
   try {
     const analysis = await previewTarballImport(file)
@@ -416,6 +448,7 @@ function handleClearSource() {
   importResultMessage.value = ''
   completedEnvironmentName.value = null
   importAnalysis.value = null
+  importStep.value = 'review'
   previewError.value = null
   importConfig.value = { name: '', modelStrategy: 'required', torchBackend: 'auto', switchAfterImport: true }
   nameError.value = null
@@ -453,6 +486,7 @@ async function handleAnalyzeGitUrl() {
     const analysis = await previewGitImport(gitUrlInput.value.trim(), selectedGitRef.value || undefined)
     gitUrl.value = gitUrlInput.value.trim()
     importAnalysis.value = analysis
+    importStep.value = 'review'
   } catch (err) {
     gitPreviewError.value = err instanceof Error ? err.message : 'Failed to analyze repository'
   } finally {
@@ -757,6 +791,41 @@ defineExpose({
   color: var(--cg-color-text-muted);
   font-size: var(--cg-font-size-sm);
   font-family: var(--cg-font-mono);
+}
+
+.import-stepper {
+  display: flex;
+  gap: var(--cg-space-2);
+  padding-bottom: var(--cg-space-3);
+  border-bottom: 1px solid var(--cg-color-border-subtle);
+}
+
+.import-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  color: var(--cg-color-text-muted);
+  font-family: var(--cg-font-mono);
+  font-size: var(--cg-font-size-xs);
+  text-transform: uppercase;
+}
+
+.import-step.active {
+  color: var(--cg-color-accent);
+}
+
+.import-step.complete {
+  color: var(--cg-color-success);
+}
+
+.step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
 }
 
 .import-actions {

@@ -223,7 +223,7 @@ def collect_runtime_import_report(
         return RuntimeImportReport(available=True)
 
     custom_nodes_path = Path(custom_nodes_path)
-    node_list = list(nodes) if nodes is not None else list(env.pyproject.nodes.get_existing().values())
+    node_list = list(nodes) if nodes is not None else list(env.list_manifest_nodes().values())
     usage_map = _build_workflow_usage_map(status)
 
     comparison = getattr(status, "comparison", None)

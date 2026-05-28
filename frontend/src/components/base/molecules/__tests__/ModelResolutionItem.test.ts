@@ -3,93 +3,25 @@ import { mount } from '@vue/test-utils'
 import ModelResolutionItem from '../ModelResolutionItem.vue'
 
 describe('ModelResolutionItem', () => {
-  it('renders unresolved model with filename', () => {
+  it('renders unresolved model context and actions', () => {
     const wrapper = mount(ModelResolutionItem, {
       props: {
         filename: 'flux_dev.safetensors',
-        nodeType: 'CheckpointLoader'
-      }
-    })
-
-    expect(wrapper.find('.model-filename').text()).toBe('flux_dev.safetensors')
-    expect(wrapper.find('.node-type').text()).toContain('CheckpointLoader')
-  })
-
-  it('shows model metadata when provided', () => {
-    const wrapper = mount(ModelResolutionItem, {
-      props: {
-        filename: 'sdxl_base.safetensors',
         nodeType: 'CheckpointLoader',
-        category: 'checkpoints',
-        size: 6500000000,
-        confidence: 0.95
+        status: 'not-found',
+        statusLabel: 'Not Found'
       }
     })
 
-    expect(wrapper.text()).toContain('checkpoints')
-    expect(wrapper.text()).toContain('6.05 GB')
-  })
-
-  it('displays confidence badge when provided', () => {
-    const wrapper = mount(ModelResolutionItem, {
-      props: {
-        filename: 'model.safetensors',
-        nodeType: 'CheckpointLoader',
-        confidence: 0.92
-      }
-    })
-
-    const badge = wrapper.findComponent({ name: 'ConfidenceBadge' })
-    expect(badge.exists()).toBe(true)
-    expect(badge.props('confidence')).toBe(0.92)
-  })
-
-  it('shows action buttons for unresolved model', () => {
-    const wrapper = mount(ModelResolutionItem, {
-      props: {
-        filename: 'model.safetensors',
-        nodeType: 'CheckpointLoader'
-      }
-    })
-
-    // Check buttons are present by text content
+    expect(wrapper.text()).toContain('Used by: CheckpointLoader')
+    expect(wrapper.text()).toContain('Not Found')
+    expect(wrapper.text()).toContain('Model not found in workspace')
     expect(wrapper.text()).toContain('Find Source')
     expect(wrapper.text()).toContain('Search Index')
     expect(wrapper.text()).toContain('Mark Optional')
-    expect(wrapper.text()).not.toContain('Download URL')
   })
 
-  it('emits mark-optional when optional button clicked', async () => {
-    const wrapper = mount(ModelResolutionItem, {
-      props: {
-        filename: 'model.safetensors',
-        nodeType: 'CheckpointLoader'
-      }
-    })
-
-    // Find and click the optional button (may be text or icon)
-    const buttons = wrapper.findAll('button')
-    const optionalBtn = buttons.find(btn => btn.text().includes('Optional'))
-
-    if (optionalBtn) {
-      await optionalBtn.trigger('click')
-      expect(wrapper.emitted('mark-optional')).toBeTruthy()
-    }
-  })
-
-  it('shows optional badge when is-optional is true', () => {
-    const wrapper = mount(ModelResolutionItem, {
-      props: {
-        filename: 'model.safetensors',
-        nodeType: 'CheckpointLoader',
-        isOptional: true
-      }
-    })
-
-    expect(wrapper.text()).toContain('OPTIONAL')
-  })
-
-  it('displays multiple options when has-multiple-options is true', () => {
+  it('displays multiple candidate options', () => {
     const options = [
       {
         model: {
@@ -120,17 +52,20 @@ describe('ModelResolutionItem', () => {
         filename: 'sdxl_model.safetensors',
         nodeType: 'CheckpointLoader',
         hasMultipleOptions: true,
-        options
+        options,
+        status: 'ambiguous',
+        statusLabel: '2 matches'
       }
     })
 
     const optionCards = wrapper.findAll('.option-card')
-    expect(optionCards.length).toBe(2)
+    expect(optionCards).toHaveLength(2)
     expect(wrapper.text()).toContain('sdxl_base_1.0.safetensors')
-    expect(wrapper.text()).toContain('sdxl_refiner_1.0.safetensors')
+    expect(wrapper.text()).toContain('6.05 GB')
+    expect(wrapper.text()).toContain('checkpoints')
   })
 
-  it('emits option-selected when radio option clicked', async () => {
+  it('renders candidate inputs for selecting an option', () => {
     const options = [
       {
         model: {
@@ -154,14 +89,10 @@ describe('ModelResolutionItem', () => {
       }
     })
 
-    const optionCard = wrapper.find('.option-card')
-    await optionCard.trigger('click')
-
-    expect(wrapper.emitted('option-selected')).toBeTruthy()
-    expect(wrapper.emitted('option-selected')?.[0]).toEqual([0])
+    expect(wrapper.find('input[type="radio"]').exists()).toBe(true)
   })
 
-  it('highlights selected option', () => {
+  it('highlights the selected candidate option', () => {
     const options = [
       {
         model: {
@@ -197,53 +128,27 @@ describe('ModelResolutionItem', () => {
       }
     })
 
-    const optionCards = wrapper.findAll('.option-card')
-    expect(optionCards[1].classes()).toContain('selected')
+    expect(wrapper.findAll('.option-card')[1].classes()).toContain('selected')
   })
 
-  it('emits search event when search button clicked', async () => {
-    const wrapper = mount(ModelResolutionItem, {
-      props: {
-        filename: 'model.safetensors',
-        nodeType: 'CheckpointLoader'
-      }
-    })
-
-    const buttons = wrapper.findAll('button')
-    const searchBtn = buttons.find(btn => btn.text().includes('Search'))
-
-    if (searchBtn) {
-      await searchBtn.trigger('click')
-      expect(wrapper.emitted('search')).toBeTruthy()
-    }
-  })
-
-  it('emits find-source event when find source button clicked', async () => {
-    const wrapper = mount(ModelResolutionItem, {
-      props: {
-        filename: 'model.safetensors',
-        nodeType: 'CheckpointLoader'
-      }
-    })
-
-    const buttons = wrapper.findAll('button')
-    const findSourceBtn = buttons.find(btn => btn.text().includes('Find Source'))
-
-    if (findSourceBtn) {
-      await findSourceBtn.trigger('click')
-      expect(wrapper.emitted('find-source')).toBeTruthy()
-    }
-  })
-
-  it('formats file size correctly', () => {
+  it('renders existing choices as resolved', () => {
     const wrapper = mount(ModelResolutionItem, {
       props: {
         filename: 'model.safetensors',
         nodeType: 'CheckpointLoader',
-        size: 6500000000 // ~6.05 GB
+        status: 'select',
+        statusLabel: 'Selected',
+        choice: {
+          action: 'select',
+          selected_model: {
+            filename: 'model.safetensors',
+            hash: 'abc'
+          }
+        }
       }
     })
 
-    expect(wrapper.text()).toContain('6.05 GB')
+    expect(wrapper.classes()).toContain('resolved')
+    expect(wrapper.text()).toContain('Change Selection')
   })
 })

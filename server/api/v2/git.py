@@ -138,7 +138,7 @@ async def create_commit(request: web.Request, env) -> web.Response:
         })
 
     # Get workflow status
-    workflow_status = await run_sync(env.workflow_manager.get_workflow_status)
+    workflow_status = await run_sync(env.get_workflow_status)
 
     # Check commit safety
     if not workflow_status.is_commit_safe and not allow_issues:
@@ -181,9 +181,9 @@ async def get_commit_log(request: web.Request, env) -> web.Response:
     # Get history with extra for pagination check
     if branch:
         history = await run_sync(
-            env.git_manager.get_version_history,
+            env.get_commit_history,
             limit + offset + 1,
-            branch,
+            rev_range=branch,
         )
     else:
         history = await run_sync(env.get_commit_history, limit=limit + offset + 1)
@@ -200,7 +200,7 @@ async def get_commit_log(request: web.Request, env) -> web.Response:
     current_branch = await run_sync(env.get_current_branch)
 
     return web.json_response({
-        "commits": history,
+        "commits": [commit.to_dict() for commit in history],
         "has_more": has_more,
         "current_branch": current_branch,
     })
@@ -289,7 +289,7 @@ async def switch_branch(request: web.Request, env) -> web.Response:
     """Switch to a different branch. Requires restart to take effect."""
     import os
     import asyncio
-    from comfygit_core.models.exceptions import CDEnvironmentError
+    from comfygit_core.models import CDEnvironmentError
 
     json_data = await request.json()
     branch = json_data.get("branch")
@@ -337,7 +337,7 @@ async def checkout_commit(request: web.Request, env) -> web.Response:
     """Checkout a specific commit or ref."""
     import os
     import asyncio
-    from comfygit_core.models.exceptions import CDEnvironmentError
+    from comfygit_core.models import CDEnvironmentError
 
     json_data = await request.json()
     ref = json_data.get("ref")
@@ -382,7 +382,7 @@ async def revert_changes(request: web.Request, env) -> web.Response:
     """Discard uncommitted changes on the current branch and restart."""
     import os
     import asyncio
-    from comfygit_core.models.exceptions import CDEnvironmentError
+    from comfygit_core.models import CDEnvironmentError
 
     try:
         await run_sync(env.reset, "HEAD", mode="hard", strategy=None, force=True)
@@ -413,16 +413,10 @@ async def revert_changes(request: web.Request, env) -> web.Response:
 @requires_environment
 async def list_branches(request: web.Request, env) -> web.Response:
     """List all git branches."""
-    branch_tuples = await run_sync(env.git_manager.list_branches)
+    branch_entries = await run_sync(env.list_branches)
     current = await run_sync(env.get_current_branch)
 
-    # Convert tuples to dicts
-    branches = [
-        {"name": name, "is_current": is_current}
-        for name, is_current in branch_tuples
-    ]
-
     return web.json_response({
-        "branches": branches,
+        "branches": [branch.to_dict() for branch in branch_entries],
         "current": current
     })

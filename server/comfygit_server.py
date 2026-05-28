@@ -102,7 +102,7 @@ def get_environment_from_cwd():
     if _environment is not None:
         return _environment
 
-    from comfygit_core.core.workspace import Workspace, WorkspacePaths
+    from comfygit_core import Workspace
 
     cwd = Path.cwd()
 
@@ -114,11 +114,9 @@ def get_environment_from_cwd():
 
         if environments_path.name == 'environments':
             workspace_root = environments_path.parent
-            workspace_paths = WorkspacePaths(workspace_root)
-
-            if workspace_paths.exists():
+            if Workspace.exists(workspace_root):
                 try:
-                    _workspace = Workspace(workspace_paths)
+                    _workspace = Workspace.from_path(workspace_root)
                     # Use workspace.get_environment() which handles initialization properly
                     # Pass auto_sync=False to avoid slow sync on every request
                     _environment = _workspace.get_environment(env_name, auto_sync=False)
@@ -126,12 +124,11 @@ def get_environment_from_cwd():
                     return _environment
                 except Exception as e:
                     print(f"[ComfyGit] Direct environment creation failed: {e}")
-                    # Fall through to WorkspaceFactory fallback
+                    # Fall through to standard workspace discovery.
 
     # Fallback: try standard workspace discovery
     try:
-        from comfygit_core.factories.workspace_factory import WorkspaceFactory
-        _workspace = WorkspaceFactory.find()
+        _workspace = Workspace.open()
         _environment = _workspace.get_active_environment()
         if _environment:
             print(f"[ComfyGit] Using active environment '{_environment.name}'")
@@ -157,7 +154,7 @@ def find_node_by_id_or_name(env, node_id: str):
     Returns:
         tuple: (identifier, NodeInfo) or (None, None) if not found
     """
-    existing_nodes = env.pyproject.nodes.get_existing()
+    existing_nodes = env.list_manifest_nodes()
     node_id_lower = node_id.lower()
 
     for identifier, node_info in existing_nodes.items():
@@ -174,7 +171,7 @@ def get_installed_packs() -> dict[str, dict]:
         return {}
 
     try:
-        existing_nodes = env.pyproject.nodes.get_existing()
+        existing_nodes = env.list_manifest_nodes()
         packs = {}
 
         for identifier, node_info in existing_nodes.items():
@@ -234,7 +231,7 @@ def get_node_mappings() -> dict[str, list]:
 
     try:
         mappings = {}
-        existing_nodes = env.pyproject.nodes.get_existing()
+        existing_nodes = env.list_manifest_nodes()
 
         for identifier, node_info in existing_nodes.items():
             pack_ids = []
@@ -372,7 +369,7 @@ async def update_all(request):
     if not env:
         return web.json_response({"message": "No ComfyGit environment detected"}, status=500)
 
-    existing_nodes = env.pyproject.nodes.get_existing()
+    existing_nodes = env.list_manifest_nodes()
     ui_id = request.query.get("ui_id")
     client_id = request.query.get("client_id")
 
@@ -614,7 +611,7 @@ def _extract_uv_stderr(exc: Exception) -> str | None:
 
     Walks the exception chain looking for UVCommandError to get full stderr.
     """
-    from comfygit_core.models.exceptions import UVCommandError
+    from comfygit_core.models import UVCommandError
 
     current = exc
     while current is not None:
@@ -706,7 +703,7 @@ async def process_install(env, params: dict) -> dict:
         )
 
     # Check if already installed
-    existing_nodes = env.pyproject.nodes.get_existing()
+    existing_nodes = env.list_manifest_nodes()
     is_installed = pack_id in existing_nodes
 
     # If installed, check if it's disabled (needs re-enabling, not re-installing)
@@ -731,7 +728,7 @@ async def process_install(env, params: dict) -> dict:
         if is_installed and (not version or version == "latest"):
             await loop.run_in_executor(
                 None,
-                lambda: env.node_manager.update_node(pack_id)
+                lambda: env.update_node(pack_id)
             )
             return {
                 "status_str": "success",
@@ -766,7 +763,7 @@ async def process_install(env, params: dict) -> dict:
 
         await loop.run_in_executor(
             None,
-            lambda: env.node_manager.add_node(identifier, force=is_installed)
+            lambda: env.add_node(identifier, force=is_installed)
         )
 
         return {
@@ -799,7 +796,7 @@ async def process_uninstall(env, params: dict) -> dict:
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(
             None,
-            lambda: env.node_manager.remove_node(node_name)
+            lambda: env.remove_node(node_name)
         )
 
         return {
@@ -823,7 +820,7 @@ async def process_update(env, params: dict) -> dict:
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(
             None,
-            lambda: env.node_manager.update_node(node_name, no_test=False)
+            lambda: env.update_node(node_name, no_test=False)
         )
 
         return {

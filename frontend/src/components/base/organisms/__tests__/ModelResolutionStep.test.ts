@@ -1,10 +1,11 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ModelResolutionStep from '../ModelResolutionStep.vue'
-import type { ModelSearchResult } from '@/types/comfygit'
+import type { ModelChoice } from '@/types/comfygit'
 
 describe('ModelResolutionStep', () => {
   const mockUnresolvedModel = {
+    filename: 'flux_dev.safetensors',
     reference: {
       workflow: 'test_workflow',
       node_id: 'node1',
@@ -16,6 +17,7 @@ describe('ModelResolutionStep', () => {
   }
 
   const mockAmbiguousModel = {
+    filename: 'sdxl_model.safetensors',
     reference: {
       workflow: 'test_workflow',
       node_id: 'node2',
@@ -51,198 +53,86 @@ describe('ModelResolutionStep', () => {
 
   const mockModels = [mockUnresolvedModel, mockAmbiguousModel]
 
-  it('renders model resolution header with progress', () => {
+  it('renders the model resolution header and resolved count', () => {
     const wrapper = mount(ModelResolutionStep, {
       props: {
         models: mockModels,
-        currentIndex: 0
+        modelChoices: new Map()
       }
     })
 
     expect(wrapper.find('.step-title').text()).toBe('Resolve Missing Models')
-    expect(wrapper.find('.progress-text').text()).toBe('1 of 2')
+    expect(wrapper.find('.stat-badge').text()).toBe('0/2 resolved')
   })
 
-  it('shows current unresolved model', () => {
+  it('uses an empty choices map by default', () => {
     const wrapper = mount(ModelResolutionStep, {
       props: {
-        models: mockModels,
-        currentIndex: 0
+        models: mockModels
       }
     })
 
+    expect(wrapper.find('.stat-badge').text()).toBe('0/2 resolved')
+    expect(wrapper.findComponent({ name: 'ModelResolutionItem' }).exists()).toBe(true)
+  })
+
+  it('shows the current model in the item navigator and item card', () => {
+    const wrapper = mount(ModelResolutionStep, {
+      props: {
+        models: mockModels,
+        modelChoices: new Map()
+      }
+    })
+
+    expect(wrapper.text()).toContain('flux_dev.safetensors')
     const item = wrapper.findComponent({ name: 'ModelResolutionItem' })
-    expect(item.exists()).toBe(true)
     expect(item.props('filename')).toBe('flux_dev.safetensors')
+    expect(item.props('status')).toBe('not-found')
   })
 
-  it('shows ambiguous model with multiple options', () => {
+  it('passes ambiguous candidates to the item card when navigated', async () => {
     const wrapper = mount(ModelResolutionStep, {
       props: {
         models: mockModels,
-        currentIndex: 1
+        modelChoices: new Map()
       }
     })
 
+    await wrapper.findAll('.nav-arrow')[1].trigger('click')
+
     const item = wrapper.findComponent({ name: 'ModelResolutionItem' })
-    expect(item.exists()).toBe(true)
+    expect(item.props('filename')).toBe('sdxl_model.safetensors')
     expect(item.props('hasMultipleOptions')).toBe(true)
     expect(item.props('options')).toHaveLength(2)
+    expect(item.props('status')).toBe('ambiguous')
   })
 
-  it('emits next event when next button clicked', async () => {
-    // Give model a hash so continue button is enabled
-    const modelWithHash = { ...mockUnresolvedModel, hash: 'xyz123' }
-    const wrapper = mount(ModelResolutionStep, {
-      props: {
-        models: [modelWithHash, mockAmbiguousModel],
-        currentIndex: 0
-      }
-    })
-
-    await wrapper.find('.nav-btn.next').trigger('click')
-    expect(wrapper.emitted('next')).toBeTruthy()
-  })
-
-  it('emits complete event when last model and continue clicked', async () => {
-    // Give ambiguous model a selected option so continue button is enabled
-    const modelWithSelection = { ...mockAmbiguousModel, selected_option_index: 0 }
-    const wrapper = mount(ModelResolutionStep, {
-      props: {
-        models: [mockUnresolvedModel, modelWithSelection],
-        currentIndex: 1 // Last model
-      }
-    })
-
-    await wrapper.find('.nav-btn.next').trigger('click')
-    expect(wrapper.emitted('complete')).toBeTruthy()
-  })
-
-  it('emits previous event when previous button clicked', async () => {
-    const wrapper = mount(ModelResolutionStep, {
-      props: {
-        models: mockModels,
-        currentIndex: 1
-      }
-    })
-
-    await wrapper.find('.nav-btn.prev').trigger('click')
-    expect(wrapper.emitted('previous')).toBeTruthy()
-  })
-
-  it('disables previous button on first model', () => {
-    const wrapper = mount(ModelResolutionStep, {
-      props: {
-        models: mockModels,
-        currentIndex: 0
-      }
-    })
-
-    const prevBtn = wrapper.find('.nav-btn.prev')
-    expect(prevBtn.attributes('disabled')).toBeDefined()
-  })
-
-  it('shows search panel when search triggered', async () => {
-    const wrapper = mount(ModelResolutionStep, {
-      props: {
-        models: mockModels,
-        currentIndex: 0,
-        showSearch: true
-      }
-    })
-
-    expect(wrapper.find('.search-panel').exists()).toBe(true)
-    expect(wrapper.find('.search-panel-header h4').text()).toBe('Search for Model')
-  })
-
-  it('emits search-input event when typing in search', async () => {
-    const wrapper = mount(ModelResolutionStep, {
-      props: {
-        models: mockModels,
-        currentIndex: 0,
-        showSearch: true
-      }
-    })
-
-    const searchInput = wrapper.find('.search-input')
-    await searchInput.setValue('flux')
-    expect(wrapper.emitted('search-input')).toBeTruthy()
-    expect(wrapper.emitted('search-input')?.[0]).toEqual(['flux'])
-  })
-
-  it('displays search results when provided', () => {
-    const mockSearchResults: ModelSearchResult[] = [
-      {
-        filename: 'flux_dev_v1.0.safetensors',
-        hash: 'xyz789',
-        size: 12000000000,
-        category: 'checkpoints',
-        relative_path: 'checkpoints/flux_dev_v1.0.safetensors',
-        match_confidence: 0.92
-      }
-    ]
+  it('counts selected choices as resolved', () => {
+    const modelChoices = new Map<string, ModelChoice>([
+      ['flux_dev.safetensors', { action: 'optional' }]
+    ])
 
     const wrapper = mount(ModelResolutionStep, {
       props: {
         models: mockModels,
-        currentIndex: 0,
-        showSearch: true,
-        searchResults: mockSearchResults
+        modelChoices
       }
     })
 
-    const results = wrapper.findAll('.search-result-item')
-    expect(results).toHaveLength(1)
-    expect(results[0].text()).toContain('flux_dev_v1.0.safetensors')
+    expect(wrapper.find('.stat-badge').text()).toBe('1/2 resolved')
+    expect(wrapper.findComponent({ name: 'ModelResolutionItem' }).props('choice')).toEqual({ action: 'optional' })
   })
 
-  it('emits search-result-selected when clicking search result', async () => {
-    const mockSearchResults: ModelSearchResult[] = [
-      {
-        filename: 'flux_dev_v1.0.safetensors',
-        hash: 'xyz789',
-        size: 12000000000,
-        category: 'checkpoints',
-        relative_path: 'checkpoints/flux_dev_v1.0.safetensors',
-        match_confidence: 0.92
-      }
-    ]
-
+  it('derives a suggested model category for source lookup', () => {
     const wrapper = mount(ModelResolutionStep, {
       props: {
         models: mockModels,
-        currentIndex: 0,
-        showSearch: true,
-        searchResults: mockSearchResults
-      }
+        modelChoices: new Map()
+      },
     })
 
-    await wrapper.find('.search-result-item').trigger('click')
-    expect(wrapper.emitted('search-result-selected')).toBeTruthy()
-    expect(wrapper.emitted('search-result-selected')?.[0]).toEqual([mockSearchResults[0]])
+    const item = wrapper.findComponent({ name: 'ModelResolutionItem' })
+    expect(item.props('nodeType')).toBe('CheckpointLoader')
   })
 
-  it('calculates progress percentage correctly', () => {
-    const wrapper = mount(ModelResolutionStep, {
-      props: {
-        models: mockModels,
-        currentIndex: 0
-      }
-    })
-
-    const progressBar = wrapper.find('.progress-fill')
-    expect(progressBar.attributes('style')).toContain('width: 50%') // 1 of 2 = 50%
-  })
-
-  it('shows "Continue to Review" button on last model', () => {
-    const wrapper = mount(ModelResolutionStep, {
-      props: {
-        models: mockModels,
-        currentIndex: 1 // Last model
-      }
-    })
-
-    const nextBtn = wrapper.find('.nav-btn.next')
-    expect(nextBtn.text()).toContain('Continue to Review')
-  })
 })

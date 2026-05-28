@@ -198,14 +198,16 @@ def mock_env_for_operations(tmp_path):
     mock_env.name = "test-env"
     mock_env.workspace = Mock()
     mock_env.workspace.path = workspace
-    mock_env.node_manager = Mock()
-    mock_env.node_manager.add_node = Mock(return_value=Mock(name="TestNode"))
-    mock_env.node_manager.remove_node = Mock()
-    mock_env.node_manager.update_node = Mock()
+    mock_env.add_node = Mock(return_value=Mock(name="TestNode"))
+    mock_env.remove_node = Mock()
+    mock_env.update_node = Mock()
     mock_env.custom_nodes_path = workspace / "custom_nodes"
     mock_env.pyproject = Mock()
     mock_env.pyproject.nodes = Mock()
     mock_env.pyproject.nodes.get_existing = Mock(return_value={})
+    mock_env.list_manifest_nodes = Mock(
+        side_effect=lambda: mock_env.pyproject.nodes.get_existing()
+    )
     return mock_env
 
 
@@ -363,7 +365,7 @@ class TestCoreLevelLoggingNotSuppressed:
                 logger.debug("Downloading from registry...")
                 return Mock(name="TestNode")
 
-            mock_env_for_operations.node_manager.add_node = mock_add_with_logging
+            mock_env_for_operations.add_node = mock_add_with_logging
 
             with patch.object(comfygit_server, 'get_environment_from_cwd', return_value=mock_env_for_operations):
                 await comfygit_server.process_task({

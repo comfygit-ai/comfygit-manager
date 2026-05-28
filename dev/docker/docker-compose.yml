@@ -11,6 +11,7 @@ services:
       COMFYGIT_CREATE_ARGS: ${COMFYGIT_CREATE_ARGS:-}
       COMFYGIT_DEV_CORE_PATH: ${COMFYGIT_DEV_CORE_PATH:-${PWD}/../comfygit/packages/core}
       COMFYGIT_DEV_REPO_PATH: ${COMFYGIT_DEV_REPO_PATH:-${PWD}/../comfygit}
+      COMFYGIT_DEV_STUDIO_PATH: ${COMFYGIT_DEV_STUDIO_PATH:-${PWD}/../comfygit/packages/studio-runtime}
       COMFYGIT_ENV_NAME: ${COMFYGIT_ENV_NAME:-manager-dev}
       COMFYGIT_HOME: ${COMFYGIT_HOME:-${PWD}/.comfygit-workspace}
       COMFYGIT_MANAGER_DEV_PATH: ${COMFYGIT_MANAGER_DEV_PATH:-${PWD}}

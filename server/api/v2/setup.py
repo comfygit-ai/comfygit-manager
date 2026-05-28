@@ -1,4 +1,5 @@
 """First-time setup API."""
+import importlib.util
 import logging
 import os
 import shutil
@@ -9,8 +10,8 @@ from pathlib import Path
 from aiohttp import web
 
 from cgm_core.runtime_context import build_runtime_context, ensure_capability
-from comfygit_core.factories.workspace_factory import WorkspaceFactory
-from comfygit_core.models.exceptions import CDWorkspaceNotFoundError
+from comfygit_core import Workspace
+from comfygit_core.models import CDWorkspaceNotFoundError
 import orchestrator
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,13 @@ _init_task_state = {
     "models_found": None,
     "error": None
 }
+
+
+def _has_comfyui_manager(cwd: Path) -> bool:
+    """Return whether upstream ComfyUI Manager is available."""
+    if (cwd / "custom_nodes" / "ComfyUI-Manager").is_dir():
+        return True
+    return importlib.util.find_spec("comfyui_manager") is not None
 
 
 def _update_init_state(state: str, progress: int, message: str, **kwargs):
@@ -89,8 +97,9 @@ async def get_setup_status(request: web.Request) -> web.Response:
     if potential_models.exists() and potential_models.is_dir():
         detected_models_dir = str(potential_models)
 
-    # Check if ComfyUI-Manager is installed in custom_nodes
-    has_comfyui_manager = (cwd / "custom_nodes" / "ComfyUI-Manager").is_dir()
+    # Check if ComfyUI-Manager is installed as the current package-based
+    # manager or as the older custom node directory.
+    has_comfyui_manager = _has_comfyui_manager(cwd)
 
     # CLI detection
     cli_path = shutil.which('comfygit') or shutil.which('cg')
@@ -112,7 +121,7 @@ async def get_setup_status(request: web.Request) -> web.Response:
 
     # Try to find workspace at default location
     try:
-        workspace = WorkspaceFactory.find()
+        workspace = Workspace.open()
         envs = workspace.list_environments()
 
         if not envs:
@@ -184,7 +193,7 @@ def _validate_workspace_path(path: Path) -> web.Response:
     """Validate a path for workspace creation."""
     # Check if workspace already exists
     try:
-        WorkspaceFactory.find(path)
+        Workspace.open(path)
         return web.json_response({
             "valid": False,
             "error": "Workspace already exists at this location"
@@ -381,12 +390,12 @@ def _install_self_as_system_node(workspace):
 
 def _run_initialize_workspace(workspace_path: Path, models_dir: Path | None):
     """Background thread function to initialize workspace."""
-    from comfygit_core.analyzers.model_scanner import ModelScanProgress
+    from comfygit_core.models import ModelScanProgress
 
     try:
         # Phase 1: Create workspace
         _update_init_state("creating_workspace", 10, "Creating workspace structure...")
-        workspace = WorkspaceFactory.create(workspace_path)
+        workspace = Workspace.create(workspace_path)
         _update_init_state("creating_workspace", 20, "Workspace structure created")
 
         # Install comfygit-manager into system_nodes

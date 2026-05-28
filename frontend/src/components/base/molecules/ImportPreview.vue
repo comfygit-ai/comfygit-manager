@@ -22,7 +22,7 @@
       </button>
     </div>
 
-    <div class="preview-panel-frame">
+    <div :class="['preview-panel-frame', { 'preview-panel-frame--inline': !panelScroll }]">
       <section v-if="activeTab === 'overview'" class="preview-panel overview-panel" role="tabpanel">
         <div :class="['safety-notice', safetySummary.tone]">
           <div>
@@ -32,15 +32,28 @@
           <p>{{ safetySummary.message }}</p>
         </div>
 
+        <div v-if="sourcePath || warnings.length" class="source-review">
+          <div v-if="sourcePath" class="detail-stack">
+            <span class="detail-label">Source path</span>
+            <span class="mono">{{ sourcePath }}</span>
+          </div>
+          <div v-if="warnings.length" class="warning-list">
+            <div class="warning-title">Review after import</div>
+            <ul>
+              <li v-for="warning in warnings" :key="warning">{{ warning }}</li>
+            </ul>
+          </div>
+        </div>
+
         <div class="overview-grid">
           <div class="overview-card">
             <div class="overview-value">{{ workflowCount }}</div>
             <div class="overview-label">Workflows</div>
-            <div class="overview-subtle">{{ totalRequiredModels }} required model references</div>
+            <div class="overview-subtle">{{ workflowModelSummary }}</div>
           </div>
           <div class="overview-card">
-            <div class="overview-value">{{ modelCount }}</div>
-            <div class="overview-label">Models</div>
+            <div class="overview-value">{{ modelCountLabel }}</div>
+            <div class="overview-label">Model refs</div>
             <div class="overview-subtle">{{ totalModelSizeLabel }} declared</div>
           </div>
           <div class="overview-card">
@@ -49,9 +62,9 @@
             <div class="overview-subtle">{{ registryNodeCount }} registry, {{ gitNodeCount }} git</div>
           </div>
           <div class="overview-card">
-            <div class="overview-value">{{ modelLocalCount }}</div>
-            <div class="overview-label">Local models</div>
-            <div class="overview-subtle">{{ modelDownloadCount }} download{{ modelDownloadCount !== 1 ? 's' : '' }} needed</div>
+            <div class="overview-value">{{ modelLocalCountLabel }}</div>
+            <div class="overview-label">Availability</div>
+            <div class="overview-subtle">{{ modelAvailabilitySummary }}</div>
           </div>
         </div>
 
@@ -64,7 +77,9 @@
                 <Value>{{ stat.count }}</Value>
               </div>
             </div>
-            <div v-else class="empty-list">No models declared.</div>
+            <div v-else class="empty-list">
+              {{ modelsUnavailable ? 'Model references will be resolved after import.' : 'No models declared.' }}
+            </div>
           </div>
 
           <div class="overview-section">
@@ -161,7 +176,9 @@
             </div>
           </article>
         </div>
-        <div v-else class="empty-list">No models declared.</div>
+        <div v-else class="empty-list">
+          {{ modelsUnavailable ? 'Model references will be resolved after import.' : 'No models declared.' }}
+        </div>
       </section>
 
       <section v-else-if="activeTab === 'nodes'" class="preview-panel" role="tabpanel">
@@ -171,6 +188,7 @@
             <div class="row-chips">
               <span class="chip">{{ nodeSourceLabel(node) }}</span>
               <span v-if="node.version" class="chip muted">{{ node.version }}</span>
+              <span v-if="node.requires_review" class="chip warning">review</span>
             </div>
             <div class="detail-grid">
               <div class="detail-line">
@@ -201,6 +219,13 @@
             <div v-if="node.repository" class="detail-stack">
               <span class="detail-label">Repository</span>
               <a class="source-link" :href="node.repository" target="_blank" rel="noreferrer">{{ node.repository }}</a>
+            </div>
+            <div v-if="node.provenance_detail" class="detail-stack">
+              <span class="detail-label">Provenance</span>
+              <span>{{ node.provenance_detail }}</span>
+            </div>
+            <div v-if="node.warning" class="node-warning">
+              {{ node.warning }}
             </div>
             <div v-if="node.dependency_sources?.length" class="detail-stack">
               <span class="detail-label">Dependency sources</span>
@@ -233,7 +258,7 @@
         </div>
       </section>
 
-      <section v-else class="preview-panel manifest-panel" role="tabpanel">
+      <section v-else-if="activeTab === 'manifest' && showManifest" class="preview-panel manifest-panel" role="tabpanel">
         <pre v-if="manifestToml" class="manifest-code">{{ manifestToml }}</pre>
         <div v-else class="empty-list">
           Manifest preview is not available from this running backend yet.
@@ -244,7 +269,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import SectionTitle from '@/components/base/atoms/SectionTitle.vue'
 import Value from '@/components/base/atoms/Value.vue'
 import CommitHash from '@/components/base/atoms/CommitHash.vue'
@@ -261,11 +286,22 @@ const props = withDefaults(defineProps<{
   gitCommit?: string
   gitUrl?: string
   manifestToml?: string
+  sourcePath?: string
+  warnings?: string[]
+  modelsUnavailable?: boolean
+  modelAvailabilityUnavailable?: boolean
+  panelScroll?: boolean
+  showManifest?: boolean
 }>(), {
   workflows: () => [],
   models: () => [],
   nodes: () => [],
-  manifestToml: ''
+  manifestToml: '',
+  warnings: () => [],
+  modelsUnavailable: false,
+  modelAvailabilityUnavailable: false,
+  panelScroll: true,
+  showManifest: true
 })
 
 const activeTab = ref<PreviewTab>('overview')
@@ -281,7 +317,28 @@ const modelDownloadCount = computed(() => props.models.filter(model => model.nee
 const modelsWithoutSourceCount = computed(() => props.models.filter(model => !model.locally_available && model.sources.length === 0).length)
 const totalRequiredModels = computed(() => props.workflows.reduce((sum, workflow) => sum + workflow.models_required, 0))
 const totalModelSize = computed(() => props.models.reduce((sum, model) => sum + Math.max(0, model.size || 0), 0))
-const totalModelSizeLabel = computed(() => totalModelSize.value > 0 ? formatSize(totalModelSize.value) : 'unknown size')
+const modelCountLabel = computed(() => props.modelsUnavailable ? '-' : String(modelCount.value))
+const modelLocalCountLabel = computed(() => (
+  props.modelsUnavailable || props.modelAvailabilityUnavailable
+    ? '-'
+    : String(modelLocalCount.value)
+))
+const workflowModelSummary = computed(() => (
+  props.modelsUnavailable
+    ? 'model references resolved after import'
+    : `${totalRequiredModels.value} required model references`
+))
+const totalModelSizeLabel = computed(() => {
+  if (props.modelsUnavailable) return 'not scanned'
+  return totalModelSize.value > 0 ? formatSize(totalModelSize.value) : 'unknown size'
+})
+const modelAvailabilitySummary = computed(() => (
+  props.modelsUnavailable
+    ? 'resolved after import'
+    : props.modelAvailabilityUnavailable
+      ? 'not checked in preview'
+    : `${modelDownloadCount.value} download${modelDownloadCount.value !== 1 ? 's' : ''} needed`
+))
 
 const modelCategoryStats = computed(() => {
   const counts = new Map<string, number>()
@@ -304,7 +361,7 @@ const unknownSourceModelCount = computed(() => {
 
 const safetySummary = computed(() => {
   const highRiskSignals = modelsWithoutSourceCount.value + unknownSourceModelCount.value + devNodeCount.value
-  const reviewSignals = gitNodeCount.value + modelDownloadCount.value
+  const reviewSignals = gitNodeCount.value + modelDownloadCount.value + (props.modelsUnavailable || props.modelAvailabilityUnavailable ? 1 : 0)
 
   if (highRiskSignals > 0) {
     return {
@@ -318,7 +375,11 @@ const safetySummary = computed(() => {
     return {
       tone: 'caution',
       label: 'Review recommended',
-      message: 'This import installs Git nodes or downloads models from known hosts. Review source URLs and pinned commits before importing.'
+      message: props.modelsUnavailable
+        ? 'This source is scanned outside a managed manifest. Model dependencies will be resolved after import; review status before deploying.'
+        : props.modelAvailabilityUnavailable
+          ? 'Model references were detected, but local model availability is checked after import. Review status before deploying.'
+        : 'This import installs Git nodes or downloads models from known hosts. Review source URLs and pinned commits before importing.'
     }
   }
 
@@ -329,14 +390,25 @@ const safetySummary = computed(() => {
   }
 })
 
-const tabs = computed(() => [
-  { id: 'overview' as const, label: 'Overview', count: null },
-  { id: 'workflows' as const, label: 'Workflows', count: workflowCount.value },
-  { id: 'models' as const, label: 'Models', count: modelCount.value },
-  { id: 'nodes' as const, label: 'Custom Nodes', count: nodeCount.value },
-  { id: 'git' as const, label: 'Git Info', count: null },
-  { id: 'manifest' as const, label: 'Manifest', count: null },
-])
+const tabs = computed(() => {
+  const visibleTabs = [
+    { id: 'overview' as const, label: 'Overview', count: null },
+    { id: 'workflows' as const, label: 'Workflows', count: workflowCount.value },
+    { id: 'models' as const, label: 'Models', count: modelCount.value },
+    { id: 'nodes' as const, label: 'Custom Nodes', count: nodeCount.value },
+    { id: 'git' as const, label: 'Git Info', count: null },
+  ]
+  if (props.showManifest) {
+    visibleTabs.push({ id: 'manifest' as const, label: 'Manifest', count: null })
+  }
+  return visibleTabs
+})
+
+watch(tabs, (visibleTabs) => {
+  if (!visibleTabs.some(tab => tab.id === activeTab.value)) {
+    activeTab.value = 'overview'
+  }
+})
 
 function modelCategory(model: ModelAnalysis): string {
   return model.relative_path.split('/')[0] || 'model'
@@ -448,6 +520,18 @@ function formatSize(bytes: number): string {
   padding: var(--cg-space-3);
 }
 
+.preview-panel-frame--inline {
+  height: min(580px, 62vh);
+  min-height: 420px;
+  overflow: hidden;
+}
+
+.preview-panel-frame--inline .preview-panel {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .overview-panel {
   display: flex;
   flex-direction: column;
@@ -486,6 +570,43 @@ function formatSize(bytes: number): string {
 .safety-notice p {
   margin: 0;
   color: var(--cg-color-text-secondary);
+  font-size: var(--cg-font-size-sm);
+}
+
+.source-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cg-space-3);
+  padding: var(--cg-space-3);
+  background: var(--cg-color-bg-tertiary);
+  border: 1px solid var(--cg-color-border-subtle);
+}
+
+.warning-list {
+  padding: var(--cg-space-3);
+  background: var(--cg-color-warning-muted);
+  border: 1px solid var(--cg-color-warning);
+}
+
+.warning-title {
+  color: var(--cg-color-text-primary);
+  font-weight: var(--cg-font-weight-semibold);
+  margin-bottom: var(--cg-space-2);
+}
+
+.warning-list ul {
+  margin: 0;
+  padding-left: var(--cg-space-5);
+  color: var(--cg-color-text-secondary);
+  font-size: var(--cg-font-size-sm);
+}
+
+.node-warning {
+  margin-top: var(--cg-space-2);
+  padding: var(--cg-space-2);
+  color: var(--cg-color-warning);
+  background: var(--cg-color-warning-muted);
+  border: 1px solid var(--cg-color-warning);
   font-size: var(--cg-font-size-sm);
 }
 

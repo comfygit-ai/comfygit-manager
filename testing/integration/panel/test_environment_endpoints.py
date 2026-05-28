@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import Mock, MagicMock
 import json
 from pathlib import Path
-from comfygit_core.models.exceptions import CDEnvironmentNotFoundError
+from comfygit_core.models import CDEnvironmentNotFoundError
 import api.v2.environments as env_module
 
 
@@ -290,7 +290,7 @@ class TestSwitchEnvironmentEndpoint:
     async def test_error_target_env_not_found(self, client, monkeypatch):
         """Should return 404 when target environment doesn't exist."""
         # Setup
-        from comfygit_core.models.exceptions import CDEnvironmentNotFoundError
+        from comfygit_core.models import CDEnvironmentNotFoundError
 
         mock_workspace = Mock()
         mock_current_env = Mock()
@@ -549,8 +549,8 @@ class TestSwitchStatusEndpoint:
         assert data["state"] == "unknown"
         assert "restarting" in data["message"].lower()
 
-    async def test_error_invalid_status_file(self, client, monkeypatch, tmp_path):
-        """Should return 500 when status file is corrupted."""
+    async def test_invalid_status_file_returns_idle(self, client, monkeypatch, tmp_path):
+        """Should treat an unreadable status file as no active switch."""
         # Setup
         mock_workspace = Mock()
         mock_workspace.path = tmp_path
@@ -571,9 +571,10 @@ class TestSwitchStatusEndpoint:
         resp = await client.get("/v2/comfygit/switch_status")
 
         # Verify
-        assert resp.status == 500
+        assert resp.status == 200
         data = await resp.json()
-        assert "error" in data
+        assert data["state"] == "idle"
+        assert "No switch in progress" in data["message"]
 
 
 @pytest.mark.integration
@@ -644,8 +645,8 @@ class TestCreateEnvironmentEndpoint:
         mock_workspace.path = tmp_path
         mock_workspace.list_environments.return_value = []
 
-        # Mock WorkspaceFactory.find in the environments module
-        monkeypatch.setattr(env_module.WorkspaceFactory, "find", lambda path: mock_workspace)
+        # Mock Workspace.open in the environments module
+        monkeypatch.setattr(env_module.Workspace, "open", lambda path: mock_workspace)
 
         # Mock orchestrator to return NOT managed (simulating first-time setup)
         monkeypatch.setattr("orchestrator.detect_environment_type", lambda: (False, None, None))
@@ -675,7 +676,7 @@ class TestCreateEnvironmentEndpoint:
         """Should deny environment creation when runtime context is cloud-bound."""
         mock_workspace = Mock()
         mock_workspace.path = tmp_path
-        monkeypatch.setattr(env_module.WorkspaceFactory, "find", Mock(return_value=mock_workspace))
+        monkeypatch.setattr(env_module.Workspace, "open", Mock(return_value=mock_workspace))
         monkeypatch.setenv("COMFYGIT_RUNTIME_MODE", "cloud_bound")
 
         resp = await client.post("/v2/workspace/environments", json={
@@ -720,12 +721,12 @@ class TestCreateEnvironmentEndpoint:
 
     async def test_error_workspace_path_not_found(self, client, monkeypatch):
         """Should return 404 when explicit workspace_path doesn't exist."""
-        from comfygit_core.models.exceptions import CDWorkspaceNotFoundError
+        from comfygit_core.models import CDWorkspaceNotFoundError
 
         def mock_find(path):
             raise CDWorkspaceNotFoundError(f"Workspace not found at {path}")
 
-        monkeypatch.setattr(env_module.WorkspaceFactory, "find", mock_find)
+        monkeypatch.setattr(env_module.Workspace, "open", mock_find)
 
         # Execute: POST with invalid workspace_path
         resp = await client.post("/v2/workspace/environments", json={

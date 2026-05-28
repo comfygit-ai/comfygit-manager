@@ -9,7 +9,7 @@
     <div class="item-body">
       <!-- Already resolved state - show change option -->
       <div v-if="hasChoice" class="resolved-state">
-        <BaseButton variant="ghost" size="sm" @click="emit('clear-choice')">
+        <BaseButton variant="ghost" size="sm" @click="handleClearChoice">
           Change Selection
         </BaseButton>
       </div>
@@ -47,13 +47,13 @@
 
         <!-- Action buttons for ambiguous -->
         <div class="action-buttons">
-          <BaseButton variant="secondary" size="sm" @click="emit('find-source')">
+          <BaseButton variant="secondary" size="sm" @click="handleFindSource">
             Find Source
           </BaseButton>
-          <BaseButton variant="secondary" size="sm" @click="emit('search')">
+          <BaseButton variant="secondary" size="sm" @click="handleSearch">
             Search Index
           </BaseButton>
-          <BaseButton variant="secondary" size="sm" @click="emit('mark-optional')">
+          <BaseButton variant="secondary" size="sm" @click="handleMarkOptional">
             Mark Optional
           </BaseButton>
         </div>
@@ -67,13 +67,13 @@
         </div>
 
         <div class="action-buttons">
-          <BaseButton variant="secondary" size="sm" @click="emit('find-source')">
+          <BaseButton variant="secondary" size="sm" @click="handleFindSource">
             Find Source
           </BaseButton>
-          <BaseButton variant="secondary" size="sm" @click="emit('search')">
+          <BaseButton variant="secondary" size="sm" @click="handleSearch">
             Search Index
           </BaseButton>
-          <BaseButton variant="secondary" size="sm" @click="emit('mark-optional')">
+          <BaseButton variant="secondary" size="sm" @click="handleMarkOptional">
             Mark Optional
           </BaseButton>
         </div>
@@ -165,6 +165,22 @@ const statusVariant = computed(() => {
 
 function handleOptionClick(index: number) {
   emit('option-selected', index)
+}
+
+function handleMarkOptional() {
+  emit('mark-optional')
+}
+
+function handleFindSource() {
+  emit('find-source')
+}
+
+function handleSearch() {
+  emit('search')
+}
+
+function handleClearChoice() {
+  emit('clear-choice')
 }
 
 function formatSize(bytes: number): string {

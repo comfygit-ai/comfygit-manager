@@ -29,7 +29,7 @@
         <div class="settings-section">
           <SettingRow
             label="CivitAI API Key"
-            description="API key for downloading models from CivitAI"
+            description="API key for searching and downloading CivitAI models. Saved in the workspace config file on this machine."
           >
             <TextInput
               v-model="civitaiToken"
@@ -42,7 +42,7 @@
 
           <SettingRow
             label="HuggingFace Token"
-            description="Access token for downloading gated/private models from HuggingFace"
+            description="Access token for gated or private Hugging Face models. Saved in the workspace config file on this machine."
           >
             <TextInput
               v-model="huggingfaceToken"
@@ -55,7 +55,7 @@
 
           <SettingRow
             label="GitHub Personal Access Token"
-            description="Client-side token used for private Git remote access during deploy and remote operations"
+            description="Client-side token for private HTTPS Git remote operations"
             stacked
           >
             <div class="token-setting">
@@ -69,7 +69,7 @@
                 SSH origin remote detected. PAT authentication only works with HTTPS remotes.
               </div>
               <div class="token-help">
-                Stored in your browser only. Never sent to the server except when you explicitly test or use authenticated remote operations.
+                Stored in this browser only. Sent to the local Manager backend only when you test it or run an authenticated remote operation.
               </div>
               <div class="token-actions">
                 <ActionButton

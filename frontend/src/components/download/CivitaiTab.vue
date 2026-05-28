@@ -488,6 +488,10 @@ const suggestedDirectory = computed(() => directoryForModelType(selectedModel.va
 async function handleSearch() {
   const query = searchInput.value.trim()
   if (!query) return
+  if (!tokenMask.value) {
+    searchError.value = 'Configure a CivitAI API key before searching or downloading CivitAI models.'
+    return
+  }
 
   searching.value = true
   searchError.value = null

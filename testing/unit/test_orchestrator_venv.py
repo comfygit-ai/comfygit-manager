@@ -8,7 +8,7 @@ import pytest
 class TestOrchestratorVenv:
     """Test orchestrator venv creation and setup."""
 
-    def test_ensure_orchestrator_venv_idempotent(self, mock_orchestrator_venv):
+    def test_ensure_orchestrator_venv_idempotent(self, mock_orchestrator_venv, mocker):
         """Should not recreate venv if it already exists."""
         from server.orchestrator import ensure_orchestrator_venv
 
@@ -16,6 +16,7 @@ class TestOrchestratorVenv:
         marker = mock_orchestrator_venv / "bin" / ".created"
         marker.touch()
         original_mtime = marker.stat().st_mtime
+        mocker.patch("server.orchestrator._orchestrator_venv_is_current", return_value=True)
 
         ensure_orchestrator_venv(mock_orchestrator_venv)
 

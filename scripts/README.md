@@ -22,7 +22,8 @@ the environment already exists in the workspace, it reuses it.
 The dev stack:
 
 - mounts this `comfygit-manager` repo into the container
-- mounts the sibling `comfygit` repo and installs its core/CLI packages editable
+- mounts the sibling `comfygit` repo and installs its core, Studio runtime, and
+  CLI packages editable
 - mounts the host models directory into the container, defaulting to
   `~/dev/models -> /data/models`
 - passes the host Git author name/email into the container so environment
@@ -33,9 +34,11 @@ The dev stack:
   GitHub remotes work with SSH URLs without copying private keys into Docker
 - symlinks this manager repo into `ComfyUI/custom_nodes`
 - tracks `comfygit-manager` as a development node
-- writes the local editable core path to `.cec/overlays/.local.toml`
+- writes the local editable core and Studio runtime paths to
+  `.cec/overlays/.local.toml`
 - starts ComfyUI with `--overlay .local` so the environment venv uses the
-  mounted editable `comfygit-core` package during run sync
+  mounted editable `comfygit-core` and `comfygit-studio` packages during run
+  sync
 - runs `cg -e <env> run` with GPU passthrough from Docker Compose
 
 Local editable package paths should live in `.cec/overlays/.local.toml`, not in
@@ -126,16 +129,29 @@ sections from committed `pyproject.toml` files.
 Helper used by hooks/filtering to avoid committing machine-local uv source
 overrides.
 
+### `test-local-core`
+
+Runs backend tests through the repo-local testing project against local editable
+`comfygit-core` and `comfygit-studio` checkouts without changing the tracked
+Manager `pyproject.toml` dependency pins:
+
+```bash
+./scripts/test-local-core
+./scripts/test-local-core testing/unit/test_readiness.py -q
+```
+
+By default it uses the sibling checkout at `../comfygit`. Set
+`COMFYGIT_CORE_PATH=/path/to/comfygit/packages/core` and
+`COMFYGIT_STUDIO_PATH=/path/to/comfygit/packages/studio-runtime` for different
+local package paths.
+
 ## Legacy and specialized helpers
 
 These scripts predate the manager-owned Docker dev stack and are still useful
 for narrower workflows:
 
-- `comfygit-dev`: older local/simulator-oriented manager dev launcher.
 - `comfygit-worktree.sh`: creates a manager git worktree paired with a ComfyGit
   environment.
-- `pull-runpod-image.sh` and `start-simulator.sh`: older RunPod/local simulator
-  helpers.
 - `sync-requirements.py`: syncs dependency metadata from project files.
 - `check-frontend-version.sh`: checks bundled frontend/version state.
 

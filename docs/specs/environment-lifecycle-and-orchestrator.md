@@ -169,6 +169,39 @@ environment-specific data sources used by the panel shell and the environments
 section so the imported environment is reflected in navigation without relying
 on unrelated status refreshes.
 
+### CGM-ENV-11C [PARTIAL]: Unmanaged local ComfyUI installs should have a best-effort adoption path
+Validation: MIXED
+
+When the manager is running inside an unmanaged local ComfyUI install and a
+ComfyGit workspace exists, the setup flow should offer an `Import Current
+Environment` path. This path should scan the currently running ComfyUI
+directory, create a normal managed ComfyGit environment in the selected
+workspace, copy discoverable workflow files into the environment's tracked
+workflow storage, seed discoverable custom nodes into the environment manifest,
+and then let the user switch to it through the existing local orchestrator flow.
+
+This adoption path is best-effort. It should not claim that every dependency is
+fully portable merely because it was present in the unmanaged runtime. Unknown
+custom-node provenance, Python package drift, and unresolved model sources
+should remain visible through the normal ComfyGit status, readiness, and
+resolution surfaces after import.
+
+Custom-node provenance detection should prefer explicit, portable sources before
+falling back to copied development nodes. If a custom node is an independent Git
+checkout, the import should use that repository and source revision when
+possible. If the node has `pyproject.toml` metadata, the import should use the
+declared project name, version, repository URL, and `tool.comfy` metadata to
+match a Comfy Registry package. A registry match is only trusted when the same
+version is present and installable in the registry cache. If no exact registry
+version is available but a repository URL is declared, import may use that Git
+repository with a warning that the exact local revision was not proven. If no
+portable source is found, the node may be copied as a local development node and
+flagged for manual provenance review.
+
+The unmanaged source ComfyUI directory must not be converted in place. Import
+current environment creates a sibling managed environment and leaves the
+original runtime available until the user explicitly switches.
+
 ### CGM-ENV-12 [LIVE]: Manager-created environments should use supported ComfyUI releases
 Validation: TEST
 
@@ -238,3 +271,17 @@ preserved.
 This remains partial until both supervisor modes are covered by automated
 handoff tests and the switch modal consumes them without falling back to noisy
 failed polling during normal handoff.
+
+### CGM-ENV-15 [LIVE]: Local Studio serving is a child runtime, not lifecycle authority
+Validation: TEST
+
+The manager may launch a local `cg serve` Studio process for the current
+managed environment so users can test saved workflow contracts in the shared
+Studio UI. That process should reuse ComfyGit CLI serve behavior and should be
+tracked separately from environment switching, workspace setup, and ComfyUI
+orchestrator supervision.
+
+Starting Studio must not mutate the selected environment, switch the running
+ComfyUI process, or imply cloud deployment. It is a local runtime adapter over
+the currently running ComfyUI API endpoint and the current environment's saved
+workflow contracts.

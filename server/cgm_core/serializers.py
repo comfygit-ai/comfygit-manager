@@ -117,11 +117,15 @@ def serialize_workflow_execution_contract(contract) -> dict | None:
                 input_payload["min"] = item.min
             if getattr(item, "max", None) is not None:
                 input_payload["max"] = item.max
+            if getattr(item, "step", None) is not None:
+                input_payload["step"] = item.step
             enum_values = _safe_sequence(getattr(item, "enum_values", None))
             if enum_values:
                 input_payload["enum_values"] = enum_values
             if getattr(item, "description", None) is not None:
                 input_payload["description"] = item.description
+            if getattr(item, "ui_control", None) is not None:
+                input_payload["ui_control"] = item.ui_control
             inputs.append(input_payload)
 
         outputs = []
@@ -324,7 +328,7 @@ def serialize_workflow_details(
                 "loaded_by": [],
                 "file_path": file_path,
                 "relative_path": (
-                    getattr(resolved.resolved_model, "relative_path", None)
+                    _safe_str(getattr(resolved.resolved_model, "relative_path", None))
                     if resolved and resolved.resolved_model
                     else None
                 ),

@@ -13,21 +13,17 @@ class TestGetConfigEndpoint:
         # Setup: Mock environment with workspace config
         mock_env = Mock()
         mock_env.name = "test-env"
+        mock_env.get_manifest_node.return_value = None
 
-        # Mock workspace with config manager
+        # Mock workspace with public config facade methods
         mock_workspace = Mock()
         mock_workspace.path = Path("/workspace")
         mock_env.workspace = mock_workspace
 
-        # Mock config manager
-        mock_config_manager = Mock()
-
         # Mock config data
-        mock_config_manager.get_models_directory.return_value = Path("/workspace/models")
-        mock_config_manager.get_civitai_token.return_value = "test_token_1234"
-        mock_config_manager.get_huggingface_token.return_value = None
-
-        mock_workspace.workspace_config_manager = mock_config_manager
+        mock_workspace.get_models_directory.return_value = Path("/workspace/models")
+        mock_workspace.get_civitai_token.return_value = "test_token_1234"
+        mock_workspace.get_huggingface_token.return_value = None
 
         # Patch get_environment_from_cwd
         monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
@@ -59,15 +55,14 @@ class TestGetConfigEndpoint:
         # Setup
         mock_env = Mock()
         mock_env.name = "test-env"
+        mock_env.get_manifest_node.return_value = None
         mock_workspace = Mock()
         mock_workspace.path = Path("/workspace")
         mock_env.workspace = mock_workspace
 
-        mock_config_manager = Mock()
-        mock_config_manager.get_models_directory.return_value = Path("/workspace/models")
-        mock_config_manager.get_civitai_token.return_value = None  # No token
-        mock_config_manager.get_huggingface_token.return_value = None
-        mock_workspace.workspace_config_manager = mock_config_manager
+        mock_workspace.get_models_directory.return_value = Path("/workspace/models")
+        mock_workspace.get_civitai_token.return_value = None  # No token
+        mock_workspace.get_huggingface_token.return_value = None
 
         monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
 
@@ -84,15 +79,14 @@ class TestGetConfigEndpoint:
         # Setup
         mock_env = Mock()
         mock_env.name = "test-env"
+        mock_env.get_manifest_node.return_value = None
         mock_workspace = Mock()
         mock_workspace.path = Path("/workspace")
         mock_env.workspace = mock_workspace
 
-        mock_config_manager = Mock()
-        mock_config_manager.get_models_directory.return_value = Path("/workspace/models")
-        mock_config_manager.get_civitai_token.return_value = None
-        mock_config_manager.get_huggingface_token.return_value = "hf_1234567890abcdef"
-        mock_workspace.workspace_config_manager = mock_config_manager
+        mock_workspace.get_models_directory.return_value = Path("/workspace/models")
+        mock_workspace.get_civitai_token.return_value = None
+        mock_workspace.get_huggingface_token.return_value = "hf_1234567890abcdef"
 
         monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
 
@@ -110,15 +104,14 @@ class TestGetConfigEndpoint:
         # Setup
         mock_env = Mock()
         mock_env.name = "test-env"
+        mock_env.get_manifest_node.return_value = None
         mock_workspace = Mock()
         mock_workspace.path = Path("/workspace")
         mock_env.workspace = mock_workspace
 
-        mock_config_manager = Mock()
-        mock_config_manager.get_models_directory.return_value = Path("/workspace/models")
-        mock_config_manager.get_civitai_token.return_value = None
-        mock_config_manager.get_huggingface_token.return_value = None
-        mock_workspace.workspace_config_manager = mock_config_manager
+        mock_workspace.get_models_directory.return_value = Path("/workspace/models")
+        mock_workspace.get_civitai_token.return_value = None
+        mock_workspace.get_huggingface_token.return_value = None
 
         monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
 
@@ -135,15 +128,14 @@ class TestGetConfigEndpoint:
         # Setup
         mock_env = Mock()
         mock_env.name = "test-env"
+        mock_env.get_manifest_node.return_value = None
         mock_workspace = Mock()
         mock_workspace.path = Path("/workspace")
         mock_env.workspace = mock_workspace
 
-        mock_config_manager = Mock()
-        mock_config_manager.get_models_directory.return_value = Path("/workspace/models")
-        mock_config_manager.get_civitai_token.return_value = "abc"  # Short token
-        mock_config_manager.get_huggingface_token.return_value = None
-        mock_workspace.workspace_config_manager = mock_config_manager
+        mock_workspace.get_models_directory.return_value = Path("/workspace/models")
+        mock_workspace.get_civitai_token.return_value = "abc"  # Short token
+        mock_workspace.get_huggingface_token.return_value = None
 
         monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
 
@@ -161,17 +153,16 @@ class TestGetConfigEndpoint:
         # Setup
         mock_env = Mock()
         mock_env.name = "test-env"
+        mock_env.get_manifest_node.return_value = None
         mock_workspace = Mock()
         mock_workspace.path = Path("/workspace")
         mock_env.workspace = mock_workspace
 
-        mock_config_manager = Mock()
         # Simulate ComfyDockError when models directory not set
-        from comfygit_core.models.exceptions import ComfyDockError
-        mock_config_manager.get_models_directory.side_effect = ComfyDockError("No models directory set")
-        mock_config_manager.get_civitai_token.return_value = None
-        mock_config_manager.get_huggingface_token.return_value = None
-        mock_workspace.workspace_config_manager = mock_config_manager
+        from comfygit_core.models import ComfyDockError
+        mock_workspace.get_models_directory.side_effect = ComfyDockError("No models directory set")
+        mock_workspace.get_civitai_token.return_value = None
+        mock_workspace.get_huggingface_token.return_value = None
 
         monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
 
@@ -210,9 +201,7 @@ class TestUpdateConfigEndpoint:
         mock_workspace.path = Path("/workspace")
         mock_env.workspace = mock_workspace
 
-        mock_config_manager = Mock()
-        mock_config_manager.set_civitai_token = Mock()
-        mock_workspace.workspace_config_manager = mock_config_manager
+        mock_workspace.set_civitai_token = Mock()
 
         monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
 
@@ -226,8 +215,8 @@ class TestUpdateConfigEndpoint:
         data = await resp.json()
         assert data["status"] == "updated"
 
-        # Verify the config manager was called
-        mock_config_manager.set_civitai_token.assert_called_once_with("new_token_5678")
+        # Verify the workspace facade was called
+        mock_workspace.set_civitai_token.assert_called_once_with("new_token_5678")
 
     async def test_success_clear_civitai_token(self, client, monkeypatch):
         """Should clear civitai token when set to None."""
@@ -238,9 +227,7 @@ class TestUpdateConfigEndpoint:
         mock_workspace.path = Path("/workspace")
         mock_env.workspace = mock_workspace
 
-        mock_config_manager = Mock()
-        mock_config_manager.set_civitai_token = Mock()
-        mock_workspace.workspace_config_manager = mock_config_manager
+        mock_workspace.set_civitai_token = Mock()
 
         monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
 
@@ -251,7 +238,7 @@ class TestUpdateConfigEndpoint:
 
         # Verify
         assert resp.status == 200
-        mock_config_manager.set_civitai_token.assert_called_once_with(None)
+        mock_workspace.set_civitai_token.assert_called_once_with(None)
 
     async def test_success_update_huggingface_token(self, client, monkeypatch):
         """Should return 200 and update HuggingFace token."""
@@ -262,9 +249,7 @@ class TestUpdateConfigEndpoint:
         mock_workspace.path = Path("/workspace")
         mock_env.workspace = mock_workspace
 
-        mock_config_manager = Mock()
-        mock_config_manager.set_huggingface_token = Mock()
-        mock_workspace.workspace_config_manager = mock_config_manager
+        mock_workspace.set_huggingface_token = Mock()
 
         monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
 
@@ -278,8 +263,8 @@ class TestUpdateConfigEndpoint:
         data = await resp.json()
         assert data["status"] == "updated"
 
-        # Verify the config manager was called
-        mock_config_manager.set_huggingface_token.assert_called_once_with("hf_new_token_abc123")
+        # Verify the workspace facade was called
+        mock_workspace.set_huggingface_token.assert_called_once_with("hf_new_token_abc123")
 
     async def test_success_clear_huggingface_token(self, client, monkeypatch):
         """Should clear HuggingFace token when set to None."""
@@ -290,9 +275,7 @@ class TestUpdateConfigEndpoint:
         mock_workspace.path = Path("/workspace")
         mock_env.workspace = mock_workspace
 
-        mock_config_manager = Mock()
-        mock_config_manager.set_huggingface_token = Mock()
-        mock_workspace.workspace_config_manager = mock_config_manager
+        mock_workspace.set_huggingface_token = Mock()
 
         monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
 
@@ -303,7 +286,7 @@ class TestUpdateConfigEndpoint:
 
         # Verify
         assert resp.status == 200
-        mock_config_manager.set_huggingface_token.assert_called_once_with(None)
+        mock_workspace.set_huggingface_token.assert_called_once_with(None)
 
     async def test_success_update_models_path(self, client, monkeypatch):
         """Should return 200 and update models directory."""
@@ -341,9 +324,7 @@ class TestUpdateConfigEndpoint:
         mock_workspace.path = Path("/workspace")
         mock_env.workspace = mock_workspace
 
-        mock_config_manager = Mock()
-        mock_config_manager.set_civitai_token = Mock()
-        mock_workspace.workspace_config_manager = mock_config_manager
+        mock_workspace.set_civitai_token = Mock()
 
         monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
 
@@ -354,7 +335,7 @@ class TestUpdateConfigEndpoint:
 
         # Verify
         assert resp.status == 200
-        mock_config_manager.set_civitai_token.assert_called_once_with("partial_token")
+        mock_workspace.set_civitai_token.assert_called_once_with("partial_token")
 
     async def test_validation_invalid_json(self, client, monkeypatch):
         """Should return 400 when request body is invalid JSON."""
@@ -379,7 +360,7 @@ class TestUpdateConfigEndpoint:
         mock_workspace.path = Path("/workspace")
 
         # Mock set_models_directory to raise error for invalid path
-        from comfygit_core.models.exceptions import ComfyDockError
+        from comfygit_core.models import ComfyDockError
         mock_workspace.set_models_directory.side_effect = ComfyDockError("Directory does not exist")
         mock_env.workspace = mock_workspace
 
@@ -419,9 +400,6 @@ class TestUpdateConfigEndpoint:
         mock_workspace.path = Path("/workspace")
         mock_env.workspace = mock_workspace
 
-        mock_config_manager = Mock()
-        mock_workspace.workspace_config_manager = mock_config_manager
-
         monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
 
         # Execute - send unsupported fields (should be ignored for now)
@@ -445,18 +423,16 @@ class TestGetConfigWithoutEnvironment:
         # Setup: No environment, but workspace_path is provided
         monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: None)
 
-        # Create mock workspace with config manager
+        # Create mock workspace with public config facade methods
         mock_workspace = Mock()
         mock_workspace.path = tmp_path
-        mock_config_manager = Mock()
-        mock_config_manager.get_models_directory.return_value = tmp_path / "models"
-        mock_config_manager.get_civitai_token.return_value = "test_token"
-        mock_config_manager.get_huggingface_token.return_value = None
-        mock_workspace.workspace_config_manager = mock_config_manager
+        mock_workspace.get_models_directory.return_value = tmp_path / "models"
+        mock_workspace.get_civitai_token.return_value = "test_token"
+        mock_workspace.get_huggingface_token.return_value = None
 
         # Import config module and patch Workspace class
         from api.v2 import config as config_module
-        monkeypatch.setattr(config_module, "Workspace", lambda path: mock_workspace)
+        monkeypatch.setattr(config_module.Workspace, "from_path", lambda path: mock_workspace)
 
         # Execute with workspace_path query param
         resp = await client.get(f"/v2/comfygit/config?workspace_path={tmp_path}")
@@ -483,14 +459,12 @@ class TestGetConfigWithoutEnvironment:
         # Create mock workspace
         mock_workspace = Mock()
         mock_workspace.path = tmp_path
-        mock_config_manager = Mock()
-        mock_config_manager.get_models_directory.return_value = None
-        mock_config_manager.get_civitai_token.return_value = None
-        mock_config_manager.get_huggingface_token.return_value = None
-        mock_workspace.workspace_config_manager = mock_config_manager
+        mock_workspace.get_models_directory.return_value = None
+        mock_workspace.get_civitai_token.return_value = None
+        mock_workspace.get_huggingface_token.return_value = None
 
         from api.v2 import config as config_module
-        monkeypatch.setattr(config_module, "Workspace", lambda path: mock_workspace)
+        monkeypatch.setattr(config_module.Workspace, "from_path", lambda path: mock_workspace)
 
         # Execute
         resp = await client.get(f"/v2/comfygit/config?workspace_path={tmp_path}")
@@ -530,11 +504,9 @@ class TestUpdateConfigWithoutEnvironment:
         # Create mock workspace
         mock_workspace = Mock()
         mock_workspace.path = tmp_path
-        mock_config_manager = Mock()
-        mock_workspace.workspace_config_manager = mock_config_manager
 
         from api.v2 import config as config_module
-        monkeypatch.setattr(config_module, "Workspace", lambda path: mock_workspace)
+        monkeypatch.setattr(config_module.Workspace, "from_path", lambda path: mock_workspace)
 
         # Execute
         resp = await client.post(
@@ -561,11 +533,10 @@ class TestUpdateConfigWithoutEnvironment:
         # Create mock workspace
         mock_workspace = Mock()
         mock_workspace.path = tmp_path
-        mock_config_manager = Mock()
-        mock_workspace.workspace_config_manager = mock_config_manager
+        mock_workspace.set_civitai_token = Mock()
 
         from api.v2 import config as config_module
-        monkeypatch.setattr(config_module, "Workspace", lambda path: mock_workspace)
+        monkeypatch.setattr(config_module.Workspace, "from_path", lambda path: mock_workspace)
 
         # Execute
         resp = await client.post(
@@ -575,7 +546,7 @@ class TestUpdateConfigWithoutEnvironment:
 
         # Verify
         assert resp.status == 200
-        mock_config_manager.set_civitai_token.assert_called_once_with("new_token")
+        mock_workspace.set_civitai_token.assert_called_once_with("new_token")
 
     async def test_error_no_environment_and_no_workspace_path(self, client, monkeypatch):
         """Should return 500 when no environment and no workspace_path provided."""

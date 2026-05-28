@@ -16,10 +16,13 @@ from huggingface_hub import HfApi
 
 from cgm_core.decorators import requires_environment, logged_operation
 from cgm_utils.async_helpers import run_sync
-from comfygit_core.caching.api_cache import APICacheManager
-from comfygit_core.clients.civitai_client import CivitAIClient, CivitAIError
-from comfygit_core.configs.model_config import ModelConfig
-from comfygit_core.services.huggingface_url import parse_huggingface_url
+from comfygit_core.assets import (
+    APICacheManager,
+    CivitAIClient,
+    CivitAIError,
+    ModelConfig,
+    parse_huggingface_url,
+)
 
 routes = web.RouteTableDef()
 
@@ -109,7 +112,8 @@ def _model_filename_terms(filename: str | None) -> tuple[str, str, str, str]:
 def _score_source_candidate(url: str, context: str, model_info: dict) -> tuple[int, list[str]]:
     score = 0
     reasons = []
-    haystacks = [context.lower(), url.lower()]
+    url_haystack = url.lower()
+    context_haystack = context.lower()
     filename, stem, basename, basename_stem = _model_filename_terms(model_info.get("filename"))
     category = (model_info.get("category") or "").lower()
     hashes = [
@@ -118,26 +122,43 @@ def _score_source_candidate(url: str, context: str, model_info: dict) -> tuple[i
         str(model_info.get("sha256") or "").lower(),
     ]
 
-    if filename and any(filename in haystack for haystack in haystacks):
-        score += 60
-        reasons.append("filename match")
-    elif basename and any(basename in haystack for haystack in haystacks):
-        score += 55
-        reasons.append("filename match")
-    elif stem and any(stem in haystack for haystack in haystacks):
+    if filename and filename in url_haystack:
+        score += 85
+        reasons.append("filename in URL")
+    elif basename and basename in url_haystack:
+        score += 80
+        reasons.append("filename in URL")
+    elif stem and stem in url_haystack:
+        score += 65
+        reasons.append("model name in URL")
+    elif basename_stem and basename_stem in url_haystack:
+        score += 65
+        reasons.append("model name in URL")
+    elif filename and filename in context_haystack:
+        score += 40
+        reasons.append("filename nearby")
+    elif basename and basename in context_haystack:
         score += 35
-        reasons.append("model name match")
-    elif basename_stem and any(basename_stem in haystack for haystack in haystacks):
-        score += 35
-        reasons.append("model name match")
+        reasons.append("filename nearby")
+    elif stem and stem in context_haystack:
+        score += 25
+        reasons.append("model name nearby")
+    elif basename_stem and basename_stem in context_haystack:
+        score += 25
+        reasons.append("model name nearby")
 
     for model_hash in hashes:
-        if model_hash and len(model_hash) >= 8 and any(model_hash in haystack for haystack in haystacks):
-            score += 50
-            reasons.append("hash match")
-            break
+        if model_hash and len(model_hash) >= 8:
+            if model_hash in url_haystack:
+                score += 80
+                reasons.append("hash in URL")
+                break
+            if model_hash in context_haystack:
+                score += 50
+                reasons.append("hash nearby")
+                break
 
-    if category and category != "unknown" and category in context.lower():
+    if category and category != "unknown" and category in context_haystack:
         score += 10
         reasons.append("category nearby")
 
@@ -197,7 +218,7 @@ def _scan_workflow_source_candidates(
     candidates_by_key = {}
     for workflow_name in workflow_names:
         try:
-            workflow_path = env.workflow_manager.get_workflow_path(workflow_name)
+            workflow_path = env.get_existing_workflow_path(workflow_name)
         except Exception:
             continue
 
@@ -213,7 +234,14 @@ def _scan_workflow_source_candidates(
             context = _candidate_context(text, match.start(), match.end())
             score, reasons = _score_source_candidate(url, context, model_info)
             has_identity_match = any(
-                reason in {"filename match", "model name match", "hash match"}
+                reason in {
+                    "filename in URL",
+                    "model name in URL",
+                    "filename nearby",
+                    "model name nearby",
+                    "hash in URL",
+                    "hash nearby",
+                }
                 for reason in reasons
             )
             if require_identity_match and not has_identity_match:
@@ -249,7 +277,6 @@ def _scan_workflow_download_candidates(env) -> list[dict]:
     except Exception:
         workflow_names = []
 
-    model_repo = env.workspace.model_repository
     known_filenames = {
         model.filename.lower()
         for model in env.workspace.list_models()
@@ -258,7 +285,7 @@ def _scan_workflow_download_candidates(env) -> list[dict]:
     candidates_by_key = {}
     for workflow_name in workflow_names:
         try:
-            workflow_path = env.workflow_manager.get_workflow_path(workflow_name)
+            workflow_path = env.get_existing_workflow_path(workflow_name)
         except Exception:
             continue
 
@@ -271,7 +298,7 @@ def _scan_workflow_download_candidates(env) -> list[dict]:
             url = _normalize_source_download_url(_strip_url_punctuation(match.group(0)))
             if not _url_looks_like_model_source(url, {}):
                 continue
-            if model_repo.find_by_source_url(url):
+            if env.workspace.find_model_by_source_url(url):
                 continue
             url_filename = _source_url_filename(url)
             if url_filename and url_filename.lower() in known_filenames:
@@ -327,32 +354,27 @@ def _model_details_payload(env, details) -> dict:
         except Exception:
             pass
 
-    models_dir = env.workspace.workspace_config_manager.get_models_directory()
+    models_dir = env.workspace.get_models_directory()
     primary_path = str(models_dir / model.relative_path) if models_dir and model.relative_path else model.relative_path
 
     locations = []
     for loc in details.all_locations:
-        path = (
-            loc.get("path") or
-            loc.get("full_path") or
-            loc.get("relative_path") or
-            ""
-        )
+        path = loc.full_path or loc.relative_path or ""
         if path and not path.startswith("/") and models_dir:
             path = str(models_dir / path)
         if not path:
             path = primary_path
 
         loc_info = {"path": path}
-        if loc.get("id") is not None:
-            loc_info["id"] = loc.get("id")
-        if loc.get("base_directory"):
-            loc_info["base_directory"] = loc.get("base_directory")
-        if loc.get("relative_path"):
-            loc_info["relative_path"] = loc.get("relative_path")
-        if "mtime" in loc:
+        if loc.id is not None:
+            loc_info["id"] = loc.id
+        if loc.base_directory:
+            loc_info["base_directory"] = loc.base_directory
+        if loc.relative_path:
+            loc_info["relative_path"] = loc.relative_path
+        if loc.mtime:
             try:
-                loc_info["modified"] = datetime.fromtimestamp(loc["mtime"]).strftime("%Y-%m-%d %H:%M:%S")
+                loc_info["modified"] = datetime.fromtimestamp(loc.mtime).strftime("%Y-%m-%d %H:%M:%S")
             except Exception:
                 pass
         locations.append(loc_info)
@@ -369,8 +391,8 @@ def _model_details_payload(env, details) -> dict:
     sources = []
     for src in details.sources:
         sources.append({
-            "type": src.get("type", "unknown"),
-            "url": src.get("url", ""),
+            "type": src.type or "unknown",
+            "url": src.url,
         })
 
     return {
@@ -391,7 +413,7 @@ def _model_has_download_source(env, model_hash: str | None) -> bool:
     if not model_hash:
         return False
     try:
-        return bool(env.workspace.model_repository.get_sources(model_hash))
+        return env.workspace.model_has_sources(model_hash)
     except Exception:
         return False
 
@@ -467,12 +489,7 @@ def _workflow_names_with_manifest_models(env, analyzed_workflows: list) -> list[
         if name and name not in workflow_names:
             workflow_names.append(name)
 
-    try:
-        manifest_workflows = _safe_dict(env.pyproject.workflows.get_all_with_resolutions())
-    except Exception:
-        manifest_workflows = {}
-
-    for name in manifest_workflows:
+    for name in env.list_manifest_workflows():
         if isinstance(name, str) and name not in workflow_names:
             workflow_names.append(name)
 
@@ -481,26 +498,14 @@ def _workflow_names_with_manifest_models(env, analyzed_workflows: list) -> list[
 
 def _workflow_manifest_models(env, workflow_name: str) -> list:
     """Return manifest models for a workflow, tolerating unavailable manifest data."""
-    try:
-        return _safe_sequence(env.pyproject.workflows.get_workflow_models(workflow_name))
-    except Exception:
-        return []
+    return list(env.get_workflow_manifest_models(workflow_name))
 
 
 def _global_manifest_model(env, model_hash: str | None):
     """Return a global manifest model when the pyproject exposes one."""
     if not model_hash:
         return None
-    try:
-        get_by_hash = getattr(env.pyproject.models, "get_by_hash", None)
-    except Exception:
-        return None
-    if not callable(get_by_hash):
-        return None
-    try:
-        model = get_by_hash(model_hash)
-    except Exception:
-        return None
+    model = env.get_manifest_model(model_hash)
     if _safe_str(getattr(model, "hash", None)) or _safe_str(getattr(model, "filename", None)):
         return model
     return None
@@ -647,153 +652,9 @@ def _merge_manifest_workflow_models(
             )
 
 
-def _primary_model_path(env, details) -> Path:
-    payload = _model_details_payload(env, details)
-    for location in payload["locations"]:
-        path = location.get("path")
-        if path and Path(path).is_file():
-            return Path(path)
-    raise FileNotFoundError(f"Model file not found on disk: {details.model.filename}")
-
-
 def _compute_missing_model_hashes(env, identifier: str) -> dict:
-    details = env.workspace.get_model_details(identifier)
-    model = details.model
-    model_path = _primary_model_path(env, details)
-    model_repo = env.workspace.model_repository
-
-    if not model.blake3_hash:
-        blake3_hash = model_repo.compute_blake3(model_path)
-        model_repo.update_blake3(model.hash, blake3_hash)
-
-    if not model.sha256_hash:
-        sha256_hash = model_repo.compute_sha256(model_path)
-        model_repo.update_sha256(model.hash, sha256_hash)
-
-    refreshed = env.workspace.get_model_details(model.hash)
-    return _model_details_payload(env, refreshed)
-
-
-def _path_for_model_location(location: dict) -> Path:
-    base_directory = location.get("base_directory")
-    relative_path = location.get("relative_path")
-    if not base_directory or not relative_path:
-        raise ValueError("Model location is missing base directory or relative path")
-
-    base_path = Path(base_directory).expanduser()
-    target_path = base_path / str(relative_path).replace("\\", "/")
-    base_resolved = base_path.resolve(strict=False)
-    parent_resolved = target_path.parent.resolve(strict=False)
-
-    try:
-        parent_resolved.relative_to(base_resolved)
-    except ValueError as exc:
-        raise ValueError(f"Refusing to delete model outside indexed base directory: {target_path}") from exc
-
-    return target_path
-
-
-def _normalize_location_relative_path(value: object) -> str:
-    return str(value or "").replace("\\", "/").strip("/")
-
-
-def _same_model_location(location: dict, body: dict) -> bool:
-    requested_id = body.get("location_id", body.get("id"))
-    location_id = location.get("id")
-    if requested_id is not None and location_id is not None:
-        try:
-            return int(requested_id) == int(location_id)
-        except (TypeError, ValueError):
-            return False
-
-    requested_base = body.get("base_directory")
-    requested_relative = body.get("relative_path")
-    if requested_base and requested_relative and location.get("base_directory") and location.get("relative_path"):
-        return (
-            Path(str(requested_base)).expanduser() == Path(str(location["base_directory"])).expanduser()
-            and _normalize_location_relative_path(requested_relative)
-            == _normalize_location_relative_path(location["relative_path"])
-        )
-
-    requested_path = body.get("path")
-    if requested_path:
-        indexed_path = location.get("path") or location.get("full_path")
-        if indexed_path and Path(str(requested_path)).expanduser() == Path(str(indexed_path)).expanduser():
-            return True
-
-    return False
-
-
-def _find_indexed_model_location(locations: list[dict], body: dict) -> dict | None:
-    for location in locations:
-        if _same_model_location(location, body):
-            return location
-    return None
-
-
-async def _delete_indexed_model_location(model_repo, location: dict) -> tuple[str, bool, bool, str | None]:
-    model_path = _path_for_model_location(location)
-    path_str = str(model_path)
-
-    if model_path.exists() or model_path.is_symlink():
-        if not model_path.is_file() and not model_path.is_symlink():
-            return path_str, False, False, "Indexed model location is not a file"
-        model_path.unlink()
-        deleted = True
-        missing = False
-    else:
-        deleted = False
-        missing = True
-
-    try:
-        location_id = location.get("id")
-        if location_id is not None:
-            await run_sync(model_repo.remove_location_by_id, int(location_id))
-        else:
-            await run_sync(
-                model_repo.remove_location_for_directory,
-                Path(location["base_directory"]),
-                location["relative_path"],
-            )
-    except Exception as exc:
-        return path_str, deleted, missing, str(exc)
-
-    return path_str, deleted, missing, None
-
-
-async def _delete_model_locations(model_repo, locations: list[dict]) -> tuple[list[str], list[str], list[dict]]:
-    deleted_paths = []
-    missing_paths = []
-    errors = []
-
-    for location in locations:
-        try:
-            path_str, deleted, missing, location_error = await _delete_indexed_model_location(model_repo, location)
-        except ValueError as exc:
-            errors.append({
-                "path": location.get("path") or location.get("relative_path") or "",
-                "error": str(exc),
-            })
-            continue
-        except Exception as exc:
-            errors.append({
-                "path": location.get("path") or location.get("relative_path") or "",
-                "error": str(exc),
-            })
-            continue
-
-        if deleted:
-            deleted_paths.append(path_str)
-        elif missing:
-            missing_paths.append(path_str)
-
-        if location_error:
-            errors.append({
-                "path": path_str,
-                "error": location_error,
-            })
-
-    return deleted_paths, missing_paths, errors
+    details = env.workspace.ensure_model_hashes(identifier)
+    return _model_details_payload(env, details)
 
 
 @routes.get("/v2/comfygit/models/environment")
@@ -924,9 +785,8 @@ async def get_workspace_models(request: web.Request, env) -> web.Response:
 async def add_model_source(request: web.Request, env) -> web.Response:
     """Add a download source URL to a model in the workspace index.
 
-    This endpoint adds sources directly to the workspace model repository (SQLite),
-    not the environment's pyproject.toml. Use this for managing sources of models
-    in the shared workspace index.
+    This endpoint updates the shared workspace model index, not the
+    environment's pyproject.toml.
     """
     identifier = request.match_info["identifier"]
 
@@ -940,24 +800,10 @@ async def add_model_source(request: web.Request, env) -> web.Response:
         return web.json_response({"error": "Missing 'source_url' field"}, status=400)
 
     try:
-        model_repo = env.workspace.model_repository
-
-        # Check if model exists in the workspace index
-        if not model_repo.has_model(identifier):
-            return web.json_response(
-                {"error": f"Model not found in workspace index: {identifier}"},
-                status=404
-            )
-
-        # Auto-detect source type
-        source_type = env.workspace.model_downloader.detect_url_type(source_url)
-
-        # Add source to the repository
-        await run_sync(
-            model_repo.add_source,
-            model_hash=identifier,
-            source_type=source_type,
-            source_url=source_url
+        source_type = await run_sync(
+            env.workspace.add_indexed_model_source,
+            identifier,
+            source_url,
         )
 
         return web.json_response({
@@ -965,6 +811,11 @@ async def add_model_source(request: web.Request, env) -> web.Response:
             "model_hash": identifier,
             "source_type": source_type,
         })
+    except KeyError:
+        return web.json_response(
+            {"error": f"Model not found in workspace index: {identifier}"},
+            status=404,
+        )
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
@@ -1063,10 +914,11 @@ async def remove_model_source(request: web.Request, env) -> web.Response:
         return web.json_response({"error": "Missing 'source_url' field"}, status=400)
 
     try:
-        model_repo = env.workspace.model_repository
-
-        # Remove source from the repository
-        removed = await run_sync(model_repo.remove_source, identifier, source_url)
+        removed = await run_sync(
+            env.workspace.remove_indexed_model_source,
+            identifier,
+            source_url,
+        )
 
         if not removed:
             return web.json_response(
@@ -1089,7 +941,7 @@ async def delete_workspace_model(request: web.Request, env) -> web.Response:
     identifier = request.match_info["identifier"]
 
     try:
-        details = await run_sync(env.workspace.get_model_details, identifier)
+        result = await run_sync(env.workspace.delete_model, identifier)
     except ValueError as e:
         return web.json_response({"error": str(e)}, status=400)
     except KeyError:
@@ -1097,29 +949,15 @@ async def delete_workspace_model(request: web.Request, env) -> web.Response:
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
-    try:
-        model_repo = env.workspace.model_repository
-        deleted_paths, missing_paths, errors = await _delete_model_locations(
-            model_repo,
-            list(details.all_locations),
-        )
-
-        await run_sync(model_repo.clear_orphaned_models)
-        await run_sync(model_repo.clear_orphaned_model_sources)
-
-        remaining_locations = await run_sync(model_repo.get_locations, details.model.hash)
-        status = "partial" if errors else "success"
-        return web.json_response({
-            "status": status,
-            "deleted": details.model.filename,
-            "model_hash": details.model.hash,
-            "deleted_paths": deleted_paths,
-            "missing_paths": missing_paths,
-            "errors": errors,
-            "remaining_locations": len(remaining_locations),
-        })
-    except Exception as e:
-        return web.json_response({"error": str(e)}, status=500)
+    return web.json_response({
+        "status": result.status,
+        "deleted": result.filename,
+        "model_hash": result.model_hash,
+        "deleted_paths": result.deleted_paths,
+        "missing_paths": result.missing_paths,
+        "errors": result.errors,
+        "remaining_locations": result.remaining_locations,
+    })
 
 
 @routes.delete("/v2/workspace/models/{identifier}/locations")
@@ -1137,38 +975,32 @@ async def delete_workspace_model_location(request: web.Request, env) -> web.Resp
         return web.json_response({"error": "Missing model location identifier"}, status=400)
 
     try:
-        details = await run_sync(env.workspace.get_model_details, identifier)
+        result = await run_sync(
+            env.workspace.delete_model_location,
+            identifier,
+            location_id=body.get("location_id", body.get("id")),
+            base_directory=body.get("base_directory"),
+            relative_path=body.get("relative_path"),
+            path=body.get("path"),
+        )
     except ValueError as e:
         return web.json_response({"error": str(e)}, status=400)
-    except KeyError:
+    except KeyError as e:
+        if "Indexed model location not found" in str(e):
+            return web.json_response({"error": "Indexed model location not found"}, status=404)
         return web.json_response({"error": f"Model not found: {identifier}"}, status=404)
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
-    try:
-        model_repo = env.workspace.model_repository
-        location = _find_indexed_model_location(list(details.all_locations), body)
-        if location is None:
-            return web.json_response({"error": "Indexed model location not found"}, status=404)
-
-        deleted_paths, missing_paths, errors = await _delete_model_locations(model_repo, [location])
-
-        await run_sync(model_repo.clear_orphaned_models)
-        await run_sync(model_repo.clear_orphaned_model_sources)
-
-        remaining_locations = await run_sync(model_repo.get_locations, details.model.hash)
-        status = "partial" if errors else "success"
-        return web.json_response({
-            "status": status,
-            "deleted": details.model.filename,
-            "model_hash": details.model.hash,
-            "deleted_paths": deleted_paths,
-            "missing_paths": missing_paths,
-            "errors": errors,
-            "remaining_locations": len(remaining_locations),
-        })
-    except Exception as e:
-        return web.json_response({"error": str(e)}, status=500)
+    return web.json_response({
+        "status": result.status,
+        "deleted": result.filename,
+        "model_hash": result.model_hash,
+        "deleted_paths": result.deleted_paths,
+        "missing_paths": result.missing_paths,
+        "errors": result.errors,
+        "remaining_locations": result.remaining_locations,
+    })
 
 
 @routes.post("/v2/workspace/models/scan")
@@ -1190,7 +1022,7 @@ async def scan_workspace_models(request: web.Request, env) -> web.Response:
 async def get_models_directory(request: web.Request, env) -> web.Response:
     """Get the current models directory path."""
     try:
-        models_dir = env.workspace.workspace_config_manager.get_models_directory()
+        models_dir = env.workspace.get_models_directory()
         return web.json_response({
             "path": str(models_dir) if models_dir else None,
         })
@@ -1654,8 +1486,13 @@ def _civitai_client(env) -> CivitAIClient:
     cache_manager = APICacheManager(cache_base_path=env.workspace.paths.cache)
     return CivitAIClient(
         cache_manager=cache_manager,
-        workspace_config=env.workspace.workspace_config_manager,
+        api_key=env.workspace.get_civitai_token(),
     )
+
+
+def _require_civitai_token(env) -> str | None:
+    """Return the configured CivitAI token, if model browsing may proceed."""
+    return env.workspace.get_civitai_token()
 
 
 def _shard_group(path: str) -> str | None:
@@ -1695,6 +1532,12 @@ async def workspace_civitai_search(request: web.Request, env) -> web.Response:
         page = max(int(request.query.get("page", 1)), 1)
     except (ValueError, TypeError):
         return web.json_response({"error": "Page must be a valid integer"}, status=400)
+
+    if not _require_civitai_token(env):
+        return web.json_response(
+            {"error": "Configure a CivitAI API key before searching or downloading CivitAI models."},
+            status=401,
+        )
 
     client = _civitai_client(env)
 
@@ -1796,6 +1639,12 @@ async def workspace_civitai_model(request: web.Request, env) -> web.Response:
     except (KeyError, ValueError):
         return web.json_response({"error": "Invalid model ID"}, status=400)
 
+    if not _require_civitai_token(env):
+        return web.json_response(
+            {"error": "Configure a CivitAI API key before loading CivitAI model details."},
+            status=401,
+        )
+
     client = _civitai_client(env)
     try:
         model = await run_sync(client.get_model, model_id)
@@ -1815,6 +1664,12 @@ async def workspace_civitai_model_version(request: web.Request, env) -> web.Resp
         version_id = int(request.match_info["version_id"])
     except (KeyError, ValueError):
         return web.json_response({"error": "Invalid model version ID"}, status=400)
+
+    if not _require_civitai_token(env):
+        return web.json_response(
+            {"error": "Configure a CivitAI API key before loading CivitAI model versions."},
+            status=401,
+        )
 
     client = _civitai_client(env)
     try:
@@ -1899,7 +1754,7 @@ async def workspace_models_subdirectories(request: web.Request, env) -> web.Resp
 
     models_dir = None
     try:
-        models_dir = env.workspace.workspace_config_manager.get_models_directory()
+        models_dir = env.workspace.get_models_directory()
     except Exception:
         pass
 

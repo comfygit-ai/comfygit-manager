@@ -4,10 +4,64 @@ from unittest.mock import Mock
 import sys
 from pathlib import Path
 
+from comfygit_core.models import (
+    EnvironmentReadiness,
+    GitCommitSummary,
+    GitRemote,
+    GitSyncStatus,
+    NodeProvenanceWarning,
+    ReadinessWarnings,
+)
+
 # Add helpers to path
 helpers_dir = Path(__file__).parent.parent.parent / "helpers"
 if str(helpers_dir) not in sys.path:
     sys.path.insert(0, str(helpers_dir))
+
+
+def _remote(
+    name: str,
+    fetch_url: str,
+    push_url: str | None = None,
+    *,
+    is_default: bool = False,
+) -> GitRemote:
+    return GitRemote(
+        name=name,
+        fetch_url=fetch_url,
+        push_url=push_url or fetch_url,
+        is_default=is_default,
+    )
+
+
+def _sync_status(
+    *,
+    ahead: int = 0,
+    behind: int = 0,
+    remote_branch_exists: bool = True,
+) -> GitSyncStatus:
+    return GitSyncStatus(
+        ahead=ahead,
+        behind=behind,
+        remote_branch_exists=remote_branch_exists,
+    )
+
+
+def _commit(
+    hash: str,
+    message: str,
+    *,
+    refs: str = "",
+    date: str = "2025-01-15 11:00:00",
+    date_relative: str = "1 hour ago",
+) -> GitCommitSummary:
+    return GitCommitSummary(
+        hash=hash,
+        refs=refs,
+        message=message,
+        date=date,
+        date_relative=date_relative,
+    )
 
 
 @pytest.mark.integration
@@ -18,29 +72,18 @@ class TestGetRemotesEndpoint:
         self,
         client,
         mock_environment,
-        monkeypatch
     ):
         """Should return list of remotes with fetch/push URLs consolidated."""
-        # Setup: git_manager.list_remotes returns separate fetch/push entries
-        mock_environment.git_manager.list_remotes.return_value = [
-            ("origin", "https://github.com/user/repo.git", "fetch"),
-            ("origin", "https://github.com/user/repo.git", "push"),
-            ("upstream", "https://github.com/other/repo.git", "fetch"),
-            ("upstream", "git@github.com:other/repo.git", "push"),
+        # Setup: environment returns consolidated typed remote entries.
+        mock_environment.list_remotes.return_value = [
+            _remote("origin", "https://github.com/user/repo.git", is_default=True),
+            _remote(
+                "upstream",
+                "https://github.com/other/repo.git",
+                "git@github.com:other/repo.git",
+            ),
         ]
         mock_environment.get_current_branch.return_value = "main"
-        mock_environment.git_manager.get_current_branch.return_value = "main"
-
-        # Mock git_config_get to return tracking remote
-        def mock_config_get(repo_path, key):
-            if key == "branch.main.remote":
-                return "origin"
-            return None
-
-        monkeypatch.setattr(
-            "api.v2.remotes.git_config_get",
-            mock_config_get
-        )
 
         # Execute
         resp = await client.get("/v2/comfygit/remotes")
@@ -71,7 +114,7 @@ class TestGetRemotesEndpoint:
         mock_environment
     ):
         """Should return empty list when no remotes configured."""
-        mock_environment.git_manager.list_remotes.return_value = []
+        mock_environment.list_remotes.return_value = []
         mock_environment.get_current_branch.return_value = "main"
 
         resp = await client.get("/v2/comfygit/remotes")
@@ -86,9 +129,8 @@ class TestGetRemotesEndpoint:
         mock_environment
     ):
         """Should include current branch tracking info."""
-        mock_environment.git_manager.list_remotes.return_value = [
-            ("origin", "https://github.com/user/repo.git", "fetch"),
-            ("origin", "https://github.com/user/repo.git", "push"),
+        mock_environment.list_remotes.return_value = [
+            _remote("origin", "https://github.com/user/repo.git", is_default=True),
         ]
         mock_environment.get_current_branch.return_value = "feature-branch"
         mock_environment.git_manager.get_current_branch.return_value = "feature-branch"
@@ -124,7 +166,7 @@ class TestAddRemoteEndpoint:
         mock_environment
     ):
         """Should add a new remote successfully."""
-        mock_environment.git_manager.add_remote.return_value = None
+        mock_environment.add_remote.return_value = None
 
         resp = await client.post(
             "/v2/comfygit/remotes",
@@ -136,7 +178,7 @@ class TestAddRemoteEndpoint:
         assert data["status"] == "success"
         assert data["remote_name"] == "upstream"
 
-        mock_environment.git_manager.add_remote.assert_called_once_with(
+        mock_environment.add_remote.assert_called_once_with(
             "upstream", "https://github.com/other/repo.git"
         )
 
@@ -176,7 +218,7 @@ class TestAddRemoteEndpoint:
         mock_environment
     ):
         """Should return 409 when remote already exists."""
-        mock_environment.git_manager.add_remote.side_effect = OSError(
+        mock_environment.add_remote.side_effect = OSError(
             "Remote 'origin' already exists"
         )
 
@@ -214,7 +256,7 @@ class TestRemoveRemoteEndpoint:
         mock_environment
     ):
         """Should remove a remote successfully."""
-        mock_environment.git_manager.remove_remote.return_value = None
+        mock_environment.remove_remote.return_value = None
 
         resp = await client.delete("/v2/comfygit/remotes/upstream")
 
@@ -223,7 +265,7 @@ class TestRemoveRemoteEndpoint:
         assert data["status"] == "success"
         assert data["remote_name"] == "upstream"
 
-        mock_environment.git_manager.remove_remote.assert_called_once_with("upstream")
+        mock_environment.remove_remote.assert_called_once_with("upstream")
 
     async def test_error_remote_not_found(
         self,
@@ -231,7 +273,7 @@ class TestRemoveRemoteEndpoint:
         mock_environment
     ):
         """Should return 404 when remote doesn't exist."""
-        mock_environment.git_manager.remove_remote.side_effect = ValueError(
+        mock_environment.remove_remote.side_effect = ValueError(
             "Remote 'nonexistent' not found"
         )
 
@@ -264,7 +306,7 @@ class TestUpdateRemoteUrlEndpoint:
     ):
         """Should update fetch URL."""
         # Mock the set_url method (will be added)
-        mock_environment.git_manager.set_remote_url = Mock(return_value=None)
+        mock_environment.set_remote_url = Mock(return_value=None)
 
         resp = await client.patch(
             "/v2/comfygit/remotes/origin",
@@ -281,7 +323,7 @@ class TestUpdateRemoteUrlEndpoint:
         mock_environment
     ):
         """Should update both fetch and push URLs."""
-        mock_environment.git_manager.set_remote_url = Mock(return_value=None)
+        mock_environment.set_remote_url = Mock(return_value=None)
 
         resp = await client.patch(
             "/v2/comfygit/remotes/origin",
@@ -316,7 +358,7 @@ class TestUpdateRemoteUrlEndpoint:
         mock_environment
     ):
         """Should return 404 when remote doesn't exist."""
-        mock_environment.git_manager.set_remote_url = Mock(
+        mock_environment.set_remote_url = Mock(
             side_effect=ValueError("Remote 'nonexistent' not found")
         )
 
@@ -354,7 +396,7 @@ class TestFetchRemoteEndpoint:
         mock_environment
     ):
         """Should fetch from remote successfully."""
-        mock_environment.git_manager.fetch = Mock(return_value=None)
+        mock_environment.fetch_remote = Mock(return_value=None)
 
         resp = await client.post("/v2/comfygit/remotes/origin/fetch")
 
@@ -363,7 +405,7 @@ class TestFetchRemoteEndpoint:
         assert data["status"] == "success"
         assert data["remote_name"] == "origin"
 
-        mock_environment.git_manager.fetch.assert_called_once_with("origin")
+        mock_environment.fetch_remote.assert_called_once_with("origin", token=None)
 
     async def test_error_remote_not_found(
         self,
@@ -371,7 +413,7 @@ class TestFetchRemoteEndpoint:
         mock_environment
     ):
         """Should return 404 when remote doesn't exist."""
-        mock_environment.git_manager.fetch = Mock(
+        mock_environment.fetch_remote = Mock(
             side_effect=ValueError("Remote 'nonexistent' not configured")
         )
 
@@ -387,7 +429,7 @@ class TestFetchRemoteEndpoint:
         mock_environment
     ):
         """Should return 500 when fetch fails (network, auth, etc)."""
-        mock_environment.git_manager.fetch = Mock(
+        mock_environment.fetch_remote = Mock(
             side_effect=OSError("Failed to connect to remote")
         )
 
@@ -403,7 +445,7 @@ class TestFetchRemoteEndpoint:
         mock_environment
     ):
         """Should return 401 when Git needs credentials for fetch."""
-        mock_environment.git_manager.fetch = Mock(
+        mock_environment.fetch_remote = Mock(
             side_effect=OSError("fatal: could not read Username for 'https://github.com'")
         )
 
@@ -435,10 +477,9 @@ class TestRemoteSyncStatusEndpoint:
         mock_environment
     ):
         """Should return ahead/behind counts."""
-        mock_environment.git_manager.get_sync_status = Mock(return_value={
-            "ahead": 3,
-            "behind": 1
-        })
+        mock_environment.get_remote_sync_status = Mock(
+            return_value=_sync_status(ahead=3, behind=1)
+        )
         mock_environment.get_current_branch.return_value = "main"
 
         resp = await client.get("/v2/comfygit/remotes/origin/status")
@@ -456,10 +497,9 @@ class TestRemoteSyncStatusEndpoint:
         mock_environment
     ):
         """Should use branch from query param if provided."""
-        mock_environment.git_manager.get_sync_status = Mock(return_value={
-            "ahead": 0,
-            "behind": 5
-        })
+        mock_environment.get_remote_sync_status = Mock(
+            return_value=_sync_status(behind=5)
+        )
         mock_environment.get_current_branch.return_value = "main"
 
         resp = await client.get("/v2/comfygit/remotes/origin/status?branch=develop")
@@ -468,7 +508,7 @@ class TestRemoteSyncStatusEndpoint:
         data = await resp.json()
         assert data["branch"] == "develop"
 
-        mock_environment.git_manager.get_sync_status.assert_called_once_with(
+        mock_environment.get_remote_sync_status.assert_called_once_with(
             "origin", "develop"
         )
 
@@ -478,10 +518,7 @@ class TestRemoteSyncStatusEndpoint:
         mock_environment
     ):
         """Should handle zero ahead/behind (in sync)."""
-        mock_environment.git_manager.get_sync_status = Mock(return_value={
-            "ahead": 0,
-            "behind": 0
-        })
+        mock_environment.get_remote_sync_status = Mock(return_value=_sync_status())
         mock_environment.get_current_branch.return_value = "main"
 
         resp = await client.get("/v2/comfygit/remotes/origin/status")
@@ -497,7 +534,7 @@ class TestRemoteSyncStatusEndpoint:
         mock_environment
     ):
         """Should return 404 when remote doesn't exist."""
-        mock_environment.git_manager.get_sync_status = Mock(
+        mock_environment.get_remote_sync_status = Mock(
             side_effect=ValueError("Remote 'nonexistent' not found")
         )
         mock_environment.get_current_branch.return_value = "main"
@@ -530,13 +567,17 @@ class TestPullPreviewEndpoint:
         mock_environment
     ):
         """Should return incoming commits and changes preview."""
-        mock_environment.git_manager.get_sync_status = Mock(return_value={
-            "ahead": 0,
-            "behind": 2
-        })
-        mock_environment.git_manager.get_version_history = Mock(return_value=[
-            {"hash": "abc1234", "refs": "", "message": "Add new features", "date": "2025-01-15 11:00:00", "date_relative": "1 hour ago"},
-            {"hash": "def5678", "refs": "", "message": "Fix bug", "date": "2025-01-15 10:00:00", "date_relative": "2 hours ago"}
+        mock_environment.get_remote_sync_status = Mock(
+            return_value=_sync_status(behind=2)
+        )
+        mock_environment.get_commit_history = Mock(return_value=[
+            _commit("abc1234", "Add new features"),
+            _commit(
+                "def5678",
+                "Fix bug",
+                date="2025-01-15 10:00:00",
+                date_relative="2 hours ago",
+            ),
         ])
         mock_environment.get_current_branch.return_value = "main"
         mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
@@ -553,7 +594,7 @@ class TestPullPreviewEndpoint:
         assert data["commits"][0]["message"] == "Add new features"
         assert data["can_pull"] is True
         assert data["has_uncommitted_changes"] is False
-        mock_environment.git_manager.get_version_history.assert_called_once_with(2, "HEAD..origin/main")
+        mock_environment.get_commit_history.assert_called_once_with(2, rev_range="HEAD..origin/main")
 
     async def test_blocked_by_uncommitted_changes(
         self,
@@ -561,7 +602,9 @@ class TestPullPreviewEndpoint:
         mock_environment
     ):
         """Should indicate blocked when uncommitted changes exist."""
-        mock_environment.git_manager.get_sync_status = Mock(return_value={"ahead": 0, "behind": 1})
+        mock_environment.get_remote_sync_status = Mock(
+            return_value=_sync_status(behind=1)
+        )
         mock_environment.get_current_branch.return_value = "main"
         mock_environment.status.return_value = Mock(git=Mock(has_changes=True))
 
@@ -579,7 +622,7 @@ class TestPullPreviewEndpoint:
         mock_environment
     ):
         """Should use branch from query param."""
-        mock_environment.git_manager.get_sync_status = Mock(return_value={"ahead": 0, "behind": 0})
+        mock_environment.get_remote_sync_status = Mock(return_value=_sync_status())
         mock_environment.get_current_branch.return_value = "main"
         mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
 
@@ -595,7 +638,7 @@ class TestPullPreviewEndpoint:
         mock_environment
     ):
         """Should return 404 when remote doesn't exist."""
-        mock_environment.git_manager.get_sync_status = Mock(
+        mock_environment.get_remote_sync_status = Mock(
             side_effect=ValueError("Remote 'nonexistent' not found")
         )
         mock_environment.get_current_branch.return_value = "main"
@@ -764,14 +807,17 @@ class TestPushPreviewEndpoint:
         mock_environment
     ):
         """Should return outgoing commits preview with commit details."""
-        mock_environment.git_manager.get_sync_status = Mock(return_value={
-            "ahead": 2,
-            "behind": 0,
-            "remote_branch_exists": True
-        })
-        mock_environment.git_manager.get_version_history = Mock(return_value=[
-            {"hash": "abc1234", "refs": "", "message": "Add new feature", "date": "2025-01-15 11:00:00", "date_relative": "1 hour ago"},
-            {"hash": "def5678", "refs": "", "message": "Fix bug", "date": "2025-01-15 10:00:00", "date_relative": "2 hours ago"},
+        mock_environment.get_remote_sync_status = Mock(
+            return_value=_sync_status(ahead=2, remote_branch_exists=True)
+        )
+        mock_environment.get_commit_history = Mock(return_value=[
+            _commit("abc1234", "Add new feature"),
+            _commit(
+                "def5678",
+                "Fix bug",
+                date="2025-01-15 10:00:00",
+                date_relative="2 hours ago",
+            ),
         ])
         mock_environment.get_current_branch.return_value = "main"
         mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
@@ -797,13 +843,11 @@ class TestPushPreviewEndpoint:
         mock_environment
     ):
         """Should return commits for first push (no remote branch)."""
-        mock_environment.git_manager.get_sync_status = Mock(return_value={
-            "ahead": 1,
-            "behind": 0,
-            "remote_branch_exists": False
-        })
-        mock_environment.git_manager.get_version_history = Mock(return_value=[
-            {"hash": "abc1234", "refs": "HEAD -> main", "message": "Initial commit", "date": "2025-01-15 11:00:00", "date_relative": "1 hour ago"},
+        mock_environment.get_remote_sync_status = Mock(
+            return_value=_sync_status(ahead=1, remote_branch_exists=False)
+        )
+        mock_environment.get_commit_history = Mock(return_value=[
+            _commit("abc1234", "Initial commit", refs="HEAD -> main"),
         ])
         mock_environment.get_current_branch.return_value = "main"
         mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
@@ -823,10 +867,9 @@ class TestPushPreviewEndpoint:
         mock_environment
     ):
         """Should indicate force needed when remote has new commits."""
-        mock_environment.git_manager.get_sync_status = Mock(return_value={
-            "ahead": 1,
-            "behind": 2
-        })
+        mock_environment.get_remote_sync_status = Mock(
+            return_value=_sync_status(ahead=1, behind=2)
+        )
         mock_environment.get_current_branch.return_value = "main"
         mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
 
@@ -843,7 +886,9 @@ class TestPushPreviewEndpoint:
         mock_environment
     ):
         """Should indicate blocked when uncommitted changes exist."""
-        mock_environment.git_manager.get_sync_status = Mock(return_value={"ahead": 1, "behind": 0})
+        mock_environment.get_remote_sync_status = Mock(
+            return_value=_sync_status(ahead=1)
+        )
         mock_environment.get_current_branch.return_value = "main"
         mock_environment.status.return_value = Mock(git=Mock(has_changes=True))
 
@@ -861,32 +906,27 @@ class TestPushPreviewEndpoint:
         mock_environment
     ):
         """Should include reproducibility warnings in push preview without blocking push."""
-        mock_environment.git_manager.get_sync_status = Mock(return_value={
-            "ahead": 1,
-            "behind": 0,
-            "remote_branch_exists": True
-        })
-        mock_environment.git_manager.get_version_history = Mock(return_value=[])
+        mock_environment.get_remote_sync_status = Mock(
+            return_value=_sync_status(ahead=1, remote_branch_exists=True)
+        )
+        mock_environment.get_commit_history = Mock(return_value=[])
         mock_environment.get_current_branch.return_value = "main"
         mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
 
-        mock_model_manager = Mock()
-        mock_model_manager.get_all.return_value = []
-
-        dev_node = Mock()
-        dev_node.name = "local-dev-node"
-        dev_node.source = "development"
-        dev_node.version = "dev"
-        dev_node.registry_id = None
-        dev_node.repository = None
-        dev_node.pinned_commit = None
-        dev_node.criticality = "required"
-
-        mock_environment.pyproject.models = mock_model_manager
-        mock_environment.pyproject.workflows.get_all_with_resolutions.return_value = {}
-        mock_environment.pyproject.nodes.get_existing.return_value = {
-            "local-dev-node": dev_node
-        }
+        mock_environment.get_readiness.side_effect = None
+        mock_environment.get_readiness.return_value = EnvironmentReadiness(
+            warnings=ReadinessWarnings(
+                nodes_without_provenance=[
+                    NodeProvenanceWarning(
+                        name="local-dev-node",
+                        source="development",
+                        criticality="required",
+                        reason="Development node is missing portable git repository and pinned commit metadata.",
+                        version="dev",
+                    )
+                ]
+            )
+        )
 
         resp = await client.get("/v2/comfygit/remotes/origin/push-preview")
 
@@ -902,7 +942,7 @@ class TestPushPreviewEndpoint:
         mock_environment
     ):
         """Should return 404 when remote doesn't exist."""
-        mock_environment.git_manager.get_sync_status = Mock(
+        mock_environment.get_remote_sync_status = Mock(
             side_effect=ValueError("Remote 'nonexistent' not found")
         )
         mock_environment.get_current_branch.return_value = "main"
@@ -936,7 +976,9 @@ class TestPushEndpoint:
     ):
         """Should push to remote successfully."""
         mock_environment.push_commits = Mock(return_value="Pushed to origin/main")
-        mock_environment.git_manager.get_sync_status = Mock(return_value={"ahead": 2, "behind": 0})
+        mock_environment.get_remote_sync_status = Mock(
+            return_value=_sync_status(ahead=2)
+        )
         mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
         mock_environment.get_current_branch.return_value = "main"
 
@@ -976,7 +1018,9 @@ class TestPushEndpoint:
     ):
         """Should allow force push when specified."""
         mock_environment.push_commits = Mock(return_value="Force pushed")
-        mock_environment.git_manager.get_sync_status = Mock(return_value={"ahead": 1, "behind": 2})
+        mock_environment.get_remote_sync_status = Mock(
+            return_value=_sync_status(ahead=1, behind=2)
+        )
         mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
         mock_environment.get_current_branch.return_value = "main"
 
@@ -999,7 +1043,9 @@ class TestPushEndpoint:
         mock_environment.push_commits = Mock(
             side_effect=OSError("Updates were rejected because remote has newer commits")
         )
-        mock_environment.git_manager.get_sync_status = Mock(return_value={"ahead": 1, "behind": 0})
+        mock_environment.get_remote_sync_status = Mock(
+            return_value=_sync_status(ahead=1)
+        )
         mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
         mock_environment.get_current_branch.return_value = "main"
 
@@ -1020,11 +1066,9 @@ class TestPushEndpoint:
     ):
         """Should offer force before push when known remote-tracking ref is ahead."""
         mock_environment.push_commits = Mock(return_value="Should not push")
-        mock_environment.git_manager.get_sync_status = Mock(return_value={
-            "ahead": 1,
-            "behind": 2,
-            "remote_branch_exists": True,
-        })
+        mock_environment.get_remote_sync_status = Mock(
+            return_value=_sync_status(ahead=1, behind=2, remote_branch_exists=True)
+        )
         mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
         mock_environment.get_current_branch.return_value = "main"
 
@@ -1048,7 +1092,9 @@ class TestPushEndpoint:
         mock_environment.push_commits = Mock(
             side_effect=OSError("fatal: could not read Username for 'https://github.com'")
         )
-        mock_environment.git_manager.get_sync_status = Mock(return_value={"ahead": 1, "behind": 0})
+        mock_environment.get_remote_sync_status = Mock(
+            return_value=_sync_status(ahead=1)
+        )
         mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
         mock_environment.get_current_branch.return_value = "main"
 
@@ -1070,7 +1116,7 @@ class TestPushEndpoint:
         mock_environment.push_commits = Mock(
             side_effect=ValueError("Remote 'nonexistent' not found")
         )
-        mock_environment.git_manager.get_sync_status = Mock(return_value={"ahead": 0, "behind": 0})
+        mock_environment.get_remote_sync_status = Mock(return_value=_sync_status())
         mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
         mock_environment.get_current_branch.return_value = "main"
 

@@ -1,9 +1,0 @@
-{
-  "id": "gzpopk4e09l081",
-  "name": "my-comfyui-deploy",
-  "desiredStatus": "EXITED",
-  "costPerHr": 0.59,
-  "publicIp": "203.57.40.177",
-  "portMappings": {"22": 10088},
-  "machine": {}
-}

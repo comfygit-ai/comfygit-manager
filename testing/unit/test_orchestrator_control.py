@@ -381,7 +381,7 @@ class TestProcessTracking:
         orch._used_extra_args = False
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = "/usr/bin/python"
+        mock_env.get_runtime_python.return_value = "/usr/bin/python"
         mock_env.comfyui_path = Path("/tmp/comfyui")
 
         with patch('subprocess.Popen') as mock_popen:
@@ -408,7 +408,7 @@ class TestProcessTracking:
         orch._used_extra_args = False
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = "/usr/bin/python"
+        mock_env.get_runtime_python.return_value = "/usr/bin/python"
         mock_env.comfyui_path = Path("/tmp/comfyui")
 
         with patch('subprocess.Popen'):
@@ -486,7 +486,7 @@ class TestOrchestratorInitialization:
         """Should load workspace config during init."""
         from server.orchestrator import Orchestrator, DEFAULT_CONFIG
 
-        with patch('server.orchestrator.WorkspaceFactory.find') as mock_factory:
+        with patch('server.orchestrator.Workspace.open') as mock_factory:
             mock_workspace = Mock()
             mock_workspace.path = metadata_dir.parent
             mock_factory.return_value = mock_workspace
@@ -507,7 +507,7 @@ class TestOrchestratorInitialization:
         """Should initialize command coordination flags."""
         from server.orchestrator import Orchestrator, DEFAULT_CONFIG
 
-        with patch('server.orchestrator.WorkspaceFactory.find') as mock_factory:
+        with patch('server.orchestrator.Workspace.open') as mock_factory:
             mock_workspace = Mock()
             mock_workspace.path = metadata_dir.parent
             mock_factory.return_value = mock_workspace
@@ -537,7 +537,7 @@ class TestOrchestratorInitialization:
         # Create stale temp files
         (metadata_dir / ".cmd.tmp.old").write_text("{}")
 
-        with patch('server.orchestrator.WorkspaceFactory.find') as mock_factory:
+        with patch('server.orchestrator.Workspace.open') as mock_factory:
             mock_workspace = Mock()
             mock_workspace.path = metadata_dir.parent
             mock_factory.return_value = mock_workspace
@@ -562,7 +562,7 @@ class TestOrchestratorInitialization:
         """Should start control server if enabled in config."""
         from server.orchestrator import Orchestrator, DEFAULT_CONFIG
 
-        with patch('server.orchestrator.WorkspaceFactory.find') as mock_factory:
+        with patch('server.orchestrator.Workspace.open') as mock_factory:
             mock_workspace = Mock()
             mock_workspace.path = metadata_dir.parent
             mock_factory.return_value = mock_workspace

@@ -179,6 +179,21 @@ The manager API should support explicit full-hash computation for a known local
 model file or model index entry. The operation may be long-running or
 asynchronous, but it should make progress/failure visible to the frontend.
 
+### CGM-API-10E [LIVE]: Git remote PATs are user-scoped request credentials
+Validation: STATIC
+
+GitHub personal access tokens used for HTTPS git remote operations represent the
+browser user's git identity. The manager frontend may store a PAT in browser
+localStorage for that user's convenience, but the manager backend must not save
+that PAT to workspace configuration. The frontend should send it to the backend
+only for explicit authenticated git actions such as auth tests, fetch, pull, or
+push. Backend remote endpoints should treat it as request-scoped credential
+material and pass it to core git facade methods without persisting it.
+
+This differs from CivitAI and Hugging Face credentials, which may be stored as
+machine-local workspace configuration because backend model search and download
+operations need server-side provider access.
+
 Computed Blake3 and SHA256 values should be persisted in the model index so
 future source discovery, export/push readiness, and cloud dependency-proof
 flows can reuse them without repeatedly rescanning the same model file.
@@ -390,3 +405,16 @@ should direct users to ComfyUI logs for the import error.
 Runtime import failures are warnings, not export, push, or commit blockers.
 They may be included in readiness warning payloads so shared review surfaces can
 mention them, but they must not be treated as portable provenance failures.
+
+### CGM-API-17 [LIVE]: Local Studio launch should reuse the ComfyGit serve adapter
+Validation: TEST
+
+When the panel opens Studio for the current managed environment, the manager
+API should start or reuse a local `cg serve` process rather than reimplementing
+contract execution routes inside the custom-node backend.
+
+The launch response should return browser-facing process metadata such as URL,
+port, environment name, PID, and log path. The backend may derive the public
+host from the current request, but it should keep lifecycle ownership narrow:
+this is a local child serve process for testing and Studio use, not a cloud
+deployment, cloud publication, or environment-switch authority.

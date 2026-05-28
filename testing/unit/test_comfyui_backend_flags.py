@@ -10,6 +10,11 @@ import pytest
 from unittest.mock import Mock
 
 
+def _mock_runtime(env: Mock, version: str) -> None:
+    env.get_runtime_python.return_value = Path("/python")
+    env.get_runtime_package_version.return_value = version
+
+
 @pytest.mark.unit
 class TestGetComfyuiBackendFlags:
     """Test _get_comfyui_backend_flags() method."""
@@ -26,8 +31,7 @@ class TestGetComfyuiBackendFlags:
 
         # Mock environment with CPU PyTorch
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = Path("/python")
-        mock_env.uv_manager.show_package.return_value = "Name: torch\nVersion: 2.9.0\n"
+        _mock_runtime(mock_env, "2.9.0")
 
         flags = orch._get_comfyui_backend_flags(mock_env)
 
@@ -44,8 +48,7 @@ class TestGetComfyuiBackendFlags:
         )
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = Path("/python")
-        mock_env.uv_manager.show_package.return_value = "Name: torch\nVersion: 2.9.0+cu128\n"
+        _mock_runtime(mock_env, "2.9.0+cu128")
 
         flags = orch._get_comfyui_backend_flags(mock_env)
 
@@ -62,8 +65,7 @@ class TestGetComfyuiBackendFlags:
         )
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = Path("/python")
-        mock_env.uv_manager.show_package.return_value = "Name: torch\nVersion: 2.9.0+rocm6.3\n"
+        _mock_runtime(mock_env, "2.9.0+rocm6.3")
 
         flags = orch._get_comfyui_backend_flags(mock_env)
 
@@ -80,8 +82,7 @@ class TestGetComfyuiBackendFlags:
         )
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = Path("/python")
-        mock_env.uv_manager.show_package.side_effect = Exception("Package not found")
+        mock_env.get_runtime_package_version.side_effect = Exception("Package not found")
 
         flags = orch._get_comfyui_backend_flags(mock_env)
 
@@ -105,8 +106,7 @@ class TestStartComfyuiWithBackendFlags:
         )
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = Path("/python")
-        mock_env.uv_manager.show_package.return_value = "Name: torch\nVersion: 2.9.0\n"
+        _mock_runtime(mock_env, "2.9.0")
         mock_env.comfyui_path = Path("/ComfyUI")
 
         orch._start_comfyui(mock_env)
@@ -131,8 +131,7 @@ class TestStartComfyuiWithBackendFlags:
         )
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = Path("/python")
-        mock_env.uv_manager.show_package.return_value = "Name: torch\nVersion: 2.9.0+cu128\n"
+        _mock_runtime(mock_env, "2.9.0+cu128")
         mock_env.comfyui_path = Path("/ComfyUI")
 
         orch._start_comfyui(mock_env)
@@ -174,8 +173,7 @@ class TestExtraArgsFromConfig:
         )
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = Path("/python")
-        mock_env.uv_manager.show_package.return_value = "Name: torch\nVersion: 2.9.0+cu128\n"
+        _mock_runtime(mock_env, "2.9.0+cu128")
         mock_env.comfyui_path = Path("/ComfyUI")
 
         orch._start_comfyui(mock_env)
@@ -206,8 +204,7 @@ class TestExtraArgsFromConfig:
         )
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = Path("/python")
-        mock_env.uv_manager.show_package.return_value = "Name: torch\nVersion: 2.9.0\n"  # CPU
+        _mock_runtime(mock_env, "2.9.0")  # CPU
         mock_env.comfyui_path = Path("/ComfyUI")
 
         orch._start_comfyui(mock_env)
@@ -241,8 +238,7 @@ class TestExtraArgsFromConfig:
         )
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = Path("/python")
-        mock_env.uv_manager.show_package.return_value = "Name: torch\nVersion: 2.9.0+cu128\n"
+        _mock_runtime(mock_env, "2.9.0+cu128")
         mock_env.comfyui_path = Path("/ComfyUI")
 
         orch._start_comfyui(mock_env)
@@ -271,8 +267,7 @@ class TestExtraArgsFromConfig:
         )
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = Path("/python")
-        mock_env.uv_manager.show_package.return_value = "Name: torch\nVersion: 2.9.0+cu128\n"
+        _mock_runtime(mock_env, "2.9.0+cu128")
         mock_env.comfyui_path = Path("/ComfyUI")
 
         orch._start_comfyui(mock_env)
@@ -336,8 +331,7 @@ class TestConfigReloadOnRestart:
         }))
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = Path("/python")
-        mock_env.uv_manager.show_package.return_value = "Name: torch\nVersion: 2.9.0+cu128\n"
+        _mock_runtime(mock_env, "2.9.0+cu128")
         mock_env.comfyui_path = Path("/ComfyUI")
 
         # Call _start_comfyui - should reload config and pick up --lowvram
@@ -413,8 +407,7 @@ class TestCrashRecoveryExtraArgsTracking:
         )
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = Path("/python")
-        mock_env.uv_manager.show_package.return_value = "Name: torch\nVersion: 2.9.0+cu128\n"
+        _mock_runtime(mock_env, "2.9.0+cu128")
         mock_env.comfyui_path = Path("/ComfyUI")
 
         orch._start_comfyui(mock_env)
@@ -443,8 +436,7 @@ class TestCrashRecoveryExtraArgsTracking:
         )
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = Path("/python")
-        mock_env.uv_manager.show_package.return_value = "Name: torch\nVersion: 2.9.0+cu128\n"
+        _mock_runtime(mock_env, "2.9.0+cu128")
         mock_env.comfyui_path = Path("/ComfyUI")
 
         orch._start_comfyui(mock_env)
@@ -481,8 +473,7 @@ class TestCrashRecoverySkipExtraArgs:
         orch._skip_extra_args = True
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = Path("/python")
-        mock_env.uv_manager.show_package.return_value = "Name: torch\nVersion: 2.9.0+cu128\n"
+        _mock_runtime(mock_env, "2.9.0+cu128")
         mock_env.comfyui_path = Path("/ComfyUI")
 
         orch._start_comfyui(mock_env)
@@ -520,8 +511,7 @@ class TestCrashRecoverySkipExtraArgs:
         orch._skip_extra_args = False
 
         mock_env = Mock()
-        mock_env.uv_manager.python_executable = Path("/python")
-        mock_env.uv_manager.show_package.return_value = "Name: torch\nVersion: 2.9.0+cu128\n"
+        _mock_runtime(mock_env, "2.9.0+cu128")
         mock_env.comfyui_path = Path("/ComfyUI")
 
         orch._start_comfyui(mock_env)

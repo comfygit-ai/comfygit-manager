@@ -196,8 +196,10 @@ Optional fields may include:
 - `default`
 - `min`
 - `max`
+- `step`
 - `enum_values`
 - `description`
+- `ui_control`
 
 The durable input item should represent portable mapping state, not transient
 frontend selection state.
@@ -210,16 +212,30 @@ promoted widgets they may differ; for example a visible subgraph node `170`
 with promoted widget `prompt` can map to API prompt node `170:151` input
 `prompt`.
 
-### CGM-WCDM-06A [PLANNED]: Numeric input constraints may be stored as optional durable bounds
+### CGM-WCDM-06A [LIVE]: Numeric input metadata may store optional bounds and step hints
 Validation: TEST
 
 Inputs with normalized type `integer` or `number` may store:
 
 - `min`
 - `max`
+- `step`
 
-These fields should remain optional and should only be used when the contract
-author intends to bound valid numeric values.
+`min` and `max` are validation bounds. `step` is a positive numeric control
+hint for Studio and similar clients. These fields should remain optional:
+authoring clients may infer them from ComfyUI widget metadata or let authors
+edit them, while runtime clients should use conservative fallback increments
+when `step` is absent.
+
+When an integer ComfyUI widget exposes only generic frontend/runtime step
+metadata, authoring clients may omit `step` rather than persist an implementation
+default. Explicit schema metadata from the widget remains authoritative when
+available.
+
+Authoring clients should not classify a numeric input as `integer` only because
+the current value or frontend runtime step is whole-numbered. Integer type
+inference should come from explicit ComfyUI schema metadata or equivalent
+precision metadata.
 
 ### CGM-WCDM-06B [PLANNED]: Enum input values may be stored as an explicit allowed set
 Validation: TEST
@@ -231,6 +247,22 @@ Inputs with normalized type `enum` may store:
 `enum_values` should be a bounded ordered list of allowed string values. This
 field should be treated as the durable source of truth for enum options when
 present.
+
+### CGM-WCDM-06C [LIVE]: String inputs may store explicit UI control metadata
+Validation: TEST
+
+Inputs with normalized type `string` may store:
+
+- `ui_control`
+
+Supported values are `textarea` for multiline text and `input` for a single-line
+text field. This field is durable presentation metadata for Studio and similar
+contract clients. It should not change the contract value type or how runtime
+adapters patch the captured API prompt.
+
+If `ui_control` is absent for a string input, clients should default to
+`textarea` for existing contracts and should not infer control shape from the
+input name.
 
 ### CGM-WCDM-07 [PARTIAL]: The first implementation may target widget-backed inputs before broader graph source kinds
 Validation: HUMAN_REVIEW
@@ -318,6 +350,7 @@ The authoring and projection layers should treat the following fields as
 type-scoped rather than universally meaningful:
 
 - `min` and `max` for `integer` and `number`
+- `step` for `integer` and `number`
 - `enum_values` for `enum`
 
 These fields may be omitted entirely when they do not apply.

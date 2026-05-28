@@ -20,10 +20,10 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
 
-      - name: Prepare unreleased core source
+      - name: Prepare unreleased ComfyGit sources
         run: |
           python scripts/prepare-ci-core-source.py
-          uv lock --upgrade-package comfygit-core
+          uv lock --upgrade-package comfygit-core --upgrade-package comfygit-studio
 
       - name: Run ruff
         run: uv run ruff check .
@@ -43,10 +43,10 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
 
-      - name: Prepare unreleased core source
+      - name: Prepare unreleased ComfyGit sources
         run: |
           python scripts/prepare-ci-core-source.py
-          uv lock --upgrade-package comfygit-core
+          uv lock --upgrade-package comfygit-core --upgrade-package comfygit-studio
 
       - name: Install dependencies
         run: uv sync

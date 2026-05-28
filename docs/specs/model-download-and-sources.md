@@ -56,6 +56,16 @@ behavior is a clean `https://civitai.com/api/download/models/{versionId}` URL
 plus an `Authorization: Bearer ...` request header when a workspace API key is
 available.
 
+### CGM-MDL-03C [LIVE]: Civitai search and downloads require a user-provided API key
+Validation: TEST
+
+The manager should not rely on bundled Civitai client keys or private search
+credentials. Civitai browsing, model lookup, and download execution should use
+the user's configured Civitai API key from local workspace configuration. If no
+key is configured, the UI should ask the user to provide one and the backend
+should return a clear authentication/configuration error instead of attempting
+unauthenticated search.
+
 ### CGM-MDL-03B [LIVE]: Civitai browsing should expose model, version, and file selection
 Validation: TEST
 

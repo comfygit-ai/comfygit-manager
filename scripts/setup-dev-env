@@ -21,7 +21,7 @@
 #
 # This script:
 #   1. Replaces registry-installed comfygit-manager with a symlink to this repo
-#   2. Adds comfygit-core as an editable local overlay source
+#   2. Adds comfygit-core and comfygit-studio as editable local overlay sources
 #   3. Marks comfygit-manager as a development node (skips version checks)
 #
 # IMPORTANT:
@@ -49,6 +49,7 @@ MANAGER_PATH="$(dirname "$SCRIPT_DIR")"
 DEFAULT_COMFYGIT_REPO_ROOT="$(dirname "$MANAGER_PATH")/comfygit"
 COMFYGIT_REPO_ROOT="$DEFAULT_COMFYGIT_REPO_ROOT"
 CORE_PATH="$COMFYGIT_REPO_ROOT/packages/core"
+STUDIO_RUNTIME_PATH="$COMFYGIT_REPO_ROOT/packages/studio-runtime"
 
 # Defaults
 WORKSPACE_PATH=""
@@ -137,6 +138,7 @@ done
 
 COMFYGIT_REPO_ROOT="$DOCKER_COMFYGIT_PATH"
 CORE_PATH="$COMFYGIT_REPO_ROOT/packages/core"
+STUDIO_RUNTIME_PATH="$COMFYGIT_REPO_ROOT/packages/studio-runtime"
 
 # Resolve workspace path: arg > COMFYGIT_HOME > ~/comfygit
 if [[ -z "$WORKSPACE_PATH" ]]; then
@@ -190,10 +192,22 @@ if [[ ! -d "$CORE_PATH" ]]; then
     exit 1
 fi
 
+if [[ ! -d "$STUDIO_RUNTIME_PATH" ]]; then
+    echo "Error: comfygit-studio runtime not found at: $STUDIO_RUNTIME_PATH"
+    echo "Expected directory structure:"
+    echo "  parent-dir/"
+    echo "    comfygit-manager/  (this repo)"
+    echo "    comfygit/"
+    echo "      packages/"
+    echo "        studio-runtime/"
+    exit 1
+fi
+
 # Print configuration
 echo "[setup-dev-env] Workspace: $WORKSPACE_PATH"
 echo "[setup-dev-env] Manager:   $MANAGER_PATH"
 echo "[setup-dev-env] Core:      $CORE_PATH"
+echo "[setup-dev-env] Studio:    $STUDIO_RUNTIME_PATH"
 echo "[setup-dev-env] ComfyGit:  $COMFYGIT_REPO_ROOT"
 if [[ "$START_DOCKER" == "true" ]]; then
     echo "[setup-dev-env] Models:    $DOCKER_MODELS_DIR -> /data/models"
@@ -274,20 +288,24 @@ setup_environment() {
         ln -s "$MANAGER_PATH" "$manager_link"
     fi
 
-    # Configure comfygit-core as a machine-local editable overlay source.
+    # Configure local ComfyGit packages as machine-local editable overlay sources.
     # This is intentionally not a direct venv mutation: cg sync/run own the venv.
     if [[ ! -d "$cec_path" ]]; then
-        echo "  Warning: .cec directory not found, skipping core local overlay"
+        echo "  Warning: .cec directory not found, skipping ComfyGit local overlay"
     else
         mkdir -p "$(dirname "$overlay_path")"
-        python3 - "$overlay_path" "$CORE_PATH" <<'PYEOF'
+        python3 - "$overlay_path" "$CORE_PATH" "$STUDIO_RUNTIME_PATH" <<'PYEOF'
 import json
 import sys
 from pathlib import Path
 
 overlay_path = Path(sys.argv[1])
 core_path = sys.argv[2]
-source_line = f"comfygit-core = {{ path = {json.dumps(core_path)}, editable = true }}"
+studio_runtime_path = sys.argv[3]
+source_lines = [
+    f"comfygit-core = {{ path = {json.dumps(core_path)}, editable = true }}",
+    f"comfygit-studio = {{ path = {json.dumps(studio_runtime_path)}, editable = true }}",
+]
 
 if overlay_path.exists():
     lines = overlay_path.read_text(encoding="utf-8").splitlines()
@@ -310,29 +328,32 @@ for line in lines:
 
     if is_section:
         if in_sources and not inserted:
-            result.append(source_line)
+            result.extend(source_lines)
             inserted = True
         in_sources = stripped == "[sources]"
         sources_found = sources_found or in_sources
         result.append(line)
         continue
 
-    if in_sources and stripped.startswith("comfygit-core"):
+    if in_sources and (
+        stripped.startswith("comfygit-core")
+        or stripped.startswith("comfygit-studio")
+    ):
         continue
 
     result.append(line)
 
 if sources_found:
     if in_sources and not inserted:
-        result.append(source_line)
+        result.extend(source_lines)
 else:
     if result and result[-1].strip():
         result.append("")
-    result.extend(["[sources]", source_line])
+    result.extend(["[sources]", *source_lines])
 
 overlay_path.write_text("\n".join(result).rstrip() + "\n", encoding="utf-8")
 PYEOF
-        echo "  Core local overlay: $overlay_path"
+        echo "  ComfyGit local overlay: $overlay_path"
 
         # Ensure local overlay state stays machine-local in older environments.
         touch "$gitignore_path"

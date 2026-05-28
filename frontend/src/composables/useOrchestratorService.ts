@@ -2,7 +2,7 @@
  * Orchestrator Service Composable (Refactored for Remote Access)
  *
  * Uses ComfyUI API proxy routes instead of direct orchestrator connections.
- * Works with cloud proxies (RunPod, Vast.ai) and local development.
+ * Works with cloud proxies and local development.
  */
 import { fetchComfyApi } from '@/utils/comfyApi'
 

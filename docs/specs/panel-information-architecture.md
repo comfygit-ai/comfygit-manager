@@ -73,6 +73,11 @@ without leaving the environment-management context.
 Import should remain a workspace-level action because it creates a new
 environment rather than mutating the current one.
 
+In unmanaged local bootstrap mode, the setup flow may also expose an `Import
+Current Environment` action. That action belongs beside create/import choices
+because it creates a new managed environment from the currently running ComfyUI
+install instead of operating on a current managed environment.
+
 ### CGM-IA-05 [LIVE]: Environment export should be initiated from environment cards or details rather than a top-level sidebar destination
 Validation: HUMAN_REVIEW
 
@@ -166,8 +171,8 @@ surfaces.
 ### CGM-IA-10 [LIVE]: Provider-target and deployment controls should not remain first-class local panel destinations
 Validation: HUMAN_REVIEW
 
-RunPod, custom worker, and other provider-specific deployment controls are not
-the intended long-term primary job of the local panel.
+Provider-specific deployment controls are not the intended long-term primary job
+of the local panel.
 
 The local panel should prefer:
 - local commits
@@ -179,8 +184,8 @@ Cloud should own the actual deployment and runtime-management workflow.
 
 The current panel maps old `Deploy`, `Publish`, and `Account` navigation state
 to Version Control rather than keeping the retired Cloud domain active. Legacy
-deploy components may still exist in the codebase as reference or unused code,
-but they are not part of the active panel information architecture.
+provider-deploy components and endpoints have been removed from the manager
+codebase.
 
 ### CGM-IA-11 [RETIRED]: Blocked publish flows should route users to `Account` rather than embedding a second full auth surface inside `Publish`
 Validation: HUMAN_REVIEW

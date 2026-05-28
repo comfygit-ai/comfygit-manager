@@ -4,12 +4,6 @@ from aiohttp import web
 from cgm_core.decorators import requires_environment, logged_operation
 from cgm_core.readiness import build_environment_readiness
 from cgm_utils.async_helpers import run_sync
-from comfygit_core.utils.git import (
-    git_config_get,
-    git_fetch_with_auth,
-    git_push_with_auth,
-    git_pull_with_auth,
-)
 
 routes = web.RouteTableDef()
 
@@ -23,44 +17,9 @@ def _get_auth_token(request: web.Request) -> str | None:
     return request.headers.get("X-Git-Auth-Token")
 
 
-def _consolidate_remotes(remote_list: list[tuple[str, str, str]]) -> list[dict]:
-    """
-    Consolidate git remote -v output into RemoteInfo structures.
-
-    Args:
-        remote_list: List of (name, url, type) tuples where type is 'fetch' or 'push'
-
-    Returns:
-        List of dicts with name, fetch_url, push_url
-    """
-    remotes = {}
-    for name, url, remote_type in remote_list:
-        if name not in remotes:
-            remotes[name] = {"name": name, "fetch_url": "", "push_url": ""}
-
-        if remote_type == "fetch":
-            remotes[name]["fetch_url"] = url
-        elif remote_type == "push":
-            remotes[name]["push_url"] = url
-
-    # If push_url is empty, default to fetch_url
-    for remote in remotes.values():
-        if not remote["push_url"]:
-            remote["push_url"] = remote["fetch_url"]
-
-    return list(remotes.values())
-
-
-def _get_tracking_remote(env, branch: str | None) -> str | None:
-    """Get the remote that the given branch tracks."""
-    if not branch:
-        return None
-
-    try:
-        remote = git_config_get(env.git_manager.repo_path, f"branch.{branch}.remote")
-        return remote if remote else None
-    except Exception:
-        return None
+def _commits_to_dict(commits) -> list[dict]:
+    """Serialize typed core commit summaries for JSON responses."""
+    return [commit.to_dict() for commit in commits]
 
 
 def _git_operation_error_response(error: Exception, default_status: int = 500) -> web.Response:
@@ -121,19 +80,15 @@ def _git_operation_error_response(error: Exception, default_status: int = 500) -
 @requires_environment
 async def list_remotes(request: web.Request, env) -> web.Response:
     """List all git remotes with consolidated fetch/push URLs."""
-    # Get raw remote list
-    remote_list = await run_sync(env.git_manager.list_remotes)
-
-    # Consolidate fetch/push entries
-    remotes = _consolidate_remotes(remote_list)
+    remote_entries = await run_sync(env.list_remotes)
+    remotes = [remote.to_dict() for remote in remote_entries]
 
     # Get current branch and tracking info
     current_branch = await run_sync(env.get_current_branch)
-    tracking_remote = _get_tracking_remote(env, current_branch)
-
-    # Mark default remote
-    for remote in remotes:
-        remote["is_default"] = remote["name"] == tracking_remote
+    tracking_remote = next(
+        (remote.name for remote in remote_entries if remote.is_default),
+        None,
+    )
 
     # Build tracking info
     tracking_info = None
@@ -147,6 +102,52 @@ async def list_remotes(request: web.Request, env) -> web.Response:
         "remotes": remotes,
         "current_branch_tracking": tracking_info
     })
+
+
+@routes.post("/v2/comfygit/remotes/test-git-auth")
+@requires_environment
+async def test_git_auth(request: web.Request, env) -> web.Response:
+    """Test GitHub PAT authentication against the origin remote."""
+    data = await request.json()
+    token = data.get("token")
+
+    if not token:
+        return web.json_response(
+            {"status": "error", "message": "Token is required"},
+            status=400,
+        )
+
+    try:
+        remote_url = await run_sync(env.get_remote_url, "origin")
+        if not remote_url:
+            return web.json_response(
+                {"status": "error", "message": "No origin remote configured"},
+                status=400,
+            )
+
+        if remote_url.startswith("git@") or remote_url.startswith("ssh://"):
+            return web.json_response({
+                "status": "error",
+                "message": "SSH remotes do not support PAT authentication. Convert to HTTPS.",
+            })
+
+        success = await run_sync(env.check_remote_auth, remote_url, token)
+        if success:
+            return web.json_response({
+                "status": "success",
+                "message": "GitHub authentication successful",
+            })
+
+        return web.json_response({
+            "status": "error",
+            "message": "Authentication failed. Check your token has repo access.",
+        })
+
+    except Exception as e:
+        return web.json_response({
+            "status": "error",
+            "message": f"Test failed: {str(e)}",
+        })
 
 
 @routes.post("/v2/comfygit/remotes")
@@ -163,7 +164,7 @@ async def add_remote(request: web.Request, env) -> web.Response:
         return web.json_response({"error": "url is required"}, status=400)
 
     try:
-        await run_sync(env.git_manager.add_remote, name, url)
+        await run_sync(env.add_remote, name, url)
     except OSError as e:
         # Remote already exists
         return web.json_response({"error": str(e)}, status=409)
@@ -183,7 +184,7 @@ async def remove_remote(request: web.Request, env) -> web.Response:
     name = request.match_info["name"]
 
     try:
-        await run_sync(env.git_manager.remove_remote, name)
+        await run_sync(env.remove_remote, name)
     except ValueError as e:
         # Remote not found
         return web.json_response({"error": str(e)}, status=404)
@@ -210,11 +211,11 @@ async def update_remote_url(request: web.Request, env) -> web.Response:
 
     try:
         # Update fetch URL
-        await run_sync(env.git_manager.set_remote_url, name, url, False)
+        await run_sync(env.set_remote_url, name, url, is_push=False)
 
         # Update push URL if different
         if push_url and push_url != url:
-            await run_sync(env.git_manager.set_remote_url, name, push_url, True)
+            await run_sync(env.set_remote_url, name, push_url, is_push=True)
     except ValueError as e:
         # Remote not found
         return web.json_response({"error": str(e)}, status=404)
@@ -239,17 +240,7 @@ async def fetch_remote(request: web.Request, env) -> web.Response:
     auth_token = _get_auth_token(request)
 
     try:
-        if auth_token:
-            # Use authenticated fetch
-            await run_sync(
-                git_fetch_with_auth,
-                env.git_manager.repo_path,
-                name,
-                auth_token
-            )
-        else:
-            # Standard fetch (relies on machine credentials)
-            await run_sync(env.git_manager.fetch, name)
+        await run_sync(env.fetch_remote, name, token=auth_token)
     except ValueError as e:
         # Remote not found
         return web.json_response({"error": str(e)}, status=404)
@@ -277,7 +268,7 @@ async def get_remote_sync_status(request: web.Request, env) -> web.Response:
         branch = await run_sync(env.get_current_branch)
 
     try:
-        sync_status = await run_sync(env.git_manager.get_sync_status, name, branch)
+        sync_status = await run_sync(env.get_remote_sync_status, name, branch)
     except ValueError as e:
         # Remote not found
         return web.json_response({"error": str(e)}, status=404)
@@ -287,8 +278,8 @@ async def get_remote_sync_status(request: web.Request, env) -> web.Response:
     return web.json_response({
         "remote": name,
         "branch": branch,
-        "ahead": sync_status["ahead"],
-        "behind": sync_status["behind"]
+        "ahead": sync_status.ahead,
+        "behind": sync_status.behind,
     })
 
 
@@ -305,7 +296,7 @@ async def get_pull_preview(request: web.Request, env) -> web.Response:
 
     try:
         # Get sync status (ahead/behind counts)
-        sync_status = await run_sync(env.git_manager.get_sync_status, name, branch)
+        sync_status = await run_sync(env.get_remote_sync_status, name, branch)
     except ValueError as e:
         return web.json_response({"error": str(e)}, status=404)
     except Exception as e:
@@ -320,13 +311,13 @@ async def get_pull_preview(request: web.Request, env) -> web.Response:
     block_reason = "uncommitted_changes" if has_uncommitted else None
 
     # Fetch incoming commits
-    commits_behind = sync_status["behind"]
+    commits_behind = sync_status.behind
     if commits_behind > 0:
         try:
             incoming = await run_sync(
-                env.git_manager.get_version_history,
+                env.get_commit_history,
                 commits_behind,
-                f"HEAD..{name}/{branch}",
+                rev_range=f"HEAD..{name}/{branch}",
             )
         except Exception:
             incoming = []
@@ -344,7 +335,7 @@ async def get_pull_preview(request: web.Request, env) -> web.Response:
         "remote": name,
         "branch": branch,
         "commits_behind": commits_behind,
-        "commits": incoming,
+        "commits": _commits_to_dict(incoming),
         "changes": changes,
         "has_uncommitted_changes": has_uncommitted,
         "can_pull": can_pull,
@@ -389,25 +380,19 @@ async def pull_from_remote(request: web.Request, env) -> web.Response:
         # Use authenticated pull if token provided
         if auth_token:
             # Do authenticated fetch + merge manually
-            await run_sync(
-                git_pull_with_auth,
-                env.git_manager.repo_path,
-                name,
-                auth_token,
-                branch
-            )
-            # Then run repair/sync
             result = await run_sync(
-                env.repair_after_pull,
-                model_strategy
-            )
-        else:
-            # Standard pull_and_repair (relies on machine credentials)
-            result = await run_sync(
-                env.pull_and_repair,
+                env.pull_remote,
                 name,
                 branch,
-                model_strategy
+                model_strategy,
+                token=auth_token,
+            )
+        else:
+            result = await run_sync(
+                env.pull_remote,
+                name,
+                branch,
+                model_strategy,
             )
 
         # Extract sync result info
@@ -449,7 +434,7 @@ async def get_push_preview(request: web.Request, env) -> web.Response:
 
     try:
         # Get sync status (ahead/behind counts + remote_branch_exists flag)
-        sync_status = await run_sync(env.git_manager.get_sync_status, name, branch)
+        sync_status = await run_sync(env.get_remote_sync_status, name, branch)
     except ValueError as e:
         return web.json_response({"error": str(e)}, status=404)
     except Exception as e:
@@ -460,10 +445,10 @@ async def get_push_preview(request: web.Request, env) -> web.Response:
     has_uncommitted = status.git.has_changes
 
     # First push = remote branch doesn't exist yet
-    is_first_push = not sync_status.get("remote_branch_exists", True)
+    is_first_push = not sync_status.remote_branch_exists
 
     # Determine if force is needed (remote has new commits)
-    remote_has_new = sync_status["behind"] > 0
+    remote_has_new = sync_status.behind > 0
     needs_force = remote_has_new
 
     # Build response
@@ -471,18 +456,18 @@ async def get_push_preview(request: web.Request, env) -> web.Response:
     block_reason = "uncommitted_changes" if has_uncommitted else None
 
     # Fetch outgoing commits
-    commits_ahead = sync_status["ahead"]
+    commits_ahead = sync_status.ahead
     if commits_ahead > 0:
         try:
             if is_first_push:
                 outgoing = await run_sync(
-                    env.git_manager.get_version_history, commits_ahead
+                    env.get_commit_history, commits_ahead
                 )
             else:
                 outgoing = await run_sync(
-                    env.git_manager.get_version_history,
+                    env.get_commit_history,
                     commits_ahead,
-                    f"{name}/{branch}..HEAD",
+                    rev_range=f"{name}/{branch}..HEAD",
                 )
         except Exception:
             outgoing = []
@@ -495,7 +480,7 @@ async def get_push_preview(request: web.Request, env) -> web.Response:
         "remote": name,
         "branch": branch,
         "commits_ahead": commits_ahead,
-        "commits": outgoing,
+        "commits": _commits_to_dict(outgoing),
         "has_uncommitted_changes": has_uncommitted,
         "remote_has_new_commits": remote_has_new,
         "can_push": can_push,
@@ -533,7 +518,7 @@ async def push_to_remote(request: web.Request, env) -> web.Response:
 
     # Get commits ahead count before pushing.
     try:
-        sync_status = await run_sync(env.git_manager.get_sync_status, name, branch)
+        sync_status = await run_sync(env.get_remote_sync_status, name, branch)
     except ValueError as e:
         return web.json_response({"error": str(e)}, status=404)
     except OSError as e:
@@ -541,9 +526,9 @@ async def push_to_remote(request: web.Request, env) -> web.Response:
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
-    commits_ahead = sync_status["ahead"]
+    commits_ahead = sync_status.ahead
 
-    if sync_status.get("behind", 0) > 0 and not force:
+    if sync_status.behind > 0 and not force:
         return web.json_response(
             {
                 "error": (
@@ -557,19 +542,13 @@ async def push_to_remote(request: web.Request, env) -> web.Response:
         )
 
     try:
-        if auth_token:
-            # Use authenticated push
-            output = await run_sync(
-                git_push_with_auth,
-                env.git_manager.repo_path,
-                name,
-                auth_token,
-                branch,
-                force
-            )
-        else:
-            # Standard push (relies on machine credentials)
-            output = await run_sync(env.push_commits, name, branch, force)
+        output = await run_sync(
+            env.push_remote,
+            name,
+            branch,
+            force=force,
+            token=auth_token,
+        )
 
         return web.json_response({
             "status": "success",

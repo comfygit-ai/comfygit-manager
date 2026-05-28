@@ -39,6 +39,11 @@
     </div>
 
     <aside class="io-mapping-sidebar">
+      <div v-if="saveToast" :class="['io-save-toast', saveToast.type]">
+        <span class="io-save-toast-icon">{{ saveToast.type === 'success' ? '✓' : '!' }}</span>
+        <span>{{ saveToast.message }}</span>
+      </div>
+
       <div class="io-mapping-sidebar-scroll">
         <div v-if="loading" class="io-state-block">
           Loading workflow contract...
@@ -158,7 +163,15 @@
                     :model-value="input.type"
                     :options="typeOptions"
                     full-width
-                    @update:model-value="input.type = $event"
+                    @update:model-value="setInputType(input, $event)"
+                  />
+                </BaseFormField>
+                <BaseFormField v-if="input.type === 'string'" label="Text Control">
+                  <BaseSelect
+                    :model-value="input.ui_control || 'textarea'"
+                    :options="textControlOptions"
+                    full-width
+                    @update:model-value="setInputTextControl(input, $event)"
                   />
                 </BaseFormField>
                 <BaseFormField label="Required">
@@ -191,6 +204,14 @@
                     :model-value="formatOptionalNumber(input.max)"
                     full-width
                     @update:model-value="input.max = parseOptionalNumber($event)"
+                  />
+                </BaseFormField>
+                <BaseFormField v-if="isNumericType(input.type)" label="Step">
+                  <BaseInput
+                    :model-value="formatOptionalNumber(input.step)"
+                    :placeholder="formatOptionalNumber(defaultNumericStep(input.type))"
+                    full-width
+                    @update:model-value="input.step = parseOptionalPositiveNumber($event)"
                   />
                 </BaseFormField>
                 <BaseFormField v-if="isEnumType(input.type)" class="item-grid-full" label="Enum Values">
@@ -348,6 +369,8 @@ const selectedOutputIndex = ref<number | null>(null)
 const overlayTick = ref(0)
 const hoverSummary = ref<{ kind: 'input' | 'output'; label: string } | null>(null)
 const hoverOverlay = ref<{ kind: 'input' | 'output'; style: Record<string, string> } | null>(null)
+const saveToast = ref<{ message: string; type: 'success' | 'error' } | null>(null)
+let saveToastTimeout: ReturnType<typeof setTimeout> | null = null
 let overlayFrame: number | null = null
 
 type MappingItemKind = 'input' | 'output'
@@ -366,6 +389,11 @@ const typeOptions = [
   'video',
   'audio',
   'file',
+]
+
+const textControlOptions = [
+  { label: 'Multiline text', value: 'textarea' },
+  { label: 'Text field', value: 'input' },
 ]
 
 const requiredOptions = [
@@ -487,6 +515,51 @@ function resolveInputApiBinding(node: any, widget: any | null, fieldKey: string 
   }
 }
 
+function asNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed || undefined
+}
+
+function isGeneratedWidgetName(value: unknown): boolean {
+  const text = asNonEmptyString(value)
+  return !!text && /^(value|input)_\d+$/i.test(text)
+}
+
+function getWidgetFieldKey(widget: any | null): string | undefined {
+  return asNonEmptyString(widget?.options?.property) ?? asNonEmptyString(widget?.name)
+}
+
+function firstHumanWidgetLabel(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    const text = asNonEmptyString(value)
+    if (text && !isGeneratedWidgetName(text)) {
+      return text
+    }
+  }
+  return undefined
+}
+
+function getWidgetDisplayLabel(widget: any | null, fieldKey: string | undefined, fallback: string): string {
+  return firstHumanWidgetLabel(
+    widget?.label,
+    widget?.options?.label,
+    widget?.input?.label,
+    widget?.localized_name,
+    widget?.display_name,
+    widget?.displayName,
+    widget?.options?.localized_name,
+    widget?.options?.display_name,
+    widget?.options?.displayName,
+    widget?.input?.localized_name,
+    widget?.input?.display_name,
+    widget?.input?.displayName,
+    widget?.sourceWidgetName,
+    widget?.name,
+    fieldKey,
+  ) ?? fallback
+}
+
 function hydrateApiBindings(contract: WorkflowExecutionContract) {
   const graph = props.comfyApp?.rootGraph ?? props.comfyApp?.graph
   for (const namedContract of Object.values(contract.contracts)) {
@@ -494,11 +567,7 @@ function hydrateApiBindings(contract: WorkflowExecutionContract) {
       if (input.widget_idx == null) continue
       const node = graph?.getNodeById?.(String(input.node_id))
       const widget = Array.isArray(node?.widgets) ? node.widgets[input.widget_idx] : null
-      const fieldKey = input.field_key || (
-        typeof widget?.options?.property === 'string'
-          ? widget.options.property
-          : (typeof widget?.name === 'string' ? widget.name : undefined)
-      )
+      const fieldKey = input.field_key || getWidgetFieldKey(widget)
       if (fieldKey) {
         input.field_key = fieldKey
       }
@@ -528,6 +597,11 @@ function parseOptionalNumber(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+function parseOptionalPositiveNumber(value: string): number | undefined {
+  const parsed = parseOptionalNumber(value)
+  return parsed != null && parsed > 0 ? parsed : undefined
+}
+
 function formatEnumValues(values: string[] | undefined): string {
   return (values || []).join('\n')
 }
@@ -549,17 +623,96 @@ function formatTextareaValue(value: unknown): string {
   return String(value)
 }
 
+function setInputType(input: WorkflowContractInput, value: string) {
+  input.type = value
+  if (value === 'string') {
+    input.ui_control = input.ui_control || 'textarea'
+  } else {
+    delete input.ui_control
+  }
+}
+
+function setInputTextControl(input: WorkflowContractInput, value: string) {
+  input.ui_control = value === 'input' ? 'input' : 'textarea'
+}
+
+function normalizeInputUiControls(contract: WorkflowExecutionContract) {
+  for (const namedContract of Object.values(contract.contracts)) {
+    for (const input of namedContract.inputs) {
+      if (input.type === 'string') {
+        input.ui_control = input.ui_control || 'textarea'
+      } else {
+        delete input.ui_control
+      }
+    }
+  }
+}
+
 function inferWidgetEnumValues(widget: any): string[] {
   const rawValues = widget?.options?.values
   if (!Array.isArray(rawValues)) return []
   return rawValues.map((value: unknown) => String(value)).filter(Boolean)
 }
 
+const UNBOUNDED_NUMERIC_BOUND_ABS = 1_000_000_000_000_000
+const DEFAULT_INTEGER_STEP = 1
+const DEFAULT_NUMBER_STEP = 0.01
+
+function readNestedValue(source: any, path: string[]): unknown {
+  let current = source
+  for (const segment of path) {
+    if (current == null || typeof current !== 'object') return undefined
+    current = current[segment]
+  }
+  return current
+}
+
+function firstPresentWidgetValue(widget: any, paths: string[][]): unknown {
+  for (const path of paths) {
+    const value = readNestedValue(widget, path)
+    if (value != null && value !== '') return value
+  }
+  return undefined
+}
+
 function inferWidgetNumericBound(widget: any, key: 'min' | 'max'): number | undefined {
-  const value = widget?.options?.[key]
-  if (value == null || value === '') return undefined
+  const paths = [
+    ['options', key],
+    ['input', key],
+    [key],
+  ]
+  for (const path of paths) {
+    const value = readNestedValue(widget, path)
+    if (value == null || value === '') continue
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed)) continue
+    if (Math.abs(parsed) >= UNBOUNDED_NUMERIC_BOUND_ABS) continue
+    return parsed
+  }
+  return undefined
+}
+
+function parsePositiveNumericMetadata(value: unknown): number | undefined {
   const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : undefined
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined
+  if (Math.abs(parsed) >= UNBOUNDED_NUMERIC_BOUND_ABS) return undefined
+  return parsed
+}
+
+function inferWidgetNumericStep(widget: any, inputType: string | undefined): number | undefined {
+  const ignoreWeakRuntimeStep = inputType === 'integer'
+  const paths = [
+    { path: ['input', 'step'], strong: true },
+    { path: ['input', 'widget', 'step'], strong: true },
+    { path: ['step'], strong: false },
+    { path: ['options', 'step'], strong: false },
+  ]
+  for (const { path, strong } of paths) {
+    if (ignoreWeakRuntimeStep && !strong) continue
+    const parsed = parsePositiveNumericMetadata(readNestedValue(widget, path))
+    if (parsed != null) return parsed
+  }
+  return undefined
 }
 
 function slugifyName(value: string, fallback: string): string {
@@ -591,6 +744,42 @@ function normalizeType(value: unknown): string {
   if (normalized.includes('combo') || normalized.includes('enum')) return 'enum'
   if (normalized.includes('string') || normalized.includes('text')) return 'string'
   return 'file'
+}
+
+function defaultNumericStep(type: string | undefined): number {
+  return type === 'integer' ? DEFAULT_INTEGER_STEP : DEFAULT_NUMBER_STEP
+}
+
+function normalizeWidgetType(widget: any): string {
+  const explicitType = firstPresentWidgetValue(widget, [
+    ['input', 'type'],
+    ['input', 'widget', 'type'],
+    ['options', 'type'],
+    ['options', 'inputType'],
+    ['type'],
+  ])
+  const normalized = normalizeType(explicitType)
+  if (normalized !== 'number') return normalized
+
+  const explicitTypeText = String(explicitType ?? '').toLowerCase()
+  if (
+    explicitTypeText.includes('float') ||
+    explicitTypeText.includes('double') ||
+    explicitTypeText.includes('decimal')
+  ) {
+    return 'number'
+  }
+
+  const precision = firstPresentWidgetValue(widget, [
+    ['options', 'precision'],
+    ['input', 'precision'],
+    ['precision'],
+  ])
+  if (precision != null && Number(precision) === 0) {
+    return 'integer'
+  }
+
+  return normalized
 }
 
 function getInputCardKey(input: WorkflowContractInput, index: number): string {
@@ -633,16 +822,21 @@ function getDropPosition(event: DragEvent): DropPosition {
   return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
 }
 
+function normalizeDropTarget(kind: MappingItemKind, index: number, event: DragEvent) {
+  const items = kind === 'input' ? activeContract.value.inputs : activeContract.value.outputs
+  const position = getDropPosition(event)
+  if (position === 'after' && index < items.length - 1) {
+    return { kind, index: index + 1, position: 'before' as const }
+  }
+  return { kind, index, position }
+}
+
 function handleItemDragOver(kind: MappingItemKind, index: number, event: DragEvent) {
   if (!draggingItem.value || draggingItem.value.kind !== kind) return
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = 'move'
   }
-  dropTarget.value = {
-    kind,
-    index,
-    position: getDropPosition(event),
-  }
+  dropTarget.value = normalizeDropTarget(kind, index, event)
 }
 
 function moveArrayItem<T>(items: T[], fromIndex: number, insertionIndex: number): number {
@@ -673,10 +867,12 @@ function remapSelectedIndex(selectedIndex: number | null, fromIndex: number, toI
 function handleItemDrop(kind: MappingItemKind, index: number, event: DragEvent) {
   if (!draggingItem.value || draggingItem.value.kind !== kind) return
 
-  const position = dropTarget.value?.kind === kind && dropTarget.value.index === index
-    ? dropTarget.value.position
-    : getDropPosition(event)
-  const insertionIndex = position === 'after' ? index + 1 : index
+  const normalizedTarget = dropTarget.value?.kind === kind
+    ? dropTarget.value
+    : normalizeDropTarget(kind, index, event)
+  const insertionIndex = normalizedTarget.position === 'after'
+    ? normalizedTarget.index + 1
+    : normalizedTarget.index
   const fromIndex = draggingItem.value.index
 
   if (kind === 'input') {
@@ -951,19 +1147,17 @@ function addOrSelectInput(node: any, widget: any | null, source: 'widget' | 'med
   const isMediaLoaderSource = source === 'media_loader' && media
   const fieldKey = isMediaLoaderSource
     ? media.fieldKey
-    : (
-        typeof widget?.options?.property === 'string'
-          ? widget.options.property
-          : (typeof widget?.name === 'string' ? widget.name : undefined)
-      )
-  const nameSource = isMediaLoaderSource ? media.fieldKey : (widget?.name || fieldKey || 'input')
+    : getWidgetFieldKey(widget)
+  const fallbackLabel = `Input ${activeContract.value.inputs.length + 1}`
+  const displayName = isMediaLoaderSource
+    ? media.displayName
+    : getWidgetDisplayLabel(widget, fieldKey, fallbackLabel)
+  const nameSource = isMediaLoaderSource ? media.fieldKey : displayName
 
   const nextInput: WorkflowContractInput = {
     name: slugifyName(String(nameSource), `input_${activeContract.value.inputs.length + 1}`),
-    display_name: isMediaLoaderSource
-      ? media.displayName
-      : String(widget?.name || fieldKey || `Input ${activeContract.value.inputs.length + 1}`),
-    type: isMediaLoaderSource ? media.type : normalizeType(widget?.type),
+    display_name: displayName,
+    type: isMediaLoaderSource ? media.type : normalizeWidgetType(widget),
     node_id: String(node.id),
     widget_idx: widgetIndex >= 0 ? widgetIndex : undefined,
     field_key: fieldKey,
@@ -972,9 +1166,14 @@ function addOrSelectInput(node: any, widget: any | null, source: 'widget' | 'med
     default: isMediaLoaderSource ? '' : (widget?.value ?? ''),
   }
 
+  if (nextInput.type === 'string') {
+    nextInput.ui_control = 'textarea'
+  }
+
   if (isNumericType(nextInput.type)) {
     nextInput.min = inferWidgetNumericBound(widget, 'min')
     nextInput.max = inferWidgetNumericBound(widget, 'max')
+    nextInput.step = inferWidgetNumericStep(widget, nextInput.type)
   }
 
   if (isEnumType(nextInput.type)) {
@@ -1047,7 +1246,7 @@ function updateHoverState(event: PointerEvent) {
       kind: 'input',
       label: target.source === 'media_loader'
         ? `${target.media?.label || 'file upload'} · Node ${target.node.id}`
-        : `${target.widget?.name || 'widget'} · Node ${target.node.id}`,
+        : `${getWidgetDisplayLabel(target.widget, getWidgetFieldKey(target.widget), 'widget')} · Node ${target.node.id}`,
     }
     hoverOverlay.value = { kind: 'input', style: rect }
     return
@@ -1112,6 +1311,17 @@ function detachCanvasListener() {
   document.removeEventListener('pointermove', updateHoverState, true)
 }
 
+function showSaveToast(message: string, type: 'success' | 'error' = 'success') {
+  if (saveToastTimeout) {
+    clearTimeout(saveToastTimeout)
+  }
+  saveToast.value = { message, type }
+  saveToastTimeout = setTimeout(() => {
+    saveToast.value = null
+    saveToastTimeout = null
+  }, 3000)
+}
+
 async function loadContract() {
   if (!workflowName.value) return
   loading.value = true
@@ -1131,6 +1341,7 @@ async function handleSave() {
   saving.value = true
   error.value = null
   try {
+    normalizeInputUiControls(form.value)
     hydrateApiBindings(form.value)
     const apiPrompt = await captureCurrentApiPrompt()
     response.value = await saveWorkflowContract(workflowName.value, form.value, apiPrompt)
@@ -1138,9 +1349,10 @@ async function handleSave() {
     window.dispatchEvent(new CustomEvent('comfygit:workflow-contract-saved', {
       detail: { workflowName: workflowName.value }
     }))
-    closeOverlay({ reopenPanel: true })
+    showSaveToast('Contract saved')
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to save workflow contract'
+    showSaveToast(error.value, 'error')
   } finally {
     saving.value = false
   }
@@ -1178,6 +1390,11 @@ function closeOverlay(options?: { reopenPanel?: boolean }) {
   visible.value = false
   hoverSummary.value = null
   hoverOverlay.value = null
+  saveToast.value = null
+  if (saveToastTimeout) {
+    clearTimeout(saveToastTimeout)
+    saveToastTimeout = null
+  }
   showDeleteConfirm.value = false
   clearDragState()
   if (options?.reopenPanel) {
@@ -1247,6 +1464,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   detachCanvasListener()
   stopOverlayLoop()
+  if (saveToastTimeout) {
+    clearTimeout(saveToastTimeout)
+    saveToastTimeout = null
+  }
   window.removeEventListener('comfygit:open-io-mapping', openOverlay as EventListener)
   window.removeEventListener('keydown', handleEscape)
 })
@@ -1365,6 +1586,42 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--cg-color-bg-primary) 96%, transparent);
   backdrop-filter: blur(14px);
   pointer-events: auto;
+}
+
+.io-save-toast {
+  position: absolute;
+  right: calc(100% + var(--cg-space-3));
+  bottom: var(--cg-space-4);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  width: max-content;
+  max-width: 320px;
+  padding: var(--cg-space-2) var(--cg-space-3);
+  border: 1px solid var(--cg-color-border);
+  background: var(--cg-color-bg-secondary);
+  color: var(--cg-color-text-primary);
+  box-shadow: var(--cg-shadow-lg);
+  font-size: var(--cg-font-size-sm);
+  pointer-events: none;
+}
+
+.io-save-toast.success {
+  border-color: var(--cg-color-success);
+}
+
+.io-save-toast.error {
+  border-color: var(--cg-color-error);
+}
+
+.io-save-toast-icon {
+  color: var(--cg-color-success);
+  font-weight: 700;
+}
+
+.io-save-toast.error .io-save-toast-icon {
+  color: var(--cg-color-error);
 }
 
 .io-mapping-sidebar-scroll {
@@ -1622,6 +1879,13 @@ onBeforeUnmount(() => {
     left: 0;
     width: 100vw;
     max-width: 100vw;
+  }
+
+  .io-save-toast {
+    right: auto;
+    left: var(--cg-space-4);
+    bottom: calc(72px + var(--cg-space-3));
+    max-width: calc(100% - (var(--cg-space-4) * 2));
   }
 
   .item-grid {

@@ -7,19 +7,23 @@ from pathlib import Path
 import xxhash
 from aiohttp import web
 
-from comfygit_core.models.workflow_contract import (
+from comfygit_core.assets import DownloadRequest
+from comfygit_core.models import (
+    BatchDownloadCallbacks,
+    ManifestWorkflowModel,
+    ModelResolutionContext,
     NamedWorkflowContract,
+    NodeResolutionContext,
+    ResolvedModel,
+    ResolvedNodePackage,
+    Workflow,
     WorkflowContractInput,
+    WorkflowContractInputControl,
     WorkflowContractOutput,
     WorkflowExecutionContract,
+    WorkflowNodeWidgetRef,
 )
-from comfygit_core.strategies.auto import AutoNodeStrategy, AutoModelStrategy
-from comfygit_core.models.workflow import (
-    NodeResolutionContext, ModelResolutionContext,
-    ResolvedNodePackage, ResolvedModel, WorkflowNodeWidgetRef,
-    BatchDownloadCallbacks, Workflow,
-)
-from comfygit_core.analyzers.workflow_dependency_parser import WorkflowDependencyParser
+from comfygit_core.workflow import AutoModelStrategy, AutoNodeStrategy
 
 from cgm_core.decorators import requires_environment, logged_operation
 from cgm_core.dependency_preview import dependency_review_response
@@ -341,6 +345,15 @@ def _safe_str(value) -> str | None:
     return None
 
 
+def _safe_input_ui_control(value) -> WorkflowContractInputControl | None:
+    """Return a supported contract input UI control value."""
+    if value == "input":
+        return "input"
+    if value == "textarea":
+        return "textarea"
+    return None
+
+
 def _safe_int(value) -> int:
     """Safely convert value to int, handling Mock objects."""
     if isinstance(value, int):
@@ -368,6 +381,13 @@ def _safe_number(value):
         return None
 
 
+def _safe_positive_number(value):
+    number = _safe_number(value)
+    if number is None or number <= 0:
+        return None
+    return number
+
+
 def _safe_sequence(value) -> list:
     """Safely convert sequence-like values to a list."""
     if value is None:
@@ -386,16 +406,13 @@ def _safe_dict(value) -> dict:
 
 def _workflow_manifest_models(env, workflow_name: str) -> list:
     """Return manifest models for a workflow, tolerating unavailable manifest data."""
-    try:
-        return _safe_sequence(env.pyproject.workflows.get_workflow_models(workflow_name))
-    except Exception:
-        return []
+    return list(env.get_workflow_manifest_models(workflow_name))
 
 
 async def _invalidate_workflow_resolution_cache(env, workflow_name: str) -> None:
     """Invalidate cached workflow analysis after manifest-only workflow edits."""
     try:
-        await run_sync(env.workflow_cache.invalidate, env.name, workflow_name)
+        await run_sync(env.invalidate_workflow_resolution_cache, workflow_name)
     except Exception as exc:
         logger.debug("Unable to invalidate workflow cache for %s: %s", workflow_name, exc)
 
@@ -440,7 +457,7 @@ def _iter_widget_values(widgets_values):
 def _get_workflow_contract_context(env, workflow_name: str) -> dict | None:
     """Build lightweight contract-authoring context from the current workflow file."""
     try:
-        workflow_path = env.workflow_manager.get_workflow_path(workflow_name)
+        workflow_path = env.get_existing_workflow_path(workflow_name)
     except FileNotFoundError:
         return None
 
@@ -529,8 +546,10 @@ def _parse_execution_contract_payload(data: dict) -> WorkflowExecutionContract:
                 default=item_dict.get("default"),
                 min=_safe_number(item_dict.get("min")),
                 max=_safe_number(item_dict.get("max")),
+                step=_safe_positive_number(item_dict.get("step")),
                 enum_values=[str(value) for value in _safe_sequence(item_dict.get("enum_values"))],
                 description=_safe_str(item_dict.get("description")),
+                ui_control=_safe_input_ui_control(item_dict.get("ui_control")),
             ))
 
         outputs = []
@@ -565,20 +584,9 @@ def _parse_execution_contract_payload(data: dict) -> WorkflowExecutionContract:
     )
 
 
-def _get_package_aliases(workflow_manager) -> dict[str, str]:
-    """Return package alias metadata when available."""
-    resolver = getattr(workflow_manager, "global_node_resolver", None)
-    repository = getattr(resolver, "repository", None)
-    global_mappings = getattr(repository, "global_mappings", None)
-    aliases = getattr(global_mappings, "package_aliases", None)
-    return _safe_dict(aliases)
-
-
 def _reconstruct_optional_node_buckets(env, dependencies, workflow_name: str) -> dict[str, list]:
     """Place saved optional node mappings back into their original resolution buckets."""
-    custom_map = env.pyproject.workflows.get_custom_node_map(workflow_name)
-    if not isinstance(custom_map, dict):
-        custom_map = {}
+    custom_map = dict(env.get_workflow_custom_node_map(workflow_name))
     optional_node_types = {
         node_type for node_type, mapping in custom_map.items()
         if mapping is False
@@ -586,8 +594,7 @@ def _reconstruct_optional_node_buckets(env, dependencies, workflow_name: str) ->
     if not optional_node_types:
         return {"unresolved": [], "ambiguous": [], "uninstallable": [], "resolved": []}
 
-    installed = env.pyproject.nodes.get_existing()
-    resolver = env.workflow_manager.global_node_resolver
+    installed = env.list_manifest_nodes()
     node_context = NodeResolutionContext(
         installed_packages=installed,
         custom_mappings={
@@ -608,7 +615,7 @@ def _reconstruct_optional_node_buckets(env, dependencies, workflow_name: str) ->
 
     buckets = {"unresolved": [], "ambiguous": [], "uninstallable": [], "resolved": []}
     for node in unique_nodes.values():
-        resolved_packages = resolver.resolve_single_node_with_context(node, node_context)
+        resolved_packages = env.resolve_workflow_node_packages(node, node_context)
         if resolved_packages is None:
             buckets["unresolved"].append(node)
             continue
@@ -728,8 +735,8 @@ async def _apply_explicit_node_mapping_choices(
     node_choices: dict[str, dict],
 ) -> dict[str, list]:
     """Persist explicit per-workflow node mapping choices before resolution."""
-    custom_map = await run_sync(env.pyproject.workflows.get_custom_node_map, workflow_name)
-    before = dict(custom_map) if isinstance(custom_map, dict) else {}
+    custom_map = await run_sync(env.get_workflow_custom_node_map, workflow_name)
+    before = dict(custom_map)
 
     changes = {
         "nodes_marked_optional": [],
@@ -747,7 +754,7 @@ async def _apply_explicit_node_mapping_choices(
             if not package_id or before.get(node_type) == package_id:
                 continue
             await run_sync(
-                env.pyproject.workflows.set_custom_node_mapping,
+                env.set_workflow_custom_node_mapping,
                 workflow_name,
                 node_type,
                 package_id,
@@ -762,7 +769,7 @@ async def _apply_explicit_node_mapping_choices(
             if before.get(node_type) is False:
                 continue
             await run_sync(
-                env.pyproject.workflows.set_custom_node_mapping,
+                env.set_workflow_custom_node_mapping,
                 workflow_name,
                 node_type,
                 None,
@@ -772,7 +779,7 @@ async def _apply_explicit_node_mapping_choices(
 
         if action == "skip" and node_type in before:
             removed = await run_sync(
-                env.pyproject.workflows.remove_custom_node_mapping,
+                env.remove_workflow_custom_node_mapping,
                 workflow_name,
                 node_type,
             )
@@ -1148,7 +1155,7 @@ def _apply_explicit_model_choices_to_manifest(env, workflow_name: str, model_cho
 
     if updated_models:
         try:
-            env.pyproject.workflows.set_workflow_models(workflow_name, current_models)
+            env.set_workflow_manifest_models(workflow_name, current_models)
         except Exception:
             logger.exception("Failed to write workflow model choices for '%s'", workflow_name)
 
@@ -1365,10 +1372,10 @@ async def set_model_importance(request: web.Request, env) -> web.Response:
 
     # Call core library
     success = await run_sync(
-        env.workflow_manager.update_model_criticality,
+        env.update_workflow_model_criticality,
         name,
         model,
-        importance
+        importance,
     )
 
     if not success:
@@ -1406,7 +1413,7 @@ async def add_workflow_model(request: web.Request, env) -> web.Response:
 
     try:
         model = await run_sync(
-            env.workflow_manager.add_existing_model_to_workflow,
+            env.add_workflow_model_dependency,
             workflow_name=name,
             model_hash=model_hash,
             relative_path=relative_path,
@@ -1448,7 +1455,7 @@ async def remove_workflow_model(request: web.Request, env) -> web.Response:
 
     try:
         removed = await run_sync(
-            env.workflow_manager.remove_manual_model_from_workflow,
+            env.remove_workflow_model_dependency,
             workflow_name=name,
             model_hash=model_hash,
             relative_path=relative_path,
@@ -1629,15 +1636,15 @@ async def install_workflow(request: web.Request, env) -> web.Response:
 async def analyze_workflow(request: web.Request, env) -> web.Response:
     """Analyze workflow for interactive resolution wizard.
 
-    Uses workflow_manager.analyze_and_resolve_workflow directly to avoid
+    Uses the environment analysis facade directly to avoid
     triggering any pending downloads - we just want the analysis data.
     """
     name = request.match_info["name"]
 
-    # Call analyze_and_resolve_workflow directly (NOT env.resolve_workflow)
+    # Analyze directly (NOT env.resolve_workflow)
     # This gives us analysis + resolution WITHOUT executing downloads
     dependencies, result = await run_sync(
-        env.workflow_manager.analyze_and_resolve_workflow,
+        env.analyze_workflow_dependencies,
         name
     )
 
@@ -1662,12 +1669,10 @@ async def analyze_workflow(request: web.Request, env) -> web.Response:
     version_gated_nodes = _safe_sequence(getattr(result, "nodes_version_gated", None))
     uninstallable_nodes = _safe_sequence(getattr(result, "nodes_uninstallable", None))
     node_guidance = _safe_dict(getattr(result, "node_guidance", None))
-    package_aliases = _get_package_aliases(env.workflow_manager)
+    package_aliases = env.get_workflow_package_aliases()
     optional_buckets = _reconstruct_optional_node_buckets(env, dependencies, name)
     saved_optional_choice = {"action": "optional"}
-    custom_node_map = env.pyproject.workflows.get_custom_node_map(name)
-    if not isinstance(custom_node_map, dict):
-        custom_node_map = {}
+    custom_node_map = dict(env.get_workflow_custom_node_map(name))
     resolved_nodes = [
         node for node in result.nodes_resolved
         if getattr(node, "is_optional", False) is not True
@@ -1829,22 +1834,10 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
         )
 
     try:
-        # Parse workflow JSON into Workflow object
-        workflow_obj = Workflow.from_json(workflow_data)
-
-        # Analyze using the Workflow object directly (no temp file needed)
-        parser = WorkflowDependencyParser(
-            workflow=workflow_obj,
+        dependencies, result = await run_sync(
+            env.analyze_workflow_json,
+            workflow_data,
             workflow_name=workflow_name,
-            cec_path=env.cec_path,
-            builtin_versions_repository=getattr(env.workflow_manager, "builtin_versions_repository", None),
-        )
-        dependencies = parser.analyze_dependencies()
-
-        # Use the same resolution logic as analyze_workflow
-        result = await run_sync(
-            env.workflow_manager.resolve_workflow,
-            dependencies
         )
     except Exception as e:
         return web.json_response(
@@ -1854,7 +1847,7 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
 
     # Determine uninstalled nodes (same logic as analyze_workflow lines 641-648)
     # For unsaved workflows, check against environment's installed packages
-    installed_packages = set(env.pyproject.nodes.get_existing().keys())
+    installed_packages = set(env.list_manifest_nodes().keys())
     uninstalled_set = {
         n.package_id for n in result.nodes_resolved
         if n.package_id and n.package_id not in installed_packages
@@ -1868,7 +1861,7 @@ async def analyze_workflow_json(request: web.Request, env) -> web.Response:
     version_gated_nodes = _safe_sequence(getattr(result, "nodes_version_gated", None))
     uninstallable_nodes = _safe_sequence(getattr(result, "nodes_uninstallable", None))
     node_guidance = _safe_dict(getattr(result, "node_guidance", None))
-    package_aliases = _get_package_aliases(env.workflow_manager)
+    package_aliases = env.get_workflow_package_aliases()
     needs_user_input = bool(
         result.nodes_unresolved or result.nodes_ambiguous or
         result.models_unresolved or result.models_ambiguous
@@ -1992,15 +1985,14 @@ async def search_nodes(request: web.Request, env) -> web.Response:
         return web.json_response({"results": [], "total": 0})
 
     # Get installed packages for marking
-    installed = env.pyproject.nodes.get_existing()
+    installed = env.list_manifest_nodes()
 
     # Search using core library
     matches = await run_sync(
-        env.workflow_manager.global_node_resolver.search_packages,
+        env.search_workflow_node_packages,
         query,
-        installed,
-        True,  # include_registry
-        limit
+        include_registry=True,
+        limit=limit,
     )
 
     # Normalize scores to 0.0-1.0 range for frontend display
@@ -2054,17 +2046,16 @@ async def search_models(request: web.Request, env) -> web.Response:
 
     # Search using core library
     matches = await run_sync(
-        env.workflow_manager.search_models,
+        env.search_workflow_models,
         query,
-        None,  # node_type filter
-        limit
+        node_type=None,
+        limit=limit,
     )
 
     # Get global models for download source info
     global_models = {}
     try:
-        all_global = env.pyproject.models.get_all()
-        for m in all_global:
+        for m in env.list_manifest_models().values():
             global_models[m.hash] = m
     except Exception:
         pass
@@ -2119,11 +2110,11 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
         workflow_name=name,
         node_choices=node_choices,
     )
-    await run_sync(env.workflow_cache.invalidate, env.name, name)
+    await run_sync(env.invalidate_workflow_resolution_cache, name)
 
     # Get current resolution state (does NOT execute downloads)
     _, result = await run_sync(
-        env.workflow_manager.analyze_and_resolve_workflow,
+        env.analyze_workflow_dependencies,
         name
     )
     model_paths_to_sync = sum(
@@ -2135,7 +2126,7 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
     # Apply strategies to fix unresolved issues (writes to pyproject.toml)
     if result.has_issues:
         result = await run_sync(
-            env.workflow_manager.fix_resolution,
+            env.fix_workflow_resolution,
             result,
             node_strategy,
             model_strategy
@@ -2143,7 +2134,7 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
         model_paths_synced = model_paths_to_sync
     elif model_paths_to_sync > 0:
         model_paths_synced = await run_sync(
-            env.workflow_manager.update_workflow_model_paths,
+            env.update_workflow_model_paths,
             result
         )
 
@@ -2151,7 +2142,7 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
 
     # Collect what needs to be installed (excluding user-skipped packages)
     nodes_to_install = []
-    installed = env.pyproject.nodes.get_existing()
+    installed = env.list_manifest_nodes()
     explicit_registry_package_ids = _explicit_registry_install_package_ids(node_choices)
     for node in result.nodes_resolved:
         if node.package_id and node.match_type != "optional":
@@ -2183,9 +2174,7 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
 
     # Write property_download_intent models to pyproject (they're in models_resolved, not processed by fix_resolution)
     try:
-        from comfygit_core.models.manifest import ManifestWorkflowModel
-
-        existing_models = env.pyproject.workflows.get_workflow_models(name)
+        existing_models = list(env.get_workflow_manifest_models(name))
         existing_filenames = {m.filename for m in existing_models if m.sources}
 
         for model in result.models_resolved:
@@ -2221,12 +2210,12 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
                     sources=[url],
                     relative_path=target_path
                 )
-                env.pyproject.workflows.add_workflow_model(name, manifest_model)
+                env.add_workflow_manifest_model(name, manifest_model)
     except Exception:
         pass  # Continue even if write fails - downloads will still work
 
     # Get models directory for checking if files already exist
-    models_dir = env.workspace.workspace_config_manager.get_models_directory()
+    models_dir = env.workspace.get_models_directory()
 
     # Collect models that need downloading (download_intent/property_download_intent with model_source)
     # Skip models where user chose to cancel/optional, or file already exists
@@ -2262,13 +2251,11 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
     # Also check pyproject.toml for any unresolved models with sources
     # (in case they weren't picked up from resolution result)
     try:
-        all_workflows = env.pyproject.workflows.get_all_with_resolutions()
-        workflow_data = all_workflows.get(name, {})
-        for manifest_model in workflow_data.get("models", []):
-            if manifest_model.get("status") == "unresolved" and manifest_model.get("sources"):
-                sources = manifest_model.get("sources", [])
-                filename = manifest_model.get("filename")
-                rel_path = manifest_model.get("relative_path")
+        for manifest_model in env.get_workflow_manifest_models(name):
+            if manifest_model.status == "unresolved" and manifest_model.sources:
+                sources = manifest_model.sources
+                filename = manifest_model.filename
+                rel_path = manifest_model.relative_path
 
                 # Check if user cancelled this download
                 choice = model_choices.get(filename)
@@ -2387,7 +2374,7 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
                 workflow_name=name,
                 node_choices=node_choices,
             )
-            await run_sync(env.workflow_cache.invalidate, env.name, name)
+            await run_sync(env.invalidate_workflow_resolution_cache, name)
 
             result = await run_sync(
                 env.resolve_workflow,
@@ -2407,7 +2394,7 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
 
             # Collect nodes to install
             nodes_to_install = []
-            installed = env.pyproject.nodes.get_existing()
+            installed = env.list_manifest_nodes()
             explicit_registry_package_ids = _explicit_registry_install_package_ids(node_choices)
             for node in result.nodes_resolved:
                 if node.package_id and node.match_type != "optional":
@@ -2507,27 +2494,23 @@ async def get_pending_downloads(request: web.Request, env) -> web.Response:
     pending_downloads = []
 
     try:
-        # Read directly from pyproject.toml - more reliable than resolution flow
-        all_workflows = env.pyproject.workflows.get_all_with_resolutions()
-
-        for workflow_name, workflow_data in all_workflows.items():
-            models = workflow_data.get("models", [])
-
-            for model in models:
+        # Read from manifest snapshot, which is more reliable than resolution flow.
+        for workflow_name, workflow_data in env.list_manifest_workflows().items():
+            for model in workflow_data.models:
                 # Check for unresolved models with sources (download URLs)
-                if model.get("status") == "unresolved" and model.get("sources"):
-                    sources = model.get("sources", [])
+                if model.status == "unresolved" and model.sources:
+                    sources = model.sources
                     if sources:
-                        target_path = model.get("relative_path")
+                        target_path = model.relative_path
                         if target_path:
-                            models_dir = env.workspace.workspace_config_manager.get_models_directory()
+                            models_dir = env.workspace.get_models_directory()
                             normalized_target = str(target_path).replace("\\", "/").lstrip("/")
                             if models_dir and (models_dir / normalized_target).exists():
                                 continue
 
                         pending_downloads.append({
                             "workflow": workflow_name,
-                            "filename": model.get("filename", "unknown"),
+                            "filename": model.filename or "unknown",
                             "url": sources[0],  # Use first source URL
                             "target_path": target_path,
                             "size": 0  # Unknown until download starts
@@ -2681,10 +2664,7 @@ async def download_model_stream(request: web.Request, env) -> web.StreamResponse
 
     async def run_download():
         """Run download in thread pool."""
-        from comfygit_core.services.model_downloader import DownloadRequest
-
-        downloader = env.workflow_manager.downloader
-        models_dir = downloader.models_dir
+        models_dir = env.get_model_download_directory()
         full_target = models_dir / target_path
 
         request_obj = DownloadRequest(
@@ -2693,7 +2673,7 @@ async def download_model_stream(request: web.Request, env) -> web.StreamResponse
             workflow_name=workflow_name
         )
 
-        return await run_sync(downloader.download, request_obj, broadcast_progress)
+        return await run_sync(env.download_model_request, request_obj, broadcast_progress)
 
     # Add our queue to subscribers
     my_queue: asyncio.Queue = asyncio.Queue()
@@ -2769,38 +2749,10 @@ async def download_model_stream(request: web.Request, env) -> web.StreamResponse
 
 
 async def _finalize_download(env, workflow_name: str, filename: str, model_hash: str):
-    """Update pyproject.toml after successful download.
-
-    Finds the workflow model by filename and updates it to resolved status.
-    """
-    from comfygit_core.models.manifest import ManifestModel
-
-    models = env.pyproject.workflows.get_workflow_models(workflow_name)
-
-    for model in models:
-        if model.filename == filename and model.status == "unresolved" and model.sources:
-            # Get model from repository
-            resolved_model = env.workflow_manager.model_repository.get_model(model_hash)
-            if not resolved_model:
-                return  # Model not indexed yet - skip update
-
-            # Create global table entry with download source preserved
-            manifest_model = ManifestModel(
-                hash=model_hash,
-                filename=resolved_model.filename,
-                relative_path=resolved_model.relative_path,
-                category=model.category,
-                size=resolved_model.file_size,
-                sources=model.sources  # Preserve download URL
-            )
-            env.pyproject.models.add_model(manifest_model)
-
-            # Update workflow model to resolved
-            model.hash = model_hash
-            model.status = "resolved"
-            model.sources = []
-            model.relative_path = None
-
-            # Save changes
-            env.pyproject.workflows.set_workflow_models(workflow_name, models)
-            return
+    """Update manifest state after a workflow model download succeeds."""
+    await run_sync(
+        env.mark_workflow_model_download_resolved,
+        workflow_name,
+        filename=filename,
+        model_hash=model_hash,
+    )

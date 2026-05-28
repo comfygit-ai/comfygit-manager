@@ -38,8 +38,8 @@ parent_dir = Path(__file__).parent.parent
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))
 
-# Add server directory to path so deploy module can be found
-# Force insert at position 0 to ensure it takes precedence
+# Add server directory to path for modules imported as top-level ComfyUI plugin
+# files during panel tests.
 server_dir = parent_dir / "server"
 if str(server_dir) not in sys.path:
     sys.path.insert(0, str(server_dir))
@@ -52,10 +52,6 @@ import server as real_server_package  # noqa: E402
 # This allows comfygit_panel.py to import from server.PromptServer
 if not hasattr(real_server_package, 'PromptServer'):
     real_server_package.PromptServer = MagicMock()
-
-# Note: We intentionally don't pre-import deploy modules here.
-# Pre-importing would interfere with mocking in panel tests.
-
 
 @pytest.fixture
 def temp_dir() -> Generator[Path, None, None]:
@@ -253,7 +249,7 @@ def mock_comfyui_args() -> list[str]:
 
 @pytest.fixture
 def mock_workspace_factory(mocker, temp_dir):
-    """Mock WorkspaceFactory for tests that don't need real workspace."""
+    """Mock Workspace.open for tests that don't need real workspace."""
     # Use temp directory so mkdir works
     test_workspace = temp_dir / "test_workspace"
     test_workspace.mkdir()
@@ -264,7 +260,7 @@ def mock_workspace_factory(mocker, temp_dir):
     mock_workspace_obj.paths = mocker.Mock()
     mock_workspace_obj.paths.metadata = test_workspace / ".metadata"
 
-    mocker.patch("server.orchestrator.WorkspaceFactory.find", return_value=mock_workspace_obj)
+    mocker.patch("server.orchestrator.Workspace.open", return_value=mock_workspace_obj)
     # Also mock the control server to avoid port binding issues in tests
     mocker.patch("server.orchestrator.Orchestrator._start_control_server")
     return mock_workspace_obj

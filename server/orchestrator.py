@@ -21,22 +21,18 @@ import venv
 from pathlib import Path
 from typing import Optional
 
-from comfygit_core.core.environment import Environment
-from comfygit_core.core.workspace import Workspace
-from comfygit_core.factories.workspace_factory import WorkspaceFactory
-from comfygit_core.lifecycle.switch_observer import (
+from comfygit_core import Environment, Workspace
+from comfygit_core.runtime import (
     SWITCH_STATUS_FILE,
     SwitchObserverServer,
     append_switch_log,
     cleanup_switch_status as core_cleanup_switch_status,
     read_switch_status as core_read_switch_status,
-    write_switch_status as core_write_switch_status,
-)
-from comfygit_core.lifecycle.comfyui_readiness import (
     resolve_comfyui_endpoint,
     wait_for_comfyui_ready,
+    write_switch_status as core_write_switch_status,
 )
-from comfygit_core.models.exceptions import CDEnvironmentNotFoundError, CDWorkspaceNotFoundError
+from comfygit_core.models import CDEnvironmentNotFoundError, CDWorkspaceNotFoundError
 
 
 # ============================================================================
@@ -142,7 +138,7 @@ def detect_environment_type() -> tuple[bool, Optional[Workspace], Optional[Envir
 
     # Step 2: Load workspace
     try:
-        workspace = WorkspaceFactory.find(workspace_root)
+        workspace = Workspace.open(workspace_root)
     except CDWorkspaceNotFoundError:
         return (False, None, None)
 
@@ -550,7 +546,7 @@ def _get_venv_executables(venv_path: Path) -> tuple[Path, Path]:
 
 def _create_venv_with_uv(venv_path: Path, python_exe: Path) -> bool:
     """
-    Create venv using UVCommand from comfygit-core.
+    Create venv using comfygit-core's public uv runtime helper.
 
     Uses bundled uv binary which creates symlinks on macOS,
     avoiding the @executable_path dylib issue.
@@ -558,23 +554,27 @@ def _create_venv_with_uv(venv_path: Path, python_exe: Path) -> bool:
     Returns True on success, False if uv unavailable.
     """
     try:
-        from comfygit_core.integrations.uv_command import UVCommand
-
-        uv = UVCommand()
-        uv.venv(venv_path, python="3.12")
+        from comfygit_core.runtime import create_uv_venv
 
         # Install comfygit-core using uv pip (doesn't need pip in venv)
         dev_core_path = os.environ.get("COMFYGIT_DEV_CORE_PATH")
         if dev_core_path:
             print(f"[ComfyGit] Dev mode: installing core from {dev_core_path}")
-            uv.pip_install(["-e", dev_core_path], python=python_exe)
+            install_packages = ["-e", dev_core_path]
         else:
-            uv.pip_install(["comfygit-core"], python=python_exe)
+            install_packages = ["comfygit-core"]
+
+        create_uv_venv(
+            venv_path,
+            python="3.12",
+            install_packages=install_packages,
+            install_python=python_exe,
+        )
 
         return True
 
     except ImportError:
-        print("[ComfyGit] UVCommand not available, falling back to venv module")
+        print("[ComfyGit] uv runtime helper not available, falling back to venv module")
         return False
     except Exception as e:
         print(f"[ComfyGit] uv venv failed ({e}), falling back to venv module")
@@ -598,6 +598,45 @@ def _create_venv_with_stdlib(venv_path: Path, pip_exe: Path) -> None:
         subprocess.run([str(pip_exe), "install", "comfygit-core", "--quiet"], check=True)
 
 
+def _orchestrator_venv_is_current(venv_path: Path, python_exe: Path) -> bool:
+    """Return true when the existing orchestrator venv can import required core APIs."""
+    if not (venv_path.exists() and python_exe.exists()):
+        return False
+
+    check_script = """
+import importlib.util
+import os
+from pathlib import Path
+
+spec = importlib.util.find_spec("comfygit_core.runtime")
+if spec is None:
+    raise SystemExit(1)
+
+dev_core_path = os.environ.get("COMFYGIT_DEV_CORE_PATH")
+if dev_core_path:
+    import comfygit_core
+
+    core_file = Path(comfygit_core.__file__).resolve()
+    expected = Path(dev_core_path).resolve()
+    try:
+        core_file.relative_to(expected)
+    except ValueError:
+        raise SystemExit(2)
+"""
+
+    try:
+        result = subprocess.run(
+            [str(python_exe), "-c", check_script],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except Exception:
+        return False
+
+    return result.returncode == 0
+
+
 def ensure_orchestrator_venv(venv_path: Path) -> None:
     """
     Create dedicated virtual environment for orchestrator.
@@ -608,7 +647,7 @@ def ensure_orchestrator_venv(venv_path: Path) -> None:
     """
     python_exe, pip_exe = _get_venv_executables(venv_path)
 
-    if venv_path.exists() and python_exe.exists():
+    if _orchestrator_venv_is_current(venv_path, python_exe):
         return  # Already set up
 
     if venv_path.exists():
@@ -675,7 +714,7 @@ class Orchestrator:
         self.comfyui_args = args
 
         # Load workspace
-        self.workspace = WorkspaceFactory.find(workspace_root)
+        self.workspace = Workspace.open(workspace_root)
 
         # State files
         self.metadata_dir = self.workspace.path / ".metadata"
@@ -927,19 +966,10 @@ class Orchestrator:
             List of flags (e.g., ["--cpu"]) or empty list
         """
         try:
-            # Get torch version from the environment's venv
-            pip_show_output = env.uv_manager.show_package(
-                "torch", env.uv_manager.python_executable
-            )
-
-            # Extract version from output (e.g., "Version: 2.9.0+cu128")
-            import re
-            match = re.search(r'^Version:\s*(.+)$', pip_show_output, re.MULTILINE)
-            if not match:
+            version = env.get_runtime_package_version("torch")
+            if not version:
                 print("[Orchestrator] Could not parse torch version, defaulting to --cpu")
                 return ["--cpu"]
-
-            version = match.group(1).strip()
 
             # Check for backend suffix (e.g., +cu128, +rocm6.3)
             if '+' in version:
@@ -972,7 +1002,7 @@ class Orchestrator:
         self.config = load_workspace_config(self.metadata_dir)
 
         # Use environment's UV-managed Python
-        python_exe = env.uv_manager.python_executable
+        python_exe = env.get_runtime_python()
         main_py = env.comfyui_path / "main.py"
 
         # Detect backend-specific flags
@@ -1211,7 +1241,7 @@ class Orchestrator:
     def _get_recovery_command(self, env_name: str) -> str:
         """Generate manual recovery command."""
         env = self.workspace.get_environment(env_name, auto_sync=False)
-        python_exe = env.uv_manager.python_executable
+        python_exe = env.get_runtime_python()
         main_py = env.comfyui_path / "main.py"
         args = ' '.join(self.comfyui_args)
 

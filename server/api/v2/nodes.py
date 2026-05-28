@@ -1,8 +1,10 @@
 """Node management API."""
 from collections import defaultdict
 from aiohttp import web
-from comfygit_core.models.dependency_resolution import DependencyResolutionAcceptance
-from comfygit_core.models.exceptions import CDDependencyPreviewStaleError
+from comfygit_core.models import (
+    CDDependencyPreviewStaleError,
+    DependencyResolutionAcceptance,
+)
 
 from cgm_core.dependency_preview import (
     build_install_identifier,
@@ -170,7 +172,7 @@ async def get_nodes(request: web.Request, env) -> web.Response:
     try:
         # Get installed nodes (from list_nodes) and environment status
         installed_nodes = await run_sync(env.list_nodes)
-        tracked_nodes = env.pyproject.nodes.get_existing()
+        tracked_nodes = env.list_manifest_nodes()
         status = await run_sync(env.status)
 
         # Build workflow usage map
@@ -323,7 +325,7 @@ async def update_node_criticality(request: web.Request, env) -> web.Response:
             "error": "Invalid criticality. Must be 'required' or 'optional'."
         }, status=400)
 
-    tracked_nodes = env.pyproject.nodes.get_existing()
+    tracked_nodes = env.list_manifest_nodes()
     identifier, _node = _find_tracked_node(tracked_nodes, node_name)
     if not identifier:
         return web.json_response({
@@ -331,14 +333,7 @@ async def update_node_criticality(request: web.Request, env) -> web.Response:
         }, status=404)
 
     try:
-        if hasattr(env, "update_node_criticality"):
-            success = await run_sync(env.update_node_criticality, identifier, criticality)
-        elif hasattr(env.pyproject.nodes, "set_criticality"):
-            success = await run_sync(env.pyproject.nodes.set_criticality, identifier, criticality)
-        else:
-            return web.json_response({
-                "error": "Installed comfygit-core does not support node criticality updates"
-            }, status=501)
+        success = await run_sync(env.update_node_criticality, identifier, criticality)
 
         if not success:
             return web.json_response({

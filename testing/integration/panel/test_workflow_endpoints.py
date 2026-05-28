@@ -111,6 +111,68 @@ class TestWorkflowsListEndpoint:
 
 
 @pytest.mark.integration
+class TestWorkflowContractEndpoint:
+    """GET/PUT workflow execution contract endpoints."""
+
+    async def test_put_preserves_numeric_step_and_string_ui_control(self, client, mock_environment):
+        """Saved contract payload should round-trip durable UI metadata."""
+        resp = await client.put(
+            "/v2/comfygit/workflow/test.json/contract",
+            json={
+                "api_prompt": {"1": {"class_type": "KSampler", "inputs": {}}},
+                "contracts": {
+                    "default": {
+                        "inputs": [
+                            {
+                                "name": "cfg",
+                                "type": "number",
+                                "node_id": "1",
+                                "required": True,
+                                "default": 7.5,
+                                "min": 0,
+                                "max": 20,
+                                "step": 0.25,
+                            },
+                            {
+                                "name": "prompt",
+                                "type": "string",
+                                "node_id": "2",
+                                "required": True,
+                                "ui_control": "input",
+                            },
+                        ],
+                        "outputs": [
+                            {
+                                "name": "preview",
+                                "type": "image",
+                                "node_id": "9",
+                            },
+                            {
+                                "name": "archive",
+                                "type": "file",
+                                "node_id": "10",
+                            },
+                        ],
+                    }
+                },
+            },
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+        inputs = data["execution_contract"]["contracts"]["default"]["inputs"]
+        outputs = data["execution_contract"]["contracts"]["default"]["outputs"]
+        assert [item["name"] for item in inputs] == ["cfg", "prompt"]
+        assert [item["name"] for item in outputs] == ["preview", "archive"]
+        assert inputs[0]["step"] == 0.25
+        assert inputs[1]["ui_control"] == "input"
+        mock_environment.set_workflow_execution_contract.assert_called_once()
+        saved_contract = mock_environment.set_workflow_execution_contract.call_args.args[1]
+        assert [item.name for item in saved_contract.contracts["default"].inputs] == ["cfg", "prompt"]
+        assert [item.name for item in saved_contract.contracts["default"].outputs] == ["preview", "archive"]
+
+
+@pytest.mark.integration
 class TestWorkflowDetailsEndpoint:
     """GET /v2/comfygit/workflow/{name}/details - Get workflow details."""
 
@@ -1569,8 +1631,7 @@ class TestApplyResolutionEndpoint:
 
         # Mock workspace for models_dir check
         mock_environment.workspace = Mock()
-        mock_environment.workspace.workspace_config_manager = Mock()
-        mock_environment.workspace.workspace_config_manager.get_models_directory.return_value = None
+        mock_environment.workspace.get_models_directory.return_value = None
 
         # Mock resolution result (empty - all resolution happens via Path 2)
         mock_result = create_mock_resolution(
@@ -2412,33 +2473,17 @@ class TestAnalyzeWorkflowJsonEndpoint:
         assert "match_confidence" in resolved_model
         assert "has_download_source" in resolved_model
 
-    async def test_analyze_json_passes_builtin_versions_repository(
+    async def test_analyze_json_delegates_to_environment_facade(
         self,
         client,
         mock_environment,
-        monkeypatch
     ):
-        """Parser for analyze-json should receive builtin_versions_repository."""
-        import api.v2.workflows as workflow_api
-
-        captured_kwargs = {}
-        fake_dependencies = Mock()
-
-        class FakeParser:
-            def __init__(self, **kwargs):
-                captured_kwargs.update(kwargs)
-
-            def analyze_dependencies(self):
-                return fake_dependencies
-
-        builtin_repo = object()
-        mock_environment.workflow_manager.builtin_versions_repository = builtin_repo
-        mock_environment.workflow_manager.resolve_workflow = Mock(return_value=create_mock_resolution())
-        mock_environment.pyproject = Mock()
-        mock_environment.pyproject.nodes = Mock()
-        mock_environment.pyproject.nodes.get_existing.return_value = {}
-
-        monkeypatch.setattr(workflow_api, "WorkflowDependencyParser", FakeParser)
+        """Analyze-json should call core's unsaved workflow analysis facade."""
+        mock_environment.analyze_workflow_json.side_effect = None
+        mock_environment.analyze_workflow_json.return_value = (
+            Mock(workflow_name="test"),
+            create_mock_resolution(),
+        )
 
         resp = await client.post(
             "/v2/comfygit/workflow/analyze-json",
@@ -2446,8 +2491,10 @@ class TestAnalyzeWorkflowJsonEndpoint:
         )
 
         assert resp.status == 200
-        assert captured_kwargs["builtin_versions_repository"] is builtin_repo
-        assert captured_kwargs["workflow_name"] == "test"
+        mock_environment.analyze_workflow_json.assert_called_once_with(
+            {"nodes": {}},
+            workflow_name="test",
+        )
 
     async def test_analyze_json_version_gated_and_uninstallable_require_action_not_user_input(
         self,
