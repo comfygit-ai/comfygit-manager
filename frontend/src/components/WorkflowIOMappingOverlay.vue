@@ -500,6 +500,51 @@ function resolveInputApiBinding(node: any, widget: any | null, fieldKey: string 
   }
 }
 
+function asNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed || undefined
+}
+
+function isGeneratedWidgetName(value: unknown): boolean {
+  const text = asNonEmptyString(value)
+  return !!text && /^(value|input)_\d+$/i.test(text)
+}
+
+function getWidgetFieldKey(widget: any | null): string | undefined {
+  return asNonEmptyString(widget?.options?.property) ?? asNonEmptyString(widget?.name)
+}
+
+function firstHumanWidgetLabel(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    const text = asNonEmptyString(value)
+    if (text && !isGeneratedWidgetName(text)) {
+      return text
+    }
+  }
+  return undefined
+}
+
+function getWidgetDisplayLabel(widget: any | null, fieldKey: string | undefined, fallback: string): string {
+  return firstHumanWidgetLabel(
+    widget?.label,
+    widget?.options?.label,
+    widget?.input?.label,
+    widget?.localized_name,
+    widget?.display_name,
+    widget?.displayName,
+    widget?.options?.localized_name,
+    widget?.options?.display_name,
+    widget?.options?.displayName,
+    widget?.input?.localized_name,
+    widget?.input?.display_name,
+    widget?.input?.displayName,
+    widget?.sourceWidgetName,
+    widget?.name,
+    fieldKey,
+  ) ?? fallback
+}
+
 function hydrateApiBindings(contract: WorkflowExecutionContract) {
   const graph = props.comfyApp?.rootGraph ?? props.comfyApp?.graph
   for (const namedContract of Object.values(contract.contracts)) {
@@ -507,11 +552,7 @@ function hydrateApiBindings(contract: WorkflowExecutionContract) {
       if (input.widget_idx == null) continue
       const node = graph?.getNodeById?.(String(input.node_id))
       const widget = Array.isArray(node?.widgets) ? node.widgets[input.widget_idx] : null
-      const fieldKey = input.field_key || (
-        typeof widget?.options?.property === 'string'
-          ? widget.options.property
-          : (typeof widget?.name === 'string' ? widget.name : undefined)
-      )
+      const fieldKey = input.field_key || getWidgetFieldKey(widget)
       if (fieldKey) {
         input.field_key = fieldKey
       }
@@ -989,18 +1030,16 @@ function addOrSelectInput(node: any, widget: any | null, source: 'widget' | 'med
   const isMediaLoaderSource = source === 'media_loader' && media
   const fieldKey = isMediaLoaderSource
     ? media.fieldKey
-    : (
-        typeof widget?.options?.property === 'string'
-          ? widget.options.property
-          : (typeof widget?.name === 'string' ? widget.name : undefined)
-      )
-  const nameSource = isMediaLoaderSource ? media.fieldKey : (widget?.name || fieldKey || 'input')
+    : getWidgetFieldKey(widget)
+  const fallbackLabel = `Input ${activeContract.value.inputs.length + 1}`
+  const displayName = isMediaLoaderSource
+    ? media.displayName
+    : getWidgetDisplayLabel(widget, fieldKey, fallbackLabel)
+  const nameSource = isMediaLoaderSource ? media.fieldKey : displayName
 
   const nextInput: WorkflowContractInput = {
     name: slugifyName(String(nameSource), `input_${activeContract.value.inputs.length + 1}`),
-    display_name: isMediaLoaderSource
-      ? media.displayName
-      : String(widget?.name || fieldKey || `Input ${activeContract.value.inputs.length + 1}`),
+    display_name: displayName,
     type: isMediaLoaderSource ? media.type : normalizeType(widget?.type),
     node_id: String(node.id),
     widget_idx: widgetIndex >= 0 ? widgetIndex : undefined,
@@ -1089,7 +1128,7 @@ function updateHoverState(event: PointerEvent) {
       kind: 'input',
       label: target.source === 'media_loader'
         ? `${target.media?.label || 'file upload'} · Node ${target.node.id}`
-        : `${target.widget?.name || 'widget'} · Node ${target.node.id}`,
+        : `${getWidgetDisplayLabel(target.widget, getWidgetFieldKey(target.widget), 'widget')} · Node ${target.node.id}`,
     }
     hoverOverlay.value = { kind: 'input', style: rect }
     return
