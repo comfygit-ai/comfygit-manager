@@ -685,16 +685,31 @@ function inferWidgetNumericBound(widget: any, key: 'min' | 'max'): number | unde
   return undefined
 }
 
-function inferWidgetNumericStep(widget: any): number | undefined {
-  const value = firstPresentWidgetValue(widget, [
-    ['options', 'step'],
-    ['input', 'step'],
-    ['step'],
-  ])
+function isSubgraphPromotedWidget(widget: any): boolean {
+  return widget?.sourceNodeId != null || asNonEmptyString(widget?.sourceWidgetName) != null
+}
+
+function parsePositiveNumericMetadata(value: unknown): number | undefined {
   const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed <= 0) return undefined
   if (Math.abs(parsed) >= UNBOUNDED_NUMERIC_BOUND_ABS) return undefined
   return parsed
+}
+
+function inferWidgetNumericStep(widget: any, inputType: string | undefined): number | undefined {
+  const weakRuntimeStep = inputType === 'integer' && isSubgraphPromotedWidget(widget)
+  const paths = [
+    { path: ['input', 'step'], strong: true },
+    { path: ['input', 'widget', 'step'], strong: true },
+    { path: ['step'], strong: false },
+    { path: ['options', 'step'], strong: false },
+  ]
+  for (const { path, strong } of paths) {
+    if (weakRuntimeStep && !strong) continue
+    const parsed = parsePositiveNumericMetadata(readNestedValue(widget, path))
+    if (parsed != null) return parsed
+  }
+  return undefined
 }
 
 function slugifyName(value: string, fallback: string): string {
@@ -1152,7 +1167,7 @@ function addOrSelectInput(node: any, widget: any | null, source: 'widget' | 'med
   if (isNumericType(nextInput.type)) {
     nextInput.min = inferWidgetNumericBound(widget, 'min')
     nextInput.max = inferWidgetNumericBound(widget, 'max')
-    nextInput.step = inferWidgetNumericStep(widget)
+    nextInput.step = inferWidgetNumericStep(widget, nextInput.type)
   }
 
   if (isEnumType(nextInput.type)) {

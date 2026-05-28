@@ -227,6 +227,10 @@ authoring clients may infer them from ComfyUI widget metadata or let authors
 edit them, while runtime clients should use conservative fallback increments
 when `step` is absent.
 
+When a visible ComfyUI subgraph widget exposes only generic runtime step
+metadata, authoring clients may omit `step` rather than persist an implementation
+default. Promoted-input schema metadata remains authoritative when available.
+
 ### CGM-WCDM-06B [PLANNED]: Enum input values may be stored as an explicit allowed set
 Validation: TEST
 
