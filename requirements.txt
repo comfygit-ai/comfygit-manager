@@ -1,4 +1,5 @@
-comfygit-core==0.4.2
-comfygit-studio==0.4.2
+comfygit-core==0.5.0
+comfygit-studio==0.5.0
+tomli>=2.0.0; python_version < '3.11'
 watchdog>=6.0.0
 xxhash>=3.5.0

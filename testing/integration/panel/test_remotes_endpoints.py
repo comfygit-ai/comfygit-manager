@@ -913,6 +913,7 @@ class TestPushPreviewEndpoint:
         mock_environment.get_current_branch.return_value = "main"
         mock_environment.status.return_value = Mock(git=Mock(has_changes=False))
 
+        mock_environment.get_readiness.side_effect = None
         mock_environment.get_readiness.return_value = EnvironmentReadiness(
             warnings=ReadinessWarnings(
                 nodes_without_provenance=[

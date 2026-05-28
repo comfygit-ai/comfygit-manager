@@ -2,6 +2,19 @@
 import pytest
 from unittest.mock import Mock
 
+from comfygit_core.models import (
+    EnvironmentReadiness,
+    ModelSourceCandidate,
+    ModelSourceWarning,
+    NodeProvenanceWarning,
+    ReadinessBlockingIssue,
+    ReadinessWarnings,
+)
+
+
+def _set_export_readiness(mock_environment, readiness: EnvironmentReadiness) -> None:
+    mock_environment.get_readiness = Mock(return_value=readiness)
+
 
 @pytest.mark.integration
 class TestSyncEndpoint:
@@ -280,6 +293,7 @@ class TestExportValidateEndpoint:
         mock_pyproject = Mock()
         mock_pyproject.models.get_all.return_value = []
         mock_environment.pyproject = mock_pyproject
+        _set_export_readiness(mock_environment, EnvironmentReadiness())
 
         # Execute
         resp = await client.post("/v2/comfygit/export/validate", json={})
@@ -305,6 +319,18 @@ class TestExportValidateEndpoint:
         mock_env_status.workflow.sync_status.modified = ["modified-workflow.json"]
         mock_env_status.workflow.sync_status.deleted = []
         mock_environment.workflow_manager.get_workflow_status.return_value = mock_env_status.workflow
+        _set_export_readiness(
+            mock_environment,
+            EnvironmentReadiness(
+                blocking_issues=[
+                    ReadinessBlockingIssue(
+                        type="uncommitted_workflows",
+                        message="Workflows have uncommitted changes.",
+                        details=["new-workflow.json", "modified-workflow.json"],
+                    )
+                ]
+            ),
+        )
 
         # Execute
         resp = await client.post("/v2/comfygit/export/validate", json={})
@@ -333,6 +359,17 @@ class TestExportValidateEndpoint:
         mock_env_status.workflow.is_commit_safe = True
         mock_environment.workflow_manager.get_workflow_status.return_value = mock_env_status.workflow
         mock_environment.git_manager.has_uncommitted_changes.return_value = True
+        _set_export_readiness(
+            mock_environment,
+            EnvironmentReadiness(
+                blocking_issues=[
+                    ReadinessBlockingIssue(
+                        type="uncommitted_git_changes",
+                        message="Environment has uncommitted git changes.",
+                    )
+                ]
+            ),
+        )
 
         # Execute
         resp = await client.post("/v2/comfygit/export/validate", json={})
@@ -358,6 +395,17 @@ class TestExportValidateEndpoint:
         mock_env_status.workflow.is_commit_safe = False  # Has unresolved issues
         mock_environment.workflow_manager.get_workflow_status.return_value = mock_env_status.workflow
         mock_environment.git_manager.has_uncommitted_changes.return_value = False
+        _set_export_readiness(
+            mock_environment,
+            EnvironmentReadiness(
+                blocking_issues=[
+                    ReadinessBlockingIssue(
+                        type="unresolved_issues",
+                        message="Workflows have unresolved dependency issues.",
+                    )
+                ]
+            ),
+        )
 
         # Execute
         resp = await client.post("/v2/comfygit/export/validate", json={})
@@ -402,6 +450,20 @@ class TestExportValidateEndpoint:
         mock_pyproject.workflows.get_workflow_models.return_value = [mock_wf_model]
 
         mock_environment.pyproject = mock_pyproject
+        _set_export_readiness(
+            mock_environment,
+            EnvironmentReadiness(
+                warnings=ReadinessWarnings(
+                    models_without_sources=[
+                        ModelSourceWarning(
+                            filename="sd_xl_base_1.0.safetensors",
+                            hash="abc123",
+                            workflows=["portrait.json"],
+                        )
+                    ]
+                )
+            ),
+        )
 
         # Execute
         resp = await client.post("/v2/comfygit/export/validate", json={})
@@ -462,6 +524,22 @@ class TestExportValidateEndpoint:
             "registry-node": registry_node,
         }
         mock_environment.pyproject = mock_pyproject
+        _set_export_readiness(
+            mock_environment,
+            EnvironmentReadiness(
+                warnings=ReadinessWarnings(
+                    nodes_without_provenance=[
+                        NodeProvenanceWarning(
+                            name="local-dev-node",
+                            source="development",
+                            criticality="required",
+                            reason="Development node is missing portable git repository and pinned commit metadata.",
+                            version="dev",
+                        )
+                    ]
+                )
+            ),
+        )
 
         resp = await client.post("/v2/comfygit/export/validate", json={})
 
@@ -507,6 +585,26 @@ class TestExportValidateEndpoint:
         mock_environment.workspace.model_repository.get_sources.return_value = [
             {"type": "huggingface", "url": "https://huggingface.co/example/model"}
         ]
+        _set_export_readiness(
+            mock_environment,
+            EnvironmentReadiness(
+                warnings=ReadinessWarnings(
+                    models_without_sources=[
+                        ModelSourceWarning(
+                            filename="sd_xl_base_1.0.safetensors",
+                            hash="abc123",
+                            workflows=["portrait.json"],
+                            source_candidates=[
+                                ModelSourceCandidate(
+                                    type="huggingface",
+                                    url="https://huggingface.co/example/model",
+                                )
+                            ],
+                        )
+                    ]
+                )
+            ),
+        )
 
         resp = await client.post("/v2/comfygit/export/validate", json={})
 

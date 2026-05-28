@@ -172,10 +172,12 @@ interface ModelToResolve {
   options?: ModelOption[]
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   models: ModelToResolve[]
-  modelChoices: Map<string, ModelChoice>
-}>()
+  modelChoices?: Map<string, ModelChoice>
+}>(), {
+  modelChoices: () => new Map<string, ModelChoice>()
+})
 
 const emit = defineEmits<{
   (e: 'mark-optional', filename: string): void

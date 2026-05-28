@@ -140,7 +140,7 @@ describe('MissingResourcesPopup alias dedupe', () => {
     expect(document.body.querySelectorAll('.community-info')).toHaveLength(1)
 
     const installButton = Array.from(document.body.querySelectorAll('button'))
-      .find(btn => (btn.textContent || '').trim() === 'Install')
+      .find(btn => (btn.textContent || '').trim() === 'Install from Registry')
 
     expect(installButton).toBeDefined()
     ;(installButton as HTMLButtonElement).click()
