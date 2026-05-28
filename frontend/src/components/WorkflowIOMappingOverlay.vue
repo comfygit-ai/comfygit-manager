@@ -692,10 +692,6 @@ function inferWidgetNumericBound(widget: any, key: 'min' | 'max'): number | unde
   return undefined
 }
 
-function isSubgraphPromotedWidget(widget: any): boolean {
-  return widget?.sourceNodeId != null || asNonEmptyString(widget?.sourceWidgetName) != null
-}
-
 function parsePositiveNumericMetadata(value: unknown): number | undefined {
   const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed <= 0) return undefined
@@ -704,7 +700,7 @@ function parsePositiveNumericMetadata(value: unknown): number | undefined {
 }
 
 function inferWidgetNumericStep(widget: any, inputType: string | undefined): number | undefined {
-  const weakRuntimeStep = inputType === 'integer' && isSubgraphPromotedWidget(widget)
+  const ignoreWeakRuntimeStep = inputType === 'integer'
   const paths = [
     { path: ['input', 'step'], strong: true },
     { path: ['input', 'widget', 'step'], strong: true },
@@ -712,7 +708,7 @@ function inferWidgetNumericStep(widget: any, inputType: string | undefined): num
     { path: ['options', 'step'], strong: false },
   ]
   for (const { path, strong } of paths) {
-    if (weakRuntimeStep && !strong) continue
+    if (ignoreWeakRuntimeStep && !strong) continue
     const parsed = parsePositiveNumericMetadata(readNestedValue(widget, path))
     if (parsed != null) return parsed
   }
@@ -765,6 +761,15 @@ function normalizeWidgetType(widget: any): string {
   const normalized = normalizeType(explicitType)
   if (normalized !== 'number') return normalized
 
+  const explicitTypeText = String(explicitType ?? '').toLowerCase()
+  if (
+    explicitTypeText.includes('float') ||
+    explicitTypeText.includes('double') ||
+    explicitTypeText.includes('decimal')
+  ) {
+    return 'number'
+  }
+
   const precision = firstPresentWidgetValue(widget, [
     ['options', 'precision'],
     ['input', 'precision'],
@@ -772,19 +777,6 @@ function normalizeWidgetType(widget: any): string {
   ])
   if (precision != null && Number(precision) === 0) {
     return 'integer'
-  }
-
-  const step = firstPresentWidgetValue(widget, [
-    ['options', 'step'],
-    ['input', 'step'],
-    ['step'],
-  ])
-  const parsedStep = Number(step)
-  if (Number.isFinite(parsedStep) && Number.isInteger(parsedStep)) {
-    const defaultValue = widget?.value
-    if (defaultValue == null || Number.isInteger(Number(defaultValue))) {
-      return 'integer'
-    }
   }
 
   return normalized
@@ -1598,13 +1590,14 @@ onBeforeUnmount(() => {
 
 .io-save-toast {
   position: absolute;
-  left: var(--cg-space-4);
-  bottom: calc(72px + var(--cg-space-3));
-  z-index: 1;
+  right: calc(100% + var(--cg-space-3));
+  bottom: var(--cg-space-4);
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: var(--cg-space-2);
-  max-width: calc(100% - (var(--cg-space-4) * 2));
+  width: max-content;
+  max-width: 320px;
   padding: var(--cg-space-2) var(--cg-space-3);
   border: 1px solid var(--cg-color-border);
   background: var(--cg-color-bg-secondary);
@@ -1886,6 +1879,13 @@ onBeforeUnmount(() => {
     left: 0;
     width: 100vw;
     max-width: 100vw;
+  }
+
+  .io-save-toast {
+    right: auto;
+    left: var(--cg-space-4);
+    bottom: calc(72px + var(--cg-space-3));
+    max-width: calc(100% - (var(--cg-space-4) * 2));
   }
 
   .item-grid {

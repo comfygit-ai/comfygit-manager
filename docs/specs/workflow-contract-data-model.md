@@ -227,9 +227,15 @@ authoring clients may infer them from ComfyUI widget metadata or let authors
 edit them, while runtime clients should use conservative fallback increments
 when `step` is absent.
 
-When a visible ComfyUI subgraph widget exposes only generic runtime step
+When an integer ComfyUI widget exposes only generic frontend/runtime step
 metadata, authoring clients may omit `step` rather than persist an implementation
-default. Promoted-input schema metadata remains authoritative when available.
+default. Explicit schema metadata from the widget remains authoritative when
+available.
+
+Authoring clients should not classify a numeric input as `integer` only because
+the current value or frontend runtime step is whole-numbered. Integer type
+inference should come from explicit ComfyUI schema metadata or equivalent
+precision metadata.
 
 ### CGM-WCDM-06B [PLANNED]: Enum input values may be stored as an explicit allowed set
 Validation: TEST
