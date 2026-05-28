@@ -18,6 +18,7 @@ from comfygit_core.models import (
     ResolvedNodePackage,
     Workflow,
     WorkflowContractInput,
+    WorkflowContractInputControl,
     WorkflowContractOutput,
     WorkflowExecutionContract,
     WorkflowNodeWidgetRef,
@@ -344,6 +345,15 @@ def _safe_str(value) -> str | None:
     return None
 
 
+def _safe_input_ui_control(value) -> WorkflowContractInputControl | None:
+    """Return a supported contract input UI control value."""
+    if value == "input":
+        return "input"
+    if value == "textarea":
+        return "textarea"
+    return None
+
+
 def _safe_int(value) -> int:
     """Safely convert value to int, handling Mock objects."""
     if isinstance(value, int):
@@ -531,6 +541,7 @@ def _parse_execution_contract_payload(data: dict) -> WorkflowExecutionContract:
                 max=_safe_number(item_dict.get("max")),
                 enum_values=[str(value) for value in _safe_sequence(item_dict.get("enum_values"))],
                 description=_safe_str(item_dict.get("description")),
+                ui_control=_safe_input_ui_control(item_dict.get("ui_control")),
             ))
 
         outputs = []

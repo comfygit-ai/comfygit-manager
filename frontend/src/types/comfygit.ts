@@ -442,6 +442,7 @@ export interface WorkflowContractInput {
   node_id: string | number
   required: boolean
   display_name?: string
+  ui_control?: 'input' | 'textarea'
   widget_idx?: number
   field_key?: string
   api_node_id?: string | number

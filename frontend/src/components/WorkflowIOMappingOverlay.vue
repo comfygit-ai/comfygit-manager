@@ -158,7 +158,15 @@
                     :model-value="input.type"
                     :options="typeOptions"
                     full-width
-                    @update:model-value="input.type = $event"
+                    @update:model-value="setInputType(input, $event)"
+                  />
+                </BaseFormField>
+                <BaseFormField v-if="input.type === 'string'" label="Text Control">
+                  <BaseSelect
+                    :model-value="input.ui_control || 'textarea'"
+                    :options="textControlOptions"
+                    full-width
+                    @update:model-value="setInputTextControl(input, $event)"
                   />
                 </BaseFormField>
                 <BaseFormField label="Required">
@@ -368,6 +376,11 @@ const typeOptions = [
   'file',
 ]
 
+const textControlOptions = [
+  { label: 'Multiline text', value: 'textarea' },
+  { label: 'Text field', value: 'input' },
+]
+
 const requiredOptions = [
   { label: 'Required', value: 'true' },
   { label: 'Optional', value: 'false' },
@@ -547,6 +560,31 @@ function formatValuePreview(value: unknown): string {
 function formatTextareaValue(value: unknown): string {
   if (value == null) return ''
   return String(value)
+}
+
+function setInputType(input: WorkflowContractInput, value: string) {
+  input.type = value
+  if (value === 'string') {
+    input.ui_control = input.ui_control || 'textarea'
+  } else {
+    delete input.ui_control
+  }
+}
+
+function setInputTextControl(input: WorkflowContractInput, value: string) {
+  input.ui_control = value === 'input' ? 'input' : 'textarea'
+}
+
+function normalizeInputUiControls(contract: WorkflowExecutionContract) {
+  for (const namedContract of Object.values(contract.contracts)) {
+    for (const input of namedContract.inputs) {
+      if (input.type === 'string') {
+        input.ui_control = input.ui_control || 'textarea'
+      } else {
+        delete input.ui_control
+      }
+    }
+  }
 }
 
 function inferWidgetEnumValues(widget: any): string[] {
@@ -972,6 +1010,10 @@ function addOrSelectInput(node: any, widget: any | null, source: 'widget' | 'med
     default: isMediaLoaderSource ? '' : (widget?.value ?? ''),
   }
 
+  if (nextInput.type === 'string') {
+    nextInput.ui_control = 'textarea'
+  }
+
   if (isNumericType(nextInput.type)) {
     nextInput.min = inferWidgetNumericBound(widget, 'min')
     nextInput.max = inferWidgetNumericBound(widget, 'max')
@@ -1131,6 +1173,7 @@ async function handleSave() {
   saving.value = true
   error.value = null
   try {
+    normalizeInputUiControls(form.value)
     hydrateApiBindings(form.value)
     const apiPrompt = await captureCurrentApiPrompt()
     response.value = await saveWorkflowContract(workflowName.value, form.value, apiPrompt)

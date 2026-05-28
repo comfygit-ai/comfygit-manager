@@ -198,6 +198,7 @@ Optional fields may include:
 - `max`
 - `enum_values`
 - `description`
+- `ui_control`
 
 The durable input item should represent portable mapping state, not transient
 frontend selection state.
@@ -231,6 +232,22 @@ Inputs with normalized type `enum` may store:
 `enum_values` should be a bounded ordered list of allowed string values. This
 field should be treated as the durable source of truth for enum options when
 present.
+
+### CGM-WCDM-06C [LIVE]: String inputs may store explicit UI control metadata
+Validation: TEST
+
+Inputs with normalized type `string` may store:
+
+- `ui_control`
+
+Supported values are `textarea` for multiline text and `input` for a single-line
+text field. This field is durable presentation metadata for Studio and similar
+contract clients. It should not change the contract value type or how runtime
+adapters patch the captured API prompt.
+
+If `ui_control` is absent for a string input, clients should default to
+`textarea` for existing contracts and should not infer control shape from the
+input name.
 
 ### CGM-WCDM-07 [PARTIAL]: The first implementation may target widget-backed inputs before broader graph source kinds
 Validation: HUMAN_REVIEW
