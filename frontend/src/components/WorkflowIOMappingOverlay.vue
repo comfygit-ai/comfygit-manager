@@ -39,6 +39,11 @@
     </div>
 
     <aside class="io-mapping-sidebar">
+      <div v-if="saveToast" :class="['io-save-toast', saveToast.type]">
+        <span class="io-save-toast-icon">{{ saveToast.type === 'success' ? '✓' : '!' }}</span>
+        <span>{{ saveToast.message }}</span>
+      </div>
+
       <div class="io-mapping-sidebar-scroll">
         <div v-if="loading" class="io-state-block">
           Loading workflow contract...
@@ -364,6 +369,8 @@ const selectedOutputIndex = ref<number | null>(null)
 const overlayTick = ref(0)
 const hoverSummary = ref<{ kind: 'input' | 'output'; label: string } | null>(null)
 const hoverOverlay = ref<{ kind: 'input' | 'output'; style: Record<string, string> } | null>(null)
+const saveToast = ref<{ message: string; type: 'success' | 'error' } | null>(null)
+let saveToastTimeout: ReturnType<typeof setTimeout> | null = null
 let overlayFrame: number | null = null
 
 type MappingItemKind = 'input' | 'output'
@@ -823,16 +830,21 @@ function getDropPosition(event: DragEvent): DropPosition {
   return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
 }
 
+function normalizeDropTarget(kind: MappingItemKind, index: number, event: DragEvent) {
+  const items = kind === 'input' ? activeContract.value.inputs : activeContract.value.outputs
+  const position = getDropPosition(event)
+  if (position === 'after' && index < items.length - 1) {
+    return { kind, index: index + 1, position: 'before' as const }
+  }
+  return { kind, index, position }
+}
+
 function handleItemDragOver(kind: MappingItemKind, index: number, event: DragEvent) {
   if (!draggingItem.value || draggingItem.value.kind !== kind) return
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = 'move'
   }
-  dropTarget.value = {
-    kind,
-    index,
-    position: getDropPosition(event),
-  }
+  dropTarget.value = normalizeDropTarget(kind, index, event)
 }
 
 function moveArrayItem<T>(items: T[], fromIndex: number, insertionIndex: number): number {
@@ -863,10 +875,12 @@ function remapSelectedIndex(selectedIndex: number | null, fromIndex: number, toI
 function handleItemDrop(kind: MappingItemKind, index: number, event: DragEvent) {
   if (!draggingItem.value || draggingItem.value.kind !== kind) return
 
-  const position = dropTarget.value?.kind === kind && dropTarget.value.index === index
-    ? dropTarget.value.position
-    : getDropPosition(event)
-  const insertionIndex = position === 'after' ? index + 1 : index
+  const normalizedTarget = dropTarget.value?.kind === kind
+    ? dropTarget.value
+    : normalizeDropTarget(kind, index, event)
+  const insertionIndex = normalizedTarget.position === 'after'
+    ? normalizedTarget.index + 1
+    : normalizedTarget.index
   const fromIndex = draggingItem.value.index
 
   if (kind === 'input') {
@@ -1305,6 +1319,17 @@ function detachCanvasListener() {
   document.removeEventListener('pointermove', updateHoverState, true)
 }
 
+function showSaveToast(message: string, type: 'success' | 'error' = 'success') {
+  if (saveToastTimeout) {
+    clearTimeout(saveToastTimeout)
+  }
+  saveToast.value = { message, type }
+  saveToastTimeout = setTimeout(() => {
+    saveToast.value = null
+    saveToastTimeout = null
+  }, 3000)
+}
+
 async function loadContract() {
   if (!workflowName.value) return
   loading.value = true
@@ -1332,9 +1357,10 @@ async function handleSave() {
     window.dispatchEvent(new CustomEvent('comfygit:workflow-contract-saved', {
       detail: { workflowName: workflowName.value }
     }))
-    closeOverlay({ reopenPanel: true })
+    showSaveToast('Contract saved')
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to save workflow contract'
+    showSaveToast(error.value, 'error')
   } finally {
     saving.value = false
   }
@@ -1372,6 +1398,11 @@ function closeOverlay(options?: { reopenPanel?: boolean }) {
   visible.value = false
   hoverSummary.value = null
   hoverOverlay.value = null
+  saveToast.value = null
+  if (saveToastTimeout) {
+    clearTimeout(saveToastTimeout)
+    saveToastTimeout = null
+  }
   showDeleteConfirm.value = false
   clearDragState()
   if (options?.reopenPanel) {
@@ -1441,6 +1472,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   detachCanvasListener()
   stopOverlayLoop()
+  if (saveToastTimeout) {
+    clearTimeout(saveToastTimeout)
+    saveToastTimeout = null
+  }
   window.removeEventListener('comfygit:open-io-mapping', openOverlay as EventListener)
   window.removeEventListener('keydown', handleEscape)
 })
@@ -1559,6 +1594,41 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--cg-color-bg-primary) 96%, transparent);
   backdrop-filter: blur(14px);
   pointer-events: auto;
+}
+
+.io-save-toast {
+  position: absolute;
+  left: var(--cg-space-4);
+  bottom: calc(72px + var(--cg-space-3));
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--cg-space-2);
+  max-width: calc(100% - (var(--cg-space-4) * 2));
+  padding: var(--cg-space-2) var(--cg-space-3);
+  border: 1px solid var(--cg-color-border);
+  background: var(--cg-color-bg-secondary);
+  color: var(--cg-color-text-primary);
+  box-shadow: var(--cg-shadow-lg);
+  font-size: var(--cg-font-size-sm);
+  pointer-events: none;
+}
+
+.io-save-toast.success {
+  border-color: var(--cg-color-success);
+}
+
+.io-save-toast.error {
+  border-color: var(--cg-color-error);
+}
+
+.io-save-toast-icon {
+  color: var(--cg-color-success);
+  font-weight: 700;
+}
+
+.io-save-toast.error .io-save-toast-icon {
+  color: var(--cg-color-error);
 }
 
 .io-mapping-sidebar-scroll {

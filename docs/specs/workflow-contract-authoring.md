@@ -81,6 +81,9 @@ Input and output order is user-controlled inside the mapping surface. Reordering
 items changes the order of the saved contract arrays and therefore the order
 later contract-driven API/UI surfaces should present.
 
+The mapping surface should present one insertion target for each ordering slot:
+before the first item, between adjacent items, and after the last item.
+
 ### CGM-WCA-05 [LIVE]: Contract save must replace the durable saved contract, not only transient UI state
 Validation: TEST
 

@@ -141,7 +141,18 @@ class TestWorkflowContractEndpoint:
                                 "ui_control": "input",
                             },
                         ],
-                        "outputs": [],
+                        "outputs": [
+                            {
+                                "name": "preview",
+                                "type": "image",
+                                "node_id": "9",
+                            },
+                            {
+                                "name": "archive",
+                                "type": "file",
+                                "node_id": "10",
+                            },
+                        ],
                     }
                 },
             },
@@ -150,9 +161,15 @@ class TestWorkflowContractEndpoint:
         assert resp.status == 200
         data = await resp.json()
         inputs = data["execution_contract"]["contracts"]["default"]["inputs"]
+        outputs = data["execution_contract"]["contracts"]["default"]["outputs"]
+        assert [item["name"] for item in inputs] == ["cfg", "prompt"]
+        assert [item["name"] for item in outputs] == ["preview", "archive"]
         assert inputs[0]["step"] == 0.25
         assert inputs[1]["ui_control"] == "input"
         mock_environment.set_workflow_execution_contract.assert_called_once()
+        saved_contract = mock_environment.set_workflow_execution_contract.call_args.args[1]
+        assert [item.name for item in saved_contract.contracts["default"].inputs] == ["cfg", "prompt"]
+        assert [item.name for item in saved_contract.contracts["default"].outputs] == ["preview", "archive"]
 
 
 @pytest.mark.integration

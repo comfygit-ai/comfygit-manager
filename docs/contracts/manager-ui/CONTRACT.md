@@ -89,6 +89,10 @@ own:
 Less-frequent metadata editing may be collapsed by default, but it should still
 be available inside the same authoring surface.
 
+Saving from the mapping surface should keep the user in I/O mapping mode and
+show a lightweight success notification, so users can save intermediate work
+without leaving the graph-authoring context.
+
 ### CGM-UI-09B [LIVE]: Destructive workflow contract deletion should require confirmation
 Validation: HUMAN_REVIEW
 
