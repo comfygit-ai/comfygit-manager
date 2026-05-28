@@ -201,6 +201,14 @@
                     @update:model-value="input.max = parseOptionalNumber($event)"
                   />
                 </BaseFormField>
+                <BaseFormField v-if="isNumericType(input.type)" label="Step">
+                  <BaseInput
+                    :model-value="formatOptionalNumber(input.step)"
+                    :placeholder="formatOptionalNumber(defaultNumericStep(input.type))"
+                    full-width
+                    @update:model-value="input.step = parseOptionalPositiveNumber($event)"
+                  />
+                </BaseFormField>
                 <BaseFormField v-if="isEnumType(input.type)" class="item-grid-full" label="Enum Values">
                   <BaseTextarea
                     :model-value="formatEnumValues(input.enum_values)"
@@ -582,6 +590,11 @@ function parseOptionalNumber(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+function parseOptionalPositiveNumber(value: string): number | undefined {
+  const parsed = parseOptionalNumber(value)
+  return parsed != null && parsed > 0 ? parsed : undefined
+}
+
 function formatEnumValues(values: string[] | undefined): string {
   return (values || []).join('\n')
 }
@@ -635,6 +648,8 @@ function inferWidgetEnumValues(widget: any): string[] {
 }
 
 const UNBOUNDED_NUMERIC_BOUND_ABS = 1_000_000_000_000_000
+const DEFAULT_INTEGER_STEP = 1
+const DEFAULT_NUMBER_STEP = 0.01
 
 function readNestedValue(source: any, path: string[]): unknown {
   let current = source
@@ -670,6 +685,18 @@ function inferWidgetNumericBound(widget: any, key: 'min' | 'max'): number | unde
   return undefined
 }
 
+function inferWidgetNumericStep(widget: any): number | undefined {
+  const value = firstPresentWidgetValue(widget, [
+    ['options', 'step'],
+    ['input', 'step'],
+    ['step'],
+  ])
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined
+  if (Math.abs(parsed) >= UNBOUNDED_NUMERIC_BOUND_ABS) return undefined
+  return parsed
+}
+
 function slugifyName(value: string, fallback: string): string {
   const normalized = value
     .trim()
@@ -699,6 +726,10 @@ function normalizeType(value: unknown): string {
   if (normalized.includes('combo') || normalized.includes('enum')) return 'enum'
   if (normalized.includes('string') || normalized.includes('text')) return 'string'
   return 'file'
+}
+
+function defaultNumericStep(type: string | undefined): number {
+  return type === 'integer' ? DEFAULT_INTEGER_STEP : DEFAULT_NUMBER_STEP
 }
 
 function normalizeWidgetType(widget: any): string {
@@ -1121,6 +1152,7 @@ function addOrSelectInput(node: any, widget: any | null, source: 'widget' | 'med
   if (isNumericType(nextInput.type)) {
     nextInput.min = inferWidgetNumericBound(widget, 'min')
     nextInput.max = inferWidgetNumericBound(widget, 'max')
+    nextInput.step = inferWidgetNumericStep(widget)
   }
 
   if (isEnumType(nextInput.type)) {

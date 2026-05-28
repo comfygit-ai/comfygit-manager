@@ -450,6 +450,7 @@ export interface WorkflowContractInput {
   default?: unknown
   min?: number
   max?: number
+  step?: number
   enum_values?: string[]
   description?: string
 }

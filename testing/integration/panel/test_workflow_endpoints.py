@@ -111,6 +111,51 @@ class TestWorkflowsListEndpoint:
 
 
 @pytest.mark.integration
+class TestWorkflowContractEndpoint:
+    """GET/PUT workflow execution contract endpoints."""
+
+    async def test_put_preserves_numeric_step_and_string_ui_control(self, client, mock_environment):
+        """Saved contract payload should round-trip durable UI metadata."""
+        resp = await client.put(
+            "/v2/comfygit/workflow/test.json/contract",
+            json={
+                "api_prompt": {"1": {"class_type": "KSampler", "inputs": {}}},
+                "contracts": {
+                    "default": {
+                        "inputs": [
+                            {
+                                "name": "cfg",
+                                "type": "number",
+                                "node_id": "1",
+                                "required": True,
+                                "default": 7.5,
+                                "min": 0,
+                                "max": 20,
+                                "step": 0.25,
+                            },
+                            {
+                                "name": "prompt",
+                                "type": "string",
+                                "node_id": "2",
+                                "required": True,
+                                "ui_control": "input",
+                            },
+                        ],
+                        "outputs": [],
+                    }
+                },
+            },
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+        inputs = data["execution_contract"]["contracts"]["default"]["inputs"]
+        assert inputs[0]["step"] == 0.25
+        assert inputs[1]["ui_control"] == "input"
+        mock_environment.set_workflow_execution_contract.assert_called_once()
+
+
+@pytest.mark.integration
 class TestWorkflowDetailsEndpoint:
     """GET /v2/comfygit/workflow/{name}/details - Get workflow details."""
 

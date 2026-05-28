@@ -381,6 +381,13 @@ def _safe_number(value):
         return None
 
 
+def _safe_positive_number(value):
+    number = _safe_number(value)
+    if number is None or number <= 0:
+        return None
+    return number
+
+
 def _safe_sequence(value) -> list:
     """Safely convert sequence-like values to a list."""
     if value is None:
@@ -539,6 +546,7 @@ def _parse_execution_contract_payload(data: dict) -> WorkflowExecutionContract:
                 default=item_dict.get("default"),
                 min=_safe_number(item_dict.get("min")),
                 max=_safe_number(item_dict.get("max")),
+                step=_safe_positive_number(item_dict.get("step")),
                 enum_values=[str(value) for value in _safe_sequence(item_dict.get("enum_values"))],
                 description=_safe_str(item_dict.get("description")),
                 ui_control=_safe_input_ui_control(item_dict.get("ui_control")),
