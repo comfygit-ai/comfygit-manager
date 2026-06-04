@@ -586,9 +586,11 @@ async function handleLifecycleAction(action: LifecycleAction) {
     case 'review_untracked_node':
     case 'track_dev_node':
     case 'remove_untracked_node':
+    case 'restore_or_relink_dev_node':
     case 'view_runtime_import_error':
       emit('view-nodes')
       return
+    case 'review_workflow_changes':
     case 'resolve_workflow_nodes':
     case 'sync_model_paths':
     case 'download_required_models':

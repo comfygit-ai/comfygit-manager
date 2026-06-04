@@ -9903,9 +9903,11 @@ const c1 = { class: "source-picker" }, d1 = {
           case "review_untracked_node":
           case "track_dev_node":
           case "remove_untracked_node":
+          case "restore_or_relink_dev_node":
           case "view_runtime_import_error":
             b("view-nodes");
             return;
+          case "review_workflow_changes":
           case "resolve_workflow_nodes":
           case "sync_model_paths":
           case "download_required_models":
@@ -10574,7 +10576,7 @@ const c1 = { class: "source-picker" }, d1 = {
       }, null, 8, ["warnings"])) : v("", !0)
     ], 64));
   }
-}), ww = /* @__PURE__ */ Ue(yw, [["__scopeId", "data-v-a5ae148c"]]);
+}), ww = /* @__PURE__ */ Ue(yw, [["__scopeId", "data-v-8eaa7a25"]]);
 async function la(e, s) {
   const n = await un(e, s);
   if (!n.ok) {
