@@ -517,6 +517,10 @@ const lifecycleGuidance = computed<LifecycleGuidanceView | null>(() => {
 })
 
 function lifecycleIssueTitle(issue: LifecycleIssue): string {
+  if (issue.id === 'new_workflow_added') {
+    return issue.affected_resources.length === 1 ? 'New workflow added' : 'New workflows added'
+  }
+
   const layerLabels: Record<string, string> = {
     manifest: 'Manifest needs attention',
     filesystem: 'Filesystem needs attention',

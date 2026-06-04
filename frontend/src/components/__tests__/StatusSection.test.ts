@@ -298,6 +298,64 @@ describe('StatusSection - Setup State Issue Cards', () => {
     expect(onSyncEnvironment).toHaveBeenCalledTimes(1)
   })
 
+  it('shows new workflow lifecycle guidance as a commit snapshot action', async () => {
+    const status = createMockStatus()
+    status.workflows.new = ['txt2img_basic']
+    const onCommitChanges = vi.fn()
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed',
+        onCommitChanges,
+        lifecycleStatus: createLifecycleStatus({
+          issues: [
+            {
+              id: 'new_workflow_added',
+              layer: 'snapshot',
+              severity: 'warning',
+              message: 'New workflow saved in ComfyUI and not yet captured in the environment snapshot.',
+              blocking: false,
+              affected_resources: ['txt2img_basic'],
+              source: 'WorkflowSyncStatus.new',
+              details: [],
+              action_ids: ['commit_snapshot']
+            }
+          ],
+          actions: [
+            {
+              id: 'commit_snapshot',
+              label: 'Commit snapshot',
+              description: 'Commit the current desired environment state.',
+              target_layer: 'snapshot',
+              issue_ids: ['new_workflow_added'],
+              expected_mutation_layers: ['manifest', 'snapshot'],
+              enabled: true,
+              disabled_reason: null,
+              destructive: false,
+              restart_required: false,
+              confirmation_required: false
+            }
+          ],
+          primary_action_id: 'commit_snapshot'
+        })
+      },
+      global: {
+        stubs: ['StatusDetailModal', 'Teleport']
+      }
+    })
+
+    expect(wrapper.text()).toContain('New workflow added')
+    expect(wrapper.text()).toContain('New workflow saved in ComfyUI')
+    expect(wrapper.text()).toContain('txt2img_basic')
+
+    const commitButton = wrapper.findAllComponents({ name: 'ActionButton' })
+      .find(button => button.text().includes('Commit snapshot'))
+    expect(commitButton).toBeTruthy()
+    await commitButton!.trigger('click')
+    expect(onCommitChanges).toHaveBeenCalledTimes(1)
+  })
+
   it('routes lifecycle runtime import failures to the nodes view', async () => {
     const status = createMockStatus()
     const onViewNodes = vi.fn()

@@ -9879,7 +9879,7 @@ const d1 = { class: "source-picker" }, f1 = {
       };
     });
     function V(ae) {
-      return {
+      return ae.id === "new_workflow_added" ? ae.affected_resources.length === 1 ? "New workflow added" : "New workflows added" : {
         manifest: "Manifest needs attention",
         filesystem: "Filesystem needs attention",
         runtime: "Runtime needs attention",
@@ -10593,7 +10593,7 @@ const d1 = { class: "source-picker" }, f1 = {
       }, null, 8, ["warnings"])) : v("", !0)
     ], 64));
   }
-}), _w = /* @__PURE__ */ Ue(ww, [["__scopeId", "data-v-8eaa7a25"]]);
+}), _w = /* @__PURE__ */ Ue(ww, [["__scopeId", "data-v-18ad3752"]]);
 async function la(e, s) {
   const n = await un(e, s);
   if (!n.ok) {
