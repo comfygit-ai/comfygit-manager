@@ -180,6 +180,7 @@
             ref="statusSectionRef"
             :status="status!"
             :setup-state="setupState"
+            :lifecycle-status="lifecycleStatus"
             @switch-branch="handleSwitchBranchClick"
             @commit-changes="showCommitModal = true"
             @sync-environment="showSyncModal = true"
@@ -472,6 +473,7 @@ import type {
   RuntimeCapabilities,
   SetupStatus,
   SetupState,
+  EnvironmentLifecycleStatus,
   UpdateCheckResponse,
   SwitchEnvironmentObserver,
   SwitchEnvironmentProgress,
@@ -491,6 +493,7 @@ const emit = defineEmits<{
 
 const {
   getStatus,
+  getLifecycleStatus,
   getHistory,
   getBranches,
   checkout,
@@ -522,6 +525,7 @@ type SwitchProgressLike = Partial<SwitchEnvironmentProgress> & {
 }
 
 const status = ref<ComfyGitStatus | null>(null)
+const lifecycleStatus = ref<EnvironmentLifecycleStatus | null>(null)
 const commits = ref<CommitInfo[]>([])
 const historyHasMore = ref(false)
 const isLoadingHistoryMore = ref(false)
@@ -895,13 +899,19 @@ async function refresh(options: { refreshWorkflows?: boolean } = {}) {
 
   try {
     // Use forceRefresh=true to clear cached environment state
-    const [statusRes, historyRes, branchesRes, envsRes] = await Promise.all([
+    const lifecycleStatusPromise = getLifecycleStatus(false).catch((err) => {
+      console.warn('[ComfyGit] Failed to load lifecycle status', err)
+      return null
+    })
+    const [statusRes, lifecycleStatusRes, historyRes, branchesRes, envsRes] = await Promise.all([
       getStatus(true),
+      lifecycleStatusPromise,
       getHistory(HISTORY_PAGE_SIZE),
       getBranches(),
       getEnvironments()
     ])
     status.value = statusRes
+    lifecycleStatus.value = lifecycleStatusRes
     commits.value = historyRes.commits
     historyHasMore.value = historyRes.has_more
     branches.value = branchesRes.branches
@@ -923,6 +933,7 @@ async function refresh(options: { refreshWorkflows?: boolean } = {}) {
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load status'
     status.value = null
+    lifecycleStatus.value = null
     commits.value = []
     historyHasMore.value = false
     branches.value = []

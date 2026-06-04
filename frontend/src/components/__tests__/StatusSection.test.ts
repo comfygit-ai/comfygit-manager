@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import StatusSection from '../StatusSection.vue'
-import type { ComfyGitStatus } from '@/types/comfygit'
+import type { ComfyGitStatus, EnvironmentLifecycleStatus } from '@/types/comfygit'
 
 // Mock minimal status object for tests
 const createMockStatus = (): ComfyGitStatus => ({
@@ -35,6 +35,21 @@ const createMockStatus = (): ComfyGitStatus => ({
     packages_in_sync: true
   },
   missing_models_count: 0
+})
+
+const createLifecycleStatus = (
+  overrides: Partial<EnvironmentLifecycleStatus> = {}
+): EnvironmentLifecycleStatus => ({
+  environment_name: 'test-env',
+  workspace_path: '/tmp/workspace',
+  current_branch: 'main',
+  current_commit: 'abc123',
+  detached_head: false,
+  layers: [],
+  issues: [],
+  actions: [],
+  primary_action_id: null,
+  ...overrides
 })
 
 describe('StatusSection - Setup State Issue Cards', () => {
@@ -221,5 +236,138 @@ describe('StatusSection - Setup State Issue Cards', () => {
     expect(wrapper.text()).toContain('1 custom node failed to import')
     expect(wrapper.text()).toContain('ComfyUI-FL-VoxCPM')
     expect(wrapper.text()).toContain('VoxCPM V2 TTS')
+  })
+
+  it('shows lifecycle sync guidance for missing declared nodes', async () => {
+    const status = createMockStatus()
+    status.comparison.is_synced = false
+    status.comparison.missing_nodes = ['comfyui-impact-pack']
+    const onSyncEnvironment = vi.fn()
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed',
+        onSyncEnvironment,
+        lifecycleStatus: createLifecycleStatus({
+          issues: [
+            {
+              id: 'missing_declared_nodes',
+              layer: 'filesystem',
+              severity: 'error',
+              message: 'Manifest declares custom nodes that are missing on disk.',
+              blocking: true,
+              affected_resources: ['comfyui-impact-pack'],
+              source: 'EnvironmentComparison.missing_nodes',
+              details: [],
+              action_ids: ['sync_missing_nodes']
+            }
+          ],
+          actions: [
+            {
+              id: 'sync_missing_nodes',
+              label: 'Sync missing nodes',
+              description: 'Install node folders declared by the manifest.',
+              target_layer: 'filesystem',
+              issue_ids: ['missing_declared_nodes'],
+              expected_mutation_layers: ['filesystem', 'operation'],
+              enabled: true,
+              disabled_reason: null,
+              destructive: false,
+              restart_required: true,
+              confirmation_required: false
+            }
+          ],
+          primary_action_id: 'sync_missing_nodes'
+        })
+      },
+      global: {
+        stubs: ['StatusDetailModal', 'Teleport']
+      }
+    })
+
+    expect(wrapper.text()).toContain('Filesystem needs attention')
+    expect(wrapper.text()).toContain('Manifest declares custom nodes that are missing on disk.')
+    expect(wrapper.text()).toContain('comfyui-impact-pack')
+    expect(wrapper.text()).toContain('Restart required after applying this action')
+
+    const syncButton = wrapper.findAllComponents({ name: 'ActionButton' })
+      .find(button => button.text().includes('Sync missing nodes'))
+    expect(syncButton).toBeTruthy()
+    await syncButton!.trigger('click')
+    expect(onSyncEnvironment).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes lifecycle runtime import failures to the nodes view', async () => {
+    const status = createMockStatus()
+    const onViewNodes = vi.fn()
+    status.runtime_issues = {
+      available: true,
+      custom_node_import_failure_count: 1,
+      custom_node_import_failures: [
+        {
+          name: 'ComfyUI-Broken',
+          registry_id: 'ComfyUI-Broken',
+          module_name: 'ComfyUI-Broken',
+          module_path: '/tmp/custom_nodes/ComfyUI-Broken',
+          criticality: 'required',
+          used_in_workflows: [],
+          status: 'failed',
+          message: 'Import failed',
+          guidance: 'Check ComfyUI logs.'
+        }
+      ]
+    }
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed',
+        onViewNodes,
+        lifecycleStatus: createLifecycleStatus({
+          issues: [
+            {
+              id: 'runtime_import_failure',
+              layer: 'runtime',
+              severity: 'warning',
+              message: 'ComfyUI reported custom-node import failures.',
+              blocking: false,
+              affected_resources: ['ComfyUI-Broken'],
+              source: 'LifecycleRuntimeState.import_errors',
+              details: [],
+              action_ids: ['view_runtime_import_error']
+            }
+          ],
+          actions: [
+            {
+              id: 'view_runtime_import_error',
+              label: 'View import error',
+              description: 'Open runtime import error details.',
+              target_layer: 'runtime',
+              issue_ids: ['runtime_import_failure'],
+              expected_mutation_layers: ['runtime'],
+              enabled: true,
+              disabled_reason: null,
+              destructive: false,
+              restart_required: false,
+              confirmation_required: false
+            }
+          ],
+          primary_action_id: 'view_runtime_import_error'
+        })
+      },
+      global: {
+        stubs: ['StatusDetailModal', 'Teleport']
+      }
+    })
+
+    expect(wrapper.text()).toContain('Runtime needs attention')
+    expect(wrapper.text()).toContain('ComfyUI-Broken')
+
+    const viewButton = wrapper.findAllComponents({ name: 'ActionButton' })
+      .find(button => button.text().includes('View import error'))
+    expect(viewButton).toBeTruthy()
+    await viewButton!.trigger('click')
+    expect(onViewNodes).toHaveBeenCalledTimes(1)
   })
 })

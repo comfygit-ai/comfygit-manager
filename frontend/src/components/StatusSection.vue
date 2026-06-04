@@ -48,6 +48,30 @@
         </template>
       </IssueCard>
 
+      <IssueCard
+        v-if="lifecycleGuidance"
+        :severity="lifecycleGuidance.severity"
+        :icon="lifecycleGuidance.icon"
+        :title="lifecycleGuidance.title"
+        :description="lifecycleGuidance.description"
+        :items="lifecycleGuidance.items"
+      >
+        <template #actions>
+          <ActionButton
+            v-if="lifecycleGuidance.primaryAction"
+            variant="primary"
+            size="sm"
+            :disabled="!lifecycleGuidance.primaryAction.enabled"
+            @click="handleLifecycleAction(lifecycleGuidance.primaryAction)"
+          >
+            {{ lifecycleGuidance.primaryAction.label }}
+          </ActionButton>
+          <ActionButton variant="secondary" size="sm" @click="handleShowAll">
+            View Details
+          </ActionButton>
+        </template>
+      </IssueCard>
+
       <!-- Environment Health Section -->
       <div class="health-section-wrapper" @mouseenter="showHealthActions = true" @mouseleave="showHealthActions = false">
         <div class="health-section-header">
@@ -351,7 +375,15 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
-import type { AnalyzedWorkflow, ComfyGitStatus, ExportValidationResult, SetupState } from '@/types/comfygit'
+import type {
+  AnalyzedWorkflow,
+  ComfyGitStatus,
+  EnvironmentLifecycleStatus,
+  ExportValidationResult,
+  LifecycleAction,
+  LifecycleIssue,
+  SetupState
+} from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
 import SectionTitle from '@/components/base/atoms/SectionTitle.vue'
@@ -365,6 +397,7 @@ import ReadinessIssuesModal from '@/components/ReadinessIssuesModal.vue'
 interface Props {
   status: ComfyGitStatus
   setupState?: SetupState
+  lifecycleStatus?: EnvironmentLifecycleStatus | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -413,6 +446,17 @@ const emit = defineEmits<{
 const isRepairing = ref(false)
 const isRepairingEnvironment = ref(false)
 
+type IssueCardSeverity = 'info' | 'warning' | 'error'
+
+interface LifecycleGuidanceView {
+  severity: IssueCardSeverity
+  icon: string
+  title: string
+  description: string
+  items: string[]
+  primaryAction: LifecycleAction | null
+}
+
 function handleRepairEnvironment() {
   isRepairingEnvironment.value = true
   emit('repair-environment')
@@ -424,6 +468,154 @@ function resetRepairingEnvironmentState() {
 
 function closeDetailModal() {
   showDetailModal.value = false
+}
+
+const lifecyclePrimaryAction = computed(() => {
+  const lifecycle = props.lifecycleStatus
+  if (!lifecycle) return null
+  return lifecycle.actions.find(action => action.id === lifecycle.primary_action_id) ||
+         lifecycle.actions.find(action => action.enabled) ||
+         null
+})
+
+const lifecycleIssuesById = computed(() => {
+  const entries = (props.lifecycleStatus?.issues || []).map(issue => [issue.id, issue] as const)
+  return new Map(entries)
+})
+
+const lifecyclePrimaryIssue = computed(() => {
+  const lifecycle = props.lifecycleStatus
+  if (!lifecycle) return null
+
+  const action = lifecyclePrimaryAction.value
+  const actionIssue = action?.issue_ids
+    .map(id => lifecycleIssuesById.value.get(id))
+    .find((issue): issue is LifecycleIssue => Boolean(issue))
+  if (actionIssue) return actionIssue
+
+  return lifecycle.issues.find(issue => issue.severity === 'error') ||
+         lifecycle.issues.find(issue => issue.severity === 'warning') ||
+         lifecycle.issues.find(issue => issue.severity === 'info') ||
+         null
+})
+
+const lifecycleGuidance = computed<LifecycleGuidanceView | null>(() => {
+  if (props.setupState !== 'managed') return null
+  const issue = lifecyclePrimaryIssue.value
+  const action = lifecyclePrimaryAction.value
+  if (!issue && !action) return null
+
+  const severity = issue?.severity || 'info'
+  return {
+    severity,
+    icon: severity === 'error' ? '⚠' : severity === 'warning' ? '⚠' : 'ℹ',
+    title: issue ? lifecycleIssueTitle(issue) : 'Recommended next step',
+    description: issue?.message || action?.description || 'Review the current environment lifecycle state.',
+    items: lifecycleGuidanceItems(issue, action),
+    primaryAction: action
+  }
+})
+
+function lifecycleIssueTitle(issue: LifecycleIssue): string {
+  const layerLabels: Record<string, string> = {
+    manifest: 'Manifest needs attention',
+    filesystem: 'Filesystem needs attention',
+    runtime: 'Runtime needs attention',
+    snapshot: 'Snapshot needs attention',
+    workspace_index: 'Model index needs attention',
+    operation: 'Operation in progress'
+  }
+  return layerLabels[issue.layer] || 'Environment needs attention'
+}
+
+function lifecycleGuidanceItems(issue: LifecycleIssue | null, action: LifecycleAction | null): string[] {
+  const items: string[] = []
+
+  if (issue) {
+    issue.affected_resources.slice(0, 4).forEach(resource => {
+      items.push(resource)
+    })
+    if (issue.affected_resources.length > 4) {
+      items.push(`...and ${issue.affected_resources.length - 4} more`)
+    }
+    if (items.length === 0) {
+      issue.details.slice(0, 3).forEach(detail => items.push(detail))
+    }
+  }
+
+  if (action?.restart_required) {
+    items.push('Restart required after applying this action')
+  }
+  if (action?.disabled_reason) {
+    items.push(action.disabled_reason)
+  }
+
+  return items
+}
+
+async function openReadinessIssues() {
+  if (!readinessResult.value) {
+    await validateReadiness()
+  }
+  if (readinessResult.value) {
+    showReadinessIssuesModal.value = true
+  }
+}
+
+async function handleLifecycleAction(action: LifecycleAction) {
+  if (!action.enabled) return
+
+  switch (action.id) {
+    case 'setup_workspace':
+      emit('start-setup')
+      return
+    case 'create_environment':
+      emit('create-environment')
+      return
+    case 'import_existing_environment':
+      emit('view-environments')
+      return
+    case 'sync_environment':
+    case 'sync_missing_nodes':
+      emit('sync-environment')
+      return
+    case 'repair_environment':
+    case 'restart_comfyui':
+      emit('repair-environment')
+      return
+    case 'review_untracked_node':
+    case 'track_dev_node':
+    case 'remove_untracked_node':
+    case 'view_runtime_import_error':
+      emit('view-nodes')
+      return
+    case 'resolve_workflow_nodes':
+    case 'sync_model_paths':
+    case 'download_required_models':
+      emit('view-workflows')
+      return
+    case 'add_model_source':
+    case 'add_node_source_info':
+    case 'fix_build_readiness':
+    case 'export_environment':
+    case 'deploy_environment':
+      await openReadinessIssues()
+      return
+    case 'commit_snapshot':
+      emit('commit-changes')
+      return
+    case 'create_branch':
+      emit('create-branch')
+      return
+    case 'push_snapshot':
+      emit('view-history')
+      return
+    case 'view_operation_logs':
+      emit('view-debug')
+      return
+    default:
+      handleShowAll()
+  }
 }
 
 // Workflows with unresolved or ambiguous models
