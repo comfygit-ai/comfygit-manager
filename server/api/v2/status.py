@@ -2,6 +2,7 @@
 from aiohttp import web
 
 from cgm_core.decorators import requires_environment
+from cgm_core.lifecycle import build_environment_lifecycle_status
 from cgm_core.serializers import serialize_environment_status
 from cgm_utils.async_helpers import run_sync
 
@@ -44,6 +45,26 @@ async def get_status(request: web.Request, env) -> web.Response:
 
         status = await run_sync(env.status)
         return web.json_response(serialize_environment_status(status, env.name, env))
+    except Exception as e:
+        return web.json_response({
+            "error": str(e)
+        }, status=500)
+
+
+@routes.get("/v2/comfygit/lifecycle_status")
+@requires_environment
+async def get_lifecycle_status(request: web.Request, env) -> web.Response:
+    """Get unified lifecycle status and next-action guidance."""
+    try:
+        include_readiness = request.query.get("include_readiness", "true").lower() != "false"
+        status = await run_sync(env.status)
+        return web.json_response(
+            await build_environment_lifecycle_status(
+                env,
+                include_readiness=include_readiness,
+                status=status,
+            )
+        )
     except Exception as e:
         return web.json_response({
             "error": str(e)

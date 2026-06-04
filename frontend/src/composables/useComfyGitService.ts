@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import type {
   ComfyGitStatus,
+  EnvironmentLifecycleStatus,
   CommitResult,
   LogResult,
   ExportResult,
@@ -432,6 +433,32 @@ export function useComfyGitService() {
 
     const url = forceRefresh ? '/v2/comfygit/status?refresh=true' : '/v2/comfygit/status'
     return fetchApi<ComfyGitStatus>(url)
+  }
+
+  async function getLifecycleStatus(includeReadiness = true): Promise<EnvironmentLifecycleStatus> {
+    if (USE_MOCK) {
+      const status = await mockApi.getStatus()
+      return {
+        environment_name: status.environment,
+        workspace_path: null,
+        current_branch: status.branch,
+        current_commit: null,
+        detached_head: status.is_detached_head,
+        layers: [],
+        issues: [],
+        actions: [],
+        primary_action_id: null,
+        runtime_state: {
+          comfyui_reachable: null,
+          restart_required: false,
+          import_errors: [],
+          message: null
+        }
+      }
+    }
+
+    const query = includeReadiness ? '' : '?include_readiness=false'
+    return fetchApi<EnvironmentLifecycleStatus>(`/v2/comfygit/lifecycle_status${query}`)
   }
 
   async function commit(message: string, allowIssues = false): Promise<CommitResult> {
@@ -2366,6 +2393,7 @@ export function useComfyGitService() {
     isLoading,
     error,
     getStatus,
+    getLifecycleStatus,
     commit,
     getHistory,
     getBranchHistory,

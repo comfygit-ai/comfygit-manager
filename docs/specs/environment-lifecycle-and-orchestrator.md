@@ -285,3 +285,25 @@ Starting Studio must not mutate the selected environment, switch the running
 ComfyUI process, or imply cloud deployment. It is a local runtime adapter over
 the currently running ComfyUI API endpoint and the current environment's saved
 workflow contracts.
+
+### CGM-ENV-16 [PARTIAL]: Environment health guidance should separate durable and runtime layers
+Validation: TEST
+
+Manager-facing environment health should preserve the durable layer split owned
+by ComfyGit core:
+
+- manifest intent
+- materialized filesystem state
+- live runtime state
+- git snapshot state
+- workspace index state
+- active lifecycle operation state
+
+The manager may provide live runtime observations to core lifecycle policy, but
+it should not collapse manifest cleanliness, filesystem drift, restart/import
+state, and git snapshot state into a single ambiguous "dirty" or "not synced"
+message.
+
+This remains partial until the panel's primary status cards and calls to action
+render from the unified lifecycle status payload instead of ad hoc frontend
+conditionals.

@@ -3,6 +3,11 @@ import sys
 from unittest.mock import Mock
 
 import pytest
+from comfygit_core.models import (
+    EnvironmentLifecycleStatus,
+    LifecycleAction,
+    LifecycleIssue,
+)
 
 
 @pytest.mark.integration
@@ -193,6 +198,142 @@ class TestStatusEndpoint:
         assert runtime_issues["custom_node_import_failure_count"] == 1
         assert runtime_issues["custom_node_import_failures"][0]["name"] == "FailedNode"
         assert "ComfyUI logs" in runtime_issues["custom_node_import_failures"][0]["guidance"]
+
+    async def test_lifecycle_status_endpoint_returns_core_guidance(
+        self,
+        client,
+        mock_environment,
+        mock_env_status,
+    ):
+        """Should expose core lifecycle status as an additive manager API."""
+        mock_env_status.comparison.is_synced = False
+        mock_env_status.comparison.missing_nodes = {"rgthree-comfy"}
+        mock_environment.status.return_value = mock_env_status
+        mock_environment.get_lifecycle_status.return_value = EnvironmentLifecycleStatus(
+            environment_name="test-env",
+            workspace_path="/tmp/test-workspace",
+            current_branch="main",
+            issues=(
+                LifecycleIssue(
+                    id="missing_declared_nodes",
+                    layer="filesystem",
+                    severity="error",
+                    message="Manifest declares custom nodes that are missing on disk.",
+                    blocking=True,
+                    affected_resources=("rgthree-comfy",),
+                    action_ids=("sync_missing_nodes",),
+                ),
+            ),
+            actions=(
+                LifecycleAction(
+                    id="sync_missing_nodes",
+                    label="Sync missing nodes",
+                    description="Install manifest-declared custom nodes that are missing locally.",
+                    target_layer="filesystem",
+                    issue_ids=("missing_declared_nodes",),
+                ),
+            ),
+            primary_action_id="sync_missing_nodes",
+        )
+
+        resp = await client.get("/v2/comfygit/lifecycle_status")
+        data = await resp.json()
+
+        assert resp.status == 200
+        assert data["environment_name"] == "test-env"
+        assert data["primary_action_id"] == "sync_missing_nodes"
+        assert {issue["id"] for issue in data["issues"]} == {"missing_declared_nodes"}
+        assert data["runtime_state"]["comfyui_reachable"] is None
+
+        mock_environment.get_lifecycle_status.assert_called_once()
+        _, kwargs = mock_environment.get_lifecycle_status.call_args
+        assert kwargs["status"] is mock_env_status
+        assert kwargs["include_readiness"] is True
+
+    async def test_lifecycle_status_endpoint_can_skip_readiness(
+        self,
+        client,
+        mock_environment,
+        mock_env_status,
+    ):
+        """Should let polling clients avoid readiness work when they only need lifecycle drift."""
+        mock_environment.status.return_value = mock_env_status
+
+        resp = await client.get("/v2/comfygit/lifecycle_status?include_readiness=false")
+
+        assert resp.status == 200
+        _, kwargs = mock_environment.get_lifecycle_status.call_args
+        assert kwargs["include_readiness"] is False
+
+    async def test_lifecycle_status_endpoint_includes_runtime_import_failures(
+        self,
+        client,
+        mock_environment,
+        mock_env_status,
+        tmp_path,
+        monkeypatch,
+    ):
+        """Should enrich core lifecycle guidance with Manager runtime import health."""
+        custom_nodes_path = tmp_path / "custom_nodes"
+        custom_nodes_path.mkdir()
+        (custom_nodes_path / "FailedNode").mkdir()
+        mock_environment.custom_nodes_path = custom_nodes_path
+
+        monkeypatch.setitem(
+            sys.modules,
+            "nodes",
+            Mock(LOADED_MODULE_DIRS={"LoadedNode": str(custom_nodes_path / "LoadedNode")}),
+        )
+
+        failed_node = Mock()
+        failed_node.name = "FailedNode"
+        failed_node.registry_id = "FailedNode"
+        failed_node.criticality = "required"
+        mock_environment.list_nodes.return_value = [failed_node]
+        mock_environment.status.return_value = mock_env_status
+
+        def _runtime_lifecycle(**kwargs):
+            runtime_state = kwargs["runtime_state"]
+            import_errors = tuple(runtime_state.import_errors)
+            return EnvironmentLifecycleStatus(
+                environment_name="test-env",
+                workspace_path="/tmp/test-workspace",
+                current_branch="main",
+                issues=(
+                    LifecycleIssue(
+                        id="runtime_import_failure",
+                        layer="runtime",
+                        severity="warning",
+                        message="ComfyUI reported custom-node import failures.",
+                        affected_resources=import_errors,
+                        action_ids=("view_runtime_import_error",),
+                    ),
+                ),
+                actions=(
+                    LifecycleAction(
+                        id="view_runtime_import_error",
+                        label="View runtime import error",
+                        description="Inspect custom-node import failures from the running ComfyUI process.",
+                        target_layer="runtime",
+                        issue_ids=("runtime_import_failure",),
+                    ),
+                ),
+                primary_action_id="view_runtime_import_error",
+            )
+
+        mock_environment.get_lifecycle_status.side_effect = _runtime_lifecycle
+
+        resp = await client.get("/v2/comfygit/lifecycle_status?include_readiness=false")
+        data = await resp.json()
+
+        assert resp.status == 200
+        assert data["runtime_state"]["comfyui_reachable"] is True
+        assert data["runtime_state"]["import_errors"] == ["FailedNode"]
+
+        runtime_issue = next(issue for issue in data["issues"] if issue["id"] == "runtime_import_failure")
+        assert runtime_issue["blocking"] is False
+        assert runtime_issue["affected_resources"] == ["FailedNode"]
+        assert data["primary_action_id"] == "view_runtime_import_error"
 
     async def test_analyzed_workflows_in_response(
         self,

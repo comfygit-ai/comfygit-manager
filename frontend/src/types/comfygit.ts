@@ -67,6 +67,64 @@ export interface ComfyGitStatus {
   runtime_issues?: RuntimeIssues
 }
 
+export type LifecycleLayer = 'manifest' | 'filesystem' | 'runtime' | 'snapshot' | 'workspace_index' | 'operation'
+export type LifecycleLayerStatus = 'ok' | 'attention' | 'blocked' | 'unknown'
+export type LifecycleSeverity = 'info' | 'warning' | 'error'
+
+export interface LifecycleIssue {
+  id: string
+  layer: LifecycleLayer
+  severity: LifecycleSeverity
+  message: string
+  blocking: boolean
+  affected_resources: string[]
+  source: string | null
+  details: string[]
+  action_ids: string[]
+}
+
+export interface LifecycleAction {
+  id: string
+  label: string
+  description: string
+  target_layer: LifecycleLayer
+  issue_ids: string[]
+  expected_mutation_layers: LifecycleLayer[]
+  enabled: boolean
+  disabled_reason: string | null
+  destructive: boolean
+  restart_required: boolean
+  confirmation_required: boolean
+}
+
+export interface LifecycleLayerSummary {
+  layer: LifecycleLayer
+  status: LifecycleLayerStatus
+  message: string | null
+  issue_count: number
+  blocking_count: number
+}
+
+export interface LifecycleRuntimeState {
+  comfyui_reachable: boolean | null
+  restart_required: boolean
+  import_errors: string[]
+  message: string | null
+}
+
+export interface EnvironmentLifecycleStatus {
+  environment_name: string | null
+  workspace_path: string | null
+  current_branch: string | null
+  current_commit: string | null
+  detached_head: boolean
+  layers: LifecycleLayerSummary[]
+  issues: LifecycleIssue[]
+  actions: LifecycleAction[]
+  primary_action_id: string | null
+  runtime_state?: LifecycleRuntimeState
+}
+
 export interface CommitInfo {
   hash: string
   short_hash?: string

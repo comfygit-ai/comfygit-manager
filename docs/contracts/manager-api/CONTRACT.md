@@ -265,6 +265,25 @@ At minimum, the API contract should support:
 The detailed lifecycle semantics are specified by `CGM-ENV-07` through
 `CGM-ENV-11` in `docs/specs/environment-lifecycle-and-orchestrator.md`.
 
+### CGM-API-13E [PARTIAL]: Lifecycle guidance should flow through core status policy
+Validation: TEST
+
+The manager API should expose a unified lifecycle status payload that is derived
+from ComfyGit core lifecycle policy rather than re-derived independently in the
+frontend.
+
+The payload should preserve core layer, issue, action, and primary-action
+identifiers so the frontend can render current state and next actions without
+coupling to raw manifest, filesystem, git, workflow, or readiness internals.
+
+Manager may enrich the core lifecycle status with runtime observations that
+only exist inside the live ComfyUI process, such as custom-node import failures
+or restart state. That enrichment should be explicit adapter-owned input to the
+core lifecycle facade, not a parallel decision tree.
+
+This remains partial until the visible status UI consumes the unified lifecycle
+payload for its primary call-to-action ordering.
+
 ### CGM-API-13A [PARTIAL]: Switch initiation should return a restart-stable observer endpoint
 Validation: TEST
 
