@@ -13,7 +13,7 @@
             <SectionTitle level="4">BRANCH</SectionTitle>
             <DetailRow
               label="Current Branch:"
-              :value="status.current_branch || 'detached HEAD'"
+              :value="currentBranchLabel"
               :mono="true"
             />
           </div>
@@ -169,6 +169,19 @@
                 </div>
               </div>
             </div>
+
+            <!-- Generic manifest/config changes -->
+            <div v-if="hasGenericGitChanges" class="change-group">
+              <div class="change-group-header">
+                <span class="change-icon modified">~</span>
+                <span class="change-group-title">CONFIGURATION UPDATED</span>
+              </div>
+              <div class="change-list">
+                <div class="change-item">
+                  <span class="node-name">Manifest or environment configuration files changed</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Environment Drift Section -->
@@ -305,7 +318,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import type { ComfyGitStatus } from '@/types/comfygit'
 import SectionTitle from '@/components/base/atoms/SectionTitle.vue'
 import DetailRow from '@/components/base/molecules/DetailRow.vue'
@@ -326,15 +339,10 @@ defineEmits<{
 
 const showSynced = ref(false)
 
-// Debug: Log when component mounts
-onMounted(() => {
-  console.log('StatusDetailModal mounted, initial show value:', props.show)
+const currentBranchLabel = computed(() => {
+  if (props.status?.branch) return props.status.branch
+  return props.status?.is_detached_head ? 'detached HEAD' : 'unknown'
 })
-
-// Debug: Log when show prop changes
-watch(() => props.show, (newVal, oldVal) => {
-  console.log('StatusDetailModal show prop changed from', oldVal, 'to', newVal)
-}, { immediate: true })
 
 const brokenSyncedWorkflows = computed(() => {
   return props.status?.workflows?.analyzed?.filter(w =>
@@ -364,12 +372,20 @@ const hasWorkflows = computed(() => {
 })
 
 const hasGitChanges = computed(() => {
+  return props.status?.has_changes === true || hasSpecificGitChanges.value
+})
+
+const hasSpecificGitChanges = computed(() => {
   const gc = props.status?.git_changes
   if (!gc) return false
   return (gc.nodes_added?.length ?? 0) > 0 ||
          (gc.nodes_removed?.length ?? 0) > 0 ||
-         gc.workflow_changes ||
-         gc.has_other_changes
+         Boolean(gc.workflow_changes) ||
+         Boolean(gc.has_other_changes)
+})
+
+const hasGenericGitChanges = computed(() => {
+  return props.status?.has_changes === true && !hasSpecificGitChanges.value
 })
 
 const isClean = computed(() => {
