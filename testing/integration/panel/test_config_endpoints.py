@@ -43,8 +43,8 @@ class TestGetConfigEndpoint:
         assert "confirm_destructive" in data
 
         # Check values
-        assert data["workspace_path"] == "/workspace"
-        assert data["models_path"] == "/workspace/models"
+        assert data["workspace_path"] == str(Path("/workspace"))
+        assert data["models_path"] == str(Path("/workspace/models"))
         # Token should be masked (last 4 chars only)
         assert data["civitai_api_key"] == "***1234"
         assert isinstance(data["auto_sync_models"], bool)
@@ -313,7 +313,7 @@ class TestUpdateConfigEndpoint:
         # Verify workspace method was called
         mock_workspace.set_models_directory.assert_called_once()
         call_args = mock_workspace.set_models_directory.call_args[0]
-        assert str(call_args[0]) == "/workspace/new_models"
+        assert str(call_args[0]) == str(Path("/workspace/new_models"))
 
     async def test_success_partial_update(self, client, monkeypatch):
         """Should update only provided fields."""

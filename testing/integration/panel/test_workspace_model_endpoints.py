@@ -544,7 +544,7 @@ class TestWorkspaceModelsDirectoryEndpoint:
 
         assert resp.status == 200
         data = await resp.json()
-        assert data["path"] == "/workspace/models"
+        assert data["path"] == str(Path("/workspace/models"))
 
     async def test_get_directory_no_environment(self, client, monkeypatch):
         """Should return 500 when no environment detected."""
