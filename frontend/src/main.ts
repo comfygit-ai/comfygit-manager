@@ -1108,8 +1108,8 @@ app.registerExtension({
             // Listen for reconnection (once)
             api.addEventListener('reconnected', onReconnect, { once: true } as any)
 
-            // Trigger reboot
-            await fetch('/v2/manager/reboot')
+            // Trigger restart through the supervisor-aware orchestrator path.
+            await fetch('/v2/comfygit/orchestrator/restart', { method: 'POST' })
             // Toast will update when reconnected
           } catch (err) {
             console.error('[ComfyGit] Failed to restart:', err)

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import type { DOMWrapper, VueWrapper } from '@vue/test-utils'
 import StatusSection from '../StatusSection.vue'
 import type { ComfyGitStatus, EnvironmentLifecycleStatus } from '@/types/comfygit'
 
@@ -52,6 +53,16 @@ const createLifecycleStatus = (
   ...overrides
 })
 
+const findLifecycleTile = (wrapper: VueWrapper, title: string): DOMWrapper<Element> => {
+  const tile = wrapper.findAll('.lifecycle-tile').find(candidate => {
+    const titleElement = candidate.find('.lifecycle-tile__title-button, .lifecycle-tile__title')
+    return titleElement.exists() && titleElement.text() === title
+  })
+
+  expect(tile).toBeTruthy()
+  return tile!
+}
+
 describe('StatusSection - Setup State Issue Cards', () => {
   it('shows no_workspace issue card when setupState is no_workspace', () => {
     const wrapper = mount(StatusSection, {
@@ -60,7 +71,7 @@ describe('StatusSection - Setup State Issue Cards', () => {
         setupState: 'no_workspace'
       },
       global: {
-        stubs: ['StatusDetailModal', 'Teleport']
+        stubs: ['Teleport']
       }
     })
 
@@ -77,7 +88,7 @@ describe('StatusSection - Setup State Issue Cards', () => {
         setupState: 'unmanaged'
       },
       global: {
-        stubs: ['StatusDetailModal', 'Teleport']
+        stubs: ['Teleport']
       }
     })
 
@@ -92,7 +103,7 @@ describe('StatusSection - Setup State Issue Cards', () => {
         setupState: 'empty_workspace'
       },
       global: {
-        stubs: ['StatusDetailModal', 'Teleport']
+        stubs: ['Teleport']
       }
     })
 
@@ -108,7 +119,7 @@ describe('StatusSection - Setup State Issue Cards', () => {
         setupState: 'managed'
       },
       global: {
-        stubs: ['StatusDetailModal', 'Teleport']
+        stubs: ['Teleport']
       }
     })
 
@@ -121,7 +132,70 @@ describe('StatusSection - Setup State Issue Cards', () => {
     expect(wrapper.text()).toContain('ENVIRONMENT HEALTH')
   })
 
-  it('shows version target in broken workflow description when guidance is available', () => {
+  it('keeps healthy lifecycle tiles visually quiet', () => {
+    const wrapper = mount(StatusSection, {
+      props: {
+        status: createMockStatus(),
+        setupState: 'managed',
+        lifecycleStatus: createLifecycleStatus()
+      },
+      global: {
+        stubs: ['Teleport']
+      }
+    })
+
+    expect(wrapper.find('.lifecycle-tile__badge--ok').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('No issues detected')
+
+    const healthyLines = wrapper.findAll('.lifecycle-tile__line--ok')
+      .map(line => line.text())
+    expect(healthyLines).toContain('✓OK')
+    expect(wrapper.findAllComponents({ name: 'ActionButton' })
+      .some(button => button.text() === 'Open')).toBe(false)
+    expect(wrapper.findAllComponents({ name: 'ActionButton' })
+      .some(button => button.text() === 'History')).toBe(false)
+  })
+
+  it('navigates from lifecycle tile titles instead of generic open buttons', async () => {
+    const status = createMockStatus()
+    const onViewWorkflows = vi.fn()
+    const onViewModels = vi.fn()
+    const onViewHistory = vi.fn()
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed',
+        lifecycleStatus: createLifecycleStatus(),
+        onViewWorkflows,
+        onViewModels,
+        onViewHistory
+      },
+      global: {
+        stubs: ['Teleport']
+      }
+    })
+
+    const titleButtons = wrapper.findAll('.lifecycle-tile__title-button')
+    const workflowsTitle = titleButtons.find(button => button.text() === 'Workflows')
+    const modelsTitle = titleButtons.find(button => button.text() === 'Models')
+    const snapshotTitle = titleButtons.find(button => button.text() === 'Snapshot')
+
+    expect(workflowsTitle).toBeTruthy()
+    expect(modelsTitle).toBeTruthy()
+    expect(snapshotTitle).toBeTruthy()
+
+    await workflowsTitle!.trigger('click')
+    expect(onViewWorkflows).toHaveBeenCalledTimes(1)
+
+    await modelsTitle!.trigger('click')
+    expect(onViewModels).toHaveBeenCalledTimes(1)
+
+    await snapshotTitle!.trigger('click')
+    expect(onViewHistory).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows version target in the nodes tile when guidance is available', () => {
     const status = createMockStatus()
     status.workflows.analyzed = [
       {
@@ -154,12 +228,13 @@ describe('StatusSection - Setup State Issue Cards', () => {
         setupState: 'managed'
       },
       global: {
-        stubs: ['StatusDetailModal', 'Teleport']
+        stubs: ['Teleport']
       }
     })
 
-    expect(wrapper.text()).toContain('require newer ComfyUI (>= 0.3.10)')
-    expect(wrapper.text()).toContain('needs ComfyUI >= 0.3.10')
+    const nodesTile = findLifecycleTile(wrapper, 'Nodes')
+    expect(nodesTile.text()).toContain('1 node needs newer ComfyUI (>= 0.3.10)')
+    expect(wrapper.text()).not.toContain('ISSUES')
   })
 
   it('uses community package terminology for uninstallable counts', () => {
@@ -195,7 +270,7 @@ describe('StatusSection - Setup State Issue Cards', () => {
         setupState: 'managed'
       },
       global: {
-        stubs: ['StatusDetailModal', 'Teleport']
+        stubs: ['Teleport']
       }
     })
 
@@ -203,7 +278,7 @@ describe('StatusSection - Setup State Issue Cards', () => {
     expect(wrapper.text().toLowerCase()).not.toContain('uninstallable node mappings')
   })
 
-  it('shows runtime custom node import failures in issues', () => {
+  it('shows runtime custom node import failures in the runtime tile', () => {
     const status = createMockStatus()
     status.runtime_issues = {
       available: true,
@@ -229,13 +304,14 @@ describe('StatusSection - Setup State Issue Cards', () => {
         setupState: 'managed'
       },
       global: {
-        stubs: ['StatusDetailModal', 'Teleport']
+        stubs: ['Teleport']
       }
     })
 
     expect(wrapper.text()).toContain('1 custom node failed to import')
     expect(wrapper.text()).toContain('ComfyUI-FL-VoxCPM')
     expect(wrapper.text()).toContain('VoxCPM V2 TTS')
+    expect(wrapper.text()).not.toContain('ISSUES')
   })
 
   it('shows lifecycle sync guidance for missing declared nodes', async () => {
@@ -282,7 +358,7 @@ describe('StatusSection - Setup State Issue Cards', () => {
         })
       },
       global: {
-        stubs: ['StatusDetailModal', 'Teleport']
+        stubs: ['Teleport']
       }
     })
 
@@ -341,7 +417,7 @@ describe('StatusSection - Setup State Issue Cards', () => {
         })
       },
       global: {
-        stubs: ['StatusDetailModal', 'Teleport']
+        stubs: ['Teleport']
       }
     })
 
@@ -354,6 +430,203 @@ describe('StatusSection - Setup State Issue Cards', () => {
     expect(commitButton).toBeTruthy()
     await commitButton!.trigger('click')
     expect(onCommitChanges).toHaveBeenCalledTimes(1)
+
+    const snapshotTileCommitButton = wrapper.findAllComponents({ name: 'ActionButton' })
+      .find(button => button.text() === 'Commit')
+    expect(snapshotTileCommitButton).toBeTruthy()
+    await snapshotTileCommitButton!.trigger('click')
+    expect(onCommitChanges).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows modified workflow lifecycle guidance as a commit snapshot action', async () => {
+    const status = createMockStatus()
+    status.workflows.modified = ['txt2img_basic']
+    const onCommitChanges = vi.fn()
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed',
+        onCommitChanges,
+        lifecycleStatus: createLifecycleStatus({
+          issues: [
+            {
+              id: 'workflow_modified',
+              layer: 'snapshot',
+              severity: 'warning',
+              message: 'Workflow modified in ComfyUI and not yet captured in the environment snapshot.',
+              blocking: false,
+              affected_resources: ['txt2img_basic'],
+              source: 'WorkflowSyncStatus.modified',
+              details: [],
+              action_ids: ['commit_snapshot', 'review_workflow_changes']
+            }
+          ],
+          actions: [
+            {
+              id: 'commit_snapshot',
+              label: 'Commit snapshot',
+              description: 'Commit the current desired environment state.',
+              target_layer: 'snapshot',
+              issue_ids: ['workflow_modified'],
+              expected_mutation_layers: ['manifest', 'snapshot'],
+              enabled: true,
+              disabled_reason: null,
+              destructive: false,
+              restart_required: false,
+              confirmation_required: false
+            }
+          ],
+          primary_action_id: 'commit_snapshot'
+        })
+      },
+      global: {
+        stubs: ['Teleport']
+      }
+    })
+
+    expect(wrapper.text()).toContain('Workflow modified')
+    expect(wrapper.text()).toContain('Workflow modified in ComfyUI')
+    expect(wrapper.text()).toContain('txt2img_basic')
+    expect(wrapper.text()).not.toContain('Manifest needs attention')
+
+    const commitButton = wrapper.findAllComponents({ name: 'ActionButton' })
+      .find(button => button.text().includes('Commit snapshot'))
+    expect(commitButton).toBeTruthy()
+    await commitButton!.trigger('click')
+    expect(onCommitChanges).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps workflow file lifecycle separate from model dependency blockers', () => {
+    const status = createMockStatus()
+    status.workflows.new = ['sd1.5']
+    status.workflows.analyzed = [
+      {
+        name: 'sd1.5',
+        sync_state: 'new',
+        status: 'broken',
+        has_issues: true,
+        has_path_sync_issues: false,
+        uninstalled_nodes: 0,
+        unresolved_nodes_count: 0,
+        nodes_version_gated_count: 0,
+        nodes_uninstallable_count: 0,
+        version_gated_guidance: [],
+        unresolved_models_count: 1,
+        ambiguous_models_count: 0,
+        ambiguous_nodes_count: 0,
+        models_needing_path_sync_count: 0,
+        pending_downloads_count: 0,
+        issue_summary: '1 unresolved model',
+        node_count: 10,
+        model_count: 1,
+        has_category_mismatch_issues: false,
+        models_with_category_mismatch_count: 0
+      }
+    ]
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed'
+      },
+      global: {
+        stubs: ['Teleport']
+      }
+    })
+
+    const workflowsTile = findLifecycleTile(wrapper, 'Workflows')
+    expect(workflowsTile.classes()).toContain('lifecycle-tile--attention')
+    expect(workflowsTile.classes()).not.toContain('lifecycle-tile--blocked')
+    expect(workflowsTile.text()).toContain('1 new to commit')
+    expect(workflowsTile.text()).not.toContain("can't run")
+    expect(workflowsTile.text()).not.toContain('unresolved models')
+
+    const modelsTile = findLifecycleTile(wrapper, 'Models')
+    expect(modelsTile.classes()).toContain('lifecycle-tile--blocked')
+    expect(modelsTile.text()).toContain('1 workflow missing models')
+  })
+
+  it('routes missing model lifecycle CTA to workflow dependency resolution', async () => {
+    const status = createMockStatus()
+    const onResolveWorkflowDependencies = vi.fn()
+    status.workflows.new = ['sd1.5']
+    status.workflows.analyzed = [
+      {
+        name: 'sd1.5',
+        sync_state: 'new',
+        status: 'broken',
+        has_issues: true,
+        has_path_sync_issues: false,
+        uninstalled_nodes: 0,
+        unresolved_nodes_count: 0,
+        nodes_version_gated_count: 0,
+        nodes_uninstallable_count: 0,
+        version_gated_guidance: [],
+        unresolved_models_count: 1,
+        ambiguous_models_count: 0,
+        ambiguous_nodes_count: 0,
+        models_needing_path_sync_count: 0,
+        pending_downloads_count: 0,
+        issue_summary: '1 unresolved model',
+        node_count: 10,
+        model_count: 1,
+        has_category_mismatch_issues: false,
+        models_with_category_mismatch_count: 0
+      }
+    ]
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed',
+        onResolveWorkflowDependencies,
+        lifecycleStatus: createLifecycleStatus({
+          issues: [
+            {
+              id: 'missing_model_source',
+              layer: 'workspace_index',
+              severity: 'error',
+              message: 'Workflows reference models that are not available or sourced.',
+              blocking: true,
+              affected_resources: ['sd1.5'],
+              source: 'ResolutionResult.models_unresolved',
+              details: [],
+              action_ids: ['resolve_missing_model']
+            }
+          ],
+          actions: [
+            {
+              id: 'resolve_missing_model',
+              label: 'Resolve models',
+              description: 'Choose how missing workflow model references should be resolved.',
+              target_layer: 'workspace_index',
+              issue_ids: ['missing_model_source'],
+              expected_mutation_layers: ['manifest', 'filesystem', 'workspace_index'],
+              enabled: true,
+              disabled_reason: null,
+              destructive: false,
+              restart_required: false,
+              confirmation_required: false
+            }
+          ],
+          primary_action_id: 'resolve_missing_model'
+        })
+      },
+      global: {
+        stubs: ['Teleport']
+      }
+    })
+
+    expect(wrapper.text()).toContain('Model index needs attention')
+    expect(wrapper.text()).toContain('Resolve models')
+
+    const resolveButton = wrapper.findAllComponents({ name: 'ActionButton' })
+      .find(button => button.text().includes('Resolve models'))
+    expect(resolveButton).toBeTruthy()
+    await resolveButton!.find('button').trigger('click')
+
+    expect(onResolveWorkflowDependencies).toHaveBeenCalledWith('sd1.5')
   })
 
   it('routes lifecycle runtime import failures to the nodes view', async () => {
@@ -415,7 +688,7 @@ describe('StatusSection - Setup State Issue Cards', () => {
         })
       },
       global: {
-        stubs: ['StatusDetailModal', 'Teleport']
+        stubs: ['Teleport']
       }
     })
 

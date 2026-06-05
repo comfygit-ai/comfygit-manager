@@ -1044,12 +1044,15 @@ async def set_models_directory(request: web.Request, env) -> web.Response:
         return web.json_response({"error": "Missing 'path' field"}, status=400)
 
     path = Path(new_path)
-    if not path.exists():
-        return web.json_response({"error": f"Path does not exist: {new_path}"}, status=400)
-    if not path.is_dir():
+    created = False
+    if path.exists() and not path.is_dir():
         return web.json_response({"error": f"Path is not a directory: {new_path}"}, status=400)
 
     try:
+        if not path.exists():
+            path.mkdir(parents=True, exist_ok=True)
+            created = True
+
         # Set the new models directory
         await run_sync(env.workspace.set_models_directory, path)
 
@@ -1060,6 +1063,7 @@ async def set_models_directory(request: web.Request, env) -> web.Response:
             "status": "success",
             "path": str(path),
             "models_indexed": models_indexed,
+            "created": created,
         })
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)

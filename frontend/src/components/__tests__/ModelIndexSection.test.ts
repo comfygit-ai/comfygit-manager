@@ -8,7 +8,7 @@ vi.mock('@/composables/useComfyGitService', () => ({
     getWorkspaceModels: vi.fn().mockResolvedValue([]),
     scanWorkspaceModels: vi.fn().mockResolvedValue({ changes: 0 }),
     getModelsDirectory: vi.fn().mockResolvedValue({ path: '/test/models' }),
-    setModelsDirectory: vi.fn().mockResolvedValue({ path: '/new/path', models_indexed: 0 })
+    setModelsDirectory: vi.fn().mockResolvedValue({ path: '/new/path', models_indexed: 0, created: false })
   })
 }))
 

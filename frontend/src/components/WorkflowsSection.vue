@@ -346,9 +346,6 @@ async function loadWorkflows(forceRefresh = false) {
   }
 }
 
-// Expose loadWorkflows for parent components to call
-defineExpose({ loadWorkflows })
-
 function handleDetails(name: string) {
   selectedWorkflow.value = name
   showDetailsModal.value = true
@@ -359,6 +356,35 @@ function handleResolve(name: string) {
   showDetailsModal.value = false
   showResolveModal.value = true
 }
+
+async function openResolveWorkflow(workflowName?: string) {
+  if (!workflows.value.length) {
+    await loadWorkflows(true)
+  }
+
+  const explicitWorkflow = workflowName
+    ? workflows.value.find(workflow => workflow.name === workflowName)
+    : null
+  const fallbackWorkflow = workflows.value.find(workflow =>
+    (workflow.missing_models || 0) > 0 ||
+    (workflow.pending_downloads || 0) > 0 ||
+    workflow.has_category_mismatch_issues ||
+    (workflow.missing_nodes || 0) > 0 ||
+    (workflow.version_gated_count || 0) > 0 ||
+    (workflow.uninstallable_count || 0) > 0
+  ) || workflows.value.find(workflow => workflow.status === 'broken')
+  const target = explicitWorkflow || fallbackWorkflow
+
+  if (!target) {
+    error.value = 'No workflow dependencies need resolution.'
+    return
+  }
+
+  handleResolve(target.name)
+}
+
+// Expose parent hooks for status and global refresh actions.
+defineExpose({ loadWorkflows, openResolveWorkflow })
 
 function canOpenStudio(wf: WorkflowInfo): boolean {
   return wf.contract_summary?.status === 'valid'
@@ -423,8 +449,8 @@ async function handleResolveModalClose() {
 
 async function handleRestart() {
   try {
-    await fetch('/v2/manager/reboot')
-  } catch {
+    await fetch('/v2/comfygit/orchestrator/restart', { method: 'POST' })
+  } catch (err) {
     console.error('Failed to restart:', err)
   }
 }

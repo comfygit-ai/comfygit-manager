@@ -1214,9 +1214,9 @@ export function useComfyGitService() {
     return fetchApi('/v2/workspace/models/directory')
   }
 
-  async function setModelsDirectory(path: string): Promise<{ status: string, path: string, models_indexed: number }> {
+  async function setModelsDirectory(path: string): Promise<{ status: string, path: string, models_indexed: number, created: boolean }> {
     if (USE_MOCK) {
-      return { status: 'success', path, models_indexed: 10 }
+      return { status: 'success', path, models_indexed: 10, created: false }
     }
 
     return fetchApi('/v2/workspace/models/directory', {

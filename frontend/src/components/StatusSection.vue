@@ -66,302 +66,67 @@
           >
             {{ lifecycleGuidance.primaryAction.label }}
           </ActionButton>
-          <ActionButton variant="secondary" size="sm" @click="handleShowAll">
-            View Details
-          </ActionButton>
         </template>
       </IssueCard>
 
       <!-- Environment Health Section -->
-      <div class="health-section-wrapper" @mouseenter="showHealthActions = true" @mouseleave="showHealthActions = false">
+      <div class="health-section-wrapper">
         <div class="health-section-header">
           <SectionTitle level="4" style="margin-bottom: var(--cg-space-2)">
             ENVIRONMENT HEALTH
           </SectionTitle>
-          <transition name="fade">
-            <ActionButton
-              v-if="showHealthActions"
-              variant="ghost"
-              size="xs"
-              class="show-all-button"
-              @click="handleShowAll"
-            >
-              Show All
-            </ActionButton>
-          </transition>
         </div>
 
-        <StatusGrid left-title="WORKFLOWS" right-title="GIT CHANGES">
-        <template #left>
-          <StatusItem
-            v-if="status.workflows.new.length"
-            icon="●"
-            :count="status.workflows.new.length"
-            label="new"
-            variant="new"
-          />
-          <StatusItem
-            v-if="status.workflows.modified.length"
-            icon="●"
-            :count="status.workflows.modified.length"
-            label="modified"
-            variant="modified"
-          />
-          <StatusItem
-            v-if="status.workflows.deleted.length"
-            icon="●"
-            :count="status.workflows.deleted.length"
-            label="deleted"
-            variant="deleted"
-          />
-          <StatusItem
-            icon="✓"
-            :count="status.workflows.synced.length"
-            label="synced"
-            variant="synced"
-            :separator="hasWorkflowChanges"
-          />
-        </template>
+        <div class="lifecycle-tile-grid">
+          <div
+            v-for="tile in lifecycleTiles"
+            :key="tile.id"
+            :class="['lifecycle-tile', `lifecycle-tile--${tile.status}`]"
+          >
+            <div class="lifecycle-tile__header">
+              <button
+                v-if="tile.navigationAction"
+                type="button"
+                class="lifecycle-tile__title lifecycle-tile__title-button"
+                @click="handleLifecycleTileNavigation(tile)"
+              >
+                {{ tile.title }}
+              </button>
+              <h4 v-else class="lifecycle-tile__title">{{ tile.title }}</h4>
+              <span
+                v-if="tile.status !== 'ok'"
+                :class="['lifecycle-tile__badge', `lifecycle-tile__badge--${tile.status}`]"
+              >
+                {{ tile.statusLabel }}
+              </span>
+            </div>
 
-        <template #right>
-          <StatusItem
-            v-if="status.git_changes.nodes_added.length"
-            icon="●"
-            :count="status.git_changes.nodes_added.length"
-            :label="status.git_changes.nodes_added.length === 1 ? 'node added' : 'nodes added'"
-            variant="new"
-          />
-          <StatusItem
-            v-if="status.git_changes.nodes_removed.length"
-            icon="●"
-            :count="status.git_changes.nodes_removed.length"
-            :label="status.git_changes.nodes_removed.length === 1 ? 'node removed' : 'nodes removed'"
-            variant="deleted"
-          />
-          <StatusItem
-            v-if="status.git_changes.workflow_changes"
-            icon="●"
-            :count="workflowChangesCount"
-            :label="workflowChangesCount === 1 ? 'workflow changed' : 'workflows changed'"
-            variant="modified"
-          />
-          <StatusItem
-            v-if="hasOtherWorkflowChanges"
-            icon="●"
-            label="other changes"
-            variant="modified"
-          />
-          <!-- Show "Configuration updated" when has_changes but no specific changes (e.g., pyproject.toml) -->
-          <StatusItem
-            v-if="hasGitChanges && !hasSpecificGitChanges && !hasOtherWorkflowChanges"
-            icon="●"
-            label="configuration updated"
-            variant="modified"
-          />
-          <StatusItem
-            v-if="!hasGitChanges"
-            icon="✓"
-            label="No uncommitted changes"
-            variant="ok"
-          />
-        </template>
-        <!-- Footer slot - actions when there are uncommitted changes -->
-        <template v-if="hasUncommittedWork" #footer>
-          <h4 class="footer-title">ACTIONS</h4>
-          <div class="suggestions-content">
-            <span class="suggestions-text">{{ uncommittedChangesSummary }}</span>
-            <ActionButton variant="primary" size="sm" @click="$emit('commit-changes')">
-              Commit
-            </ActionButton>
+            <div class="lifecycle-tile__lines">
+              <div
+                v-for="line in tile.lines"
+                :key="line.text"
+                :class="['lifecycle-tile__line', `lifecycle-tile__line--${line.variant || tile.status}`]"
+              >
+                <span class="lifecycle-tile__mark">{{ line.icon || lineIcon(line.variant || tile.status) }}</span>
+                <span>{{ line.text }}</span>
+              </div>
+            </div>
+
+            <div v-if="tile.action" class="lifecycle-tile__action">
+              <ActionButton
+                :variant="tile.status === 'blocked' ? 'primary' : 'secondary'"
+                size="xs"
+                @click.stop="handleLifecycleTileAction(tile)"
+              >
+                {{ tile.action.label }}
+              </ActionButton>
+            </div>
           </div>
-        </template>
-      </StatusGrid>
-      </div>
-
-      <!-- Detached HEAD Warning (Critical Priority) -->
-      <IssueCard
-        v-if="status.is_detached_head"
-        severity="error"
-        icon="⚠"
-        title="You are in detached HEAD state"
-        description="Any commits you make will not be saved to a branch! Create a branch to preserve your work."
-        style="margin-top: var(--cg-space-3)"
-      >
-        <template #actions>
-          <ActionButton variant="primary" size="sm" @click="$emit('create-branch')">
-            Create Branch
-          </ActionButton>
-        </template>
-      </IssueCard>
-
-      <!-- Issues Section - Always shown for consistency -->
-      <div style="margin-top: var(--cg-space-3)">
-        <SectionTitle level="4" style="margin-bottom: var(--cg-space-2)">
-          ISSUES
-        </SectionTitle>
-
-        <!-- Show issue cards when there are actual issues -->
-        <template v-if="hasDisplayedIssues">
-          <!-- ERROR: Broken Workflows (can't run - missing nodes/dependencies) -->
-          <IssueCard
-            v-if="allBrokenWorkflows.length > 0"
-            severity="error"
-            icon="⚠"
-            :title="`${allBrokenWorkflows.length} workflow${allBrokenWorkflows.length === 1 ? '' : 's'} can't run`"
-            :description="brokenWorkflowDescription"
-            :items="allBrokenWorkflows.map(formatBrokenWorkflowItem)"
-          >
-            <template #actions>
-              <ActionButton variant="primary" size="sm" @click="$emit('view-workflows')">
-                See Workflows
-              </ActionButton>
-            </template>
-          </IssueCard>
-
-          <!-- WARNING: Path Sync Issues (can run but paths need fixing) -->
-          <IssueCard
-            v-if="pathSyncWorkflows.length > 0"
-            severity="warning"
-            icon="⚠"
-            :title="`${pathSyncWorkflows.length} workflow${pathSyncWorkflows.length === 1 ? '' : 's'} with path issues`"
-            description="These workflows can run but have model paths that should be synced."
-            :items="pathSyncWorkflows.map(w => `${w.name} — ${w.models_needing_path_sync_count} model path${w.models_needing_path_sync_count === 1 ? '' : 's'} to sync`)"
-          >
-            <template #actions>
-              <ActionButton variant="primary" size="sm" @click="$emit('view-workflows')">
-                See Workflows
-              </ActionButton>
-            </template>
-          </IssueCard>
-
-          <!-- WARNING: Missing Models (not in broken workflows) -->
-          <IssueCard
-            v-if="status.missing_models_count > 0 && !hasBrokenWorkflows"
-            severity="warning"
-            icon="⚠"
-            :title="`${status.missing_models_count} missing model${status.missing_models_count === 1 ? '' : 's'}`"
-            description="Some workflows reference models that are not found in the workspace index. This can happen after updating the model index."
-          >
-            <template #actions>
-              <ActionButton
-                variant="primary"
-                size="sm"
-                :disabled="isRepairing"
-                @click="handleRepairMissingModels"
-              >
-                {{ isRepairing ? 'Repairing...' : 'Repair' }}
-              </ActionButton>
-              <ActionButton variant="secondary" size="sm" @click="$emit('view-workflows')">
-                See Workflows
-              </ActionButton>
-            </template>
-          </IssueCard>
-
-          <!-- ERROR: Environment Not Synced -->
-          <IssueCard
-            v-if="!status.comparison.is_synced"
-            severity="error"
-            icon="⚠"
-            title="Environment not synced"
-            :description="syncIssueDescription"
-            :items="syncIssueItems"
-          >
-            <template #actions>
-              <ActionButton variant="secondary" size="sm" @click="handleShowAll">
-                View Details
-              </ActionButton>
-              <ActionButton variant="primary" size="sm" @click="$emit('view-nodes')">
-                See Nodes
-              </ActionButton>
-            </template>
-          </IssueCard>
-
-          <!-- WARNING: Legacy ComfyUI-Manager detected -->
-          <IssueCard
-            v-if="status.has_legacy_manager"
-            severity="warning"
-            icon="⚠"
-            title="Legacy ComfyUI-Manager detected"
-            description="The old ComfyUI-Manager extension is installed alongside ComfyGit. For proper environment tracking, use ComfyGit's built-in Manager instead and remove the legacy extension."
-          >
-            <template #actions>
-              <ActionButton variant="primary" size="sm" @click="$emit('view-nodes')">
-                See Nodes
-              </ActionButton>
-            </template>
-          </IssueCard>
-
-          <!-- WARNING: Runtime custom node import failures -->
-          <IssueCard
-            v-if="runtimeNodeImportFailures.length > 0"
-            severity="warning"
-            icon="!"
-            :title="`${runtimeNodeImportFailures.length} custom node${runtimeNodeImportFailures.length === 1 ? '' : 's'} failed to import`"
-            description="ComfyUI skipped these installed nodes during startup. Check ComfyUI logs for the import error."
-            :items="runtimeNodeImportItems"
-          >
-            <template #actions>
-              <ActionButton variant="primary" size="sm" @click="$emit('view-nodes')">
-                See Nodes
-              </ActionButton>
-            </template>
-          </IssueCard>
-
-          <IssueCard
-            v-if="hasReadinessRepairItems"
-            severity="warning"
-            icon="!"
-            title="Environment reproducibility needs attention"
-            description="Some dependencies are missing source details needed to rebuild this environment elsewhere."
-            :items="readinessSummaryItems"
-          >
-            <template #actions>
-              <ActionButton variant="primary" size="sm" @click="showReadinessIssuesModal = true">
-                Review Issues
-              </ActionButton>
-            </template>
-          </IssueCard>
-
-          <IssueCard
-            v-else-if="readinessError"
-            severity="warning"
-            icon="!"
-            title="Environment reproducibility check failed"
-            :description="readinessError"
-          >
-            <template #actions>
-              <ActionButton
-                variant="secondary"
-                size="sm"
-                :loading="isCheckingReadiness"
-                @click="validateReadiness"
-              >
-                Retry
-              </ActionButton>
-            </template>
-          </IssueCard>
-        </template>
-
-        <!-- No issues but has uncommitted work - simple text -->
-        <span v-else-if="hasUncommittedWork" class="no-issues-text">No issues</span>
-
-        <!-- All Good State - no issues and no uncommitted work -->
-        <span v-else class="no-issues-text">No runtime issues detected</span>
+        </div>
       </div>
 
     </template>
   </PanelLayout>
-
-  <!-- Status Detail Modal -->
-  <StatusDetailModal
-    :show="showDetailModal"
-    :status="status"
-    :is-repairing="isRepairingEnvironment"
-    @close="showDetailModal = false"
-    @navigate-workflows="handleNavigateWorkflows"
-    @navigate-nodes="handleNavigateNodes"
-    @repair="handleRepairEnvironment"
-  />
 
   <ReadinessIssuesModal
     v-if="showReadinessIssuesModal && readinessResult"
@@ -387,11 +152,8 @@ import type {
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
 import SectionTitle from '@/components/base/atoms/SectionTitle.vue'
-import StatusGrid from '@/components/base/molecules/StatusGrid.vue'
-import StatusItem from '@/components/base/atoms/StatusItem.vue'
 import IssueCard from '@/components/base/molecules/IssueCard.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
-import StatusDetailModal from '@/components/base/molecules/StatusDetailModal.vue'
 import ReadinessIssuesModal from '@/components/ReadinessIssuesModal.vue'
 
 interface Props {
@@ -404,8 +166,6 @@ const props = withDefaults(defineProps<Props>(), {
   setupState: 'managed'
 })
 
-const showDetailModal = ref(false)
-const showHealthActions = ref(false)
 const showReadinessIssuesModal = ref(false)
 const readinessResult = ref<ExportValidationResult | null>(null)
 const readinessError = ref<string | null>(null)
@@ -413,40 +173,58 @@ const isCheckingReadiness = ref(false)
 
 const { validateExport } = useComfyGitService()
 
-function handleShowAll() {
-  showDetailModal.value = true
-}
-
-function handleNavigateWorkflows() {
-  showDetailModal.value = false
-  emit('view-workflows')
-}
-
-function handleNavigateNodes() {
-  showDetailModal.value = false
-  emit('view-nodes')
-}
-
 const emit = defineEmits<{
   'view-workflows': []
+  'view-models': []
   'view-history': []
   'commit-changes': []
   'view-debug': []
   'sync-environment': []
   'create-branch': []
   'view-nodes': []
-  'repair-missing-models': [workflowNames: string[]]
   'repair-environment': []
   'start-setup': []
   'view-environments': []
   'create-environment': []
   'refresh-status': []
+  'resolve-workflow-dependencies': [workflowName?: string]
 }>()
 
-const isRepairing = ref(false)
-const isRepairingEnvironment = ref(false)
-
 type IssueCardSeverity = 'info' | 'warning' | 'error'
+type LifecycleTileStatus = 'ok' | 'attention' | 'blocked' | 'unknown'
+type LifecycleTileActionID =
+  | 'view-workflows'
+  | 'view-models'
+  | 'view-nodes'
+  | 'view-history'
+  | 'view-debug'
+  | 'sync-environment'
+  | 'repair-environment'
+  | 'commit-changes'
+  | 'create-branch'
+  | 'review-readiness'
+  | 'refresh-status'
+
+interface LifecycleTileLine {
+  text: string
+  variant?: LifecycleTileStatus
+  icon?: string
+}
+
+interface LifecycleTileAction {
+  id: LifecycleTileActionID
+  label: string
+}
+
+interface LifecycleTile {
+  id: string
+  title: string
+  status: LifecycleTileStatus
+  statusLabel: string
+  lines: LifecycleTileLine[]
+  navigationAction?: LifecycleTileAction
+  action?: LifecycleTileAction
+}
 
 interface LifecycleGuidanceView {
   severity: IssueCardSeverity
@@ -455,19 +233,6 @@ interface LifecycleGuidanceView {
   description: string
   items: string[]
   primaryAction: LifecycleAction | null
-}
-
-function handleRepairEnvironment() {
-  isRepairingEnvironment.value = true
-  emit('repair-environment')
-}
-
-function resetRepairingEnvironmentState() {
-  isRepairingEnvironment.value = false
-}
-
-function closeDetailModal() {
-  showDetailModal.value = false
 }
 
 const lifecyclePrimaryAction = computed(() => {
@@ -519,6 +284,15 @@ const lifecycleGuidance = computed<LifecycleGuidanceView | null>(() => {
 function lifecycleIssueTitle(issue: LifecycleIssue): string {
   if (issue.id === 'new_workflow_added') {
     return issue.affected_resources.length === 1 ? 'New workflow added' : 'New workflows added'
+  }
+  if (issue.id === 'workflow_modified') {
+    return issue.affected_resources.length === 1 ? 'Workflow modified' : 'Workflows modified'
+  }
+  if (issue.id === 'workflow_deleted') {
+    return issue.affected_resources.length === 1 ? 'Workflow removed' : 'Workflows removed'
+  }
+  if (issue.id === 'workflow_changes') {
+    return 'Workflow changes pending'
   }
 
   const layerLabels: Record<string, string> = {
@@ -595,10 +369,13 @@ async function handleLifecycleAction(action: LifecycleAction) {
       emit('view-nodes')
       return
     case 'review_workflow_changes':
+      emit('view-workflows')
+      return
     case 'resolve_workflow_nodes':
     case 'sync_model_paths':
     case 'download_required_models':
-      emit('view-workflows')
+    case 'resolve_missing_model':
+      emit('resolve-workflow-dependencies', workflowNameForLifecycleAction(action.id))
       return
     case 'add_model_source':
     case 'add_node_source_info':
@@ -620,34 +397,41 @@ async function handleLifecycleAction(action: LifecycleAction) {
       emit('view-debug')
       return
     default:
-      handleShowAll()
+      handleLifecycleLayer(action.target_layer)
   }
 }
 
-// Workflows with unresolved or ambiguous models
-const workflowsWithMissingModels = computed(() => {
-  const analyzed = props.status.workflows.analyzed || []
-  // Filter workflows that have missing model issues
-  const filtered = analyzed.filter(w =>
-    w.unresolved_models_count > 0 || w.ambiguous_models_count > 0
-  )
-  // If no specific workflows found but missing_models_count > 0, return all synced workflows
-  // (the backend resolve endpoint will re-resolve and fix any mismatched hashes)
-  if (filtered.length === 0 && props.status.missing_models_count > 0) {
-    return analyzed.filter(w => w.sync_state === 'synced')
+function handleLifecycleLayer(layer: LifecycleAction['target_layer']) {
+  switch (layer) {
+    case 'manifest':
+    case 'workspace_index':
+      emit('view-workflows')
+      return
+    case 'filesystem':
+    case 'runtime':
+      emit('view-nodes')
+      return
+    case 'snapshot':
+      emit('view-history')
+      return
+    case 'operation':
+      emit('view-debug')
+      return
+    default:
+      return
   }
-  return filtered
-})
-
-function handleRepairMissingModels() {
-  const workflows = workflowsWithMissingModels.value
-  if (workflows.length === 0) return
-  isRepairing.value = true
-  emit('repair-missing-models', workflows.map(w => w.name))
 }
 
 function resetRepairingState() {
-  isRepairing.value = false
+  // Kept for parent compatibility; missing-model repair now routes through Workflows.
+}
+
+function resetRepairingEnvironmentState() {
+  // Kept for parent compatibility; repair state is now owned by the parent flow.
+}
+
+function closeDetailModal() {
+  showReadinessIssuesModal.value = false
 }
 
 defineExpose({ resetRepairingState, resetRepairingEnvironmentState, closeDetailModal })
@@ -656,21 +440,6 @@ const hasWorkflowChanges = computed(() => {
   return props.status.workflows.new.length > 0 ||
          props.status.workflows.modified.length > 0 ||
          props.status.workflows.deleted.length > 0
-})
-
-// Use top-level has_changes for determining if there are uncommitted changes
-// This catches cases like pyproject.toml modified (dependency updates) that
-// don't show up in nodes_added/nodes_removed/workflow_changes
-const hasGitChanges = computed(() => {
-  return props.status.has_changes
-})
-
-// For display purposes: detect specific change types for UI
-const hasSpecificGitChanges = computed(() => {
-  const gc = props.status.git_changes
-  return gc.nodes_added.length > 0 ||
-         gc.nodes_removed.length > 0 ||
-         gc.workflow_changes
 })
 
 const hasUncommittedWork = computed(() => {
@@ -690,35 +459,6 @@ const readinessModelWarningCount = computed(() =>
 const readinessNodeWarningCount = computed(() =>
   readinessWarnings.value.nodes_without_provenance.length
 )
-
-const readinessWarningCount = computed(() =>
-  readinessModelWarningCount.value + readinessNodeWarningCount.value
-)
-
-const hasReadinessRepairItems = computed(() =>
-  readinessWarningCount.value > 0
-)
-
-const readinessSummaryItems = computed(() => {
-  const items: string[] = []
-
-  if (readinessModelWarningCount.value > 0) {
-    items.push(`${readinessModelWarningCount.value} model${readinessModelWarningCount.value === 1 ? '' : 's'} missing download source`)
-  }
-
-  if (readinessNodeWarningCount.value > 0) {
-    const optionalCount = readinessWarnings.value.nodes_without_provenance.filter(node => node.criticality === 'optional').length
-    const requiredCount = readinessNodeWarningCount.value - optionalCount
-    if (requiredCount > 0) {
-      items.push(`${requiredCount} required node${requiredCount === 1 ? '' : 's'} missing portable source`)
-    }
-    if (optionalCount > 0) {
-      items.push(`${optionalCount} optional node${optionalCount === 1 ? '' : 's'} missing portable source`)
-    }
-  }
-
-  return items
-})
 
 async function validateReadiness() {
   isCheckingReadiness.value = true
@@ -798,10 +538,6 @@ const runtimeNodeImportItems = computed(() =>
   })
 )
 
-const hasBrokenWorkflows = computed(() => {
-  return allBrokenWorkflows.value.length > 0
-})
-
 function extractVersionTarget(guidance: string): string | null {
   const patterns = [
     />=\s*v?(\d+(?:\.\d+){1,3})/i,
@@ -876,39 +612,6 @@ const totalUninstallableNodes = computed(() => {
   )
 })
 
-const brokenWorkflowDescription = computed(() => {
-  const blockedParts: string[] = []
-  if (totalVersionGatedNodes.value > 0) {
-    blockedParts.push(
-      `${totalVersionGatedNodes.value} require newer ComfyUI${formatWorkflowVersionTargetSummary(versionGatedTargets.value)}`
-    )
-  }
-  if (totalUninstallableNodes.value > 0) {
-    blockedParts.push(`${totalUninstallableNodes.value} need community packages`)
-  }
-
-  if (blockedParts.length > 0) {
-    return `These workflows have missing, blocked, or actionable dependencies (${blockedParts.join(', ')}) that must be resolved before they can run.`
-  }
-  return 'These workflows have missing dependencies that must be resolved before they can run.'
-})
-
-// Issues that are actual problems (not just uncommitted work)
-const hasActualIssues = computed(() => {
-  return hasBrokenWorkflows.value ||
-         pathSyncWorkflows.value.length > 0 ||
-         props.status.missing_models_count > 0 ||
-         !props.status.comparison.is_synced ||
-         props.status.has_legacy_manager ||
-         runtimeNodeImportFailures.value.length > 0
-})
-
-const hasDisplayedIssues = computed(() => {
-  return hasActualIssues.value ||
-         hasReadinessRepairItems.value ||
-         Boolean(readinessError.value)
-})
-
 // Short summary for the suggestions box
 const uncommittedChangesSummary = computed(() => {
   const parts: string[] = []
@@ -931,56 +634,448 @@ const uncommittedChangesSummary = computed(() => {
   return 'Changes ready to commit'
 })
 
-// Sync issue details for the environment not synced card
-const syncIssueDescription = computed(() => {
-  const issues: string[] = []
-  const comparison = props.status.comparison
+function pluralize(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : plural}`
+}
 
-  if (comparison.missing_nodes?.length) {
-    issues.push(`${comparison.missing_nodes.length} missing node${comparison.missing_nodes.length === 1 ? '' : 's'}`)
+function needsVerb(count: number): string {
+  return count === 1 ? 'needs' : 'need'
+}
+
+function lifecycleStatusLabel(status: LifecycleTileStatus): string {
+  switch (status) {
+    case 'ok':
+      return 'OK'
+    case 'attention':
+      return 'Attention'
+    case 'blocked':
+      return 'Blocked'
+    case 'unknown':
+      return 'Unknown'
   }
-  if (comparison.extra_nodes?.length) {
-    issues.push(`${comparison.extra_nodes.length} untracked node${comparison.extra_nodes.length === 1 ? '' : 's'}`)
+}
+
+function lineIcon(status: LifecycleTileStatus): string {
+  switch (status) {
+    case 'ok':
+      return '✓'
+    case 'attention':
+      return '•'
+    case 'blocked':
+      return '!'
+    case 'unknown':
+      return '?'
+  }
+}
+
+function mostSevereStatus(statuses: LifecycleTileStatus[]): LifecycleTileStatus {
+  if (statuses.includes('blocked')) return 'blocked'
+  if (statuses.includes('attention')) return 'attention'
+  if (statuses.includes('unknown')) return 'unknown'
+  return 'ok'
+}
+
+function createTile(
+  id: LifecycleTile['id'],
+  title: string,
+  status: LifecycleTileStatus,
+  lines: LifecycleTileLine[],
+  action?: LifecycleTileAction,
+  navigationAction?: LifecycleTileAction
+): LifecycleTile {
+  return {
+    id,
+    title,
+    status,
+    statusLabel: lifecycleStatusLabel(status),
+    lines: lines.length ? lines : [{ text: 'OK', variant: 'ok' }],
+    navigationAction,
+    action
+  }
+}
+
+function summarizeFirst(items: string[], remainingLabel: string): string[] {
+  if (items.length <= 1) return items
+  return [items[0], `...and ${items.length - 1} more ${remainingLabel}`]
+}
+
+const workflowsWithModelBlockers = computed(() =>
+  (props.status.workflows.analyzed || []).filter(w =>
+    w.unresolved_models_count > 0 ||
+    w.ambiguous_models_count > 0 ||
+    w.has_category_mismatch_issues
+  )
+)
+
+const workflowsWithPendingDownloads = computed(() =>
+  (props.status.workflows.analyzed || []).filter(w => w.pending_downloads_count > 0)
+)
+
+const workflowsWithModelPathIssues = computed(() =>
+  (props.status.workflows.analyzed || []).filter(w =>
+    w.models_needing_path_sync_count > 0 && !w.has_issues
+  )
+)
+
+const workflowsWithNodeIssues = computed(() =>
+  (props.status.workflows.analyzed || []).filter(w =>
+    w.unresolved_nodes_count > 0 ||
+    w.ambiguous_nodes_count > 0 ||
+    w.uninstalled_nodes > 0 ||
+    (w.nodes_version_gated_count || 0) > 0 ||
+    (w.nodes_uninstallable_count || 0) > 0
+  )
+)
+
+function workflowNameForLifecycleAction(actionId: string): string | undefined {
+  if (actionId === 'resolve_workflow_nodes') {
+    return workflowsWithNodeIssues.value[0]?.name
+  }
+  if (actionId === 'download_required_models') {
+    return workflowsWithPendingDownloads.value[0]?.name ||
+      workflowsWithModelBlockers.value[0]?.name
+  }
+  if (actionId === 'sync_model_paths') {
+    return workflowsWithModelPathIssues.value[0]?.name ||
+      workflowsWithModelBlockers.value[0]?.name
+  }
+  if (actionId === 'resolve_missing_model') {
+    return workflowsWithModelBlockers.value[0]?.name
+  }
+  return undefined
+}
+
+const workflowTile = computed<LifecycleTile>(() => {
+  const lines: LifecycleTileLine[] = []
+  const statuses: LifecycleTileStatus[] = []
+  const changedCount = props.status.workflows.new.length +
+    props.status.workflows.modified.length +
+    props.status.workflows.deleted.length
+
+  if (changedCount > 0) {
+    const parts: string[] = []
+    if (props.status.workflows.new.length > 0) {
+      parts.push(`${props.status.workflows.new.length} new`)
+    }
+    if (props.status.workflows.modified.length > 0) {
+      parts.push(`${props.status.workflows.modified.length} modified`)
+    }
+    if (props.status.workflows.deleted.length > 0) {
+      parts.push(`${props.status.workflows.deleted.length} deleted`)
+    }
+    lines.push({ text: `${parts.join(', ')} to commit`, variant: 'attention' })
+    statuses.push('attention')
   }
 
-  if (issues.length === 0) {
-    return 'Your environment state does not match the manifest.'
+  if (props.status.workflows.synced.length > 0 || lines.length === 0) {
+    lines.push({
+      text: `${props.status.workflows.synced.length} synced`,
+      variant: lines.length === 0 ? 'ok' : 'unknown',
+      icon: lines.length === 0 ? undefined : '✓'
+    })
   }
-  return `Environment has ${issues.join(' and ')}.`
+
+  return createTile(
+    'workflows',
+    'Workflows',
+    mostSevereStatus(statuses),
+    lines,
+    undefined,
+    { id: 'view-workflows', label: 'Open workflows' }
+  )
 })
 
-const syncIssueItems = computed(() => {
-  const items: string[] = []
+const modelTile = computed<LifecycleTile>(() => {
+  const lines: LifecycleTileLine[] = []
+  const statuses: LifecycleTileStatus[] = []
+
+  if (workflowsWithModelBlockers.value.length > 0 || props.status.missing_models_count > 0) {
+    const count = workflowsWithModelBlockers.value.length || props.status.missing_models_count
+    lines.push({ text: `${pluralize(count, 'workflow')} missing models`, variant: 'blocked' })
+    statuses.push('blocked')
+  }
+
+  if (workflowsWithPendingDownloads.value.length > 0) {
+    lines.push({
+      text: `${pluralize(workflowsWithPendingDownloads.value.length, 'workflow')} pending model downloads`,
+      variant: 'attention'
+    })
+    statuses.push('attention')
+  }
+
+  if (workflowsWithModelPathIssues.value.length > 0) {
+    lines.push({
+      text: `${pluralize(workflowsWithModelPathIssues.value.length, 'workflow')} ${needsVerb(workflowsWithModelPathIssues.value.length)} model path sync`,
+      variant: 'attention'
+    })
+    statuses.push('attention')
+  }
+
+  if (readinessModelWarningCount.value > 0) {
+    lines.push({
+      text: `${pluralize(readinessModelWarningCount.value, 'model')} missing source info`,
+      variant: 'attention'
+    })
+    statuses.push('attention')
+  }
+
+  const action = readinessModelWarningCount.value > 0
+      ? { id: 'review-readiness' as const, label: 'Review' }
+      : undefined
+
+  return createTile(
+    'models',
+    'Models',
+    mostSevereStatus(statuses),
+    lines,
+    action,
+    { id: 'view-models', label: 'Open models' }
+  )
+})
+
+const nodeTile = computed<LifecycleTile>(() => {
+  const lines: LifecycleTileLine[] = []
+  const statuses: LifecycleTileStatus[] = []
   const comparison = props.status.comparison
 
-  // Show first few untracked nodes
-  if (comparison.extra_nodes?.length) {
-    comparison.extra_nodes.slice(0, 3).forEach(name => {
-      items.push(`Untracked: ${name}`)
+  if (workflowsWithNodeIssues.value.length > 0) {
+    lines.push({
+      text: `${pluralize(workflowsWithNodeIssues.value.length, 'workflow')} ${needsVerb(workflowsWithNodeIssues.value.length)} nodes`,
+      variant: 'blocked'
     })
-    if (comparison.extra_nodes.length > 3) {
-      items.push(`...and ${comparison.extra_nodes.length - 3} more untracked`)
-    }
+    statuses.push('blocked')
   }
 
-  // Show first few missing nodes
+  if (totalVersionGatedNodes.value > 0) {
+    lines.push({
+      text: `${pluralize(totalVersionGatedNodes.value, 'node')} ${needsVerb(totalVersionGatedNodes.value)} newer ComfyUI${formatWorkflowVersionTargetSummary(versionGatedTargets.value)}`,
+      variant: 'blocked'
+    })
+    statuses.push('blocked')
+  }
+
+  if (totalUninstallableNodes.value > 0) {
+    lines.push({
+      text: `${pluralize(totalUninstallableNodes.value, 'community package')} needed`,
+      variant: 'blocked'
+    })
+    statuses.push('blocked')
+  }
+
   if (comparison.missing_nodes?.length) {
-    comparison.missing_nodes.slice(0, 3).forEach(name => {
-      items.push(`Missing: ${name}`)
-    })
-    if (comparison.missing_nodes.length > 3) {
-      items.push(`...and ${comparison.missing_nodes.length - 3} more missing`)
-    }
+    lines.push({ text: `${pluralize(comparison.missing_nodes.length, 'declared node')} missing on disk`, variant: 'blocked' })
+    statuses.push('blocked')
   }
 
-  return items
+  if (comparison.extra_nodes?.length) {
+    lines.push({ text: `${pluralize(comparison.extra_nodes.length, 'untracked node')} on disk`, variant: 'attention' })
+    statuses.push('attention')
+  }
+
+  if (comparison.disabled_nodes?.length) {
+    lines.push({ text: `${pluralize(comparison.disabled_nodes.length, 'disabled node')} on disk`, variant: 'attention' })
+    statuses.push('attention')
+  }
+
+  if (props.status.has_legacy_manager) {
+    lines.push({ text: 'Legacy ComfyUI-Manager detected', variant: 'attention' })
+    statuses.push('attention')
+  }
+
+  if (readinessNodeWarningCount.value > 0) {
+    lines.push({ text: `${pluralize(readinessNodeWarningCount.value, 'node')} missing source info`, variant: 'attention' })
+    statuses.push('attention')
+  }
+
+  return createTile(
+    'nodes',
+    'Nodes',
+    mostSevereStatus(statuses),
+    lines,
+    undefined,
+    { id: 'view-nodes', label: 'Open nodes' }
+  )
 })
+
+const runtimeTile = computed<LifecycleTile>(() => {
+  const lines: LifecycleTileLine[] = []
+  const statuses: LifecycleTileStatus[] = []
+  const runtimeState = props.lifecycleStatus?.runtime_state
+
+  if (runtimeState?.comfyui_reachable === false) {
+    lines.push({ text: runtimeState.message || 'ComfyUI runtime is unreachable', variant: 'blocked' })
+    statuses.push('blocked')
+  } else if (runtimeState?.comfyui_reachable === null) {
+    lines.push({ text: runtimeState.message || 'Runtime state unknown', variant: 'unknown' })
+    statuses.push('unknown')
+  }
+
+  if (runtimeState?.restart_required) {
+    lines.push({ text: 'Restart required', variant: 'attention' })
+    statuses.push('attention')
+  }
+
+  if (runtimeNodeImportFailures.value.length > 0) {
+    lines.push({
+      text: `${pluralize(runtimeNodeImportFailures.value.length, 'custom node')} failed to import`,
+      variant: 'attention'
+    })
+    summarizeFirst(runtimeNodeImportItems.value, 'import failures')
+      .forEach(item => lines.push({ text: item, variant: 'attention', icon: '↳' }))
+    statuses.push('attention')
+  }
+
+  const action = statuses.includes('blocked') || statuses.includes('attention')
+      ? { id: 'repair-environment' as const, label: 'Repair' }
+      : undefined
+
+  return createTile(
+    'runtime',
+    'Runtime',
+    mostSevereStatus(statuses),
+    lines,
+    action,
+    { id: 'view-debug', label: 'Open runtime diagnostics' }
+  )
+})
+
+const filesystemTile = computed<LifecycleTile>(() => {
+  const lines: LifecycleTileLine[] = []
+  const statuses: LifecycleTileStatus[] = []
+  const comparison = props.status.comparison
+
+  if (!comparison.packages_in_sync) {
+    lines.push({ text: 'Python dependencies not synced', variant: 'blocked' })
+    statuses.push('blocked')
+  }
+
+  if (comparison.version_mismatches?.length) {
+    lines.push({ text: `${pluralize(comparison.version_mismatches.length, 'node version mismatch', 'node version mismatches')}`, variant: 'attention' })
+    statuses.push('attention')
+  }
+
+  const nodeDriftCount = (comparison.missing_nodes?.length || 0) +
+    (comparison.extra_nodes?.length || 0) +
+    (comparison.disabled_nodes?.length || 0)
+  if (!comparison.is_synced && nodeDriftCount === 0 && comparison.packages_in_sync) {
+    lines.push({ text: 'Environment state differs from manifest', variant: 'attention' })
+    statuses.push('attention')
+  }
+
+  return createTile(
+    'filesystem',
+    'Filesystem',
+    mostSevereStatus(statuses),
+    lines,
+    statuses.includes('blocked') ? { id: 'sync-environment', label: 'Sync' } : undefined,
+    { id: 'view-nodes', label: 'Open filesystem state' }
+  )
+})
+
+const snapshotTile = computed<LifecycleTile>(() => {
+  const lines: LifecycleTileLine[] = []
+  const statuses: LifecycleTileStatus[] = []
+
+  if (props.status.is_detached_head) {
+    lines.push({ text: 'Detached HEAD', variant: 'blocked' })
+    statuses.push('blocked')
+  }
+
+  if (hasUncommittedWork.value) {
+    lines.push({ text: uncommittedChangesSummary.value, variant: 'attention' })
+    statuses.push('attention')
+  } else {
+    lines.push({ text: 'No uncommitted changes', variant: 'ok' })
+  }
+
+  if (workflowChangesCount.value > 0 && !hasWorkflowChanges.value) {
+    lines.push({ text: `${pluralize(workflowChangesCount.value, 'workflow file')} changed`, variant: 'attention' })
+    statuses.push('attention')
+  }
+
+  if (hasOtherWorkflowChanges.value) {
+    lines.push({ text: 'Other workflow files changed', variant: 'attention' })
+    statuses.push('attention')
+  }
+
+  const action = props.status.is_detached_head
+    ? { id: 'create-branch' as const, label: 'Branch' }
+    : hasUncommittedWork.value
+      ? { id: 'commit-changes' as const, label: 'Commit' }
+      : undefined
+
+  return createTile(
+    'snapshot',
+    'Snapshot',
+    mostSevereStatus(statuses),
+    lines,
+    action,
+    { id: 'view-history', label: 'Open version control' }
+  )
+})
+
+const lifecycleTiles = computed<LifecycleTile[]>(() => [
+  workflowTile.value,
+  modelTile.value,
+  nodeTile.value,
+  runtimeTile.value,
+  filesystemTile.value,
+  snapshotTile.value
+])
+
+async function handleLifecycleTileAction(tile: LifecycleTile) {
+  if (!tile.action) return
+  await handleLifecycleTileActionById(tile.action)
+}
+
+async function handleLifecycleTileNavigation(tile: LifecycleTile) {
+  if (!tile.navigationAction) return
+  await handleLifecycleTileActionById(tile.navigationAction)
+}
+
+async function handleLifecycleTileActionById(action: LifecycleTileAction) {
+  switch (action.id) {
+    case 'view-workflows':
+      emit('view-workflows')
+      return
+    case 'view-models':
+      emit('view-models')
+      return
+    case 'view-nodes':
+      emit('view-nodes')
+      return
+    case 'view-history':
+      emit('view-history')
+      return
+    case 'view-debug':
+      emit('view-debug')
+      return
+    case 'sync-environment':
+      emit('sync-environment')
+      return
+    case 'repair-environment':
+      emit('repair-environment')
+      return
+    case 'commit-changes':
+      emit('commit-changes')
+      return
+    case 'create-branch':
+      emit('create-branch')
+      return
+    case 'refresh-status':
+      emit('refresh-status')
+      return
+    case 'review-readiness':
+      await openReadinessIssues()
+      return
+  }
+}
 </script>
 
 <style scoped>
-/* Health Section Wrapper */
 .health-section-wrapper {
   position: relative;
+  margin-top: var(--cg-space-3);
 }
 
 .health-section-header {
@@ -990,46 +1085,156 @@ const syncIssueItems = computed(() => {
   align-items: flex-start;
 }
 
-.show-all-button {
-  position: absolute;
-  top: 0;
-  right: 0;
+.lifecycle-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid var(--cg-color-border-subtle);
+  border-radius: var(--cg-radius-md);
+  overflow: hidden;
+  background: var(--cg-color-bg-secondary);
 }
 
-/* Footer section in StatusGrid */
-.footer-title {
+.lifecycle-tile {
+  min-height: 132px;
+  padding: var(--cg-space-3);
+  border-right: 1px solid var(--cg-color-border-subtle);
+  border-bottom: 1px solid var(--cg-color-border-subtle);
+  background: var(--cg-color-bg-tertiary);
+  transition:
+    background var(--cg-transition-fast),
+    border-color var(--cg-transition-fast);
+}
+
+.lifecycle-tile:nth-child(2n) {
+  border-right: 0;
+}
+
+.lifecycle-tile:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.lifecycle-tile--blocked {
+  box-shadow: inset 3px 0 0 var(--cg-color-error);
+}
+
+.lifecycle-tile--attention {
+  box-shadow: inset 3px 0 0 var(--cg-color-warning);
+}
+
+.lifecycle-tile--unknown {
+  box-shadow: inset 3px 0 0 var(--cg-color-text-muted);
+}
+
+.lifecycle-tile__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cg-space-2);
+  margin-bottom: var(--cg-space-2);
+}
+
+.lifecycle-tile__title {
+  margin: 0;
+  color: var(--cg-color-text-muted);
   font-size: var(--cg-font-size-xs);
   font-weight: var(--cg-font-weight-semibold);
-  text-transform: uppercase;
-  color: var(--cg-color-text-muted);
-  margin: 0 0 var(--cg-space-2) 0;
   letter-spacing: var(--cg-letter-spacing-wide);
+  text-transform: uppercase;
 }
 
-.suggestions-content {
+.lifecycle-tile__title-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: color var(--cg-transition-fast);
+}
+
+.lifecycle-tile__title-button:hover,
+.lifecycle-tile__title-button:focus-visible {
+  color: var(--cg-color-text-primary);
+  outline: none;
+}
+
+.lifecycle-tile__badge {
+  flex-shrink: 0;
+  font-size: var(--cg-font-size-xs);
+  font-weight: var(--cg-font-weight-semibold);
+}
+
+.lifecycle-tile__badge--ok {
+  color: var(--cg-color-success);
+}
+
+.lifecycle-tile__badge--attention {
+  color: var(--cg-color-warning);
+}
+
+.lifecycle-tile__badge--blocked {
+  color: var(--cg-color-error);
+}
+
+.lifecycle-tile__badge--unknown {
+  color: var(--cg-color-text-muted);
+}
+
+.lifecycle-tile__lines {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--cg-space-3);
+  flex-direction: column;
+  gap: var(--cg-space-1);
 }
 
-.suggestions-text {
+.lifecycle-tile__line {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr);
+  gap: var(--cg-space-1);
   color: var(--cg-color-text-secondary);
   font-size: var(--cg-font-size-sm);
+  line-height: 1.35;
 }
 
-/* Fade transition for Show All button */
-.fade-enter-active, .fade-leave-active {
-  transition: opacity var(--cg-transition-fast);
+.lifecycle-tile__line--ok {
+  color: var(--cg-color-success);
 }
 
-.fade-enter-from, .fade-leave-to {
-  opacity: 0;
+.lifecycle-tile__line--blocked {
+  color: var(--cg-color-error);
 }
 
-/* No issues text - simple inline display */
-.no-issues-text {
+.lifecycle-tile__line--attention {
+  color: var(--cg-color-text-secondary);
+}
+
+.lifecycle-tile__line--unknown {
   color: var(--cg-color-text-muted);
-  font-size: var(--cg-font-size-sm);
+}
+
+.lifecycle-tile__mark {
+  color: currentColor;
+  text-align: center;
+}
+
+.lifecycle-tile__action {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--cg-space-2);
+}
+
+@media (max-width: 640px) {
+  .lifecycle-tile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lifecycle-tile,
+  .lifecycle-tile:nth-child(2n),
+  .lifecycle-tile:nth-last-child(-n + 2) {
+    border-right: 0;
+    border-bottom: 1px solid var(--cg-color-border-subtle);
+  }
+
+  .lifecycle-tile:last-child {
+    border-bottom: 0;
+  }
 }
 </style>

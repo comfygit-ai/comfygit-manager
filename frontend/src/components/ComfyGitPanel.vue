@@ -185,10 +185,11 @@
             @commit-changes="showCommitModal = true"
             @sync-environment="showSyncModal = true"
             @view-workflows="selectView('workflows', 'this-env')"
+            @resolve-workflow-dependencies="handleResolveWorkflowDependencies"
+            @view-models="selectView('models-env', 'this-env')"
             @view-history="openVersionControl('history')"
             @view-debug="openDiagnostics('env')"
             @view-nodes="selectView('nodes', 'this-env')"
-            @repair-missing-models="handleRepairMissingModels"
             @repair-environment="handleRepairEnvironment"
             @start-setup="showSetupWizard = true"
             @view-environments="selectView('environments', 'workspace')"
@@ -439,7 +440,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import EnvironmentSwitcher from './EnvironmentSwitcher.vue'
 import StatusSection from './StatusSection.vue'
 import WorkflowsSection from './WorkflowsSection.vue'
@@ -506,7 +507,6 @@ const {
   getSwitchProgress,
   deleteEnvironment,
   syncEnvironmentManually,
-  repairWorkflowModels,
   getSetupStatus,
   getUpdateCheck,
   updateManager
@@ -580,11 +580,18 @@ const isUpdatingManager = ref(false)
 const updateNoticeVisible = computed(() => !updateNoticeHidden.value && shouldShowUpdateNotice(updateCheck.value))
 
 // Ref to child components for triggering reloads
-const workflowsSectionRef = ref<{ loadWorkflows: (forceRefresh?: boolean) => Promise<void> } | null>(null)
+const workflowsSectionRef = ref<{
+  loadWorkflows: (forceRefresh?: boolean) => Promise<void>
+  openResolveWorkflow: (workflowName?: string) => Promise<void>
+} | null>(null)
 const modelsEnvSectionRef = ref<{ loadModels: () => Promise<void> } | null>(null)
 const modelIndexSectionRef = ref<{ loadModels: () => Promise<void> } | null>(null)
 const environmentsSectionRef = ref<{ loadEnvironments: () => Promise<void>; openCreateModal: () => void } | null>(null)
-const statusSectionRef = ref<{ resetRepairingState: () => void } | null>(null)
+const statusSectionRef = ref<{
+  resetRepairingState: () => void
+  resetRepairingEnvironmentState: () => void
+  closeDetailModal: () => void
+} | null>(null)
 
 // Environment switching modals
 const showConfirmSwitch = ref(false)
@@ -684,6 +691,12 @@ function openDiagnostics(tab: DiagnosticsTab) {
 
 function handleSwitchBranchClick() {
   openVersionControl('branches')
+}
+
+async function handleResolveWorkflowDependencies(workflowName?: string) {
+  selectView('workflows', 'this-env')
+  await nextTick()
+  await workflowsSectionRef.value?.openResolveWorkflow(workflowName)
 }
 
 function handleOpenNodeManager() {
@@ -862,7 +875,7 @@ async function handleUpdateManager() {
       setRefreshFlag()
       try {
         // This will drop the connection; expected.
-        await fetchComfyApi('/v2/manager/reboot')
+        await orchestratorService.restart()
       } catch {
         // Expected on restart
       }
@@ -1206,8 +1219,7 @@ async function handleRestart() {
       setRefreshFlag()
       showToast('Restarting environment...', 'info')
       try {
-        // Call the reboot endpoint
-        await fetchComfyApi('/v2/manager/reboot')
+        await orchestratorService.restart()
       } catch {
         // Expected - server will restart and connection will drop
       }
@@ -1533,24 +1545,6 @@ async function handleSyncConfirm() {
   } catch (err) {
     removeToast(toastId)
     showToast(`Sync error: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
-  }
-}
-
-async function handleRepairMissingModels(workflowNames: string[]) {
-  try {
-    const result = await repairWorkflowModels(workflowNames)
-
-    if (result.failed.length === 0) {
-      showToast(`✓ Repaired ${result.success} workflow${result.success === 1 ? '' : 's'}`, 'success')
-    } else {
-      showToast(`Repaired ${result.success}, failed: ${result.failed.length}`, 'warning')
-    }
-
-    await refresh()
-  } catch (err) {
-    showToast(`Repair failed: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
-  } finally {
-    statusSectionRef.value?.resetRepairingState()
   }
 }
 
