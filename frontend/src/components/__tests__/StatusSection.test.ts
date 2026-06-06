@@ -362,16 +362,366 @@ describe('StatusSection - Setup State Issue Cards', () => {
       }
     })
 
-    expect(wrapper.text()).toContain('Filesystem needs attention')
+    expect(wrapper.text()).toContain('Nodes need attention')
+    expect(wrapper.text()).not.toContain('Filesystem needs attention')
     expect(wrapper.text()).toContain('Manifest declares custom nodes that are missing on disk.')
     expect(wrapper.text()).toContain('comfyui-impact-pack')
     expect(wrapper.text()).toContain('Restart required after applying this action')
+
+    const nodesTile = findLifecycleTile(wrapper, 'Nodes')
+    expect(nodesTile.classes()).toContain('lifecycle-tile--blocked')
+    expect(nodesTile.text()).toContain('1 declared node missing on disk')
+    expect(nodesTile.text()).toContain('Sync missing nodes')
+
+    const tileSyncButton = nodesTile.findAll('button')
+      .find(button => button.text().includes('Sync missing nodes'))
+    expect(tileSyncButton).toBeTruthy()
+    await tileSyncButton!.trigger('click')
+    expect(onSyncEnvironment).toHaveBeenCalledTimes(1)
 
     const syncButton = wrapper.findAllComponents({ name: 'ActionButton' })
       .find(button => button.text().includes('Sync missing nodes'))
     expect(syncButton).toBeTruthy()
     await syncButton!.trigger('click')
+    expect(onSyncEnvironment).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows workflow tracked node materialization guidance as node attention', async () => {
+    const status = createMockStatus()
+    const onSyncEnvironment = vi.fn()
+    status.comparison.missing_nodes = ['ComfyUI-Impact-Pack']
+    status.workflows.analyzed = [
+      {
+        name: 'LTX-2.3_-_FML2V_First_Middle_Last_Frame_guider',
+        sync_state: 'synced',
+        status: 'broken',
+        has_issues: true,
+        has_path_sync_issues: false,
+        uninstalled_nodes: 1,
+        unresolved_nodes_count: 0,
+        nodes_version_gated_count: 0,
+        nodes_uninstallable_count: 0,
+        version_gated_guidance: [],
+        unresolved_models_count: 0,
+        ambiguous_models_count: 0,
+        ambiguous_nodes_count: 0,
+        models_needing_path_sync_count: 0,
+        pending_downloads_count: 0,
+        issue_summary: '1 node to install',
+        node_count: 10,
+        model_count: 0,
+        has_category_mismatch_issues: false,
+        models_with_category_mismatch_count: 0
+      }
+    ]
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed',
+        onSyncEnvironment,
+        lifecycleStatus: createLifecycleStatus({
+          issues: [
+            {
+              id: 'workflow_uninstalled_nodes',
+              layer: 'filesystem',
+              severity: 'error',
+              message: 'Tracked workflow nodes are not installed locally.',
+              blocking: true,
+              affected_resources: ['LTX-2.3_-_FML2V_First_Middle_Last_Frame_guider'],
+              source: 'WorkflowAnalysisStatus.uninstalled_nodes',
+              details: [],
+              action_ids: ['sync_missing_nodes']
+            }
+          ],
+          actions: [
+            {
+              id: 'sync_missing_nodes',
+              label: 'Sync missing nodes',
+              description: 'Install node folders declared by the manifest.',
+              target_layer: 'filesystem',
+              issue_ids: ['workflow_uninstalled_nodes'],
+              expected_mutation_layers: ['filesystem', 'operation'],
+              enabled: true,
+              disabled_reason: null,
+              destructive: false,
+              restart_required: true,
+              confirmation_required: false
+            }
+          ],
+          primary_action_id: 'sync_missing_nodes'
+        })
+      },
+      global: {
+        stubs: ['Teleport']
+      }
+    })
+
+    expect(wrapper.text()).toContain('Nodes need attention')
+    expect(wrapper.text()).not.toContain('Filesystem needs attention')
+    expect(wrapper.text()).toContain('Tracked workflow nodes are not installed locally.')
+    expect(wrapper.text()).toContain('LTX-2.3_-_FML2V_First_Middle_Last_Frame_guider')
+
+    const nodesTile = findLifecycleTile(wrapper, 'Nodes')
+    expect(nodesTile.classes()).toContain('lifecycle-tile--blocked')
+    expect(nodesTile.text()).toContain('1 workflow needs nodes')
+    expect(nodesTile.text()).toContain('Sync missing nodes')
+
+    const filesystemTile = findLifecycleTile(wrapper, 'Filesystem')
+    expect(filesystemTile.classes()).toContain('lifecycle-tile--ok')
+
+    const syncButton = nodesTile.findAll('button')
+      .find(button => button.text().includes('Sync missing nodes'))
+    expect(syncButton).toBeTruthy()
+    await syncButton!.trigger('click')
     expect(onSyncEnvironment).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes untracked workflow node package installs to dependency resolution', async () => {
+    const status = createMockStatus()
+    const onResolveWorkflowDependencies = vi.fn()
+    const onSyncEnvironment = vi.fn()
+    status.workflows.analyzed = [
+      {
+        name: 'captured-node-flow',
+        sync_state: 'synced',
+        status: 'broken',
+        has_issues: true,
+        has_path_sync_issues: false,
+        uninstalled_nodes: 1,
+        unresolved_nodes_count: 0,
+        nodes_version_gated_count: 0,
+        nodes_uninstallable_count: 0,
+        version_gated_guidance: [],
+        unresolved_models_count: 0,
+        ambiguous_models_count: 0,
+        ambiguous_nodes_count: 0,
+        models_needing_path_sync_count: 0,
+        pending_downloads_count: 0,
+        issue_summary: '1 node package needs install',
+        node_count: 10,
+        model_count: 0,
+        has_category_mismatch_issues: false,
+        models_with_category_mismatch_count: 0
+      }
+    ]
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed',
+        onResolveWorkflowDependencies,
+        onSyncEnvironment
+      },
+      global: {
+        stubs: ['Teleport']
+      }
+    })
+
+    const nodesTile = findLifecycleTile(wrapper, 'Nodes')
+    expect(nodesTile.classes()).toContain('lifecycle-tile--blocked')
+    expect(nodesTile.text()).toContain('1 workflow needs nodes')
+    expect(nodesTile.text()).toContain('Resolve nodes')
+    expect(nodesTile.text()).not.toContain('Sync missing nodes')
+
+    const resolveButton = nodesTile.findAll('button')
+      .find(button => button.text().includes('Resolve nodes'))
+    expect(resolveButton).toBeTruthy()
+    await resolveButton!.trigger('click')
+    expect(onResolveWorkflowDependencies).toHaveBeenCalledWith('captured-node-flow')
+    expect(onSyncEnvironment).not.toHaveBeenCalled()
+  })
+
+  it('routes unresolved node tile CTA to workflow dependency resolution', async () => {
+    const status = createMockStatus()
+    const onResolveWorkflowDependencies = vi.fn()
+    status.workflows.analyzed = [
+      {
+        name: 'node-resolution-flow',
+        sync_state: 'synced',
+        status: 'broken',
+        has_issues: true,
+        has_path_sync_issues: false,
+        uninstalled_nodes: 0,
+        unresolved_nodes_count: 1,
+        nodes_version_gated_count: 0,
+        nodes_uninstallable_count: 0,
+        version_gated_guidance: [],
+        unresolved_models_count: 0,
+        ambiguous_models_count: 0,
+        ambiguous_nodes_count: 0,
+        models_needing_path_sync_count: 0,
+        pending_downloads_count: 0,
+        issue_summary: '1 missing node',
+        node_count: 10,
+        model_count: 0,
+        has_category_mismatch_issues: false,
+        models_with_category_mismatch_count: 0
+      }
+    ]
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed',
+        onResolveWorkflowDependencies
+      },
+      global: {
+        stubs: ['Teleport']
+      }
+    })
+
+    const nodesTile = findLifecycleTile(wrapper, 'Nodes')
+    expect(nodesTile.classes()).toContain('lifecycle-tile--blocked')
+    expect(nodesTile.text()).toContain('1 workflow needs nodes')
+    expect(nodesTile.text()).toContain('Resolve nodes')
+
+    const resolveButton = nodesTile.findAll('button')
+      .find(button => button.text().includes('Resolve nodes'))
+    expect(resolveButton).toBeTruthy()
+    await resolveButton!.trigger('click')
+    expect(onResolveWorkflowDependencies).toHaveBeenCalledWith('node-resolution-flow')
+  })
+
+  it('routes new workflow uninstalled-node CTA to workflow dependency resolution', async () => {
+    const status = createMockStatus()
+    const onResolveWorkflowDependencies = vi.fn()
+    const onSyncEnvironment = vi.fn()
+    status.workflows.new = ['new-node-flow']
+    status.workflows.analyzed = [
+      {
+        name: 'new-node-flow',
+        sync_state: 'new',
+        status: 'broken',
+        has_issues: true,
+        has_path_sync_issues: false,
+        uninstalled_nodes: 1,
+        unresolved_nodes_count: 0,
+        nodes_version_gated_count: 0,
+        nodes_uninstallable_count: 0,
+        version_gated_guidance: [],
+        unresolved_models_count: 0,
+        ambiguous_models_count: 0,
+        ambiguous_nodes_count: 0,
+        models_needing_path_sync_count: 0,
+        pending_downloads_count: 0,
+        issue_summary: '1 node package needs install',
+        node_count: 10,
+        model_count: 0,
+        has_category_mismatch_issues: false,
+        models_with_category_mismatch_count: 0
+      }
+    ]
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed',
+        onResolveWorkflowDependencies,
+        onSyncEnvironment
+      },
+      global: {
+        stubs: ['Teleport']
+      }
+    })
+
+    const nodesTile = findLifecycleTile(wrapper, 'Nodes')
+    expect(nodesTile.classes()).toContain('lifecycle-tile--blocked')
+    expect(nodesTile.text()).toContain('1 workflow needs nodes')
+    expect(nodesTile.text()).toContain('Resolve nodes')
+    expect(nodesTile.text()).not.toContain('Sync missing nodes')
+
+    const resolveButton = nodesTile.findAll('button')
+      .find(button => button.text().includes('Resolve nodes'))
+    expect(resolveButton).toBeTruthy()
+    await resolveButton!.trigger('click')
+    expect(onResolveWorkflowDependencies).toHaveBeenCalledWith('new-node-flow')
+    expect(onSyncEnvironment).not.toHaveBeenCalled()
+  })
+
+  it('routes top lifecycle node dependency CTA to workflow dependency resolution', async () => {
+    const status = createMockStatus()
+    const onResolveWorkflowDependencies = vi.fn()
+    const onSyncEnvironment = vi.fn()
+    status.workflows.new = ['new-node-flow']
+    status.workflows.analyzed = [
+      {
+        name: 'new-node-flow',
+        sync_state: 'new',
+        status: 'broken',
+        has_issues: true,
+        has_path_sync_issues: false,
+        uninstalled_nodes: 1,
+        unresolved_nodes_count: 0,
+        nodes_version_gated_count: 0,
+        nodes_uninstallable_count: 0,
+        version_gated_guidance: [],
+        unresolved_models_count: 0,
+        ambiguous_models_count: 0,
+        ambiguous_nodes_count: 0,
+        models_needing_path_sync_count: 0,
+        pending_downloads_count: 0,
+        issue_summary: '1 node package needs install',
+        node_count: 10,
+        model_count: 0,
+        has_category_mismatch_issues: false,
+        models_with_category_mismatch_count: 0
+      }
+    ]
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed',
+        onResolveWorkflowDependencies,
+        onSyncEnvironment,
+        lifecycleStatus: createLifecycleStatus({
+          issues: [
+            {
+              id: 'workflow_node_dependencies_pending',
+              layer: 'manifest',
+              severity: 'error',
+              message: 'Workflows need custom-node dependencies resolved before they can be installed.',
+              blocking: true,
+              affected_resources: ['new-node-flow'],
+              source: 'ResolutionResult.nodes_resolved_uninstalled',
+              details: [],
+              action_ids: ['resolve_workflow_nodes']
+            }
+          ],
+          actions: [
+            {
+              id: 'resolve_workflow_nodes',
+              label: 'Resolve workflow nodes',
+              description: 'Choose how missing workflow custom-node dependencies should be resolved.',
+              target_layer: 'manifest',
+              issue_ids: ['workflow_node_dependencies_pending'],
+              expected_mutation_layers: ['manifest', 'filesystem', 'runtime'],
+              enabled: true,
+              disabled_reason: null,
+              destructive: false,
+              restart_required: true,
+              confirmation_required: false
+            }
+          ],
+          primary_action_id: 'resolve_workflow_nodes'
+        })
+      },
+      global: {
+        stubs: ['Teleport']
+      }
+    })
+
+    expect(wrapper.text()).toContain('Nodes need attention')
+    expect(wrapper.text()).toContain('Resolve workflow nodes')
+
+    const resolveButton = wrapper.findAllComponents({ name: 'ActionButton' })
+      .find(button => button.text().includes('Resolve workflow nodes'))
+    expect(resolveButton).toBeTruthy()
+    await resolveButton!.find('button').trigger('click')
+
+    expect(onResolveWorkflowDependencies).toHaveBeenCalledWith('new-node-flow')
+    expect(onSyncEnvironment).not.toHaveBeenCalled()
   })
 
   it('shows new workflow lifecycle guidance as a commit snapshot action', async () => {
@@ -538,13 +888,43 @@ describe('StatusSection - Setup State Issue Cards', () => {
     const workflowsTile = findLifecycleTile(wrapper, 'Workflows')
     expect(workflowsTile.classes()).toContain('lifecycle-tile--attention')
     expect(workflowsTile.classes()).not.toContain('lifecycle-tile--blocked')
-    expect(workflowsTile.text()).toContain('1 new to commit')
+    expect(workflowsTile.text()).toContain('1 new workflow to commit')
     expect(workflowsTile.text()).not.toContain("can't run")
     expect(workflowsTile.text()).not.toContain('unresolved models')
 
     const modelsTile = findLifecycleTile(wrapper, 'Models')
     expect(modelsTile.classes()).toContain('lifecycle-tile--blocked')
     expect(modelsTile.text()).toContain('1 workflow missing models')
+  })
+
+  it('shows captured git workflow additions as workflow-domain pending snapshot work', () => {
+    const status = createMockStatus()
+    status.has_changes = true
+    status.workflows.synced = ['existing_1', 'existing_2', 'existing_3', 'existing_4', 'ltx_flow']
+    status.git_changes.workflow_changes = true
+    status.git_changes.workflow_changes_detail = {
+      ltx_flow: 'added'
+    }
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed'
+      },
+      global: {
+        stubs: ['Teleport']
+      }
+    })
+
+    const workflowsTile = findLifecycleTile(wrapper, 'Workflows')
+    expect(workflowsTile.classes()).toContain('lifecycle-tile--attention')
+    expect(workflowsTile.text()).toContain('1 new workflow to commit')
+    expect(workflowsTile.text()).toContain('5 captured')
+    expect(workflowsTile.text()).not.toContain('5 synced')
+
+    const snapshotTile = findLifecycleTile(wrapper, 'Snapshot')
+    expect(snapshotTile.text()).toContain('1 new workflow to commit')
+    expect(snapshotTile.text()).toContain('Commit')
   })
 
   it('routes missing model lifecycle CTA to workflow dependency resolution', async () => {
@@ -627,6 +1007,81 @@ describe('StatusSection - Setup State Issue Cards', () => {
     await resolveButton!.find('button').trigger('click')
 
     expect(onResolveWorkflowDependencies).toHaveBeenCalledWith('sd1.5')
+  })
+
+  it('prioritizes model tile CTA for missing models over pending downloads and source review', async () => {
+    const status = createMockStatus()
+    const onResolveWorkflowDependencies = vi.fn()
+    status.workflows.analyzed = [
+      {
+        name: 'missing-model-flow',
+        sync_state: 'synced',
+        status: 'broken',
+        has_issues: true,
+        has_path_sync_issues: false,
+        uninstalled_nodes: 0,
+        unresolved_nodes_count: 0,
+        nodes_version_gated_count: 0,
+        nodes_uninstallable_count: 0,
+        version_gated_guidance: [],
+        unresolved_models_count: 1,
+        ambiguous_models_count: 0,
+        ambiguous_nodes_count: 0,
+        models_needing_path_sync_count: 0,
+        pending_downloads_count: 0,
+        issue_summary: '1 unresolved model',
+        node_count: 10,
+        model_count: 1,
+        has_category_mismatch_issues: false,
+        models_with_category_mismatch_count: 0
+      },
+      {
+        name: 'pending-download-flow',
+        sync_state: 'synced',
+        status: 'pending_download',
+        has_issues: false,
+        has_path_sync_issues: false,
+        uninstalled_nodes: 0,
+        unresolved_nodes_count: 0,
+        nodes_version_gated_count: 0,
+        nodes_uninstallable_count: 0,
+        version_gated_guidance: [],
+        unresolved_models_count: 0,
+        ambiguous_models_count: 0,
+        ambiguous_nodes_count: 0,
+        models_needing_path_sync_count: 0,
+        pending_downloads_count: 1,
+        issue_summary: '1 pending model download',
+        node_count: 10,
+        model_count: 1,
+        has_category_mismatch_issues: false,
+        models_with_category_mismatch_count: 0
+      }
+    ]
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed',
+        onResolveWorkflowDependencies
+      },
+      global: {
+        stubs: ['Teleport']
+      }
+    })
+
+    const modelsTile = findLifecycleTile(wrapper, 'Models')
+    expect(modelsTile.text()).toContain('1 workflow missing models')
+    expect(modelsTile.text()).toContain('1 workflow pending model downloads')
+
+    expect(modelsTile.text()).toContain('Resolve models')
+    const resolveButton = modelsTile.findAll('button')
+      .find(button => button.text().includes('Resolve models'))
+    expect(resolveButton).toBeTruthy()
+    expect(modelsTile.text()).not.toContain('Review')
+
+    await resolveButton!.trigger('click')
+    expect(onResolveWorkflowDependencies).toHaveBeenCalledWith('missing-model-flow')
   })
 
   it('routes lifecycle runtime import failures to the nodes view', async () => {

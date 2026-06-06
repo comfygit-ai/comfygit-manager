@@ -9,7 +9,7 @@
 
         <div class="modal-body">
           <p class="sync-message">
-            Fix environment state mismatch:
+            Materialize the tracked environment locally. Saved workflow edits will be preserved.
           </p>
 
           <!-- Missing nodes (will be installed) -->

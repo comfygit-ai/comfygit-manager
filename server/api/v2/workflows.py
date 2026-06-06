@@ -152,6 +152,49 @@ async def check_workflow_saved(request: web.Request, env) -> web.Response:
     return web.json_response({"is_saved": False, "filename": None})
 
 
+async def _get_capture_workflow_name(request: web.Request) -> str | None:
+    """Read a workflow name from JSON body or legacy path params."""
+    if "name" in request.match_info:
+        return request.match_info["name"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        return None
+
+    name = body.get("name")
+    return name if isinstance(name, str) and name.strip() else None
+
+
+def _workflow_name_without_json_suffix(name: str) -> str:
+    """Strip only the terminal `.json` suffix from a workflow filename."""
+    return name[:-5] if name.lower().endswith(".json") else name
+
+
+@routes.post("/v2/comfygit/workflow/capture")
+@routes.post(r"/v2/comfygit/workflow/{name:.+}/capture")
+@logged_operation("capture workflow")
+async def capture_workflow(request: web.Request, env) -> web.Response:
+    """Capture one saved ComfyUI workflow into the tracked working snapshot."""
+    name = await _get_capture_workflow_name(request)
+    if not name:
+        return web.json_response({"error": "Missing workflow name"}, status=400)
+
+    try:
+        tracked_path = await run_sync(env.capture_workflow, name)
+    except FileNotFoundError as exc:
+        return web.json_response({"error": str(exc)}, status=404)
+    except Exception as exc:
+        logger.exception("Failed to capture workflow '%s'", name)
+        return web.json_response({"error": str(exc)}, status=500)
+
+    return web.json_response({
+        "status": "success",
+        "workflow": _workflow_name_without_json_suffix(name),
+        "path": str(tracked_path),
+    })
+
+
 # =============================================================================
 # Serialization Helpers for Interactive Resolution Wizard
 # =============================================================================

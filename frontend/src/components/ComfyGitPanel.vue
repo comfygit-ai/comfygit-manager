@@ -201,7 +201,9 @@
           <WorkflowsSection
             v-else-if="currentView === 'workflows'"
             ref="workflowsSectionRef"
+            :resolve-workflow-request="pendingResolveWorkflowRequest"
             @refresh="refresh"
+            @resolve-workflow-request-consumed="pendingResolveWorkflowRequest = null"
           />
 
           <!-- Models (Environment) View -->
@@ -572,6 +574,8 @@ const isLoading = ref(false)
 const error = ref<string | null>(null)
 const selectedCommit = ref<CommitInfo | null>(null)
 const showEnvironmentSelector = ref(false)
+const pendingResolveWorkflowRequest = ref<{ id: number; workflowName?: string } | null>(null)
+let resolveWorkflowRequestCounter = 0
 
 // Manager update notice state
 const updateCheck = ref<UpdateCheckResponse | null>(null)
@@ -693,10 +697,12 @@ function handleSwitchBranchClick() {
   openVersionControl('branches')
 }
 
-async function handleResolveWorkflowDependencies(workflowName?: string) {
+function handleResolveWorkflowDependencies(workflowName?: string) {
+  pendingResolveWorkflowRequest.value = {
+    id: ++resolveWorkflowRequestCounter,
+    workflowName
+  }
   selectView('workflows', 'this-env')
-  await nextTick()
-  await workflowsSectionRef.value?.openResolveWorkflow(workflowName)
 }
 
 function handleOpenNodeManager() {

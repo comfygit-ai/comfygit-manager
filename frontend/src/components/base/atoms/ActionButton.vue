@@ -3,7 +3,6 @@
     :type="type"
     :disabled="disabled || loading"
     :class="['action-btn', variant, size, { loading }]"
-    @click="$emit('click', $event)"
   >
     <span v-if="loading" class="spinner"></span>
     <slot v-if="!loading"></slot>
@@ -25,9 +24,6 @@ withDefaults(defineProps<{
   type: 'button'
 })
 
-defineEmits<{
-  click: [event: MouseEvent]
-}>()
 </script>
 
 <style scoped>

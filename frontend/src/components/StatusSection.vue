@@ -203,6 +203,10 @@ type LifecycleTileActionID =
   | 'commit-changes'
   | 'create-branch'
   | 'review-readiness'
+  | 'resolve-models'
+  | 'download-models'
+  | 'sync-model-paths'
+  | 'resolve-nodes'
   | 'refresh-status'
 
 interface LifecycleTileLine {
@@ -234,6 +238,21 @@ interface LifecycleGuidanceView {
   items: string[]
   primaryAction: LifecycleAction | null
 }
+
+const NODE_LIFECYCLE_ISSUE_IDS = new Set([
+  'missing_declared_nodes',
+  'missing_development_nodes',
+  'untracked_node_folder',
+  'untracked_development_node',
+  'node_version_mismatch',
+  'disabled_node',
+  'workflow_unresolved_nodes',
+  'workflow_node_dependencies_pending',
+  'workflow_uninstalled_nodes',
+  'workflow_version_gated_nodes',
+  'workflow_uninstallable_nodes',
+  'node_provenance_missing'
+])
 
 const lifecyclePrimaryAction = computed(() => {
   const lifecycle = props.lifecycleStatus
@@ -282,6 +301,9 @@ const lifecycleGuidance = computed<LifecycleGuidanceView | null>(() => {
 })
 
 function lifecycleIssueTitle(issue: LifecycleIssue): string {
+  if (NODE_LIFECYCLE_ISSUE_IDS.has(issue.id)) {
+    return 'Nodes need attention'
+  }
   if (issue.id === 'new_workflow_added') {
     return issue.affected_resources.length === 1 ? 'New workflow added' : 'New workflows added'
   }
@@ -505,6 +527,29 @@ const workflowChangesCount = computed(() => {
   return Object.keys(props.status.git_changes.workflow_changes_detail).length
 })
 
+const capturedWorkflowChangeCounts = computed(() => {
+  const counts = {
+    added: 0,
+    modified: 0,
+    deleted: 0,
+    other: 0
+  }
+
+  for (const changeType of Object.values(props.status.git_changes.workflow_changes_detail)) {
+    if (changeType === 'added') counts.added += 1
+    else if (changeType === 'modified') counts.modified += 1
+    else if (changeType === 'deleted') counts.deleted += 1
+    else counts.other += 1
+  }
+
+  return counts
+})
+
+const capturedWorkflowChangesCount = computed(() => {
+  const counts = capturedWorkflowChangeCounts.value
+  return counts.added + counts.modified + counts.deleted + counts.other
+})
+
 const hasOtherWorkflowChanges = computed(() => {
   return props.status.git_changes.has_other_changes
 })
@@ -612,22 +657,41 @@ const totalUninstallableNodes = computed(() => {
   )
 })
 
-// Short summary for the suggestions box
-const uncommittedChangesSummary = computed(() => {
+function workflowSnapshotChangeSummaryFromCounts(
+  counts: { added: number; modified: number; deleted: number; other: number }
+): string {
   const parts: string[] = []
 
-  if (props.status.workflows.new.length > 0) {
-    parts.push(`${props.status.workflows.new.length} new`)
-  }
-  if (props.status.workflows.modified.length > 0) {
-    parts.push(`${props.status.workflows.modified.length} modified`)
-  }
-  if (props.status.workflows.deleted.length > 0) {
-    parts.push(`${props.status.workflows.deleted.length} deleted`)
+  if (counts.added > 0) parts.push(`${counts.added} new`)
+  if (counts.modified > 0) parts.push(`${counts.modified} modified`)
+  if (counts.deleted > 0) parts.push(`${counts.deleted} removed`)
+  if (counts.other > 0) parts.push(`${counts.other} changed`)
+
+  const total = counts.added + counts.modified + counts.deleted + counts.other
+  if (total === 0) return ''
+
+  return `${parts.join(', ')} workflow${total === 1 ? '' : 's'} to commit`
+}
+
+function workflowSyncChangeSummary(): string {
+  return workflowSnapshotChangeSummaryFromCounts({
+    added: props.status.workflows.new.length,
+    modified: props.status.workflows.modified.length,
+    deleted: props.status.workflows.deleted.length,
+    other: 0
+  })
+}
+
+// Short summary for the suggestions box
+const uncommittedChangesSummary = computed(() => {
+  const syncWorkflowSummary = workflowSyncChangeSummary()
+  if (syncWorkflowSummary) {
+    return syncWorkflowSummary
   }
 
-  if (parts.length > 0) {
-    return `${parts.join(', ')} workflow${parts.length === 1 && !parts[0].includes(',') ? '' : 's'} to commit`
+  const capturedWorkflowSummary = workflowSnapshotChangeSummaryFromCounts(capturedWorkflowChangeCounts.value)
+  if (capturedWorkflowSummary) {
+    return capturedWorkflowSummary
   }
 
   // Fallback for git-only changes (nodes, config)
@@ -727,9 +791,52 @@ const workflowsWithNodeIssues = computed(() =>
   )
 )
 
+const workflowsWithUninstalledNodes = computed(() =>
+  (props.status.workflows.analyzed || []).filter(w => w.uninstalled_nodes > 0)
+)
+
+const pendingWorkflowNames = computed(() =>
+  new Set([
+    ...props.status.workflows.new,
+    ...props.status.workflows.modified
+  ])
+)
+
+const workflowsWithPendingNodeDependencies = computed(() =>
+  workflowsWithUninstalledNodes.value.filter(w =>
+    w.sync_state === 'new' ||
+    w.sync_state === 'modified' ||
+    pendingWorkflowNames.value.has(w.name)
+  )
+)
+
+const workflowsWithTrackedUninstalledNodes = computed(() =>
+  workflowsWithUninstalledNodes.value.filter(w =>
+    !workflowsWithPendingNodeDependencies.value.includes(w)
+  )
+)
+
+const workflowsWithUnresolvedNodeMappings = computed(() =>
+  (props.status.workflows.analyzed || []).filter(w =>
+    w.unresolved_nodes_count > 0 ||
+    w.ambiguous_nodes_count > 0
+  )
+)
+
+const workflowsWithNodeCompatibilityIssues = computed(() =>
+  (props.status.workflows.analyzed || []).filter(w =>
+    (w.nodes_version_gated_count || 0) > 0 ||
+    (w.nodes_uninstallable_count || 0) > 0
+  )
+)
+
 function workflowNameForLifecycleAction(actionId: string): string | undefined {
   if (actionId === 'resolve_workflow_nodes') {
-    return workflowsWithNodeIssues.value[0]?.name
+    return workflowsWithUnresolvedNodeMappings.value[0]?.name ||
+      workflowsWithNodeCompatibilityIssues.value[0]?.name ||
+      workflowsWithPendingNodeDependencies.value[0]?.name ||
+      workflowsWithUninstalledNodes.value[0]?.name ||
+      workflowsWithNodeIssues.value[0]?.name
   }
   if (actionId === 'download_required_models') {
     return workflowsWithPendingDownloads.value[0]?.name ||
@@ -753,23 +860,19 @@ const workflowTile = computed<LifecycleTile>(() => {
     props.status.workflows.deleted.length
 
   if (changedCount > 0) {
-    const parts: string[] = []
-    if (props.status.workflows.new.length > 0) {
-      parts.push(`${props.status.workflows.new.length} new`)
-    }
-    if (props.status.workflows.modified.length > 0) {
-      parts.push(`${props.status.workflows.modified.length} modified`)
-    }
-    if (props.status.workflows.deleted.length > 0) {
-      parts.push(`${props.status.workflows.deleted.length} deleted`)
-    }
-    lines.push({ text: `${parts.join(', ')} to commit`, variant: 'attention' })
+    lines.push({ text: workflowSyncChangeSummary(), variant: 'attention' })
+    statuses.push('attention')
+  } else if (capturedWorkflowChangesCount.value > 0) {
+    lines.push({
+      text: workflowSnapshotChangeSummaryFromCounts(capturedWorkflowChangeCounts.value),
+      variant: 'attention'
+    })
     statuses.push('attention')
   }
 
   if (props.status.workflows.synced.length > 0 || lines.length === 0) {
     lines.push({
-      text: `${props.status.workflows.synced.length} synced`,
+      text: `${props.status.workflows.synced.length} ${lines.length > 0 ? 'captured' : 'synced'}`,
       variant: lines.length === 0 ? 'ok' : 'unknown',
       icon: lines.length === 0 ? undefined : '✓'
     })
@@ -819,9 +922,7 @@ const modelTile = computed<LifecycleTile>(() => {
     statuses.push('attention')
   }
 
-  const action = readinessModelWarningCount.value > 0
-      ? { id: 'review-readiness' as const, label: 'Review' }
-      : undefined
+  const action = modelTileAction.value
 
   return createTile(
     'models',
@@ -831,6 +932,22 @@ const modelTile = computed<LifecycleTile>(() => {
     action,
     { id: 'view-models', label: 'Open models' }
   )
+})
+
+const modelTileAction = computed<LifecycleTileAction | undefined>(() => {
+  if (workflowsWithModelBlockers.value.length > 0 || props.status.missing_models_count > 0) {
+    return { id: 'resolve-models', label: 'Resolve models' }
+  }
+  if (workflowsWithPendingDownloads.value.length > 0) {
+    return { id: 'download-models', label: 'Download models' }
+  }
+  if (workflowsWithModelPathIssues.value.length > 0) {
+    return { id: 'sync-model-paths', label: 'Sync paths' }
+  }
+  if (readinessModelWarningCount.value > 0) {
+    return { id: 'review-readiness', label: 'Review sources' }
+  }
+  return undefined
 })
 
 const nodeTile = computed<LifecycleTile>(() => {
@@ -887,14 +1004,43 @@ const nodeTile = computed<LifecycleTile>(() => {
     statuses.push('attention')
   }
 
+  const action = nodeTileAction.value
+
   return createTile(
     'nodes',
     'Nodes',
     mostSevereStatus(statuses),
     lines,
-    undefined,
+    action,
     { id: 'view-nodes', label: 'Open nodes' }
   )
+})
+
+const nodeTileAction = computed<LifecycleTileAction | undefined>(() => {
+  const comparison = props.status.comparison
+
+  if (
+    workflowsWithUnresolvedNodeMappings.value.length > 0 ||
+    workflowsWithPendingNodeDependencies.value.length > 0 ||
+    (workflowsWithUninstalledNodes.value.length > 0 && !comparison.missing_nodes?.length)
+  ) {
+    return { id: 'resolve-nodes', label: 'Resolve nodes' }
+  }
+  if (comparison.missing_nodes?.length || workflowsWithTrackedUninstalledNodes.value.length > 0) {
+    return { id: 'sync-environment', label: 'Sync missing nodes' }
+  }
+  if (
+    workflowsWithNodeCompatibilityIssues.value.length > 0 ||
+    comparison.extra_nodes?.length ||
+    comparison.disabled_nodes?.length ||
+    props.status.has_legacy_manager
+  ) {
+    return { id: 'view-nodes', label: 'Review nodes' }
+  }
+  if (readinessNodeWarningCount.value > 0) {
+    return { id: 'review-readiness', label: 'Review sources' }
+  }
+  return undefined
 })
 
 const runtimeTile = computed<LifecycleTile>(() => {
@@ -988,7 +1134,11 @@ const snapshotTile = computed<LifecycleTile>(() => {
     lines.push({ text: 'No uncommitted changes', variant: 'ok' })
   }
 
-  if (workflowChangesCount.value > 0 && !hasWorkflowChanges.value) {
+  if (
+    workflowChangesCount.value > 0 &&
+    !hasWorkflowChanges.value &&
+    capturedWorkflowChangesCount.value === 0
+  ) {
     lines.push({ text: `${pluralize(workflowChangesCount.value, 'workflow file')} changed`, variant: 'attention' })
     statuses.push('attention')
   }
@@ -1067,6 +1217,18 @@ async function handleLifecycleTileActionById(action: LifecycleTileAction) {
       return
     case 'review-readiness':
       await openReadinessIssues()
+      return
+    case 'resolve-models':
+      emit('resolve-workflow-dependencies', workflowNameForLifecycleAction('resolve_missing_model'))
+      return
+    case 'download-models':
+      emit('resolve-workflow-dependencies', workflowNameForLifecycleAction('download_required_models'))
+      return
+    case 'sync-model-paths':
+      emit('resolve-workflow-dependencies', workflowNameForLifecycleAction('sync_model_paths'))
+      return
+    case 'resolve-nodes':
+      emit('resolve-workflow-dependencies', workflowNameForLifecycleAction('resolve_workflow_nodes'))
       return
   }
 }

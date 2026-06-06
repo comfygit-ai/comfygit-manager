@@ -246,7 +246,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import { useOrchestratorService } from '@/composables/useOrchestratorService'
 import WorkflowDetailsModal from './WorkflowDetailsModal.vue'
@@ -263,8 +263,13 @@ import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import { activateSavedWorkflow } from '@/utils/workflowLoader'
 
+const props = defineProps<{
+  resolveWorkflowRequest?: { id: number; workflowName?: string } | null
+}>()
+
 const emit = defineEmits<{
   refresh: [options?: { refreshWorkflows?: boolean }]
+  'resolve-workflow-request-consumed': [requestId: number]
 }>()
 
 const { getWorkflows, openStudio } = useComfyGitService()
@@ -385,6 +390,16 @@ async function openResolveWorkflow(workflowName?: string) {
 
 // Expose parent hooks for status and global refresh actions.
 defineExpose({ loadWorkflows, openResolveWorkflow })
+
+watch(
+  () => props.resolveWorkflowRequest,
+  async (request) => {
+    if (!request) return
+    await openResolveWorkflow(request.workflowName)
+    emit('resolve-workflow-request-consumed', request.id)
+  },
+  { immediate: true }
+)
 
 function canOpenStudio(wf: WorkflowInfo): boolean {
   return wf.contract_summary?.status === 'valid'

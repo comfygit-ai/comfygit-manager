@@ -1815,7 +1815,8 @@ export function useComfyGitService() {
 
   async function syncEnvironmentManually(
     modelStrategy: 'skip' | 'auto' | 'manual' = 'skip',
-    removeExtraNodes = true
+    removeExtraNodes = true,
+    preserveWorkflows = true
   ): Promise<SyncEnvironmentResult> {
     if (USE_MOCK) {
       await new Promise(resolve => setTimeout(resolve, 1500))
@@ -1833,9 +1834,29 @@ export function useComfyGitService() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model_strategy: modelStrategy,
-        remove_extra_nodes: removeExtraNodes
+        remove_extra_nodes: removeExtraNodes,
+        preserve_workflows: preserveWorkflows
       })
     })
+  }
+
+  async function captureWorkflow(workflowName: string): Promise<{ status: string; workflow: string; path: string }> {
+    if (USE_MOCK) {
+      return {
+        status: 'success',
+        workflow: workflowName.replace(/\.json$/i, ''),
+        path: `workflows/${workflowName.replace(/\.json$/i, '')}.json`
+      }
+    }
+
+    return fetchApi<{ status: string; workflow: string; path: string }>(
+      '/v2/comfygit/workflow/capture',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: workflowName })
+      }
+    )
   }
 
   // Push/Pull Operations
@@ -2504,6 +2525,7 @@ export function useComfyGitService() {
     validateMerge,
     // Environment Sync
     syncEnvironmentManually,
+    captureWorkflow,
     // Workflow Repair
     repairWorkflowModels,
     // Import Operations

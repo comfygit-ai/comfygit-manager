@@ -99,13 +99,15 @@ async def sync_environment(request: web.Request, env) -> web.Response:
     json_data = await request.json()
     model_strategy = json_data.get("model_strategy", "skip")
     remove_extra_nodes = json_data.get("remove_extra_nodes", True)
+    preserve_workflows = json_data.get("preserve_workflows", True)
 
     try:
         # Run sync operation
         result = await run_sync(
             env.sync,
             model_strategy=model_strategy,
-            remove_extra_nodes=remove_extra_nodes
+            remove_extra_nodes=remove_extra_nodes,
+            preserve_workflows=preserve_workflows,
         )
 
         return web.json_response({
