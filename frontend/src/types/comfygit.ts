@@ -354,6 +354,11 @@ export interface RevertChangesResult {
   message?: string
 }
 
+export interface StatusBundle {
+  status: ComfyGitStatus
+  lifecycle_status: EnvironmentLifecycleStatus
+}
+
 // Environment Management Types
 export interface EnvironmentInfo {
   name: string

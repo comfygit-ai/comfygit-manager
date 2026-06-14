@@ -210,20 +210,18 @@ def _get_environment_created_at(env) -> str | None:
 
 
 def _get_environment_info(env, current_env):
-    """Get detailed environment information."""
-    status = env.status()
-
-    # Get basic git info
-    current_branch = status.git.current_branch
+    """Get lightweight environment information for list views."""
+    sync_status = env.get_workflow_sync_status()
+    current_branch = env.get_current_branch()
 
     return {
         "name": env.name,
         "is_current": env.name == current_env.name if current_env else False,
         "path": str(env.path),
         "created_at": None,  # Could add this to Environment if needed
-        "workflow_count": len(status.workflow.sync_status.synced) + len(status.workflow.sync_status.new) + len(status.workflow.sync_status.modified),
-        "node_count": len(status.comparison.missing_nodes) + len(status.comparison.extra_nodes) + len(status.comparison.version_mismatches),
-        "model_count": len(status.missing_models),
+        "workflow_count": sync_status.total_count,
+        "node_count": len(env.list_nodes()),
+        "model_count": len(env.list_manifest_models()),
         "current_branch": current_branch
     }
 

@@ -265,6 +265,32 @@ class TestStatusEndpoint:
         _, kwargs = mock_environment.get_lifecycle_status.call_args
         assert kwargs["include_readiness"] is False
 
+    async def test_status_bundle_reuses_one_status_snapshot(
+        self,
+        client,
+        mock_environment,
+        mock_env_status,
+    ):
+        """Should return status and lifecycle from one env.status() call."""
+        mock_environment.status.return_value = mock_env_status
+        mock_environment.get_lifecycle_status.return_value = EnvironmentLifecycleStatus(
+            environment_name="test-env",
+            workspace_path="/tmp/test-workspace",
+            current_branch="main",
+        )
+
+        resp = await client.get("/v2/comfygit/status_bundle?include_readiness=false")
+        data = await resp.json()
+
+        assert resp.status == 200
+        assert data["status"]["environment"] == "test-env"
+        assert data["lifecycle_status"]["environment_name"] == "test-env"
+        mock_environment.status.assert_called_once()
+        mock_environment.get_lifecycle_status.assert_called_once()
+        _, kwargs = mock_environment.get_lifecycle_status.call_args
+        assert kwargs["status"] is mock_env_status
+        assert kwargs["include_readiness"] is False
+
     async def test_lifecycle_status_endpoint_includes_runtime_import_failures(
         self,
         client,

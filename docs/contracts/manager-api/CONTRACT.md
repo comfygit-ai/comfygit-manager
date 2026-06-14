@@ -284,6 +284,19 @@ core lifecycle facade, not a parallel decision tree.
 This remains partial until the visible status UI consumes the unified lifecycle
 payload for its primary call-to-action ordering.
 
+### CGM-API-13F [LIVE]: Normal panel refresh should avoid broad forced scans
+Validation: TEST
+
+The manager API should keep ordinary panel open and refresh paths bounded to the
+active environment and should not force model-directory sync, PyTorch probing, or
+full status recomputation for every workspace environment unless the user invokes
+an explicit deep refresh, metadata refresh, or detail view that needs that work.
+
+The environment list endpoint should return lightweight environment summaries.
+Detailed dependency, model, and workflow health may still be computed by the
+current environment status endpoint, lifecycle status endpoint, or the named
+environment detail endpoint.
+
 ### CGM-API-13A [PARTIAL]: Switch initiation should return a restart-stable observer endpoint
 Validation: TEST
 

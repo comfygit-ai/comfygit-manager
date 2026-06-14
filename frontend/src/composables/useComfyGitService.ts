@@ -79,7 +79,8 @@ import type {
   CivitaiModel,
   CivitaiModelResponse,
   CivitaiModelVersionResponse,
-  CivitaiSearchResponse
+  CivitaiSearchResponse,
+  StatusBundle
 } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
 import { useMockControls } from '@/composables/useMockControls'
@@ -459,6 +460,23 @@ export function useComfyGitService() {
 
     const query = includeReadiness ? '' : '?include_readiness=false'
     return fetchApi<EnvironmentLifecycleStatus>(`/v2/comfygit/lifecycle_status${query}`)
+  }
+
+  async function getStatusBundle(
+    options: { includeReadiness?: boolean; forceRefresh?: boolean } = {}
+  ): Promise<StatusBundle> {
+    if (USE_MOCK) {
+      return {
+        status: await mockApi.getStatus(),
+        lifecycle_status: await getLifecycleStatus(options.includeReadiness ?? true)
+      }
+    }
+
+    const params = new URLSearchParams()
+    if (options.includeReadiness === false) params.set('include_readiness', 'false')
+    if (options.forceRefresh) params.set('refresh', 'true')
+    const query = params.toString()
+    return fetchApi<StatusBundle>(`/v2/comfygit/status_bundle${query ? `?${query}` : ''}`)
   }
 
   async function commit(message: string, allowIssues = false): Promise<CommitResult> {
@@ -2414,6 +2432,7 @@ export function useComfyGitService() {
     isLoading,
     error,
     getStatus,
+    getStatusBundle,
     getLifecycleStatus,
     commit,
     getHistory,

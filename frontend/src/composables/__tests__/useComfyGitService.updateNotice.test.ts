@@ -117,4 +117,25 @@ describe('useComfyGitService lifecycle safety APIs', () => {
     })
     expect(result.workflow).toBe('LTX-2.3_-_FML2V_First_Middle_Last_Frame_guider')
   })
+
+  it('loads bundled status without forcing deep refresh by default', async () => {
+    const payload = {
+      status: { environment: 'test-env' },
+      lifecycle_status: { environment_name: 'test-env' }
+    }
+    ;(window as any).app.api.fetchApi.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify(payload)
+    })
+
+    const svc = useComfyGitService()
+    const result = await svc.getStatusBundle({ includeReadiness: false })
+
+    expect((window as any).app.api.fetchApi).toHaveBeenCalledWith(
+      '/v2/comfygit/status_bundle?include_readiness=false',
+      undefined
+    )
+    expect(result).toStrictEqual(payload)
+  })
 })

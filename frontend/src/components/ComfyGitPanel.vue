@@ -496,8 +496,6 @@ const emit = defineEmits<{
 }>()
 
 const {
-  getStatus,
-  getLifecycleStatus,
   getHistory,
   getBranches,
   checkout,
@@ -513,7 +511,8 @@ const {
   getSetupStatus,
   getUpdateCheck,
   updateManager,
-  captureWorkflow
+  captureWorkflow,
+  getStatusBundle
 } = useComfyGitService()
 
 const orchestratorService = useOrchestratorService()
@@ -945,20 +944,15 @@ async function refresh(options: { refreshWorkflows?: boolean } = {}) {
   error.value = null
 
   try {
-    // Use forceRefresh=true to clear cached environment state
-    const lifecycleStatusPromise = getLifecycleStatus(false).catch((err) => {
-      console.warn('[ComfyGit] Failed to load lifecycle status', err)
-      return null
-    })
-    const [statusRes, lifecycleStatusRes, historyRes, branchesRes, envsRes] = await Promise.all([
-      getStatus(true),
-      lifecycleStatusPromise,
+    const [statusBundleRes, historyRes, branchesRes, envsRes] = await Promise.all([
+      getStatusBundle({ includeReadiness: false }),
       getHistory(HISTORY_PAGE_SIZE),
       getBranches(),
       getEnvironments()
     ])
+    const statusRes = statusBundleRes.status
     status.value = statusRes
-    lifecycleStatus.value = lifecycleStatusRes
+    lifecycleStatus.value = statusBundleRes.lifecycle_status
     commits.value = historyRes.commits
     historyHasMore.value = historyRes.has_more
     branches.value = branchesRes.branches
