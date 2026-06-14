@@ -5,6 +5,12 @@ import logging.handlers
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
+from typing import Any
+
+
+COMMAND_RESULT_ATTR = "_comfygit_command_result"
+SUCCESS_STATUSES = {"success", "ok"}
+ERROR_STATUSES = {"error", "failed", "failure"}
 
 
 class ComfyGitLogFilter(logging.Filter):
@@ -51,6 +57,28 @@ class EnvironmentLogger:
     _active_handler: logging.handlers.RotatingFileHandler | None = None
     _current_env: str | None = None
     _original_root_level: int | None = None
+
+    @staticmethod
+    def record_command_result(logger: logging.Logger | None, result: dict[str, Any] | None) -> None:
+        """Attach a structured task result to the active command logger."""
+        if logger is not None:
+            setattr(logger, COMMAND_RESULT_ATTR, result)
+
+    @staticmethod
+    def _result_message(result: dict[str, Any]) -> str:
+        messages = result.get("messages")
+        if isinstance(messages, list) and messages:
+            return "; ".join(str(message) for message in messages)
+
+        message = result.get("message")
+        if message:
+            return str(message)
+
+        error = result.get("error")
+        if error:
+            return str(error)
+
+        return "No message provided"
 
     @classmethod
     def set_workspace_path(cls, workspace_path: Path) -> None:
@@ -168,6 +196,7 @@ class EnvironmentLogger:
 
         # Get root logger for command logging
         logger = logging.getLogger("comfygit_panel.command")
+        setattr(logger, COMMAND_RESULT_ATTR, None)
 
         # Log command start
         separator = "=" * 60
@@ -186,8 +215,20 @@ class EnvironmentLogger:
             # Yield - during this time all logging goes to the env file
             yield logger
 
-            # Log successful completion
-            logger.info(f"Command '{command}' completed successfully")
+            result = getattr(logger, COMMAND_RESULT_ATTR, None)
+            if isinstance(result, dict):
+                status = str(result.get("status_str") or result.get("status") or "").lower()
+                message = cls._result_message(result)
+
+                if status in SUCCESS_STATUSES:
+                    logger.info(f"Command '{command}' completed successfully")
+                elif status in ERROR_STATUSES:
+                    logger.error(f"Command '{command}' failed with status '{status}': {message}")
+                else:
+                    logger.warning(f"Command '{command}' completed with status '{status or 'unknown'}': {message}")
+            else:
+                # Log successful completion for callers that do not return a structured result.
+                logger.info(f"Command '{command}' completed successfully")
 
         except Exception as e:
             # Log the error
@@ -198,6 +239,9 @@ class EnvironmentLogger:
             # Log command end
             logger.info(f"Ended: {datetime.now().isoformat()}")
             logger.info(separator + "\n")
+
+            if hasattr(logger, COMMAND_RESULT_ATTR):
+                delattr(logger, COMMAND_RESULT_ATTR)
 
             # Remove the handler
             cls._remove_env_handler()

@@ -788,6 +788,76 @@ describe('StatusSection - Setup State Issue Cards', () => {
     expect(onCommitChanges).toHaveBeenCalledTimes(2)
   })
 
+  it('routes stale workflow capture lifecycle action to capture refresh', async () => {
+    const status = createMockStatus()
+    status.workflows.synced = ['stale_workflow', 'other_stale_workflow']
+    const onRefreshWorkflowCapture = vi.fn()
+
+    const wrapper = mount(StatusSection, {
+      props: {
+        status,
+        setupState: 'managed',
+        onRefreshWorkflowCapture,
+        lifecycleStatus: createLifecycleStatus({
+          issues: [
+            {
+              id: 'workflow_dependency_metadata_stale',
+              layer: 'manifest',
+              severity: 'warning',
+              message: 'Workflow dependency metadata is stale or missing from the manifest.',
+              blocking: false,
+              affected_resources: ['stale_workflow', 'other_stale_workflow'],
+              source: 'WorkflowAnalysisStatus.dependency_metadata_stale',
+              details: [],
+              action_ids: ['refresh_workflow_capture']
+            }
+          ],
+          actions: [
+            {
+              id: 'refresh_workflow_capture',
+              label: 'Refresh workflow capture',
+              description: 'Update tracked workflow dependency metadata from the saved workflow.',
+              target_layer: 'manifest',
+              issue_ids: ['workflow_dependency_metadata_stale'],
+              expected_mutation_layers: ['manifest', 'snapshot'],
+              enabled: true,
+              disabled_reason: null,
+              destructive: false,
+              restart_required: false,
+              confirmation_required: false
+            }
+          ],
+          primary_action_id: 'refresh_workflow_capture'
+        })
+      },
+      global: {
+        stubs: ['Teleport']
+      }
+    })
+
+    expect(wrapper.text()).toContain('Workflow captures need refresh')
+    expect(wrapper.text()).toContain('Refresh workflow capture')
+    expect(wrapper.text()).toContain('2 workflows need capture refresh')
+
+    const topButton = wrapper.findAllComponents({ name: 'ActionButton' })
+      .find(button => button.text().includes('Refresh workflow capture'))
+    expect(topButton).toBeTruthy()
+    await topButton!.find('button').trigger('click')
+
+    expect(onRefreshWorkflowCapture).toHaveBeenCalledWith([
+      'stale_workflow',
+      'other_stale_workflow'
+    ])
+
+    const workflowTile = findLifecycleTile(wrapper, 'Workflows')
+    const tileButton = workflowTile.findAll('button')
+      .find(button => button.text().includes('Refresh capture'))
+    expect(tileButton).toBeTruthy()
+    await tileButton!.trigger('click')
+
+    expect(onRefreshWorkflowCapture).toHaveBeenCalledTimes(2)
+  })
+
   it('shows modified workflow lifecycle guidance as a commit snapshot action', async () => {
     const status = createMockStatus()
     status.workflows.modified = ['txt2img_basic']

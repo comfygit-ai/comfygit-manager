@@ -4,14 +4,19 @@ These routes proxy requests to the orchestrator's control server,
 allowing the frontend to communicate with the orchestrator through
 ComfyUI's same-origin API (works with cloud proxies).
 """
+import asyncio
+import os
+
 import aiohttp
 from aiohttp import web, ClientTimeout
 
 from comfygit_core.runtime import read_switch_status
 
 import orchestrator
+from cgm_core.runtime_context import build_runtime_context, ensure_capability
 
 routes = web.RouteTableDef()
+RESTART_EXIT_CODE = 42
 
 
 async def _get_orchestrator_url() -> str | None:
@@ -53,6 +58,29 @@ async def _proxy_request(method: str, path: str, timeout: float = 5.0) -> web.Re
         }, status=503)
 
 
+def _restart_local_manager() -> web.Response:
+    """Restart through the local cg-run loop when no orchestrator is reachable."""
+    is_managed, workspace, current_env = orchestrator.detect_environment_type()
+    runtime_context = build_runtime_context(
+        "managed" if is_managed else "unmanaged",
+        workspace_path=str(workspace.path) if workspace else None,
+        current_environment=current_env.name if current_env else None,
+    )
+    denial = ensure_capability(runtime_context, "can_restart_current")
+    if denial:
+        return denial
+
+    async def delayed_exit():
+        await asyncio.sleep(0.3)
+        os._exit(RESTART_EXIT_CODE)
+
+    asyncio.create_task(delayed_exit())
+    return web.json_response({
+        "status": "restarting",
+        "fallback": "local_manager"
+    })
+
+
 @routes.get("/v2/comfygit/orchestrator/health")
 async def orchestrator_health(request: web.Request) -> web.Response:
     """Proxy health check to orchestrator."""
@@ -92,7 +120,10 @@ async def orchestrator_status(request: web.Request) -> web.Response:
 @routes.post("/v2/comfygit/orchestrator/restart")
 async def orchestrator_restart(request: web.Request) -> web.Response:
     """Request orchestrator to restart current environment."""
-    return await _proxy_request("POST", "/restart", timeout=10.0)
+    response = await _proxy_request("POST", "/restart", timeout=10.0)
+    if response.status != 503:
+        return response
+    return _restart_local_manager()
 
 
 @routes.post("/v2/comfygit/orchestrator/kill")

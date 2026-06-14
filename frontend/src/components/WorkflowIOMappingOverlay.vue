@@ -564,8 +564,20 @@ function hydrateApiBindings(contract: WorkflowExecutionContract) {
   const graph = props.comfyApp?.rootGraph ?? props.comfyApp?.graph
   for (const namedContract of Object.values(contract.contracts)) {
     for (const input of namedContract.inputs) {
-      if (input.widget_idx == null) continue
       const node = graph?.getNodeById?.(String(input.node_id))
+      const mediaLoader = getMediaLoaderDescriptor(node)
+      if (
+        mediaLoader &&
+        input.type === mediaLoader.type &&
+        (!input.field_key || input.field_key === mediaLoader.fieldKey || input.api_field_key === mediaLoader.fieldKey)
+      ) {
+        input.field_key = mediaLoader.fieldKey
+        input.api_node_id = String(node.id)
+        input.api_field_key = mediaLoader.apiFieldKey
+        continue
+      }
+
+      if (input.widget_idx == null) continue
       const widget = Array.isArray(node?.widgets) ? node.widgets[input.widget_idx] : null
       const fieldKey = input.field_key || getWidgetFieldKey(widget)
       if (fieldKey) {
@@ -1032,6 +1044,7 @@ const outputOverlays = computed(() => {
 
 type MediaLoaderDescriptor = {
   fieldKey: string
+  apiFieldKey: string
   displayName: string
   type: 'image' | 'audio' | 'video'
   label: string
@@ -1048,13 +1061,13 @@ function getMediaLoaderDescriptor(node: any): MediaLoaderDescriptor | null {
   const normalizedClass = classType.toLowerCase().replace(/[^a-z0-9]/g, '')
 
   if (normalizedType === 'loadimage' || normalizedClass === 'loadimage') {
-    return { fieldKey: 'image', displayName: 'Image', type: 'image', label: 'image upload' }
+    return { fieldKey: 'image', apiFieldKey: 'image', displayName: 'Image', type: 'image', label: 'image upload' }
   }
   if (normalizedType === 'loadaudio' || normalizedClass === 'loadaudio') {
-    return { fieldKey: 'audio', displayName: 'Audio', type: 'audio', label: 'audio upload' }
+    return { fieldKey: 'audio', apiFieldKey: 'audio', displayName: 'Audio', type: 'audio', label: 'audio upload' }
   }
   if (normalizedType === 'loadvideo' || normalizedClass === 'loadvideo') {
-    return { fieldKey: 'video', displayName: 'Video', type: 'video', label: 'video upload' }
+    return { fieldKey: 'video', apiFieldKey: 'file', displayName: 'Video', type: 'video', label: 'video upload' }
   }
   return null
 }
@@ -1161,7 +1174,9 @@ function addOrSelectInput(node: any, widget: any | null, source: 'widget' | 'med
     node_id: String(node.id),
     widget_idx: widgetIndex >= 0 ? widgetIndex : undefined,
     field_key: fieldKey,
-    ...resolveInputApiBinding(node, widget, fieldKey),
+    ...(isMediaLoaderSource
+      ? { api_node_id: String(node.id), api_field_key: media.apiFieldKey }
+      : resolveInputApiBinding(node, widget, fieldKey)),
     required: true,
     default: isMediaLoaderSource ? '' : (widget?.value ?? ''),
   }

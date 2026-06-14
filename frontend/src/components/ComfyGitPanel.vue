@@ -186,6 +186,7 @@
             @sync-environment="showSyncModal = true"
             @view-workflows="selectView('workflows', 'this-env')"
             @resolve-workflow-dependencies="handleResolveWorkflowDependencies"
+            @refresh-workflow-capture="handleRefreshWorkflowCapture"
             @view-models="selectView('models-env', 'this-env')"
             @view-history="openVersionControl('history')"
             @view-debug="openDiagnostics('env')"
@@ -511,7 +512,8 @@ const {
   syncEnvironmentManually,
   getSetupStatus,
   getUpdateCheck,
-  updateManager
+  updateManager,
+  captureWorkflow
 } = useComfyGitService()
 
 const orchestratorService = useOrchestratorService()
@@ -703,6 +705,32 @@ function handleResolveWorkflowDependencies(workflowName?: string) {
     workflowName
   }
   selectView('workflows', 'this-env')
+}
+
+async function handleRefreshWorkflowCapture(workflowNames?: string[]) {
+  const names = workflowNames?.filter(Boolean) || []
+  if (names.length === 0) {
+    showToast('Open the workflow details to refresh this capture.', 'warning')
+    selectView('workflows', 'this-env')
+    return
+  }
+
+  const label = names.length === 1 ? names[0] : `${names.length} workflows`
+  const toastId = showToast(`Refreshing capture for ${label}...`, 'info', 0)
+  try {
+    for (const workflowName of names) {
+      await captureWorkflow(workflowName)
+    }
+    removeToast(toastId)
+    showToast(`Workflow capture refreshed: ${label}`, 'success')
+    await refresh()
+  } catch (err) {
+    removeToast(toastId)
+    showToast(
+      `Failed to refresh workflow capture: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      'error'
+    )
+  }
 }
 
 function handleOpenNodeManager() {

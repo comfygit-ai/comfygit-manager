@@ -607,7 +607,7 @@ const emit = defineEmits<{
 
 const { analyzeWorkflow, applyResolution, installNodes, queueModelDownloads, progress, resetProgress } = useWorkflowResolution()
 const { loadPendingDownloads } = useModelDownloadQueue()
-const { openFileLocation, queueNodeInstall, getNodes } = useComfyGitService()
+const { openFileLocation, queueNodeInstall, getNodes, syncEnvironmentManually } = useComfyGitService()
 
 // State
 const analysisResult = ref<FullResolutionResult | null>(null)
@@ -1511,6 +1511,16 @@ async function handleApply() {
           })
           progress.installError = message
         }
+      }
+    }
+
+    if (progress.needsRestart) {
+      const syncResult = await syncEnvironmentManually('skip', false, true)
+      if (syncResult.status !== 'success') {
+        const details = syncResult.errors?.length
+          ? syncResult.errors.join('; ')
+          : syncResult.message
+        throw new Error(details ? `Environment sync failed: ${details}` : 'Environment sync failed')
       }
     }
 

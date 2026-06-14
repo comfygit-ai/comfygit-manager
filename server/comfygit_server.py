@@ -647,10 +647,13 @@ async def process_task(task: dict) -> dict:
     else:
         log_context = None
 
+    command_logger = None
+    result = None
+
     try:
         # Enter logging context if available
         if log_context:
-            log_context.__enter__()
+            command_logger = log_context.__enter__()
 
         if kind == "install":
             result = await process_install(env, params)
@@ -669,14 +672,20 @@ async def process_task(task: dict) -> dict:
                 "messages": [f"Unknown task kind: {kind}"]
             }
 
+        if EnvironmentLogger and command_logger:
+            EnvironmentLogger.record_command_result(command_logger, result)
+
         return result
 
     except Exception as e:
-        return {
+        result = {
             "status_str": "error",
             "completed": True,
             "messages": [str(e)]
         }
+        if EnvironmentLogger and command_logger:
+            EnvironmentLogger.record_command_result(command_logger, result)
+        return result
     finally:
         # Exit logging context
         if log_context:

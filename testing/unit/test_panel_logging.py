@@ -139,6 +139,61 @@ class TestLogPanelRequest:
         assert "message: test" in log_content
 
 
+    async def test_structured_error_result_logs_failure(self, tmp_path):
+        """Structured task errors should be logged as failures, not successes."""
+        server_path = Path(__file__).parent.parent.parent / "server"
+        if str(server_path) not in sys.path:
+            sys.path.insert(0, str(server_path))
+
+        from panel_environment_logger import EnvironmentLogger
+
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        EnvironmentLogger.set_workspace_path(workspace)
+
+        with EnvironmentLogger.log_command("test-env", "manager: install TestNode") as logger:
+            EnvironmentLogger.record_command_result(logger, {
+                "status_str": "error",
+                "messages": ["Dependency resolution failed"],
+            })
+
+        log_file = workspace / "logs" / "test-env" / "full.log"
+        assert log_file.exists()
+
+        log_content = log_file.read_text()
+        assert "Command 'manager: install TestNode' failed with status 'error': Dependency resolution failed" in log_content
+        assert "Command 'manager: install TestNode' completed successfully" not in log_content
+
+
+    async def test_structured_attention_result_logs_warning(self, tmp_path):
+        """Non-error, non-success task statuses should be visible as attention states."""
+        server_path = Path(__file__).parent.parent.parent / "server"
+        if str(server_path) not in sys.path:
+            sys.path.insert(0, str(server_path))
+
+        from panel_environment_logger import EnvironmentLogger
+
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        EnvironmentLogger.set_workspace_path(workspace)
+
+        with EnvironmentLogger.log_command("test-env", "manager: install TestNode") as logger:
+            EnvironmentLogger.record_command_result(logger, {
+                "status_str": "dependency_review_required",
+                "messages": ["Dependency review required before installing this node package."],
+            })
+
+        log_file = workspace / "logs" / "test-env" / "full.log"
+        assert log_file.exists()
+
+        log_content = log_file.read_text()
+        assert (
+            "Command 'manager: install TestNode' completed with status "
+            "'dependency_review_required': Dependency review required before installing this node package."
+        ) in log_content
+        assert "Command 'manager: install TestNode' completed successfully" not in log_content
+
+
     @pytest.mark.skip(reason="log_panel_request not implemented in comfygit_panel.py yet")
     async def test_actual_implementation_from_panel_module(self, tmp_path):
         """Test the actual log_panel_request from comfygit_panel.py.
@@ -252,6 +307,43 @@ class TestBackendOperationsLogging:
             log_content = log_file.read_text()
             assert "install" in log_content.lower(), "Log should mention install operation"
             assert "TestNode" in log_content, "Log should contain node name"
+
+        finally:
+            if 'comfygit_server' in sys.modules:
+                del sys.modules['comfygit_server']
+            if 'server' in sys.modules:
+                del sys.modules['server']
+
+    async def test_process_task_error_result_logs_failure(self, tmp_path, mock_env_for_operations):
+        """process_task should report returned error statuses in the command log."""
+        server_path = Path(__file__).parent.parent.parent / "server"
+        if str(server_path) not in sys.path:
+            sys.path.insert(0, str(server_path))
+
+        sys.modules['server'] = MagicMock()
+
+        try:
+            from panel_environment_logger import EnvironmentLogger
+            import comfygit_server
+
+            workspace = mock_env_for_operations.workspace.path
+            EnvironmentLogger.set_workspace_path(workspace)
+            comfygit_server.EnvironmentLogger = EnvironmentLogger
+
+            with patch.object(comfygit_server, 'get_environment_from_cwd', return_value=mock_env_for_operations):
+                result = await comfygit_server.process_task({
+                    "kind": "unknown",
+                    "params": {"id": "TestNode"}
+                })
+
+            assert result["status_str"] == "error"
+
+            log_file = workspace / "logs" / "test-env" / "full.log"
+            assert log_file.exists(), "Log file should be created"
+
+            log_content = log_file.read_text()
+            assert "Command 'manager: unknown' failed with status 'error': Unknown task kind: unknown" in log_content
+            assert "Command 'manager: unknown' completed successfully" not in log_content
 
         finally:
             if 'comfygit_server' in sys.modules:

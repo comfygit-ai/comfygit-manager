@@ -187,6 +187,7 @@ const emit = defineEmits<{
   'view-environments': []
   'create-environment': []
   'refresh-status': []
+  'refresh-workflow-capture': [workflowNames?: string[]]
   'resolve-workflow-dependencies': [workflowName?: string]
 }>()
 
@@ -203,6 +204,7 @@ type LifecycleTileActionID =
   | 'commit-changes'
   | 'create-branch'
   | 'review-readiness'
+  | 'refresh-workflow-capture'
   | 'resolve-models'
   | 'download-models'
   | 'sync-model-paths'
@@ -316,6 +318,11 @@ function lifecycleIssueTitle(issue: LifecycleIssue): string {
   if (issue.id === 'workflow_changes') {
     return 'Workflow changes pending'
   }
+  if (issue.id === 'workflow_dependency_metadata_stale') {
+    return issue.affected_resources.length === 1
+      ? 'Workflow capture needs refresh'
+      : 'Workflow captures need refresh'
+  }
 
   const layerLabels: Record<string, string> = {
     manifest: 'Manifest needs attention',
@@ -392,6 +399,9 @@ async function handleLifecycleAction(action: LifecycleAction) {
       return
     case 'review_workflow_changes':
       emit('view-workflows')
+      return
+    case 'refresh_workflow_capture':
+      emit('refresh-workflow-capture', workflowNamesForLifecycleIssueAction(action))
       return
     case 'resolve_workflow_nodes':
     case 'sync_model_paths':
@@ -830,7 +840,20 @@ const workflowsWithNodeCompatibilityIssues = computed(() =>
   )
 )
 
+const staleWorkflowCaptureIssue = computed(() =>
+  props.lifecycleStatus?.issues.find(issue =>
+    issue.id === 'workflow_dependency_metadata_stale'
+  )
+)
+
+const staleWorkflowCaptureNames = computed(() =>
+  staleWorkflowCaptureIssue.value?.affected_resources || []
+)
+
 function workflowNameForLifecycleAction(actionId: string): string | undefined {
+  if (actionId === 'refresh_workflow_capture') {
+    return staleWorkflowCaptureIssue.value?.affected_resources[0]
+  }
   if (actionId === 'resolve_workflow_nodes') {
     return workflowsWithUnresolvedNodeMappings.value[0]?.name ||
       workflowsWithNodeCompatibilityIssues.value[0]?.name ||
@@ -852,6 +875,15 @@ function workflowNameForLifecycleAction(actionId: string): string | undefined {
   return undefined
 }
 
+function workflowNamesForLifecycleIssueAction(action: LifecycleAction): string[] | undefined {
+  for (const issueId of action.issue_ids || []) {
+    const resources = lifecycleIssuesById.value.get(issueId)?.affected_resources || []
+    if (resources.length > 0) return resources
+  }
+  const workflowName = workflowNameForLifecycleAction(action.id)
+  return workflowName ? [workflowName] : undefined
+}
+
 const workflowTile = computed<LifecycleTile>(() => {
   const lines: LifecycleTileLine[] = []
   const statuses: LifecycleTileStatus[] = []
@@ -870,6 +902,14 @@ const workflowTile = computed<LifecycleTile>(() => {
     statuses.push('attention')
   }
 
+  if (staleWorkflowCaptureNames.value.length > 0) {
+    lines.push({
+      text: `${pluralize(staleWorkflowCaptureNames.value.length, 'workflow')} ${needsVerb(staleWorkflowCaptureNames.value.length)} capture refresh`,
+      variant: 'attention'
+    })
+    statuses.push('attention')
+  }
+
   if (props.status.workflows.synced.length > 0 || lines.length === 0) {
     lines.push({
       text: `${props.status.workflows.synced.length} ${lines.length > 0 ? 'captured' : 'synced'}`,
@@ -883,7 +923,9 @@ const workflowTile = computed<LifecycleTile>(() => {
     'Workflows',
     mostSevereStatus(statuses),
     lines,
-    undefined,
+    staleWorkflowCaptureNames.value.length > 0
+      ? { id: 'refresh-workflow-capture', label: 'Refresh capture' }
+      : undefined,
     { id: 'view-workflows', label: 'Open workflows' }
   )
 })
@@ -1214,6 +1256,9 @@ async function handleLifecycleTileActionById(action: LifecycleTileAction) {
       return
     case 'refresh-status':
       emit('refresh-status')
+      return
+    case 'refresh-workflow-capture':
+      emit('refresh-workflow-capture', staleWorkflowCaptureNames.value)
       return
     case 'review-readiness':
       await openReadinessIssues()
