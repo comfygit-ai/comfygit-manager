@@ -143,6 +143,18 @@ The UI should make active overlays visible near dependency install and review
 actions so users can tell why local resolution may differ from a clean portable
 environment build.
 
+### CGM-RRL-06D [LIVE]: Bulk custom-node installs are serialized by task completion
+Validation: TEST
+
+Bulk resource-resolution actions that install multiple custom-node packages must
+not dispatch overlapping environment mutations. The Manager should queue the next
+package install only after the previous package's Manager task completion event
+has been observed.
+
+This preserves core's single-writer environment lock while still allowing a
+batch to continue after an individual package fails, needs dependency review, or
+times out.
+
 ### CGM-RRL-07 [PLANNED]: Workflow model links should feed both missing-model and provenance repair flows
 Validation: MIXED
 

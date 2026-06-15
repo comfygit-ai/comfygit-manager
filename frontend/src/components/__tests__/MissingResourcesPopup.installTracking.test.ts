@@ -291,6 +291,62 @@ describe('MissingResourcesPopup install tracking hardening', () => {
     wrapper.unmount()
   })
 
+  it('serializes bulk installs until each queue task completes', async () => {
+    let installIndex = 0
+    mockQueueNodeInstall.mockImplementation(async (_params, options) => {
+      installIndex += 1
+      const uiId = `ui-serial-${installIndex}`
+      await options?.beforeQueueStart?.(uiId)
+      return { ui_id: uiId }
+    })
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(buildAnalysisResult({
+        missingPackages: [
+          { package_id: 'pkg-serial-one', title: 'Package Serial One' },
+          { package_id: 'pkg-serial-two', title: 'Package Serial Two' }
+        ]
+      }))
+    })
+    const restartListener = vi.fn()
+    window.addEventListener('comfygit:nodes-installed', restartListener)
+
+    const wrapper = mountPopup()
+    await triggerWorkflowAnalysis()
+
+    findButtonByText('Download All').click()
+    await flushPromises()
+    await flushPromises()
+
+    expect(mockQueueNodeInstall).toHaveBeenCalledTimes(1)
+
+    getRegisteredHandler('cm-task-completed')(
+      new CustomEvent('cm-task-completed', {
+        detail: { ui_id: 'ui-serial-1', status: { status_str: 'success' } }
+      })
+    )
+    await flushPromises()
+    await flushPromises()
+
+    expect(mockQueueNodeInstall).toHaveBeenCalledTimes(2)
+    expect(mockSyncEnvironmentManually).not.toHaveBeenCalled()
+
+    getRegisteredHandler('cm-task-completed')(
+      new CustomEvent('cm-task-completed', {
+        detail: { ui_id: 'ui-serial-2', status: { status_str: 'success' } }
+      })
+    )
+    await flushPromises()
+    await flushPromises()
+
+    expect(mockSyncEnvironmentManually).toHaveBeenCalledTimes(1)
+    expect(restartListener).toHaveBeenCalledTimes(1)
+    expect(restartListener.mock.calls[0][0].detail).toEqual({ count: 2 })
+
+    window.removeEventListener('comfygit:nodes-installed', restartListener)
+    wrapper.unmount()
+  })
+
   it('uses the same deferred sync path for section-level install all', async () => {
     let installIndex = 0
     mockQueueNodeInstall.mockImplementation(async (_params, options) => {
@@ -451,7 +507,15 @@ describe('MissingResourcesPopup install tracking hardening', () => {
   it('downloadAll continues installs after failures and surfaces summary', async () => {
     mockQueueNodeInstall
       .mockRejectedValueOnce(new Error('first install failed'))
-      .mockResolvedValueOnce({ ui_id: 'ui-success' })
+      .mockImplementationOnce(async (_params, options) => {
+        await options?.beforeQueueStart?.('ui-success')
+        getRegisteredHandler('cm-task-completed')(
+          new CustomEvent('cm-task-completed', {
+            detail: { ui_id: 'ui-success', status: { status_str: 'success' } }
+          })
+        )
+        return { ui_id: 'ui-success' }
+      })
     fetchMock.mockResolvedValue({
       ok: true,
       json: vi.fn().mockResolvedValue(buildAnalysisResult({

@@ -379,6 +379,7 @@ const shownWorkflowIds = ref<Set<string>>(new Set())
 
 // Map ui_id to package_id for tracking queue task completion
 const pendingInstalls = ref<Map<string, string>>(new Map())
+const installCompletionWaiters = ref<Map<string, (success: boolean) => void>>(new Map())
 const queueTimeouts = ref<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 const QUEUE_START_TIMEOUT_MS = 30_000
 
@@ -430,10 +431,18 @@ function getErrorMessage(err: unknown, fallback: string): string {
   return fallback
 }
 
-function clearPendingInstallByPackageId(packageId: string) {
+function settleInstallWaiter(taskId: string, success: boolean) {
+  const resolve = installCompletionWaiters.value.get(taskId)
+  if (!resolve) return
+  installCompletionWaiters.value.delete(taskId)
+  resolve(success)
+}
+
+function clearPendingInstallByPackageId(packageId: string, success = false) {
   for (const [taskId, pendingPackageId] of pendingInstalls.value.entries()) {
     if (pendingPackageId === packageId) {
       pendingInstalls.value.delete(taskId)
+      settleInstallWaiter(taskId, success)
     }
   }
 }
@@ -532,7 +541,7 @@ function clearAllQueueTimeouts() {
   queueTimeouts.value = new Map()
 }
 
-function startQueueTimeout(packageId: string) {
+function startQueueTimeout(packageId: string, taskId: string) {
   clearQueueTimeout(packageId)
 
   const timeoutId = setTimeout(() => {
@@ -548,6 +557,7 @@ function startQueueTimeout(packageId: string) {
 
     const timeoutMessage = 'Queue timeout — please retry'
     failedPackages.value.set(packageId, timeoutMessage)
+    settleInstallWaiter(taskId, false)
     console.warn('[ComfyGit] Queue timeout waiting for cm-task-started:', packageId)
   }, QUEUE_START_TIMEOUT_MS)
 
@@ -954,8 +964,18 @@ async function queueInstallRequest(
   }
 
   ensureEventListeners()
-  installingPackage.value = canonicalPackageId
   let queuedTaskId: string | null = null
+  let completionPromise: Promise<boolean> | null = null
+
+  function registerPendingInstall(taskId: string) {
+    queuedTaskId = taskId
+    pendingInstalls.value.set(taskId, canonicalPackageId)
+    queuedPackages.value.add(canonicalPackageId)
+    startQueueTimeout(canonicalPackageId, taskId)
+    completionPromise = new Promise(resolve => {
+      installCompletionWaiters.value.set(taskId, resolve)
+    })
+  }
 
   try {
     const installParams: {
@@ -981,10 +1001,7 @@ async function queueInstallRequest(
 
     const { ui_id, status } = await queueNodeInstall(installParams, {
       beforeQueueStart: (taskId) => {
-        queuedTaskId = taskId
-        pendingInstalls.value.set(taskId, canonicalPackageId)
-        queuedPackages.value.add(canonicalPackageId)
-        startQueueTimeout(canonicalPackageId)
+        registerPendingInstall(taskId)
         console.log('[ComfyGit] Registered pending install:', {
           ui_id: taskId,
           packageId: canonicalPackageId,
@@ -996,6 +1013,7 @@ async function queueInstallRequest(
     if (status?.status_str === 'dependency_review_required') {
       if (queuedTaskId) {
         pendingInstalls.value.delete(queuedTaskId)
+        settleInstallWaiter(queuedTaskId, false)
       }
       clearPendingInstallByPackageId(canonicalPackageId)
       clearQueueTimeout(canonicalPackageId)
@@ -1008,10 +1026,7 @@ async function queueInstallRequest(
 
     // Fallback for older service implementations that may ignore beforeQueueStart.
     if (!queuedTaskId) {
-      queuedTaskId = ui_id
-      pendingInstalls.value.set(ui_id, canonicalPackageId)
-      queuedPackages.value.add(canonicalPackageId)
-      startQueueTimeout(canonicalPackageId)
+      registerPendingInstall(ui_id)
       console.log('[ComfyGit] Registered pending install (fallback):', {
         ui_id,
         packageId: canonicalPackageId,
@@ -1019,12 +1034,13 @@ async function queueInstallRequest(
       })
     }
 
-    return true
+    return completionPromise ? await completionPromise : true
   } catch (e) {
     const errorMessage = getErrorMessage(e, 'Failed to queue install request')
     console.error('[ComfyGit] Failed to queue package install:', e)
     if (queuedTaskId) {
       pendingInstalls.value.delete(queuedTaskId)
+      settleInstallWaiter(queuedTaskId, false)
     }
     clearPendingInstallByPackageId(canonicalPackageId)
     clearQueueTimeout(canonicalPackageId)
@@ -1278,6 +1294,7 @@ async function analyzeWorkflow(workflow: any) {
   reviewNeededPackages.value = new Map()
   queuedModels.value = new Set()
   pendingInstalls.value = new Map()
+  installCompletionWaiters.value = new Map()
   dontShowAgain.value = false
   installedCount.value = 0
   bulkInstallInProgress.value = false
@@ -1371,6 +1388,7 @@ function handleTaskCompleted(event: CustomEvent) {
       installedPackages.value.add(packageId)
       installedCount.value++
       console.log('[ComfyGit] Package installed successfully:', packageId)
+      settleInstallWaiter(taskId, true)
     } else if (status === 'dependency_review_required') {
       const installParams = event.detail?.task?.params || event.detail?.params
       if (installParams?.id) {
@@ -1378,10 +1396,12 @@ function handleTaskCompleted(event: CustomEvent) {
       } else {
         failedPackages.value.set(packageId, 'Dependency review required')
       }
+      settleInstallWaiter(taskId, false)
     } else {
       const errorMsg = event.detail?.status?.messages?.[0] || event.detail?.result || 'Unknown error'
       failedPackages.value.set(packageId, errorMsg)
       console.error('[ComfyGit] Package install failed:', packageId, errorMsg)
+      settleInstallWaiter(taskId, false)
     }
 
     // When all pending installs are done and at least one succeeded, sync the
