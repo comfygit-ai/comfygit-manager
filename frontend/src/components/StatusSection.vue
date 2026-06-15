@@ -199,6 +199,7 @@ type LifecycleTileActionID =
   | 'view-nodes'
   | 'view-history'
   | 'view-debug'
+  | 'view-runtime-import-error'
   | 'sync-environment'
   | 'repair-environment'
   | 'commit-changes'
@@ -1113,8 +1114,10 @@ const runtimeTile = computed<LifecycleTile>(() => {
     statuses.push('attention')
   }
 
-  const action = statuses.includes('blocked') || statuses.includes('attention')
-      ? { id: 'repair-environment' as const, label: 'Repair' }
+  const action = runtimeNodeImportFailures.value.length > 0
+    ? { id: 'view-runtime-import-error' as const, label: 'View import error' }
+    : statuses.includes('blocked') || statuses.includes('attention')
+      ? { id: 'repair-environment' as const, label: 'Restart' }
       : undefined
 
   return createTile(
@@ -1241,6 +1244,9 @@ async function handleLifecycleTileActionById(action: LifecycleTileAction) {
       return
     case 'view-debug':
       emit('view-debug')
+      return
+    case 'view-runtime-import-error':
+      emit('view-nodes')
       return
     case 'sync-environment':
       emit('sync-environment')

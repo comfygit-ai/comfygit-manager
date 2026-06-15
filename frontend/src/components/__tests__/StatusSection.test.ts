@@ -278,8 +278,10 @@ describe('StatusSection - Setup State Issue Cards', () => {
     expect(wrapper.text().toLowerCase()).not.toContain('uninstallable node mappings')
   })
 
-  it('shows runtime custom node import failures in the runtime tile', () => {
+  it('shows runtime custom node import failures in the runtime tile', async () => {
     const status = createMockStatus()
+    const onViewNodes = vi.fn()
+    const onRepairEnvironment = vi.fn()
     status.runtime_issues = {
       available: true,
       custom_node_import_failure_count: 1,
@@ -301,7 +303,9 @@ describe('StatusSection - Setup State Issue Cards', () => {
     const wrapper = mount(StatusSection, {
       props: {
         status,
-        setupState: 'managed'
+        setupState: 'managed',
+        onViewNodes,
+        onRepairEnvironment
       },
       global: {
         stubs: ['Teleport']
@@ -311,7 +315,16 @@ describe('StatusSection - Setup State Issue Cards', () => {
     expect(wrapper.text()).toContain('1 custom node failed to import')
     expect(wrapper.text()).toContain('ComfyUI-FL-VoxCPM')
     expect(wrapper.text()).toContain('VoxCPM V2 TTS')
+    expect(wrapper.text()).toContain('View import error')
     expect(wrapper.text()).not.toContain('ISSUES')
+
+    const runtimeTile = findLifecycleTile(wrapper, 'Runtime')
+    const viewButton = runtimeTile.findAll('button')
+      .find(button => button.text().includes('View import error'))
+    expect(viewButton).toBeTruthy()
+    await viewButton!.trigger('click')
+    expect(onViewNodes).toHaveBeenCalledTimes(1)
+    expect(onRepairEnvironment).not.toHaveBeenCalled()
   })
 
   it('shows lifecycle sync guidance for missing declared nodes', async () => {

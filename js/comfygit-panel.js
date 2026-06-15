@@ -9663,7 +9663,7 @@ const Sh = { class: "source-picker" }, Ih = {
         text: `${Ye(we.value.length, "custom node")} failed to import`,
         variant: "attention"
       }), oe(De.value, "import failures").forEach((P) => q.push({ text: P, variant: "attention", icon: "↳" })), xe.push("attention"));
-      const at = xe.includes("blocked") || xe.includes("attention") ? { id: "repair-environment", label: "Repair" } : void 0;
+      const at = we.value.length > 0 ? { id: "view-runtime-import-error", label: "View import error" } : xe.includes("blocked") || xe.includes("attention") ? { id: "repair-environment", label: "Restart" } : void 0;
       return Q(
         "runtime",
         "Runtime",
@@ -9727,6 +9727,9 @@ const Sh = { class: "source-picker" }, Ih = {
           return;
         case "view-debug":
           m("view-debug");
+          return;
+        case "view-runtime-import-error":
+          m("view-nodes");
           return;
         case "sync-environment":
           m("sync-environment");
@@ -9919,7 +9922,7 @@ const Sh = { class: "source-picker" }, Ih = {
       }, null, 8, ["warnings"])) : g("", !0)
     ], 64));
   }
-}), Oy = /* @__PURE__ */ Oe(Ay, [["__scopeId", "data-v-bcbad340"]]);
+}), Oy = /* @__PURE__ */ Oe(Ay, [["__scopeId", "data-v-be2c1ffb"]]);
 async function da(e, s) {
   const n = await Pn(e, s);
   if (!n.ok) {
