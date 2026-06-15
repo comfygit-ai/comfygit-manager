@@ -1672,6 +1672,68 @@ class TestApplyResolutionEndpoint:
         assert saved_model.sources == [], "sources should be cleared"
         assert saved_model.relative_path is None, "relative_path should be cleared"
 
+    async def test_marks_unresolved_model_optional_reports_manifest_change(
+        self, client, mock_environment
+    ):
+        """
+        Optional choices applied through fix_workflow_resolution should still be
+        reported in the endpoint response so the UI completion summary is honest.
+        """
+        node_ref = SimpleNamespace(widget_value="missing_model.safetensors")
+        manifest_model = SimpleNamespace(
+            filename="missing_model.safetensors",
+            status="unresolved",
+            sources=[],
+            relative_path=None,
+            criticality="flexible",
+            hash=None,
+            nodes=[node_ref],
+        )
+        mock_environment.pyproject.workflows.get_workflow_models.return_value = [
+            manifest_model
+        ]
+        mock_environment.workspace.get_models_directory.return_value = None
+
+        mock_result = create_mock_resolution(
+            nodes_resolved=[],
+            nodes_unresolved=[],
+            models_resolved=[],
+            models_unresolved=[node_ref],
+            models_ambiguous=[],
+        )
+        mock_result.has_issues = True
+        mock_environment.workflow_manager.analyze_and_resolve_workflow.return_value = (
+            Mock(),
+            mock_result,
+        )
+
+        def apply_optional_resolution(result, node_strategy=None, model_strategy=None):
+            manifest_model.criticality = "optional"
+            manifest_model.status = "unresolved"
+            manifest_model.sources = []
+            manifest_model.relative_path = None
+            manifest_model.hash = None
+            result.has_issues = False
+            return result
+
+        mock_environment.workflow_manager.fix_resolution.side_effect = (
+            apply_optional_resolution
+        )
+
+        resp = await client.post(
+            "/v2/comfygit/workflow/test.json/apply-resolution",
+            json={
+                "node_choices": {},
+                "model_choices": {
+                    "missing_model.safetensors": {"action": "optional"},
+                },
+            },
+        )
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["models_marked_optional"] == ["missing_model.safetensors"]
+
 
 @pytest.mark.integration
 class TestApplyResolutionStreamEndpoint:
