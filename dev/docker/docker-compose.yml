@@ -43,8 +43,8 @@ services:
       start_period: 30s
     mem_limit: 48g
     ports:
-      - "${COMFYUI_PORT:-8188}:${COMFYUI_PORT:-8188}"
-      - "${COMFYGIT_SUPERVISOR_CONTROL_PORT:-9188}:${COMFYGIT_SUPERVISOR_CONTROL_PORT:-9188}"
+      - "${COMFYGIT_DOCKER_BIND_ADDR:-100.99.14.94}:${COMFYUI_PORT:-8188}:${COMFYUI_PORT:-8188}"
+      - "${COMFYGIT_DOCKER_BIND_ADDR:-100.99.14.94}:${COMFYGIT_SUPERVISOR_CONTROL_PORT:-9188}:${COMFYGIT_SUPERVISOR_CONTROL_PORT:-9188}"
     restart: unless-stopped
     shm_size: 8g
     volumes:
