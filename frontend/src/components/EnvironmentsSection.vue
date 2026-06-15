@@ -148,6 +148,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
+import { useEnvironmentListCache } from '@/composables/useEnvironmentListCache'
 import type { EnvironmentInfo, EnvironmentDetail } from '@/types/comfygit'
 import PanelLayout from '@/components/base/organisms/PanelLayout.vue'
 import PanelHeader from '@/components/base/molecules/PanelHeader.vue'
@@ -180,11 +181,12 @@ const emit = defineEmits<{
   export: [environmentName: string]
 }>()
 
-const { getEnvironments, getEnvironmentDetails } = useComfyGitService()
+const { getEnvironmentDetails } = useComfyGitService()
+const environmentListCache = useEnvironmentListCache()
 
-const environments = ref<EnvironmentInfo[]>([])
-const loading = ref(false)
-const error = ref<string | null>(null)
+const environments = environmentListCache.environments
+const loading = environmentListCache.loading
+const error = environmentListCache.error
 const searchQuery = ref('')
 const showPopover = ref(false)
 const showCreateModal = ref(false)
@@ -237,15 +239,11 @@ function handleDetailsExport(name: string) {
   emit('export', name)
 }
 
-async function loadEnvironments() {
-  loading.value = true
-  error.value = null
+async function loadEnvironments(forceRefresh = false) {
   try {
-    environments.value = await getEnvironments()
+    await environmentListCache.loadEnvironments({ force: forceRefresh })
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load environments'
-  } finally {
-    loading.value = false
   }
 }
 

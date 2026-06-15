@@ -468,6 +468,7 @@ import FooterInfo from './base/atoms/FooterInfo.vue'
 import FirstTimeSetupWizard from './FirstTimeSetupWizard.vue'
 import UpdateNoticeBanner from './UpdateNoticeBanner.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
+import { useEnvironmentListCache } from '@/composables/useEnvironmentListCache'
 import { useOrchestratorService } from '@/composables/useOrchestratorService'
 import type {
   ComfyGitStatus,
@@ -503,7 +504,6 @@ const {
   switchBranch,
   revertChanges,
   deleteBranch,
-  getEnvironments,
   switchEnvironment,
   getSwitchProgress,
   deleteEnvironment,
@@ -516,6 +516,7 @@ const {
 } = useComfyGitService()
 
 const orchestratorService = useOrchestratorService()
+const environmentListCache = useEnvironmentListCache()
 
 type ViewName = 'status' | 'workflows' | 'models-env' | 'nodes' | 'version-control' |
                 'environments' | 'model-index' | 'settings' | 'diagnostics'
@@ -533,7 +534,7 @@ const commits = ref<CommitInfo[]>([])
 const historyHasMore = ref(false)
 const isLoadingHistoryMore = ref(false)
 const branches = ref<BranchInfo[]>([])
-const environments = ref<EnvironmentInfo[]>([])
+const environments = environmentListCache.environments
 const currentEnvironment = computed(() => environments.value.find(e => e.is_current))
 const selectedExportEnvironment = ref<string | null>(null)
 const showImportModal = ref(false)
@@ -591,7 +592,7 @@ const workflowsSectionRef = ref<{
 } | null>(null)
 const modelsEnvSectionRef = ref<{ loadModels: () => Promise<void> } | null>(null)
 const modelIndexSectionRef = ref<{ loadModels: () => Promise<void> } | null>(null)
-const environmentsSectionRef = ref<{ loadEnvironments: () => Promise<void>; openCreateModal: () => void } | null>(null)
+const environmentsSectionRef = ref<{ loadEnvironments: (forceRefresh?: boolean) => Promise<void>; openCreateModal: () => void } | null>(null)
 const statusSectionRef = ref<{
   resetRepairingState: () => void
   resetRepairingEnvironmentState: () => void
@@ -944,11 +945,11 @@ async function refresh(options: { refreshWorkflows?: boolean } = {}) {
   error.value = null
 
   try {
-    const [statusBundleRes, historyRes, branchesRes, envsRes] = await Promise.all([
+    const [statusBundleRes, historyRes, branchesRes] = await Promise.all([
       getStatusBundle({ includeReadiness: false }),
       getHistory(HISTORY_PAGE_SIZE),
       getBranches(),
-      getEnvironments()
+      environmentListCache.loadEnvironments()
     ])
     const statusRes = statusBundleRes.status
     status.value = statusRes
@@ -956,7 +957,6 @@ async function refresh(options: { refreshWorkflows?: boolean } = {}) {
     commits.value = historyRes.commits
     historyHasMore.value = historyRes.has_more
     branches.value = branchesRes.branches
-    environments.value = envsRes
     emit('statusUpdate', statusRes)
 
     const refreshWorkflows = options.refreshWorkflows ?? true
@@ -988,10 +988,8 @@ async function refreshEnvironments() {
   error.value = null
 
   try {
-    environments.value = await getEnvironments()
-    if (environmentsSectionRef.value) {
-      await environmentsSectionRef.value.loadEnvironments()
-    }
+    environmentListCache.invalidateEnvironments()
+    await environmentListCache.loadEnvironments({ force: true })
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load environments'
   } finally {
@@ -1313,6 +1311,7 @@ async function confirmEnvironmentSwitch() {
     // Initiate the switch (pass workspace path for first-time setup)
     const result = await switchEnvironment(targetEnvironment.value, switchWorkspacePath.value || undefined)
     switchObserver.value = result?.observer || null
+    environmentListCache.invalidateEnvironments()
 
     // Start smooth progress simulation (10% → 60% over 5 seconds)
     startProgressSimulation()
@@ -1613,11 +1612,8 @@ async function handleRepairEnvironment() {
 async function handleEnvironmentCreated(environmentName: string, switchAfter: boolean) {
   showToast(`Environment '${environmentName}' created`, 'success')
 
-  // Refresh environments list
+  environmentListCache.invalidateEnvironments()
   await refresh()
-  if (environmentsSectionRef.value) {
-    await environmentsSectionRef.value.loadEnvironments()
-  }
 
   // Switch if requested
   if (switchAfter && runtimeCapabilities.value.can_switch_environment) {
@@ -1651,10 +1647,8 @@ async function handleEnvironmentDelete(envName: string) {
 
         if (result.status === 'success') {
           showToast(`Environment "${envName}" deleted`, 'success')
+          environmentListCache.invalidateEnvironments()
           await refresh()
-          if (environmentsSectionRef.value) {
-            await environmentsSectionRef.value.loadEnvironments()
-          }
         } else {
           showToast(result.message || 'Failed to delete environment', 'error')
         }
@@ -1667,6 +1661,7 @@ async function handleEnvironmentDelete(envName: string) {
 
 async function handleSetupComplete(environmentName: string, workspacePath: string | null) {
   showSetupWizard.value = false
+  environmentListCache.invalidateEnvironments()
 
   // Refresh setup status
   try {
@@ -1693,7 +1688,7 @@ async function handleEnvironmentSwitchFromWizard(envName: string, workspacePath:
 }
 
 async function handleImportCompleteSwitch(environmentName: string) {
-  // Refresh environments list first
+  environmentListCache.invalidateEnvironments()
   await refresh()
 
   // Trigger the standard environment switch flow
@@ -1721,6 +1716,8 @@ function closeExportModal() {
 }
 
 async function handleEnvironmentCreatedNoSwitch(envName: string) {
+  environmentListCache.invalidateEnvironments()
+
   // Refresh setup status to get updated environments list
   setupStatus.value = await getSetupStatus()
 

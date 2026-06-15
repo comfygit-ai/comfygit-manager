@@ -459,6 +459,19 @@ the existing commit modal through `commit_snapshot`. The UI may still offer
 review/detail navigation elsewhere, but it should not make `Review workflow
 changes` the primary CTA for normal saved workflow edits.
 
+### CGM-UI-20C [LIVE]: Environment navigation should reuse a warm list cache
+Validation: TEST
+
+The manager panel should not show a blocking environments-list loading state on
+every visit to the Environments surface when it already has a recently loaded
+environment list.
+
+The panel may refresh stale environment-list data in the background, but cached
+rows should remain visible while that refresh runs. Environment creation,
+import, deletion, and switch flows should invalidate or force-refresh the cache
+so list membership and current-environment state do not remain stale after
+mutations.
+
 ### CGM-UI-21 [PARTIAL]: Export, push, and future deploy gates should use the shared readiness review surface
 Validation: MIXED
 
