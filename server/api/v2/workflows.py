@@ -27,6 +27,7 @@ from comfygit_core.workflow import AutoModelStrategy, AutoNodeStrategy
 
 from cgm_core.decorators import requires_environment, logged_operation
 from cgm_core.dependency_preview import dependency_review_response
+from cgm_core.overlays import active_overlay_names, active_overlay_summary
 from cgm_core.serializers import (
     serialize_workflow_contract_summary,
     serialize_workflow_details,
@@ -1669,16 +1670,27 @@ async def install_workflow(request: web.Request, env) -> web.Response:
                 "status": "success",
                 "message": "All dependencies already installed",
                 "nodes_installed": [],
-                "failed": []
+                "failed": [],
+                "active_overlays": active_overlay_names(env),
             })
 
         # Install each node, continuing on failure
         installed = []
         failed = []
         dependency_review_required = []
+        overlay_names = active_overlay_names(env)
+        logger.info(
+            "Installing workflow dependencies for '%s' with active overlays: %s",
+            name,
+            active_overlay_summary(env),
+        )
         for node_id in uninstalled:
             try:
-                await run_sync(env.add_node, node_id)
+                await run_sync(
+                    env.add_node,
+                    node_id,
+                    resolve_with_overlays=True,
+                )
                 installed.append(node_id)
             except Exception as e:
                 review_result = dependency_review_response(node_id, e)
@@ -1709,6 +1721,7 @@ async def install_workflow(request: web.Request, env) -> web.Response:
             "nodes_installed": installed,
             "failed": failed,
             "dependency_review_required": dependency_review_required,
+            "active_overlays": overlay_names,
         })
     except Exception as e:
         return web.json_response({

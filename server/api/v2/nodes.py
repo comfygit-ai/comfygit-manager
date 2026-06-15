@@ -1,4 +1,5 @@
 """Node management API."""
+import logging
 from collections import defaultdict
 from aiohttp import web
 from comfygit_core.models import (
@@ -11,6 +12,7 @@ from cgm_core.dependency_preview import (
     serialize_dependency_preview,
 )
 from cgm_core.decorators import requires_environment, logged_operation
+from cgm_core.overlays import active_overlay_names, active_overlay_summary
 from cgm_core.runtime_imports import (
     build_loaded_runtime_import_payload,
     collect_runtime_import_report,
@@ -18,6 +20,7 @@ from cgm_core.runtime_imports import (
 from cgm_utils.async_helpers import run_sync
 
 routes = web.RouteTableDef()
+logger = logging.getLogger(__name__)
 
 NODE_CRITICALITIES = ("required", "optional")
 
@@ -407,11 +410,22 @@ async def install_node(request: web.Request, env) -> web.Response:
     node_name = request.match_info['name']
 
     try:
-        result = await run_sync(env.add_node, node_name)
+        overlay_names = active_overlay_names(env)
+        logger.info(
+            "Installing node '%s' with active overlays: %s",
+            node_name,
+            active_overlay_summary(env),
+        )
+        result = await run_sync(
+            env.add_node,
+            node_name,
+            resolve_with_overlays=True,
+        )
 
         return web.json_response({
             "status": "success",
             "message": f"Node '{node_name}' installed successfully",
+            "active_overlays": overlay_names,
             "node": {
                 "name": result.name,
                 "source": result.source,
@@ -431,12 +445,19 @@ async def preview_node_dependency_changes(request: web.Request, env) -> web.Resp
     try:
         params = await request.json()
         identifier = build_install_identifier(params)
+        overlay_names = active_overlay_names(env)
+        logger.info(
+            "Previewing node dependency changes for '%s' with active overlays: %s",
+            identifier,
+            active_overlay_summary(env),
+        )
         preview = await run_sync(env.preview_add_node_dependency_changes, identifier)
 
         return web.json_response({
             "status": "success" if preview.success else "error",
             "identifier": identifier,
             "preview": serialize_dependency_preview(preview),
+            "active_overlays": overlay_names,
         })
     except Exception as e:
         return web.json_response({
@@ -465,6 +486,12 @@ async def apply_node_dependency_changes(request: web.Request, env) -> web.Respon
             identifier,
             acceptance,
         )
+        overlay_names = active_overlay_names(env)
+        logger.info(
+            "Applied reviewed node dependency changes for '%s' with active overlays: %s",
+            identifier,
+            active_overlay_summary(env),
+        )
 
         return web.json_response({
             "status": "success",
@@ -473,6 +500,7 @@ async def apply_node_dependency_changes(request: web.Request, env) -> web.Respon
             "installed": result.installed,
             "needs_restart": result.needs_restart,
             "message": result.message,
+            "active_overlays": overlay_names,
         })
     except CDDependencyPreviewStaleError as e:
         return web.json_response({

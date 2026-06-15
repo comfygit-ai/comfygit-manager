@@ -130,6 +130,19 @@ node install queue is actively mutating the environment. Applying the reviewed
 change should pass the accepted preview fingerprints back through the Manager
 API so core can reject stale previews before installing the package.
 
+### CGM-RRL-06C [LIVE]: Resource installs honor active local dependency overlays
+Validation: TEST
+
+The manager resource-resolution flow should treat active overlays as part of the
+current local dependency context. If the user configured local editable sources,
+indexes, constraints, or metadata overrides through ComfyGit overlays, Manager
+install and reviewed-apply actions should use those overlays instead of
+resolving against only the portable manifest.
+
+The UI should make active overlays visible near dependency install and review
+actions so users can tell why local resolution may differ from a clean portable
+environment build.
+
 ### CGM-RRL-07 [PLANNED]: Workflow model links should feed both missing-model and provenance repair flows
 Validation: MIXED
 

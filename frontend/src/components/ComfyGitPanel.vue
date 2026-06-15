@@ -1437,6 +1437,10 @@ function startSwitchPolling() {
         return
       }
 
+      if (Array.isArray(progress.logs)) {
+        switchLogs.value = progress.logs
+      }
+
       const realProgress = progress.progress || 0
 
       // Stop simulation once real progress reaches 60%+

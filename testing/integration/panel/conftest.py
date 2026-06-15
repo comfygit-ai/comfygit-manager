@@ -270,6 +270,7 @@ def mock_environment():
 
     mock_env.get_workflow_package_aliases = Mock(side_effect=_workflow_package_aliases)
     mock_env.mark_workflow_model_download_resolved = Mock(return_value=True)
+    mock_env.list_overlays = Mock(return_value=[])
 
     # Mock status() for sync endpoint version mismatch workaround
     mock_status = Mock()

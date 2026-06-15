@@ -474,9 +474,18 @@ class TestWorkflowInstallEndpoint:
         assert len(data["nodes_installed"]) == 2
         assert "node1" in data["nodes_installed"]
         assert "node2" in data["nodes_installed"]
+        assert data["active_overlays"] == []
 
         # Verify add_node was called for each node
         assert mock_environment.add_node.call_count == 2
+        mock_environment.add_node.assert_any_call(
+            "node1",
+            resolve_with_overlays=True,
+        )
+        mock_environment.add_node.assert_any_call(
+            "node2",
+            resolve_with_overlays=True,
+        )
 
     async def test_error_no_environment(self, client, monkeypatch):
         """Should return 500 when no environment detected."""
