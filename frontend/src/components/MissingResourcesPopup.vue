@@ -438,6 +438,13 @@ function settleInstallWaiter(taskId: string, success: boolean) {
   resolve(success)
 }
 
+function settleAllInstallWaiters(success = false) {
+  for (const [taskId, resolve] of installCompletionWaiters.value.entries()) {
+    installCompletionWaiters.value.delete(taskId)
+    resolve(success)
+  }
+}
+
 function clearPendingInstallByPackageId(packageId: string, success = false) {
   for (const [taskId, pendingPackageId] of pendingInstalls.value.entries()) {
     if (pendingPackageId === packageId) {
@@ -1472,6 +1479,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   clearAllQueueTimeouts()
+  settleAllInstallWaiters(false)
   window.removeEventListener('comfygit:workflow-loaded', handleWorkflowLoaded as EventListener)
 
   // Clean up Manager queue event listeners if they were registered
