@@ -1,4 +1,4 @@
-"""Unit tests for comfygit_server install source handling."""
+"""Unit tests for comfygit_server node install/uninstall handling."""
 
 import sys
 from types import SimpleNamespace
@@ -28,6 +28,7 @@ def mock_env(tmp_path):
     env.list_overlays = Mock(return_value=[])
     env.add_node = Mock()
     env.update_node = Mock()
+    env.remove_node = Mock()
     return env
 
 
@@ -101,6 +102,57 @@ async def test_process_install_reports_active_overlays(mock_env):
     )
     assert result["active_overlays"] == [".local"]
     assert result["messages"][-1] == "Resolved with active overlays: .local"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_process_uninstall_resolves_with_active_overlays(mock_env):
+    """Uninstall should use the same overlay-aware dependency resolution as install."""
+    mock_env.list_overlays.return_value = [
+        SimpleNamespace(
+            name=".local",
+            description="Local editable sources",
+            is_local=True,
+            is_active=True,
+            requires=[],
+            is_stock=False,
+        )
+    ]
+
+    result = await comfygit_server.process_uninstall(
+        mock_env,
+        {"node_name": "rgthree-comfy"},
+    )
+
+    mock_env.remove_node.assert_called_once_with(
+        "rgthree-comfy",
+        resolve_with_overlays=True,
+    )
+    assert result["status_str"] == "success"
+    assert result["active_overlays"] == [".local"]
+    assert result["messages"][-1] == "Resolved with active overlays: .local"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_process_uninstall_reports_partial_success_when_sync_fails(mock_env):
+    """Uninstall should not report full failure after core removed the node."""
+    mock_env.remove_node.return_value = SimpleNamespace(
+        sync_succeeded=False,
+        needs_sync=True,
+        sync_error="uv failed",
+    )
+
+    result = await comfygit_server.process_uninstall(
+        mock_env,
+        {"node_name": "rgthree-comfy"},
+    )
+
+    assert result["status_str"] == "partial_success"
+    assert result["sync_succeeded"] is False
+    assert result["needs_sync"] is True
+    assert result["sync_error"] == "uv failed"
+    assert "Node was removed" in result["messages"][1]
 
 
 @pytest.mark.unit

@@ -687,6 +687,10 @@ class TestUninstallNodeEndpoint:
         data = await resp.json()
         assert data["status"] == "success"
         assert data["filesystem_action"] == "disabled"
+        mock_environment.remove_node.assert_called_once_with(
+            "some-node",
+            resolve_with_overlays=True,
+        )
 
     async def test_success_uninstall_untracked_node(
         self,
@@ -714,6 +718,10 @@ class TestUninstallNodeEndpoint:
         data = await resp.json()
         assert data["status"] == "success"
         assert data["filesystem_action"] == "deleted"
+        mock_environment.remove_node.assert_called_once_with(
+            "orphaned-node",
+            resolve_with_overlays=True,
+        )
 
     async def test_success_remove_disabled_node(
         self,
@@ -740,6 +748,36 @@ class TestUninstallNodeEndpoint:
         assert resp.status == 200
         data = await resp.json()
         assert data["status"] == "success"
+        mock_environment.remove_node.assert_called_once_with(
+            "disabled-node",
+            resolve_with_overlays=True,
+        )
+
+    async def test_partial_success_when_dependency_sync_fails(
+        self,
+        client,
+        mock_environment
+    ):
+        """Should report partial success when removal succeeded but sync failed."""
+        mock_result = Mock()
+        mock_result.identifier = "some-node"
+        mock_result.name = "some-node"
+        mock_result.source = "registry"
+        mock_result.filesystem_action = "deleted"
+        mock_result.sync_succeeded = False
+        mock_result.needs_sync = True
+        mock_result.sync_error = "uv failed"
+        mock_environment.remove_node.return_value = mock_result
+
+        resp = await client.delete("/v2/comfygit/nodes/some-node")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "partial_success"
+        assert data["filesystem_action"] == "deleted"
+        assert data["sync_succeeded"] is False
+        assert data["needs_sync"] is True
+        assert data["sync_error"] == "uv failed"
 
     async def test_error_node_not_found(
         self,

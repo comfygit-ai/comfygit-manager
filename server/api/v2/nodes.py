@@ -51,6 +51,19 @@ def _normalize_node_criticality(value):
     return value if value in NODE_CRITICALITIES else "required"
 
 
+def _node_removal_sync_payload(result) -> dict:
+    """Return JSON-safe sync status fields for a node removal result."""
+    sync_succeeded = getattr(result, "sync_succeeded", True)
+    needs_sync = getattr(result, "needs_sync", False)
+    sync_error = getattr(result, "sync_error", None)
+
+    return {
+        "sync_succeeded": sync_succeeded if sync_succeeded is False else True,
+        "needs_sync": needs_sync if needs_sync is True else False,
+        "sync_error": sync_error if isinstance(sync_error, str) else None,
+    }
+
+
 def _find_tracked_node(tracked_nodes, node_identifier):
     """Find a tracked node by manifest key or display name."""
     node_identifier_lower = node_identifier.lower()
@@ -543,12 +556,25 @@ async def uninstall_node(request: web.Request, env) -> web.Response:
     node_name = request.match_info['name']
 
     try:
-        result = await run_sync(env.remove_node, node_name)
+        overlay_names = active_overlay_names(env)
+        logger.info(
+            "Uninstalling node '%s' with active overlays: %s",
+            node_name,
+            active_overlay_summary(env),
+        )
+        result = await run_sync(
+            env.remove_node,
+            node_name,
+            resolve_with_overlays=True,
+        )
+        sync_payload = _node_removal_sync_payload(result)
 
         return web.json_response({
-            "status": "success",
+            "status": "success" if sync_payload["sync_succeeded"] else "partial_success",
             "message": f"Node '{node_name}' removed",
-            "filesystem_action": result.filesystem_action
+            "filesystem_action": result.filesystem_action,
+            "active_overlays": overlay_names,
+            **sync_payload,
         })
     except Exception as e:
         return web.json_response({
