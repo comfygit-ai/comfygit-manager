@@ -6,6 +6,14 @@ ARG BLENDER_VERSION
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PIP_PREFER_BINARY=1
 ENV PYTHONUNBUFFERED=1
+
+# EGL acceleration for headless GPU-backed rendering paths such as ShaderFlow.
+# This image is NVIDIA/CUDA based; AMD/Intel images should provide their own
+# vendor ICD configuration instead of the NVIDIA JSON below.
+ENV NVIDIA_DRIVER_CAPABILITIES=all
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV MESA_D3D12_DEFAULT_ADAPTER_NAME=NVIDIA
+ENV LD_LIBRARY_PATH="/usr/lib/wsl/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64"
 ENV WINDOW_BACKEND=headless
 
 RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|https://archive.ubuntu.com/ubuntu/|g; s|http://security.ubuntu.com/ubuntu/|https://security.ubuntu.com/ubuntu/|g' /etc/apt/sources.list.d/ubuntu.sources
@@ -17,9 +25,11 @@ RUN apt-get update -o Acquire::Retries=10 && apt-get install -y \
     ffmpeg \
     git \
     git-lfs \
+    libegl1 \
     libegl1-mesa-dev \
     libgl1 \
     libglib2.0-0 \
+    libglx0 \
     libglvnd-dev \
     libglvnd0 \
     libsm6 \
