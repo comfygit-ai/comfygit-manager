@@ -12,7 +12,7 @@
 #   --docker           Start/recreate the manager Docker dev stack
 #   --comfygit PATH    Override sibling comfygit repo path for --docker
 #   --comfyui-port N   ComfyUI host/container port for --docker (default: 8188)
-#   --torch-backend B  PyTorch backend for Docker create/run (default: cu126)
+#   --torch-backend B  PyTorch backend for Docker create/run (default: existing env setting)
 #   --project-name N   Docker Compose project name for --docker
 #   --models-dir PATH  Host models directory for --docker
 #   --extra-node PATH  Extra dev node path for --docker; may be repeated
@@ -59,7 +59,7 @@ ENV_NAME=""
 START_DOCKER=false
 DOCKER_COMFYGIT_PATH="$COMFYGIT_REPO_ROOT"
 DOCKER_COMFYUI_PORT="${COMFYUI_PORT:-8188}"
-DOCKER_TORCH_BACKEND="${COMFYGIT_TORCH_BACKEND:-cu126}"
+DOCKER_TORCH_BACKEND="${COMFYGIT_TORCH_BACKEND:-}"
 DOCKER_PROJECT_NAME=""
 DOCKER_MODELS_DIR="${SHARED_MODELS_HOST_DIR:-$HOME/dev/models}"
 DOCKER_EXTRA_NODE_ARGS=()
@@ -487,11 +487,13 @@ if [[ "$START_DOCKER" == "true" ]]; then
     docker_args=(
         "$ENV_NAME"
         --workspace "$WORKSPACE_PATH"
-        --torch-backend "$DOCKER_TORCH_BACKEND"
         --comfyui-port "$DOCKER_COMFYUI_PORT"
         --comfygit "$DOCKER_COMFYGIT_PATH"
         --models-dir "$DOCKER_MODELS_DIR"
     )
+    if [[ -n "$DOCKER_TORCH_BACKEND" ]]; then
+        docker_args+=(--torch-backend "$DOCKER_TORCH_BACKEND")
+    fi
     if [[ -n "$DOCKER_PROJECT_NAME" ]]; then
         docker_args+=(--project-name "$DOCKER_PROJECT_NAME")
     fi

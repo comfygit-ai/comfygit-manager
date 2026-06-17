@@ -25599,8 +25599,8 @@ const tL = { class: "comfygit-panel" }, sL = { class: "panel-header" }, nL = { c
         title: te ? "Switch Branch with Uncommitted Changes" : "Switch Branch",
         message: te ? "You have uncommitted changes." : `Switch to branch "${de}"?`,
         details: te ? ja() : void 0,
-        warning: te ? "This will restart ComfyUI. Changes will remain in current branch." : "This will restart ComfyUI to apply the changes.",
-        confirmLabel: te ? "Switch Anyway" : "Switch",
+        warning: te ? "This will discard uncommitted changes, switch branches, and restart ComfyUI." : "This will restart ComfyUI to apply the changes.",
+        confirmLabel: te ? "Discard and Switch" : "Switch",
         cancelLabel: "Cancel",
         onConfirm: async () => {
           _e.value = null, ht();
@@ -26356,7 +26356,7 @@ const tL = { class: "comfygit-panel" }, sL = { class: "panel-header" }, nL = { c
       ]);
     };
   }
-}), UL = /* @__PURE__ */ Ae(NL, [["__scopeId", "data-v-a85ddc16"]]), AL = { class: "item-header" }, OL = { class: "item-info" }, zL = { class: "filename" }, FL = { class: "metadata" }, BL = { class: "size" }, VL = {
+}), UL = /* @__PURE__ */ Ae(NL, [["__scopeId", "data-v-7d35c708"]]), AL = { class: "item-header" }, OL = { class: "item-info" }, zL = { class: "filename" }, FL = { class: "metadata" }, BL = { class: "size" }, VL = {
   key: 0,
   class: "type"
 }, WL = {
