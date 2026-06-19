@@ -109,6 +109,8 @@ function findButtonByText(text: string): HTMLButtonElement {
 
 describe('MissingResourcesPopup install tracking hardening', () => {
   const mockQueueNodeInstall = vi.fn()
+  const mockSyncEnvironmentManually = vi.fn()
+  const mockGetConfig = vi.fn()
   const mockAddToQueue = vi.fn()
   const fetchMock = vi.fn()
   const addEventListenerMock = vi.fn()
@@ -120,8 +122,21 @@ describe('MissingResourcesPopup install tracking hardening', () => {
     localStorage.clear()
 
     vi.mocked(useComfyGitService).mockReturnValue({
-      queueNodeInstall: mockQueueNodeInstall
+      queueNodeInstall: mockQueueNodeInstall,
+      getConfig: mockGetConfig,
+      syncEnvironmentManually: mockSyncEnvironmentManually
     } as any)
+    mockGetConfig.mockResolvedValue({
+      active_overlays: [],
+      active_overlay_names: []
+    })
+    mockSyncEnvironmentManually.mockResolvedValue({
+      status: 'success',
+      nodes_installed: [],
+      nodes_removed: [],
+      errors: [],
+      message: 'Sync completed'
+    })
 
     vi.mocked(useModelDownloadQueue).mockReturnValue({
       addToQueue: mockAddToQueue
@@ -129,6 +144,7 @@ describe('MissingResourcesPopup install tracking hardening', () => {
 
     ;(window as any).app = {
       api: {
+        fetchApi: vi.fn(),
         addEventListener: addEventListenerMock,
         removeEventListener: removeEventListenerMock
       }
@@ -147,6 +163,12 @@ describe('MissingResourcesPopup install tracking hardening', () => {
     return mount(MissingResourcesPopup, {
       attachTo: document.body
     })
+  }
+
+  function getRegisteredHandler(type: string) {
+    const call = addEventListenerMock.mock.calls.find(([eventType]) => eventType === type)
+    expect(call, `handler "${type}" not registered`).toBeTruthy()
+    return call![1] as (event: CustomEvent) => void
   }
 
   it('surfaces queueNodeInstall failures as failed package state', async () => {
@@ -169,6 +191,248 @@ describe('MissingResourcesPopup install tracking hardening', () => {
     expect(failedBadge).toBeTruthy()
     expect(failedBadge.getAttribute('title')).toContain('Queue start failed')
 
+    wrapper.unmount()
+  })
+
+  it('syncs environment before showing restart notification after successful installs', async () => {
+    let resolveSync: (value: unknown) => void = () => {}
+    mockSyncEnvironmentManually.mockReturnValue(new Promise(resolve => {
+      resolveSync = resolve
+    }))
+    mockQueueNodeInstall.mockResolvedValue({ ui_id: 'ui-success' })
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(buildAnalysisResult({
+        missingPackages: [{ package_id: 'pkg-success', title: 'Package Success' }]
+      }))
+    })
+    const restartListener = vi.fn()
+    window.addEventListener('comfygit:nodes-installed', restartListener)
+
+    const wrapper = mountPopup()
+    await triggerWorkflowAnalysis()
+
+    findButtonByText('Install').click()
+    await flushPromises()
+
+    getRegisteredHandler('cm-task-completed')(
+      new CustomEvent('cm-task-completed', {
+        detail: { ui_id: 'ui-success', status: { status_str: 'success' } }
+      })
+    )
+    await flushPromises()
+
+    expect(mockSyncEnvironmentManually).toHaveBeenCalledWith('skip', false, true)
+    expect(restartListener).not.toHaveBeenCalled()
+
+    resolveSync({
+      status: 'success',
+      nodes_installed: [],
+      nodes_removed: [],
+      errors: [],
+      message: 'Sync completed'
+    })
+    await flushPromises()
+    await flushPromises()
+
+    expect(restartListener).toHaveBeenCalledTimes(1)
+    expect(restartListener.mock.calls[0][0].detail).toEqual({ count: 1 })
+
+    window.removeEventListener('comfygit:nodes-installed', restartListener)
+    wrapper.unmount()
+  })
+
+  it('defers post-install sync until a bulk install batch completes', async () => {
+    let installIndex = 0
+    mockQueueNodeInstall.mockImplementation(async (_params, options) => {
+      installIndex += 1
+      const uiId = `ui-bulk-${installIndex}`
+      await options?.beforeQueueStart?.(uiId)
+
+      getRegisteredHandler('cm-task-completed')(
+        new CustomEvent('cm-task-completed', {
+          detail: { ui_id: uiId, status: { status_str: 'success' } }
+        })
+      )
+
+      if (installIndex === 1) {
+        expect(mockSyncEnvironmentManually).not.toHaveBeenCalled()
+      }
+
+      return { ui_id: uiId }
+    })
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(buildAnalysisResult({
+        missingPackages: [
+          { package_id: 'pkg-bulk-one', title: 'Package Bulk One' },
+          { package_id: 'pkg-bulk-two', title: 'Package Bulk Two' }
+        ]
+      }))
+    })
+    const restartListener = vi.fn()
+    window.addEventListener('comfygit:nodes-installed', restartListener)
+
+    const wrapper = mountPopup()
+    await triggerWorkflowAnalysis()
+
+    findButtonByText('Download All').click()
+    await flushPromises()
+    await flushPromises()
+    await flushPromises()
+
+    expect(mockQueueNodeInstall).toHaveBeenCalledTimes(2)
+    expect(mockSyncEnvironmentManually).toHaveBeenCalledTimes(1)
+    expect(mockSyncEnvironmentManually).toHaveBeenCalledWith('skip', false, true)
+    expect(restartListener).toHaveBeenCalledTimes(1)
+    expect(restartListener.mock.calls[0][0].detail).toEqual({ count: 2 })
+
+    window.removeEventListener('comfygit:nodes-installed', restartListener)
+    wrapper.unmount()
+  })
+
+  it('serializes bulk installs until each queue task completes', async () => {
+    let installIndex = 0
+    mockQueueNodeInstall.mockImplementation(async (_params, options) => {
+      installIndex += 1
+      const uiId = `ui-serial-${installIndex}`
+      await options?.beforeQueueStart?.(uiId)
+      return { ui_id: uiId }
+    })
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(buildAnalysisResult({
+        missingPackages: [
+          { package_id: 'pkg-serial-one', title: 'Package Serial One' },
+          { package_id: 'pkg-serial-two', title: 'Package Serial Two' }
+        ]
+      }))
+    })
+    const restartListener = vi.fn()
+    window.addEventListener('comfygit:nodes-installed', restartListener)
+
+    const wrapper = mountPopup()
+    await triggerWorkflowAnalysis()
+
+    findButtonByText('Download All').click()
+    await flushPromises()
+    await flushPromises()
+
+    expect(mockQueueNodeInstall).toHaveBeenCalledTimes(1)
+
+    getRegisteredHandler('cm-task-completed')(
+      new CustomEvent('cm-task-completed', {
+        detail: { ui_id: 'ui-serial-1', status: { status_str: 'success' } }
+      })
+    )
+    await flushPromises()
+    await flushPromises()
+
+    expect(mockQueueNodeInstall).toHaveBeenCalledTimes(2)
+    expect(mockSyncEnvironmentManually).not.toHaveBeenCalled()
+
+    getRegisteredHandler('cm-task-completed')(
+      new CustomEvent('cm-task-completed', {
+        detail: { ui_id: 'ui-serial-2', status: { status_str: 'success' } }
+      })
+    )
+    await flushPromises()
+    await flushPromises()
+
+    expect(mockSyncEnvironmentManually).toHaveBeenCalledTimes(1)
+    expect(restartListener).toHaveBeenCalledTimes(1)
+    expect(restartListener.mock.calls[0][0].detail).toEqual({ count: 2 })
+
+    window.removeEventListener('comfygit:nodes-installed', restartListener)
+    wrapper.unmount()
+  })
+
+  it('uses the same deferred sync path for section-level install all', async () => {
+    let installIndex = 0
+    mockQueueNodeInstall.mockImplementation(async (_params, options) => {
+      installIndex += 1
+      const uiId = `ui-section-bulk-${installIndex}`
+      await options?.beforeQueueStart?.(uiId)
+
+      getRegisteredHandler('cm-task-completed')(
+        new CustomEvent('cm-task-completed', {
+          detail: { ui_id: uiId, status: { status_str: 'success' } }
+        })
+      )
+
+      if (installIndex === 1) {
+        expect(mockSyncEnvironmentManually).not.toHaveBeenCalled()
+      }
+
+      return { ui_id: uiId }
+    })
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(buildAnalysisResult({
+        missingPackages: [
+          { package_id: 'pkg-section-one', title: 'Package Section One' },
+          { package_id: 'pkg-section-two', title: 'Package Section Two' }
+        ]
+      }))
+    })
+    const restartListener = vi.fn()
+    window.addEventListener('comfygit:nodes-installed', restartListener)
+
+    const wrapper = mountPopup()
+    await triggerWorkflowAnalysis()
+
+    findButtonByText('Install All').click()
+    await flushPromises()
+    await flushPromises()
+    await flushPromises()
+
+    expect(mockQueueNodeInstall).toHaveBeenCalledTimes(2)
+    expect(mockSyncEnvironmentManually).toHaveBeenCalledTimes(1)
+    expect(mockSyncEnvironmentManually).toHaveBeenCalledWith('skip', false, true)
+    expect(restartListener).toHaveBeenCalledTimes(1)
+    expect(restartListener.mock.calls[0][0].detail).toEqual({ count: 2 })
+
+    window.removeEventListener('comfygit:nodes-installed', restartListener)
+    wrapper.unmount()
+  })
+
+  it('does not show restart notification when post-install sync fails', async () => {
+    mockSyncEnvironmentManually.mockResolvedValue({
+      status: 'error',
+      nodes_installed: [],
+      nodes_removed: [],
+      errors: ['uv sync failed'],
+      message: 'Sync failed'
+    })
+    mockQueueNodeInstall.mockResolvedValue({ ui_id: 'ui-sync-fail' })
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(buildAnalysisResult({
+        missingPackages: [{ package_id: 'pkg-sync-fail', title: 'Package Sync Fail' }]
+      }))
+    })
+    const restartListener = vi.fn()
+    window.addEventListener('comfygit:nodes-installed', restartListener)
+
+    const wrapper = mountPopup()
+    await triggerWorkflowAnalysis()
+
+    findButtonByText('Install').click()
+    await flushPromises()
+
+    getRegisteredHandler('cm-task-completed')(
+      new CustomEvent('cm-task-completed', {
+        detail: { ui_id: 'ui-sync-fail', status: { status_str: 'success' } }
+      })
+    )
+    await flushPromises()
+    await flushPromises()
+
+    expect(restartListener).not.toHaveBeenCalled()
+    expect((document.body.querySelector('.base-modal-error') as HTMLElement).textContent || '')
+      .toContain('Environment sync failed: uv sync failed')
+
+    window.removeEventListener('comfygit:nodes-installed', restartListener)
     wrapper.unmount()
   })
 
@@ -243,7 +507,15 @@ describe('MissingResourcesPopup install tracking hardening', () => {
   it('downloadAll continues installs after failures and surfaces summary', async () => {
     mockQueueNodeInstall
       .mockRejectedValueOnce(new Error('first install failed'))
-      .mockResolvedValueOnce({ ui_id: 'ui-success' })
+      .mockImplementationOnce(async (_params, options) => {
+        await options?.beforeQueueStart?.('ui-success')
+        getRegisteredHandler('cm-task-completed')(
+          new CustomEvent('cm-task-completed', {
+            detail: { ui_id: 'ui-success', status: { status_str: 'success' } }
+          })
+        )
+        return { ui_id: 'ui-success' }
+      })
     fetchMock.mockResolvedValue({
       ok: true,
       json: vi.fn().mockResolvedValue(buildAnalysisResult({

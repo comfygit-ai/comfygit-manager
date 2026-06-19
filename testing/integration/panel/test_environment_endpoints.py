@@ -182,6 +182,39 @@ class TestListEnvironmentsEndpoint:
         assert data["orchestrator_active"] is True
         assert data["is_supervised"] is False
 
+    async def test_list_environments_uses_lightweight_summary(self, client, monkeypatch, tmp_path):
+        """Environment listing should not compute full status for each env."""
+        mock_workspace = Mock()
+        mock_workspace.path = tmp_path
+        mock_current_env = Mock()
+        mock_current_env.name = "env1"
+
+        mock_env = Mock()
+        mock_env.name = "env1"
+        mock_env.path = tmp_path / "env1"
+        mock_env.get_workflow_sync_status.return_value = Mock(total_count=3)
+        mock_env.get_current_branch.return_value = "main"
+        mock_env.list_nodes.return_value = [Mock(), Mock()]
+        mock_env.list_manifest_models.return_value = {"hash1": Mock()}
+        mock_env.status.side_effect = AssertionError("list endpoint should not call env.status()")
+        mock_workspace.list_environments.return_value = [mock_env]
+
+        def mock_detect():
+            return (True, mock_workspace, mock_current_env)
+
+        monkeypatch.setattr("orchestrator.detect_environment_type", mock_detect)
+        monkeypatch.setattr("orchestrator.read_orchestrator_pid", lambda _: None)
+
+        resp = await client.get("/v2/comfygit/environments")
+        data = await resp.json()
+
+        assert resp.status == 200
+        assert data["environments"][0]["workflow_count"] == 3
+        assert data["environments"][0]["node_count"] == 2
+        assert data["environments"][0]["model_count"] == 1
+        assert data["environments"][0]["current_branch"] == "main"
+        mock_env.status.assert_not_called()
+
     async def test_error_list_environments_fails(self, client, monkeypatch):
         """Should return 500 when list_environments raises exception."""
         # Setup
@@ -212,6 +245,8 @@ class TestSwitchEnvironmentEndpoint:
 
     async def test_success_initiate_switch(self, client, monkeypatch, tmp_path):
         """Should initiate switch and return success."""
+        from comfygit_core.runtime import write_supervisor_advertisement
+
         # Setup
         mock_workspace = Mock()
         mock_workspace.path = tmp_path
@@ -233,6 +268,12 @@ class TestSwitchEnvironmentEndpoint:
         monkeypatch.setattr("orchestrator.read_orchestrator_pid", lambda _: None)
         monkeypatch.setattr("orchestrator.should_spawn_orchestrator_for_switch", lambda: False)
         monkeypatch.setattr("orchestrator.write_switch_request", Mock())
+        write_supervisor_advertisement(
+            tmp_path,
+            "0.0.0.0",
+            8192,
+            public_origin="http://desktop-de51eqf.tailnet.ts.net:8192",
+        )
 
         # Mock delayed exit to prevent actual exit
         async def mock_delayed_exit():
@@ -248,6 +289,9 @@ class TestSwitchEnvironmentEndpoint:
         data = await resp.json()
         assert data["status"] == "switching"
         assert "env2" in data["message"]
+        assert data["observer"]["status_url"] == (
+            "http://desktop-de51eqf.tailnet.ts.net:8192/v2/comfygit/switch_status"
+        )
 
     async def test_error_not_managed(self, client, monkeypatch):
         """Should return 500 when not in managed environment."""
@@ -497,6 +541,9 @@ class TestSwitchStatusEndpoint:
         }
 
         status_file.write_text(json.dumps(status_data))
+        from comfygit_core.runtime import append_switch_log
+
+        append_switch_log(metadata_dir, "Syncing env2...")
 
         # Execute
         resp = await client.get("/v2/comfygit/switch_status")
@@ -508,6 +555,7 @@ class TestSwitchStatusEndpoint:
         assert data["progress"] == 50
         assert data["target_env"] == "env2"
         assert data["source_env"] == "env1"
+        assert data["logs"][0]["message"] == "Syncing env2..."
 
     async def test_success_no_switch_in_progress(self, client, monkeypatch, tmp_path):
         """Should return idle when no switch in progress."""
@@ -592,7 +640,8 @@ class TestCreateEnvironmentEndpoint:
                 "phase": None,
                 "progress": 0,
                 "message": "No creation in progress",
-                "error": None
+                "error": None,
+                "logs": []
             }
         yield
         # Reset again after test
@@ -604,7 +653,8 @@ class TestCreateEnvironmentEndpoint:
                 "phase": None,
                 "progress": 0,
                 "message": "No creation in progress",
-                "error": None
+                "error": None,
+                "logs": []
             }
 
     async def test_error_without_workspace_path_in_unmanaged(self, client, monkeypatch):
@@ -671,6 +721,14 @@ class TestCreateEnvironmentEndpoint:
         data = await resp.json()
         assert data["status"] == "started"
         assert "my-new-env" in data["message"]
+
+        status_resp = await client.get("/v2/workspace/environments/create_status")
+        assert status_resp.status == 200
+        status_data = await status_resp.json()
+        assert status_data["state"] == "creating"
+        assert status_data["logs"]
+        assert status_data["logs"][0]["level"] == "info"
+        assert "my-new-env" in status_data["logs"][0]["message"]
 
     async def test_error_cloud_bound_create_denied(self, client, monkeypatch, tmp_path):
         """Should deny environment creation when runtime context is cloud-bound."""

@@ -126,6 +126,28 @@ async function fetchStatus(forceRefresh = false) {
   }
 }
 
+async function captureSavedWorkflow(workflowName: string) {
+  const api = getComfyApi()
+  if (!api) return
+
+  try {
+    const response = await api.fetchApi(
+      '/v2/comfygit/workflow/capture',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: workflowName })
+      }
+    )
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '')
+      console.warn(`[ComfyGit] Failed to capture workflow ${workflowName}: ${errorText}`)
+    }
+  } catch (error) {
+    console.warn(`[ComfyGit] Failed to capture workflow ${workflowName}`, error)
+  }
+}
+
 // Fetch setup status to determine if in managed environment
 async function fetchSetupStatus() {
   // Mock mode: always return no_workspace to test disabled state
@@ -746,8 +768,10 @@ app.registerExtension({
         const { change_type, workflow_name } = event.detail
         console.log(`[ComfyGit] Workflow ${change_type}: ${workflow_name}`)
 
-        // The backend watcher debounces save bursts before broadcasting, so a
-        // normal status read is enough here and avoids expensive full reloads.
+        if (change_type === 'created' || change_type === 'modified') {
+          await captureSavedWorkflow(workflow_name)
+        }
+
         await fetchStatus()
         updateCommitIndicator()
       })
@@ -1108,8 +1132,8 @@ app.registerExtension({
             // Listen for reconnection (once)
             api.addEventListener('reconnected', onReconnect, { once: true } as any)
 
-            // Trigger reboot
-            await fetch('/v2/manager/reboot')
+            // Trigger restart through the supervisor-aware orchestrator path.
+            await fetch('/v2/comfygit/orchestrator/restart', { method: 'POST' })
             // Toast will update when reconnected
           } catch (err) {
             console.error('[ComfyGit] Failed to restart:', err)

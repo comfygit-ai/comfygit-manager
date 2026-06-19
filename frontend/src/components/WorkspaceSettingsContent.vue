@@ -117,6 +117,15 @@
         </div>
       </SectionGroup>
 
+      <!-- Dependency Overlays -->
+      <SectionGroup title="DEPENDENCY OVERLAYS">
+        <ActiveOverlaysNotice
+          :overlays="config?.active_overlays || []"
+          :show-empty="true"
+          description="Active overlays are applied when Manager syncs, resolves dependencies, or installs custom nodes."
+        />
+      </SectionGroup>
+
       <!-- UI Settings -->
       <SectionGroup title="UI SETTINGS">
         <div class="settings-section">
@@ -156,6 +165,7 @@ import SummaryBar from '@/components/base/molecules/SummaryBar.vue'
 import LoadingState from '@/components/base/organisms/LoadingState.vue'
 import ErrorState from '@/components/base/organisms/ErrorState.vue'
 import ActionButton from '@/components/base/atoms/ActionButton.vue'
+import ActiveOverlaysNotice from '@/components/base/molecules/ActiveOverlaysNotice.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import { isRemoteSsh, useGitAuth } from '@/composables/useGitAuth'
 import type { ConfigSettings } from '@/types/comfygit'

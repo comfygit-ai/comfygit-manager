@@ -116,4 +116,49 @@ describe('CreateEnvironmentModal name validation', () => {
     const error = getRequiredElement<HTMLDivElement>('.field-error')
     expect(error.textContent).toContain('Invalid name format')
   })
+
+  it('shows live creation logs while an environment is being created', async () => {
+    validateEnvironmentName.mockResolvedValue({ valid: true, name: 'log-env' })
+    createEnvironment.mockResolvedValue({
+      status: 'started',
+      task_id: 'task-1',
+      message: 'Creating environment...'
+    })
+    getCreateProgress.mockResolvedValue({
+      state: 'creating',
+      environment_name: 'log-env',
+      phase: 'install_dependencies',
+      progress: 55,
+      message: 'Installing PyTorch and dependencies...',
+      logs: [
+        { level: 'info', message: 'Installing PyTorch and dependencies...' }
+      ]
+    })
+
+    wrapper = mount(CreateEnvironmentModal, {
+      attachTo: document.body
+    })
+    await flushPromises()
+
+    const input = getRequiredElement<HTMLInputElement>('input.form-input')
+    input.value = 'log-env'
+    input.dispatchEvent(new Event('input'))
+    await flushPromises()
+
+    await vi.advanceTimersByTimeAsync(400)
+    await flushPromises()
+
+    const createBtn = getRequiredElement<HTMLButtonElement>('button.base-btn.primary')
+    createBtn.click()
+    await flushPromises()
+
+    expect(document.body.textContent).toContain('Create Log')
+    expect(document.body.textContent).toContain("Starting creation of 'log-env'")
+
+    await vi.advanceTimersByTimeAsync(2000)
+    await flushPromises()
+
+    expect(getCreateProgress).toHaveBeenCalled()
+    expect(document.body.textContent).toContain('Installing PyTorch and dependencies...')
+  })
 })

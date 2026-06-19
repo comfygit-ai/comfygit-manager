@@ -67,6 +67,64 @@ export interface ComfyGitStatus {
   runtime_issues?: RuntimeIssues
 }
 
+export type LifecycleLayer = 'manifest' | 'filesystem' | 'runtime' | 'snapshot' | 'workspace_index' | 'operation'
+export type LifecycleLayerStatus = 'ok' | 'attention' | 'blocked' | 'unknown'
+export type LifecycleSeverity = 'info' | 'warning' | 'error'
+
+export interface LifecycleIssue {
+  id: string
+  layer: LifecycleLayer
+  severity: LifecycleSeverity
+  message: string
+  blocking: boolean
+  affected_resources: string[]
+  source: string | null
+  details: string[]
+  action_ids: string[]
+}
+
+export interface LifecycleAction {
+  id: string
+  label: string
+  description: string
+  target_layer: LifecycleLayer
+  issue_ids: string[]
+  expected_mutation_layers: LifecycleLayer[]
+  enabled: boolean
+  disabled_reason: string | null
+  destructive: boolean
+  restart_required: boolean
+  confirmation_required: boolean
+}
+
+export interface LifecycleLayerSummary {
+  layer: LifecycleLayer
+  status: LifecycleLayerStatus
+  message: string | null
+  issue_count: number
+  blocking_count: number
+}
+
+export interface LifecycleRuntimeState {
+  comfyui_reachable: boolean | null
+  restart_required: boolean
+  import_errors: string[]
+  message: string | null
+}
+
+export interface EnvironmentLifecycleStatus {
+  environment_name: string | null
+  workspace_path: string | null
+  current_branch: string | null
+  current_commit: string | null
+  detached_head: boolean
+  layers: LifecycleLayerSummary[]
+  issues: LifecycleIssue[]
+  actions: LifecycleAction[]
+  primary_action_id: string | null
+  runtime_state?: LifecycleRuntimeState
+}
+
 export interface CommitInfo {
   hash: string
   short_hash?: string
@@ -296,6 +354,11 @@ export interface RevertChangesResult {
   message?: string
 }
 
+export interface StatusBundle {
+  status: ComfyGitStatus
+  lifecycle_status: EnvironmentLifecycleStatus
+}
+
 // Environment Management Types
 export interface EnvironmentInfo {
   name: string
@@ -345,6 +408,7 @@ export interface SwitchEnvironmentProgress {
   started_at?: string
   updated_at?: string
   error?: string
+  logs?: SwitchLogEntry[]
   recovery_command?: string
 }
 
@@ -391,6 +455,7 @@ export interface CreateEnvironmentProgress {
   progress?: number
   message: string
   error?: string
+  logs?: SwitchLogEntry[]
 }
 
 export interface ComfyUIRelease {
@@ -686,6 +751,15 @@ export interface DownloadModelRequest {
 }
 
 // Settings Types
+export interface DependencyOverlayInfo {
+  name: string
+  description?: string | null
+  is_local: boolean
+  is_active: boolean
+  requires: string[]
+  is_stock: boolean
+}
+
 export interface ConfigSettings {
   workspace_path: string
   models_path: string
@@ -694,6 +768,8 @@ export interface ConfigSettings {
   auto_sync_models: boolean
   confirm_destructive: boolean
   comfyui_extra_args: string[]
+  active_overlays?: DependencyOverlayInfo[]
+  active_overlay_names?: string[]
   manager_source?: 'registry' | 'git' | 'development' | 'unknown' | 'untracked'
   manager_version?: string | null
   manager_branch?: string | null
@@ -1106,6 +1182,7 @@ export interface DependencyResolutionApplyResult {
   needs_restart?: boolean
   message?: string
   error?: string
+  active_overlays?: string[]
 }
 
 export interface DependencyReviewPayload {
@@ -1119,6 +1196,7 @@ export interface DependencyReviewPayload {
 export interface NodeInstallQueueStatus {
   status_str?: string
   messages?: string[]
+  active_overlays?: string[]
   dependency_review?: DependencyReviewPayload
 }
 

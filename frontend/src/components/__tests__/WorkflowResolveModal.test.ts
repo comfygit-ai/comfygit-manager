@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { defineComponent, h } from 'vue'
 import WorkflowResolveModal from '../WorkflowResolveModal.vue'
 import { useWorkflowResolution } from '@/composables/useWorkflowResolution'
 import { useComfyGitService } from '@/composables/useComfyGitService'
@@ -60,6 +61,24 @@ function buildAnalysisResult() {
   }
 }
 
+function buildUnresolvedAnalysisResult() {
+  const analysis = buildAnalysisResult()
+  analysis.nodes.uninstallable = []
+  analysis.nodes.unresolved = [
+    {
+      reference: { node_type: 'JWIntegerDiv', workflow: 'test_workflow' },
+      reason: 'not_found'
+    },
+    {
+      reference: { node_type: 'JWFloatMul', workflow: 'test_workflow' },
+      reason: 'not_found'
+    }
+  ]
+  analysis.stats.total_nodes = 2
+  analysis.stats.needs_user_input = true
+  return analysis
+}
+
 function clickButtonByText(text: string) {
   const buttons = Array.from(document.querySelectorAll('button'))
   const button = buttons.find(btn => (btn.textContent || '').includes(text))
@@ -76,6 +95,8 @@ describe('WorkflowResolveModal - Community-Mapped Flow', () => {
   const mockQueueNodeInstall = vi.fn()
   const mockOpenFileLocation = vi.fn()
   const mockGetNodes = vi.fn()
+  const mockGetConfig = vi.fn()
+  const mockSyncEnvironmentManually = vi.fn()
   const mockLoadPendingDownloads = vi.fn()
 
   beforeEach(() => {
@@ -94,6 +115,17 @@ describe('WorkflowResolveModal - Community-Mapped Flow', () => {
     })
     mockQueueNodeInstall.mockResolvedValue({ ui_id: 'ui-1' })
     mockGetNodes.mockResolvedValue({ nodes: [] })
+    mockGetConfig.mockResolvedValue({
+      active_overlays: [],
+      active_overlay_names: []
+    })
+    mockSyncEnvironmentManually.mockResolvedValue({
+      status: 'success',
+      nodes_installed: [],
+      nodes_removed: [],
+      errors: [],
+      message: 'Sync completed'
+    })
     mockLoadPendingDownloads.mockResolvedValue(undefined)
 
     vi.mocked(useWorkflowResolution).mockReturnValue({
@@ -115,7 +147,9 @@ describe('WorkflowResolveModal - Community-Mapped Flow', () => {
     vi.mocked(useComfyGitService).mockReturnValue({
       openFileLocation: mockOpenFileLocation,
       queueNodeInstall: mockQueueNodeInstall,
-      getNodes: mockGetNodes
+      getNodes: mockGetNodes,
+      getConfig: mockGetConfig,
+      syncEnvironmentManually: mockSyncEnvironmentManually
     } as any)
 
     vi.mocked(useModelDownloadQueue).mockReturnValue({
@@ -189,6 +223,7 @@ describe('WorkflowResolveModal - Community-Mapped Flow', () => {
     })
     expect(mockInstallNodes).toHaveBeenCalledWith('test_workflow')
     expect(mockQueueNodeInstall).not.toHaveBeenCalled()
+    expect(mockSyncEnvironmentManually).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 
@@ -221,6 +256,168 @@ describe('WorkflowResolveModal - Community-Mapped Flow', () => {
         install_source: 'git'
       })
     )
+    expect(mockSyncEnvironmentManually).toHaveBeenCalledWith('skip', false, true)
+    wrapper.unmount()
+  })
+
+  it('offers node packs selected earlier in the wizard as mapping chips', async () => {
+    mockAnalyzeWorkflow.mockResolvedValueOnce(buildUnresolvedAnalysisResult())
+
+    const NodeResolutionStepStub = defineComponent({
+      name: 'NodeResolutionStep',
+      props: {
+        nodes: { type: Array, required: true },
+        nodeChoices: { type: Object, required: true },
+        autoResolvedPackages: { type: Array, required: true },
+        skippedPackages: { type: Object, required: true },
+        installedNodePacks: { type: Array, required: true }
+      },
+      emits: ['manual-entry'],
+      setup(_props, { emit }) {
+        return () => h('button', {
+          type: 'button',
+          onClick: () => emit(
+            'manual-entry',
+            'JWIntegerDiv',
+            'comfyui-various',
+            {
+              install_source: 'git',
+              repository: 'https://github.com/jameswalker55/comfyui-various'
+            }
+          )
+        }, 'Choose Various')
+      }
+    })
+
+    const wrapper = mount(WorkflowResolveModal, {
+      props: { workflowName: 'test_workflow' },
+      attachTo: document.body,
+      global: {
+        stubs: {
+          ResolutionStepper: { template: '<div />' },
+          NodeResolutionStep: NodeResolutionStepStub,
+          ModelResolutionStep: { template: '<div />' },
+          ApplyingStep: { template: '<div />' }
+        }
+      }
+    })
+    await flushPromises()
+
+    clickButtonByText('Continue')
+    await flushPromises()
+
+    const initialNodeStep = wrapper.findComponent(NodeResolutionStepStub)
+    expect(initialNodeStep.exists()).toBe(true)
+    initialNodeStep.vm.$emit(
+      'manual-entry',
+      'JWIntegerDiv',
+      'comfyui-various',
+      {
+        install_source: 'git',
+        repository: 'https://github.com/jameswalker55/comfyui-various'
+      }
+    )
+    await flushPromises()
+
+    const nodeStep = wrapper.findComponent(NodeResolutionStepStub)
+    expect(nodeStep.props('installedNodePacks')).toContainEqual({
+      package_id: 'comfyui-various',
+      source: 'selected-git'
+    })
+
+    wrapper.unmount()
+  })
+
+  it('syncs environment after registry node installation requires restart', async () => {
+    const progress: any = {
+      phase: 'idle',
+      completedFiles: [],
+      nodesToInstall: [],
+      nodesInstalled: [],
+      nodesMarkedOptional: [],
+      nodeInstallProgress: { completedNodes: [] }
+    }
+    vi.mocked(useWorkflowResolution).mockReturnValue({
+      analyzeWorkflow: mockAnalyzeWorkflow,
+      applyResolution: mockApplyResolution,
+      installNodes: vi.fn().mockImplementation(async () => {
+        progress.needsRestart = true
+        return {
+          status: 'success',
+          nodes_installed: ['kj-nodes'],
+          message: 'ok'
+        }
+      }),
+      queueModelDownloads: mockQueueModelDownloads,
+      resetProgress: mockResetProgress,
+      progress
+    } as any)
+
+    const wrapper = mountModal()
+    await flushPromises()
+
+    clickButtonByText('Continue')
+    await flushPromises()
+    clickButtonByText('Install from Registry')
+    await flushPromises()
+    clickButtonByText('Continue to Review')
+    await flushPromises()
+    clickButtonByText('Apply Resolution')
+    await flushPromises()
+
+    expect(mockSyncEnvironmentManually).toHaveBeenCalledWith('skip', false, true)
+    wrapper.unmount()
+  })
+
+  it('does not complete when post-install environment sync returns an error result', async () => {
+    const progress: any = {
+      phase: 'idle',
+      completedFiles: [],
+      nodesToInstall: [],
+      nodesInstalled: [],
+      nodesMarkedOptional: [],
+      nodeInstallProgress: { completedNodes: [] }
+    }
+    vi.mocked(useWorkflowResolution).mockReturnValue({
+      analyzeWorkflow: mockAnalyzeWorkflow,
+      applyResolution: mockApplyResolution,
+      installNodes: vi.fn().mockImplementation(async () => {
+        progress.needsRestart = true
+        return {
+          status: 'success',
+          nodes_installed: ['kj-nodes'],
+          message: 'ok'
+        }
+      }),
+      queueModelDownloads: mockQueueModelDownloads,
+      resetProgress: mockResetProgress,
+      progress
+    } as any)
+    mockSyncEnvironmentManually.mockResolvedValueOnce({
+      status: 'error',
+      nodes_installed: [],
+      nodes_removed: [],
+      errors: ['uv sync failed'],
+      message: 'Sync completed with errors'
+    })
+
+    const wrapper = mountModal()
+    await flushPromises()
+
+    clickButtonByText('Continue')
+    await flushPromises()
+    clickButtonByText('Install from Registry')
+    await flushPromises()
+    clickButtonByText('Continue to Review')
+    await flushPromises()
+    clickButtonByText('Apply Resolution')
+    await flushPromises()
+
+    expect(mockSyncEnvironmentManually).toHaveBeenCalledWith('skip', false, true)
+    expect(progress.phase).toBe('error')
+    expect(progress.error).toBe('Environment sync failed: uv sync failed')
+    expect(mockLoadPendingDownloads).not.toHaveBeenCalled()
+    expect(wrapper.emitted('install')).toBeUndefined()
     wrapper.unmount()
   })
 
@@ -251,6 +448,7 @@ describe('WorkflowResolveModal - Community-Mapped Flow', () => {
     })
     expect(mockInstallNodes).not.toHaveBeenCalled()
     expect(mockQueueNodeInstall).not.toHaveBeenCalled()
+    expect(mockSyncEnvironmentManually).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 })

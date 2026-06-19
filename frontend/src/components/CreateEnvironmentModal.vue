@@ -1,7 +1,7 @@
 <template>
   <BaseModal
     title="CREATE NEW ENVIRONMENT"
-    size="sm"
+    :size="isCreating ? 'md' : 'sm'"
     :show-close-button="!isCreating"
     @close="handleClose"
   >
@@ -73,22 +73,21 @@
           Creating environment <strong>{{ name }}</strong>...
         </p>
 
-        <TaskProgressDisplay
+        <LifecycleProgressDisplay
+          :state="progressDisplayState"
           :progress="createProgress.progress"
-          :message="createProgress.message"
-          :current-phase="createProgress.phase"
-          :variant="createProgress.error ? 'error' : 'default'"
-          :show-steps="true"
+          :state-label="createProgress.message"
           :steps="creationSteps"
-        />
-
-        <p v-if="!createProgress.error" class="progress-warning">
-          This may take several minutes. Please wait...
-        </p>
-
-        <div v-if="createProgress.error" class="create-error">
-          <p class="error-message">{{ createProgress.error }}</p>
-        </div>
+          :logs="createProgress.logs"
+          log-title="Create Log"
+          active-message="This may take several minutes. Please wait..."
+          complete-message="Environment created successfully."
+          error-message="Environment creation failed. Review logs for details."
+        >
+          <template #message>
+            {{ progressFooterMessage }}
+          </template>
+        </LifecycleProgressDisplay>
       </div>
     </template>
 
@@ -126,12 +125,21 @@
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick, onUnmounted, computed, watch } from 'vue'
-import type { ComfyUIRelease, CreateEnvironmentRequest } from '@/types/comfygit'
+import type { ComfyUIRelease, CreateEnvironmentRequest, SwitchLogEntry } from '@/types/comfygit'
 import { PYTHON_VERSIONS, DEFAULT_PYTHON_VERSION, TORCH_BACKENDS, DEFAULT_TORCH_BACKEND } from '@/constants/environment'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import BaseModal from './base/BaseModal.vue'
 import BaseButton from './base/BaseButton.vue'
-import TaskProgressDisplay from './base/molecules/TaskProgressDisplay.vue'
+import LifecycleProgressDisplay from './base/molecules/LifecycleProgressDisplay.vue'
+
+type CreateProgressState = {
+  state: 'idle' | 'creating' | 'complete' | 'error'
+  progress: number
+  message: string
+  phase?: string
+  error?: string
+  logs: SwitchLogEntry[]
+}
 
 const emit = defineEmits<{
   close: []
@@ -164,9 +172,11 @@ const loadingReleases = ref(false)
 
 // Progress state
 const isCreating = ref(false)
-const createProgress = ref<{ progress: number; message: string; phase?: string; error?: string }>({
+const createProgress = ref<CreateProgressState>({
+  state: 'idle',
   progress: 0,
-  message: ''
+  message: '',
+  logs: []
 })
 
 // Polling
@@ -176,15 +186,27 @@ let pollFailures = 0
 
 // Creation steps (matches core library phases)
 const creationSteps = [
-  { id: 'init_structure', label: 'Initialize structure', progressThreshold: 5 },
-  { id: 'probe_pytorch', label: 'Detect PyTorch backend', progressThreshold: 10 },
-  { id: 'resolve_version', label: 'Resolve ComfyUI version', progressThreshold: 15 },
-  { id: 'clone_comfyui', label: 'Clone/restore ComfyUI', progressThreshold: 30, aliases: ['restore_comfyui'] },
-  { id: 'configure_environment', label: 'Configure environment', progressThreshold: 40 },
-  { id: 'install_dependencies', label: 'Install PyTorch and dependencies', progressThreshold: 85 },
-  { id: 'install_manager', label: 'Install ComfyGit manager', progressThreshold: 90 },
-  { id: 'finalize', label: 'Finalize environment', progressThreshold: 100 },
+  { state: 'init_structure', label: 'Initialize structure', progressThreshold: 5, aliases: ['init'] },
+  { state: 'probe_pytorch', label: 'Detect PyTorch backend', progressThreshold: 10 },
+  { state: 'resolve_version', label: 'Resolve ComfyUI version', progressThreshold: 15 },
+  { state: 'clone_comfyui', label: 'Clone/restore ComfyUI', progressThreshold: 30, aliases: ['restore_comfyui'] },
+  { state: 'configure_environment', label: 'Configure environment', progressThreshold: 40 },
+  { state: 'install_dependencies', label: 'Install PyTorch and dependencies', progressThreshold: 85 },
+  { state: 'install_manager', label: 'Install ComfyGit manager', progressThreshold: 90 },
+  { state: 'finalize', label: 'Finalize environment', progressThreshold: 100 },
 ]
+
+const progressDisplayState = computed(() => {
+  if (createProgress.value.error || createProgress.value.state === 'error') return 'error'
+  if (createProgress.value.state === 'complete') return 'complete'
+  return createProgress.value.phase || createProgress.value.state
+})
+
+const progressFooterMessage = computed(() => {
+  if (createProgress.value.error) return createProgress.value.error
+  if (createProgress.value.state === 'complete') return 'Environment created successfully.'
+  return 'This may take several minutes. Please wait...'
+})
 
 // Input ref for autofocus
 const nameInput = ref<HTMLInputElement | null>(null)
@@ -280,7 +302,13 @@ async function handleCreate() {
   }
 
   isCreating.value = true
-  createProgress.value = { progress: 0, message: 'Starting...', phase: 'init' }
+  createProgress.value = {
+    state: 'creating',
+    progress: 0,
+    message: 'Starting...',
+    phase: 'init',
+    logs: [{ level: 'info', message: `Starting creation of '${trimmedName}'...` }]
+  }
 
   try {
     const request: CreateEnvironmentRequest = {
@@ -297,16 +325,21 @@ async function handleCreate() {
       startPolling()
     } else if (result.status === 'error') {
       createProgress.value = {
+        state: 'error',
         progress: 0,
         message: result.message || 'Failed to start creation',
-        error: result.message
+        error: result.message,
+        logs: [{ level: 'error', message: result.message || 'Failed to start creation' }]
       }
     }
   } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
     createProgress.value = {
+      state: 'error',
       progress: 0,
-      message: err instanceof Error ? err.message : 'Unknown error',
-      error: err instanceof Error ? err.message : 'Unknown error'
+      message,
+      error: message,
+      logs: [{ level: 'error', message }]
     }
   }
 }
@@ -321,10 +354,12 @@ function startPolling() {
       pollFailures = 0  // Reset on success
 
       createProgress.value = {
+        state: progress.state,
         progress: progress.progress ?? 0,
         message: progress.message,
         phase: progress.phase,
-        error: progress.error
+        error: progress.error,
+        logs: progress.logs || []
       }
 
       if (progress.state === 'complete') {
@@ -335,13 +370,19 @@ function startPolling() {
         createProgress.value.error = progress.error || progress.message
       } else if (progress.state === 'idle' && isCreating.value) {
         stopPolling()
+        createProgress.value.state = 'error'
         createProgress.value.error = 'Creation was interrupted. Please try again.'
       }
     } catch {
       pollFailures++
       if (pollFailures >= MAX_POLL_FAILURES) {
         stopPolling()
+        createProgress.value.state = 'error'
         createProgress.value.error = 'Lost connection to server.'
+        createProgress.value.logs = [
+          ...createProgress.value.logs,
+          { level: 'error', message: 'Lost connection to server.' }
+        ]
       }
     }
   }, 2000)
@@ -356,7 +397,7 @@ function stopPolling() {
 
 function resetAndClose() {
   isCreating.value = false
-  createProgress.value = { progress: 0, message: '' }
+  createProgress.value = { state: 'idle', progress: 0, message: '', logs: [] }
   emit('close')
 }
 
@@ -504,31 +545,6 @@ onUnmounted(() => {
   font-size: var(--cg-font-size-sm);
   margin-bottom: var(--cg-space-4);
   text-align: center;
-}
-
-.progress-warning {
-  margin-top: var(--cg-space-3);
-  padding: var(--cg-space-2) var(--cg-space-3);
-  background: var(--cg-color-info-muted);
-  border: 1px solid var(--cg-color-info);
-  border-radius: var(--cg-radius-sm);
-  font-size: var(--cg-font-size-xs);
-  color: var(--cg-color-info);
-  text-align: center;
-}
-
-.create-error {
-  margin-top: var(--cg-space-3);
-  padding: var(--cg-space-3);
-  background: var(--cg-color-error-muted);
-  border: 1px solid var(--cg-color-error);
-  border-radius: var(--cg-radius-sm);
-}
-
-.error-message {
-  color: var(--cg-color-error);
-  font-size: var(--cg-font-size-sm);
-  margin: 0;
 }
 
 .footer-status {

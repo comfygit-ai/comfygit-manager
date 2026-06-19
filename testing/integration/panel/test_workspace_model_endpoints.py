@@ -544,7 +544,7 @@ class TestWorkspaceModelsDirectoryEndpoint:
 
         assert resp.status == 200
         data = await resp.json()
-        assert data["path"] == "/workspace/models"
+        assert data["path"] == str(Path("/workspace/models"))
 
     async def test_get_directory_no_environment(self, client, monkeypatch):
         """Should return 500 when no environment detected."""
@@ -574,6 +574,7 @@ class TestWorkspaceModelsDirectoryEndpoint:
         assert data["status"] == "success"
         assert data["path"] == str(new_path)
         assert data["models_indexed"] == 10
+        assert data["created"] is False
 
     async def test_set_directory_missing_path(self, client, mock_environment):
         """Should return 400 when path is missing."""
@@ -586,16 +587,40 @@ class TestWorkspaceModelsDirectoryEndpoint:
         data = await resp.json()
         assert "error" in data
 
-    async def test_set_directory_invalid_path(self, client, mock_environment):
-        """Should return 400 when path does not exist."""
+    async def test_set_directory_creates_missing_path(self, client, mock_environment, tmp_path):
+        """Should create missing models directory before setting it."""
+        new_path = tmp_path / "new_models" / "nested"
+        mock_environment.workspace.set_models_directory.return_value = None
+        mock_environment.workspace.sync_model_directory.return_value = 0
+
         resp = await client.post(
             "/v2/workspace/models/directory",
-            json={"path": "/nonexistent/path/to/models"}
+            json={"path": str(new_path)}
+        )
+
+        assert resp.status == 200
+        assert new_path.is_dir()
+        data = await resp.json()
+        assert data["status"] == "success"
+        assert data["path"] == str(new_path)
+        assert data["models_indexed"] == 0
+        assert data["created"] is True
+        mock_environment.workspace.set_models_directory.assert_called_once_with(new_path)
+
+    async def test_set_directory_rejects_file_path(self, client, mock_environment, tmp_path):
+        """Should return 400 when path exists but is not a directory."""
+        file_path = tmp_path / "not-a-directory.txt"
+        file_path.write_text("not a directory")
+
+        resp = await client.post(
+            "/v2/workspace/models/directory",
+            json={"path": str(file_path)}
         )
 
         assert resp.status == 400
         data = await resp.json()
         assert "error" in data
+        assert "not a directory" in data["error"]
 
     async def test_set_directory_no_environment(self, client, monkeypatch):
         """Should return 500 when no environment detected."""

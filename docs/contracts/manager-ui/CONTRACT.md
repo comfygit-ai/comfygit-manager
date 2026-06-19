@@ -244,6 +244,18 @@ The general Model Index source-repair flow may continue to use an immediate
 `Use as source` action because that flow edits shared workspace knowledge, not
 a specific environment manifest.
 
+### CGM-UI-15D [LIVE]: Missing model availability should route to workflow dependency resolution
+Validation: TEST
+
+When Status reports a workflow model that is not available locally and does not
+have a known downloadable source, the primary action should open the workflow
+dependency-resolution flow for an affected workflow.
+
+This state should not open the readiness/reproducibility source-repair modal,
+because there is no existing local model whose provenance can be repaired yet.
+The user first needs to select a local model, add or find a source, queue a
+download, mark the model optional, or edit the workflow dependency.
+
 ### CGM-UI-16 [PARTIAL]: Blocked custom nodes should be visible as blocked, not hidden
 Validation: LLM_REVIEW
 
@@ -278,6 +290,17 @@ Validation: HUMAN_REVIEW
 Local editable package overrides belong to development scripts and local
 overlays. The manager UI should not present tracked environment metadata as the
 place to configure a developer's personal source checkout paths.
+
+### CGM-UI-17A [LIVE]: Active dependency overlays should be visible at install decision points
+Validation: STATIC
+
+When active local or shared dependency overlays exist, the manager UI should
+show them in workspace settings and dependency-resolution/install surfaces
+before the user applies node installs or sync-triggering resolution actions.
+
+The UI should present overlays as local dependency context rather than portable
+environment metadata. It should not ask users to rewrite tracked manifest
+dependencies just because a local overlay is active.
 
 ### CGM-UI-18 [PARTIAL]: Lifecycle controls should render from runtime capabilities
 Validation: MIXED
@@ -397,21 +420,27 @@ Optional development nodes should remain tracked locally so sync and rollback
 do not treat their directories as unmanaged drift, but they should not appear
 as reproducibility issues once the user has marked them optional.
 
-### CGM-UI-20 [PARTIAL]: Status should expose the primary environment readiness summary
+### CGM-UI-20 [PARTIAL]: Status should expose primary lifecycle guidance and domain health
 Validation: HUMAN_REVIEW
 
-The manager UI should make readiness visible before users reach export, push,
-or future deploy/build warning gates.
+The manager UI should make environment lifecycle state visible before users
+reach export, push, or future deploy/build warning gates.
 
-The Status surface should expose grouped reproducibility issues inside its
-existing `Issues` area. It should not force users to visit Models, Nodes,
-Workflows, and Version Control separately just to understand whether the
-environment needs attention.
+The Status surface should show one prominent primary guidance card for the next
+recommended action, then summarize other lifecycle domains in a compact health
+grid. The grid should separate at least workflow, model, node, runtime,
+filesystem, and snapshot state so users can distinguish "what changed" from
+"what cannot run" without reading a stack of competing alert cards.
 
-The current implementation exposes model/custom-node reproducibility warnings
-inside the Status `Issues` section. It remains partial until the shared
-readiness surface includes source-state, workflow contract, and
-runtime/build-plan issue groups.
+The health grid may route users to the existing Workflows, Nodes, Version
+Control, Sync, or readiness review surfaces, but it should not duplicate the
+primary lifecycle card as a second loud issue card. Snapshot commits should use
+the existing commit modal, including its existing force/allow-issues affordance
+when workflow issues are present.
+
+The current implementation exposes lifecycle domains in a Status health grid.
+It remains partial until the shared readiness surface includes source-state,
+workflow contract, and runtime/build-plan issue groups.
 
 Detailed readiness behavior is specified by `CGM-READY-01` through
 `CGM-READY-07` in `docs/specs/environment-readiness.md`.
@@ -420,12 +449,39 @@ Detailed readiness behavior is specified by `CGM-READY-01` through
 Validation: HUMAN_REVIEW
 
 When the backend reports runtime custom-node import failures, Status should show
-a compact issue in the existing `Issues` area and route users to Nodes.
+a compact runtime health signal and route users to Nodes.
 
 The Nodes surface should mark each failed installed node with a visible runtime
 status and details text that tells the user to inspect ComfyUI logs for the
 underlying Python import error. This status should not block commits, exports,
 pushes, or environment switching in the first implementation.
+
+### CGM-UI-20B [LIVE]: Workflow-file edits should be presented as snapshot capture work
+Validation: TEST
+
+When Status receives lifecycle guidance for new, modified, deleted, or mixed
+workflow file changes, the top-level card should name the workflow-file state
+directly, such as `New workflow added`, `Workflow modified`, `Workflow
+removed`, or `Workflow changes pending`.
+
+When no higher-priority materialization, model, node, runtime, or operation
+blocker exists, the primary action for those workflow-file states should use
+the existing commit modal through `commit_snapshot`. The UI may still offer
+review/detail navigation elsewhere, but it should not make `Review workflow
+changes` the primary CTA for normal saved workflow edits.
+
+### CGM-UI-20C [LIVE]: Environment navigation should reuse a warm list cache
+Validation: TEST
+
+The manager panel should not show a blocking environments-list loading state on
+every visit to the Environments surface when it already has a recently loaded
+environment list.
+
+The panel may refresh stale environment-list data in the background, but cached
+rows should remain visible while that refresh runs. Environment creation,
+import, deletion, and switch flows should invalidate or force-refresh the cache
+so list membership and current-environment state do not remain stale after
+mutations.
 
 ### CGM-UI-21 [PARTIAL]: Export, push, and future deploy gates should use the shared readiness review surface
 Validation: MIXED

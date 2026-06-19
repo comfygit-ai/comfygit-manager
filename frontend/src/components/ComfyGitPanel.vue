@@ -180,14 +180,17 @@
             ref="statusSectionRef"
             :status="status!"
             :setup-state="setupState"
+            :lifecycle-status="lifecycleStatus"
             @switch-branch="handleSwitchBranchClick"
             @commit-changes="showCommitModal = true"
             @sync-environment="showSyncModal = true"
             @view-workflows="selectView('workflows', 'this-env')"
+            @resolve-workflow-dependencies="handleResolveWorkflowDependencies"
+            @refresh-workflow-capture="handleRefreshWorkflowCapture"
+            @view-models="selectView('models-env', 'this-env')"
             @view-history="openVersionControl('history')"
             @view-debug="openDiagnostics('env')"
             @view-nodes="selectView('nodes', 'this-env')"
-            @repair-missing-models="handleRepairMissingModels"
             @repair-environment="handleRepairEnvironment"
             @start-setup="showSetupWizard = true"
             @view-environments="selectView('environments', 'workspace')"
@@ -199,7 +202,9 @@
           <WorkflowsSection
             v-else-if="currentView === 'workflows'"
             ref="workflowsSectionRef"
+            :resolve-workflow-request="pendingResolveWorkflowRequest"
             @refresh="refresh"
+            @resolve-workflow-request-consumed="pendingResolveWorkflowRequest = null"
           />
 
           <!-- Models (Environment) View -->
@@ -438,7 +443,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import EnvironmentSwitcher from './EnvironmentSwitcher.vue'
 import StatusSection from './StatusSection.vue'
 import WorkflowsSection from './WorkflowsSection.vue'
@@ -463,6 +468,7 @@ import FooterInfo from './base/atoms/FooterInfo.vue'
 import FirstTimeSetupWizard from './FirstTimeSetupWizard.vue'
 import UpdateNoticeBanner from './UpdateNoticeBanner.vue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
+import { useEnvironmentListCache } from '@/composables/useEnvironmentListCache'
 import { useOrchestratorService } from '@/composables/useOrchestratorService'
 import type {
   ComfyGitStatus,
@@ -472,6 +478,7 @@ import type {
   RuntimeCapabilities,
   SetupStatus,
   SetupState,
+  EnvironmentLifecycleStatus,
   UpdateCheckResponse,
   SwitchEnvironmentObserver,
   SwitchEnvironmentProgress,
@@ -490,7 +497,6 @@ const emit = defineEmits<{
 }>()
 
 const {
-  getStatus,
   getHistory,
   getBranches,
   checkout,
@@ -498,18 +504,19 @@ const {
   switchBranch,
   revertChanges,
   deleteBranch,
-  getEnvironments,
   switchEnvironment,
   getSwitchProgress,
   deleteEnvironment,
   syncEnvironmentManually,
-  repairWorkflowModels,
   getSetupStatus,
   getUpdateCheck,
-  updateManager
+  updateManager,
+  captureWorkflow,
+  getStatusBundle
 } = useComfyGitService()
 
 const orchestratorService = useOrchestratorService()
+const environmentListCache = useEnvironmentListCache()
 
 type ViewName = 'status' | 'workflows' | 'models-env' | 'nodes' | 'version-control' |
                 'environments' | 'model-index' | 'settings' | 'diagnostics'
@@ -522,11 +529,12 @@ type SwitchProgressLike = Partial<SwitchEnvironmentProgress> & {
 }
 
 const status = ref<ComfyGitStatus | null>(null)
+const lifecycleStatus = ref<EnvironmentLifecycleStatus | null>(null)
 const commits = ref<CommitInfo[]>([])
 const historyHasMore = ref(false)
 const isLoadingHistoryMore = ref(false)
 const branches = ref<BranchInfo[]>([])
-const environments = ref<EnvironmentInfo[]>([])
+const environments = environmentListCache.environments
 const currentEnvironment = computed(() => environments.value.find(e => e.is_current))
 const selectedExportEnvironment = ref<string | null>(null)
 const showImportModal = ref(false)
@@ -568,6 +576,8 @@ const isLoading = ref(false)
 const error = ref<string | null>(null)
 const selectedCommit = ref<CommitInfo | null>(null)
 const showEnvironmentSelector = ref(false)
+const pendingResolveWorkflowRequest = ref<{ id: number; workflowName?: string } | null>(null)
+let resolveWorkflowRequestCounter = 0
 
 // Manager update notice state
 const updateCheck = ref<UpdateCheckResponse | null>(null)
@@ -576,11 +586,18 @@ const isUpdatingManager = ref(false)
 const updateNoticeVisible = computed(() => !updateNoticeHidden.value && shouldShowUpdateNotice(updateCheck.value))
 
 // Ref to child components for triggering reloads
-const workflowsSectionRef = ref<{ loadWorkflows: (forceRefresh?: boolean) => Promise<void> } | null>(null)
+const workflowsSectionRef = ref<{
+  loadWorkflows: (forceRefresh?: boolean) => Promise<void>
+  openResolveWorkflow: (workflowName?: string) => Promise<void>
+} | null>(null)
 const modelsEnvSectionRef = ref<{ loadModels: () => Promise<void> } | null>(null)
 const modelIndexSectionRef = ref<{ loadModels: () => Promise<void> } | null>(null)
-const environmentsSectionRef = ref<{ loadEnvironments: () => Promise<void>; openCreateModal: () => void } | null>(null)
-const statusSectionRef = ref<{ resetRepairingState: () => void } | null>(null)
+const environmentsSectionRef = ref<{ loadEnvironments: (forceRefresh?: boolean) => Promise<void>; openCreateModal: () => void } | null>(null)
+const statusSectionRef = ref<{
+  resetRepairingState: () => void
+  resetRepairingEnvironmentState: () => void
+  closeDetailModal: () => void
+} | null>(null)
 
 // Environment switching modals
 const showConfirmSwitch = ref(false)
@@ -680,6 +697,40 @@ function openDiagnostics(tab: DiagnosticsTab) {
 
 function handleSwitchBranchClick() {
   openVersionControl('branches')
+}
+
+function handleResolveWorkflowDependencies(workflowName?: string) {
+  pendingResolveWorkflowRequest.value = {
+    id: ++resolveWorkflowRequestCounter,
+    workflowName
+  }
+  selectView('workflows', 'this-env')
+}
+
+async function handleRefreshWorkflowCapture(workflowNames?: string[]) {
+  const names = workflowNames?.filter(Boolean) || []
+  if (names.length === 0) {
+    showToast('Open the workflow details to refresh this capture.', 'warning')
+    selectView('workflows', 'this-env')
+    return
+  }
+
+  const label = names.length === 1 ? names[0] : `${names.length} workflows`
+  const toastId = showToast(`Refreshing capture for ${label}...`, 'info', 0)
+  try {
+    for (const workflowName of names) {
+      await captureWorkflow(workflowName)
+    }
+    removeToast(toastId)
+    showToast(`Workflow capture refreshed: ${label}`, 'success')
+    await refresh()
+  } catch (err) {
+    removeToast(toastId)
+    showToast(
+      `Failed to refresh workflow capture: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      'error'
+    )
+  }
 }
 
 function handleOpenNodeManager() {
@@ -858,7 +909,7 @@ async function handleUpdateManager() {
       setRefreshFlag()
       try {
         // This will drop the connection; expected.
-        await fetchComfyApi('/v2/manager/reboot')
+        await orchestratorService.restart()
       } catch {
         // Expected on restart
       }
@@ -894,18 +945,18 @@ async function refresh(options: { refreshWorkflows?: boolean } = {}) {
   error.value = null
 
   try {
-    // Use forceRefresh=true to clear cached environment state
-    const [statusRes, historyRes, branchesRes, envsRes] = await Promise.all([
-      getStatus(true),
+    const [statusBundleRes, historyRes, branchesRes] = await Promise.all([
+      getStatusBundle({ includeReadiness: false }),
       getHistory(HISTORY_PAGE_SIZE),
       getBranches(),
-      getEnvironments()
+      environmentListCache.loadEnvironments()
     ])
+    const statusRes = statusBundleRes.status
     status.value = statusRes
+    lifecycleStatus.value = statusBundleRes.lifecycle_status
     commits.value = historyRes.commits
     historyHasMore.value = historyRes.has_more
     branches.value = branchesRes.branches
-    environments.value = envsRes
     emit('statusUpdate', statusRes)
 
     const refreshWorkflows = options.refreshWorkflows ?? true
@@ -923,6 +974,7 @@ async function refresh(options: { refreshWorkflows?: boolean } = {}) {
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load status'
     status.value = null
+    lifecycleStatus.value = null
     commits.value = []
     historyHasMore.value = false
     branches.value = []
@@ -936,10 +988,8 @@ async function refreshEnvironments() {
   error.value = null
 
   try {
-    environments.value = await getEnvironments()
-    if (environmentsSectionRef.value) {
-      await environmentsSectionRef.value.loadEnvironments()
-    }
+    environmentListCache.invalidateEnvironments()
+    await environmentListCache.loadEnvironments({ force: true })
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load environments'
   } finally {
@@ -1023,9 +1073,9 @@ async function handleBranchSwitch(branchName: string) {
       : `Switch to branch "${branchName}"?`,
     details: hasChanges ? getChangeDetails() : undefined,
     warning: hasChanges
-      ? 'This will restart ComfyUI. Changes will remain in current branch.'
+      ? 'This will discard uncommitted changes, switch branches, and restart ComfyUI.'
       : 'This will restart ComfyUI to apply the changes.',
-    confirmLabel: hasChanges ? 'Switch Anyway' : 'Switch',
+    confirmLabel: hasChanges ? 'Discard and Switch' : 'Switch',
     cancelLabel: 'Cancel',
     onConfirm: async () => {
       confirmDialog.value = null
@@ -1195,8 +1245,7 @@ async function handleRestart() {
       setRefreshFlag()
       showToast('Restarting environment...', 'info')
       try {
-        // Call the reboot endpoint
-        await fetchComfyApi('/v2/manager/reboot')
+        await orchestratorService.restart()
       } catch {
         // Expected - server will restart and connection will drop
       }
@@ -1262,6 +1311,7 @@ async function confirmEnvironmentSwitch() {
     // Initiate the switch (pass workspace path for first-time setup)
     const result = await switchEnvironment(targetEnvironment.value, switchWorkspacePath.value || undefined)
     switchObserver.value = result?.observer || null
+    environmentListCache.invalidateEnvironments()
 
     // Start smooth progress simulation (10% → 60% over 5 seconds)
     startProgressSimulation()
@@ -1385,6 +1435,10 @@ function startSwitchPolling() {
       if (!progress) {
         // No progress info available, keep current state
         return
+      }
+
+      if (Array.isArray(progress.logs)) {
+        switchLogs.value = progress.logs
       }
 
       const realProgress = progress.progress || 0
@@ -1525,24 +1579,6 @@ async function handleSyncConfirm() {
   }
 }
 
-async function handleRepairMissingModels(workflowNames: string[]) {
-  try {
-    const result = await repairWorkflowModels(workflowNames)
-
-    if (result.failed.length === 0) {
-      showToast(`✓ Repaired ${result.success} workflow${result.success === 1 ? '' : 's'}`, 'success')
-    } else {
-      showToast(`Repaired ${result.success}, failed: ${result.failed.length}`, 'warning')
-    }
-
-    await refresh()
-  } catch (err) {
-    showToast(`Repair failed: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
-  } finally {
-    statusSectionRef.value?.resetRepairingState()
-  }
-}
-
 async function handleRepairEnvironment() {
   const toastId = showToast('Repairing environment...', 'info', 0)
 
@@ -1580,11 +1616,8 @@ async function handleRepairEnvironment() {
 async function handleEnvironmentCreated(environmentName: string, switchAfter: boolean) {
   showToast(`Environment '${environmentName}' created`, 'success')
 
-  // Refresh environments list
+  environmentListCache.invalidateEnvironments()
   await refresh()
-  if (environmentsSectionRef.value) {
-    await environmentsSectionRef.value.loadEnvironments()
-  }
 
   // Switch if requested
   if (switchAfter && runtimeCapabilities.value.can_switch_environment) {
@@ -1618,10 +1651,8 @@ async function handleEnvironmentDelete(envName: string) {
 
         if (result.status === 'success') {
           showToast(`Environment "${envName}" deleted`, 'success')
+          environmentListCache.invalidateEnvironments()
           await refresh()
-          if (environmentsSectionRef.value) {
-            await environmentsSectionRef.value.loadEnvironments()
-          }
         } else {
           showToast(result.message || 'Failed to delete environment', 'error')
         }
@@ -1634,6 +1665,7 @@ async function handleEnvironmentDelete(envName: string) {
 
 async function handleSetupComplete(environmentName: string, workspacePath: string | null) {
   showSetupWizard.value = false
+  environmentListCache.invalidateEnvironments()
 
   // Refresh setup status
   try {
@@ -1660,7 +1692,7 @@ async function handleEnvironmentSwitchFromWizard(envName: string, workspacePath:
 }
 
 async function handleImportCompleteSwitch(environmentName: string) {
-  // Refresh environments list first
+  environmentListCache.invalidateEnvironments()
   await refresh()
 
   // Trigger the standard environment switch flow
@@ -1688,6 +1720,8 @@ function closeExportModal() {
 }
 
 async function handleEnvironmentCreatedNoSwitch(envName: string) {
+  environmentListCache.invalidateEnvironments()
+
   // Refresh setup status to get updated environments list
   setupStatus.value = await getSetupStatus()
 

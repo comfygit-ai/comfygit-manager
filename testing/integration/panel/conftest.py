@@ -5,7 +5,13 @@ from collections.abc import Mapping
 from aiohttp import web
 from unittest.mock import Mock, MagicMock
 from pathlib import Path
-from comfygit_core.models import EnvironmentReadiness, GitBranch, GitSyncStatus, Workflow
+from comfygit_core.models import (
+    EnvironmentReadiness,
+    EnvironmentLifecycleStatus,
+    GitBranch,
+    GitSyncStatus,
+    Workflow,
+)
 
 # Add server directory to path
 server_dir = Path(__file__).parent.parent.parent.parent / "server"
@@ -105,6 +111,14 @@ def mock_environment():
             return EnvironmentReadiness()
 
     mock_env.get_readiness = Mock(side_effect=_get_readiness)
+
+    mock_env.get_lifecycle_status = Mock(
+        return_value=EnvironmentLifecycleStatus(
+            environment_name=mock_env.name,
+            workspace_path=str(mock_workspace.path),
+            current_branch="main",
+        )
+    )
     mock_env.get_workflow_execution_contract = Mock(return_value=None)
     mock_env.get_manifest_snapshot = Mock()
 
@@ -256,6 +270,7 @@ def mock_environment():
 
     mock_env.get_workflow_package_aliases = Mock(side_effect=_workflow_package_aliases)
     mock_env.mark_workflow_model_download_resolved = Mock(return_value=True)
+    mock_env.list_overlays = Mock(return_value=[])
 
     # Mock status() for sync endpoint version mismatch workaround
     mock_status = Mock()
@@ -299,10 +314,13 @@ def mock_env_status():
     status.comparison = Mock()
     status.comparison.is_synced = True
     status.comparison.missing_nodes = set()
+    status.comparison.dev_nodes_missing = set()
     status.comparison.extra_nodes = set()
+    status.comparison.dev_nodes_untracked = set()
     status.comparison.disabled_nodes = []
     status.comparison.version_mismatches = []
     status.comparison.packages_in_sync = True
+    status.comparison.package_sync_message = None
 
     # Top-level fields
     status.is_synced = True

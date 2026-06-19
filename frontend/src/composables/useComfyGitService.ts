@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import type {
   ComfyGitStatus,
+  EnvironmentLifecycleStatus,
   CommitResult,
   LogResult,
   ExportResult,
@@ -21,6 +22,7 @@ import type {
   EnvironmentDetail,
   SwitchEnvironmentProgress,
   SwitchEnvironmentResult,
+  SwitchLogEntry,
   CreateEnvironmentRequest,
   CreateEnvironmentResult,
   CreateEnvironmentProgress,
@@ -78,7 +80,8 @@ import type {
   CivitaiModel,
   CivitaiModelResponse,
   CivitaiModelVersionResponse,
-  CivitaiSearchResponse
+  CivitaiSearchResponse,
+  StatusBundle
 } from '@/types/comfygit'
 import { mockApi, isMockApi } from '@/services/mockApi'
 import { useMockControls } from '@/composables/useMockControls'
@@ -146,6 +149,7 @@ interface MockCreateEnvState {
   message: string
   startTime: number | null
   envName: string | null
+  logs: SwitchLogEntry[]
 }
 
 // Global mock state (persists across function calls in the same session)
@@ -163,7 +167,8 @@ const mockCreateEnvState: MockCreateEnvState = {
   progress: 0,
   message: '',
   startTime: null,
-  envName: null
+  envName: null,
+  logs: []
 }
 
 // Phase definitions with timing (matches core library phases)
@@ -227,8 +232,17 @@ function updateMockCreateEnvProgress(): void {
   let foundPhase = false
   for (const phase of MOCK_ENV_PHASES) {
     if (elapsed < phase.endTime) {
+      const previousPhase = mockCreateEnvState.phase
+      const previousMessage = mockCreateEnvState.message
       mockCreateEnvState.phase = phase.id
       mockCreateEnvState.message = phase.message
+      if (previousPhase !== phase.id || previousMessage !== phase.message) {
+        mockCreateEnvState.logs.push({
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          message: phase.message
+        })
+      }
       // Interpolate progress within phase
       const prevPhaseIdx = MOCK_ENV_PHASES.indexOf(phase) - 1
       const prevEndTime = prevPhaseIdx >= 0 ? MOCK_ENV_PHASES[prevPhaseIdx].endTime : 0
@@ -249,6 +263,11 @@ function updateMockCreateEnvProgress(): void {
     mockCreateEnvState.progress = 100
     mockCreateEnvState.message = `Environment '${mockCreateEnvState.envName}' created successfully`
     mockCreateEnvState.startTime = null
+    mockCreateEnvState.logs.push({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      message: mockCreateEnvState.message
+    })
   }
 }
 
@@ -432,6 +451,49 @@ export function useComfyGitService() {
 
     const url = forceRefresh ? '/v2/comfygit/status?refresh=true' : '/v2/comfygit/status'
     return fetchApi<ComfyGitStatus>(url)
+  }
+
+  async function getLifecycleStatus(includeReadiness = true): Promise<EnvironmentLifecycleStatus> {
+    if (USE_MOCK) {
+      const status = await mockApi.getStatus()
+      return {
+        environment_name: status.environment,
+        workspace_path: null,
+        current_branch: status.branch,
+        current_commit: null,
+        detached_head: status.is_detached_head,
+        layers: [],
+        issues: [],
+        actions: [],
+        primary_action_id: null,
+        runtime_state: {
+          comfyui_reachable: null,
+          restart_required: false,
+          import_errors: [],
+          message: null
+        }
+      }
+    }
+
+    const query = includeReadiness ? '' : '?include_readiness=false'
+    return fetchApi<EnvironmentLifecycleStatus>(`/v2/comfygit/lifecycle_status${query}`)
+  }
+
+  async function getStatusBundle(
+    options: { includeReadiness?: boolean; forceRefresh?: boolean } = {}
+  ): Promise<StatusBundle> {
+    if (USE_MOCK) {
+      return {
+        status: await mockApi.getStatus(),
+        lifecycle_status: await getLifecycleStatus(options.includeReadiness ?? true)
+      }
+    }
+
+    const params = new URLSearchParams()
+    if (options.includeReadiness === false) params.set('include_readiness', 'false')
+    if (options.forceRefresh) params.set('refresh', 'true')
+    const query = params.toString()
+    return fetchApi<StatusBundle>(`/v2/comfygit/status_bundle${query ? `?${query}` : ''}`)
   }
 
   async function commit(message: string, allowIssues = false): Promise<CommitResult> {
@@ -694,6 +756,11 @@ export function useComfyGitService() {
       mockCreateEnvState.message = 'Creating environment structure...'
       mockCreateEnvState.startTime = Date.now()
       mockCreateEnvState.envName = request.name
+      mockCreateEnvState.logs = [{
+        timestamp: new Date().toISOString(),
+        level: 'info',
+        message: `Starting creation of '${request.name}'...`
+      }]
       console.log('[MOCK] Starting environment creation:', request)
       return { status: 'started', task_id: 'mock-task-id', message: 'Creating environment...' }
     }
@@ -716,7 +783,8 @@ export function useComfyGitService() {
         progress: mockCreateEnvState.progress,
         message: mockCreateEnvState.message,
         environment_name: mockCreateEnvState.state === 'complete' ? mockCreateEnvState.envName || undefined : undefined,
-        error: mockCreateEnvState.state === 'error' ? 'Mock error occurred' : undefined
+        error: mockCreateEnvState.state === 'error' ? 'Mock error occurred' : undefined,
+        logs: mockCreateEnvState.logs
       }
     }
 
@@ -1187,9 +1255,9 @@ export function useComfyGitService() {
     return fetchApi('/v2/workspace/models/directory')
   }
 
-  async function setModelsDirectory(path: string): Promise<{ status: string, path: string, models_indexed: number }> {
+  async function setModelsDirectory(path: string): Promise<{ status: string, path: string, models_indexed: number, created: boolean }> {
     if (USE_MOCK) {
-      return { status: 'success', path, models_indexed: 10 }
+      return { status: 'success', path, models_indexed: 10, created: false }
     }
 
     return fetchApi('/v2/workspace/models/directory', {
@@ -1363,7 +1431,9 @@ export function useComfyGitService() {
         models_path: '~/comfygit/models',
         auto_sync_models: true,
         confirm_destructive: true,
-        comfyui_extra_args: []
+        comfyui_extra_args: [],
+        active_overlays: [],
+        active_overlay_names: []
       }
     }
   }
@@ -1646,6 +1716,7 @@ export function useComfyGitService() {
     status: 'success' | 'error'
     identifier: string
     preview: DependencyResolutionPreview
+    active_overlays?: string[]
   }> {
     return fetchApi('/v2/comfygit/nodes/dependency-preview', {
       method: 'POST',
@@ -1788,7 +1859,8 @@ export function useComfyGitService() {
 
   async function syncEnvironmentManually(
     modelStrategy: 'skip' | 'auto' | 'manual' = 'skip',
-    removeExtraNodes = true
+    removeExtraNodes = true,
+    preserveWorkflows = true
   ): Promise<SyncEnvironmentResult> {
     if (USE_MOCK) {
       await new Promise(resolve => setTimeout(resolve, 1500))
@@ -1806,9 +1878,29 @@ export function useComfyGitService() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model_strategy: modelStrategy,
-        remove_extra_nodes: removeExtraNodes
+        remove_extra_nodes: removeExtraNodes,
+        preserve_workflows: preserveWorkflows
       })
     })
+  }
+
+  async function captureWorkflow(workflowName: string): Promise<{ status: string; workflow: string; path: string }> {
+    if (USE_MOCK) {
+      return {
+        status: 'success',
+        workflow: workflowName.replace(/\.json$/i, ''),
+        path: `workflows/${workflowName.replace(/\.json$/i, '')}.json`
+      }
+    }
+
+    return fetchApi<{ status: string; workflow: string; path: string }>(
+      '/v2/comfygit/workflow/capture',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: workflowName })
+      }
+    )
   }
 
   // Push/Pull Operations
@@ -2366,6 +2458,8 @@ export function useComfyGitService() {
     isLoading,
     error,
     getStatus,
+    getStatusBundle,
+    getLifecycleStatus,
     commit,
     getHistory,
     getBranchHistory,
@@ -2476,6 +2570,7 @@ export function useComfyGitService() {
     validateMerge,
     // Environment Sync
     syncEnvironmentManually,
+    captureWorkflow,
     // Workflow Repair
     repairWorkflowModels,
     // Import Operations

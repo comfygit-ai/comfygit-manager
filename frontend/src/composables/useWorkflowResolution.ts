@@ -271,6 +271,7 @@ export function useWorkflowResolution() {
       status: string
       message?: string
       failed?: Array<{ node_id: string; error: string }>
+      active_overlays?: string[]
       dependency_review_required?: Array<{
         node_id: string
         error?: string

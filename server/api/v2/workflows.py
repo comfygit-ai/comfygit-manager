@@ -27,6 +27,7 @@ from comfygit_core.workflow import AutoModelStrategy, AutoNodeStrategy
 
 from cgm_core.decorators import requires_environment, logged_operation
 from cgm_core.dependency_preview import dependency_review_response
+from cgm_core.overlays import active_overlay_names, active_overlay_summary
 from cgm_core.serializers import (
     serialize_workflow_contract_summary,
     serialize_workflow_details,
@@ -150,6 +151,49 @@ async def check_workflow_saved(request: web.Request, env) -> web.Response:
             return web.json_response({"is_saved": True, "filename": filename})
 
     return web.json_response({"is_saved": False, "filename": None})
+
+
+async def _get_capture_workflow_name(request: web.Request) -> str | None:
+    """Read a workflow name from JSON body or legacy path params."""
+    if "name" in request.match_info:
+        return request.match_info["name"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        return None
+
+    name = body.get("name")
+    return name if isinstance(name, str) and name.strip() else None
+
+
+def _workflow_name_without_json_suffix(name: str) -> str:
+    """Strip only the terminal `.json` suffix from a workflow filename."""
+    return name[:-5] if name.lower().endswith(".json") else name
+
+
+@routes.post("/v2/comfygit/workflow/capture")
+@routes.post(r"/v2/comfygit/workflow/{name:.+}/capture")
+@logged_operation("capture workflow")
+async def capture_workflow(request: web.Request, env) -> web.Response:
+    """Capture one saved ComfyUI workflow into the tracked working snapshot."""
+    name = await _get_capture_workflow_name(request)
+    if not name:
+        return web.json_response({"error": "Missing workflow name"}, status=400)
+
+    try:
+        tracked_path = await run_sync(env.capture_workflow, name)
+    except FileNotFoundError as exc:
+        return web.json_response({"error": str(exc)}, status=404)
+    except Exception as exc:
+        logger.exception("Failed to capture workflow '%s'", name)
+        return web.json_response({"error": str(exc)}, status=500)
+
+    return web.json_response({
+        "status": "success",
+        "workflow": _workflow_name_without_json_suffix(name),
+        "path": str(tracked_path),
+    })
 
 
 # =============================================================================
@@ -407,6 +451,55 @@ def _safe_dict(value) -> dict:
 def _workflow_manifest_models(env, workflow_name: str) -> list:
     """Return manifest models for a workflow, tolerating unavailable manifest data."""
     return list(env.get_workflow_manifest_models(workflow_name))
+
+
+def _model_choice_keys(model) -> set[str]:
+    """Return identifiers that can match a workflow model choice."""
+    keys = {str(model.filename)} if getattr(model, "filename", None) else set()
+    for node_ref in _safe_sequence(getattr(model, "nodes", [])):
+        widget_value = getattr(node_ref, "widget_value", None)
+        if widget_value:
+            keys.add(str(widget_value))
+    return keys
+
+
+def _optional_manifest_model_choice_keys(env, workflow_name: str) -> set[str]:
+    """Return choice keys for manifest models already marked optional."""
+    keys: set[str] = set()
+    for model in _workflow_manifest_models(env, workflow_name):
+        if getattr(model, "criticality", None) == "optional":
+            keys.update(_model_choice_keys(model))
+    return keys
+
+
+def _newly_optional_model_choice_names(
+    env,
+    workflow_name: str,
+    model_choices: dict[str, dict],
+    before_optional_keys: set[str],
+) -> list[str]:
+    """Report optional model choices now reflected in the manifest."""
+    optional_choice_keys = {
+        filename
+        for filename, choice in model_choices.items()
+        if choice.get("action") == "optional"
+    }
+    if not optional_choice_keys:
+        return []
+
+    changed: list[str] = []
+    for model in _workflow_manifest_models(env, workflow_name):
+        keys = _model_choice_keys(model)
+        matched_keys = keys & optional_choice_keys
+        if not matched_keys:
+            continue
+        if matched_keys <= before_optional_keys:
+            continue
+        if getattr(model, "criticality", None) != "optional":
+            continue
+        changed.append(getattr(model, "filename", next(iter(matched_keys))))
+
+    return list(dict.fromkeys(changed))
 
 
 async def _invalidate_workflow_resolution_cache(env, workflow_name: str) -> None:
@@ -1577,16 +1670,27 @@ async def install_workflow(request: web.Request, env) -> web.Response:
                 "status": "success",
                 "message": "All dependencies already installed",
                 "nodes_installed": [],
-                "failed": []
+                "failed": [],
+                "active_overlays": active_overlay_names(env),
             })
 
         # Install each node, continuing on failure
         installed = []
         failed = []
         dependency_review_required = []
+        overlay_names = active_overlay_names(env)
+        logger.info(
+            "Installing workflow dependencies for '%s' with active overlays: %s",
+            name,
+            active_overlay_summary(env),
+        )
         for node_id in uninstalled:
             try:
-                await run_sync(env.add_node, node_id)
+                await run_sync(
+                    env.add_node,
+                    node_id,
+                    resolve_with_overlays=True,
+                )
                 installed.append(node_id)
             except Exception as e:
                 review_result = dependency_review_response(node_id, e)
@@ -1617,6 +1721,7 @@ async def install_workflow(request: web.Request, env) -> web.Response:
             "nodes_installed": installed,
             "failed": failed,
             "dependency_review_required": dependency_review_required,
+            "active_overlays": overlay_names,
         })
     except Exception as e:
         return web.json_response({
@@ -2104,6 +2209,7 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
     # Create strategies from user choices
     node_strategy = PanelNodeStrategy(node_choices)
     model_strategy = PanelModelStrategy(model_choices)
+    before_optional_model_keys = _optional_manifest_model_choice_keys(env, name)
 
     mapping_changes = await _apply_explicit_node_mapping_choices(
         env=env,
@@ -2171,6 +2277,15 @@ async def apply_resolution(request: web.Request, env) -> web.Response:
     nodes_to_install = list(dict.fromkeys(nodes_to_install))
 
     model_manifest_changes = _apply_explicit_model_choices_to_manifest(env, name, model_choices)
+    model_manifest_changes["models_marked_optional"] = list(dict.fromkeys([
+        *model_manifest_changes["models_marked_optional"],
+        *_newly_optional_model_choice_names(
+            env,
+            name,
+            model_choices,
+            before_optional_model_keys,
+        ),
+    ]))
 
     # Write property_download_intent models to pyproject (they're in models_resolved, not processed by fix_resolution)
     try:
@@ -2365,6 +2480,7 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
     # Create strategies from user choices
     node_strategy = PanelNodeStrategy(node_choices)
     model_strategy = PanelModelStrategy(model_choices)
+    before_optional_model_keys = _optional_manifest_model_choice_keys(env, name)
 
     async def run_resolution():
         """Run resolution in thread pool and signal completion."""
@@ -2391,6 +2507,15 @@ async def apply_resolution_stream(request: web.Request, env) -> web.StreamRespon
 
             nodes_marked_optional = mapping_changes["nodes_marked_optional"]
             model_manifest_changes = _apply_explicit_model_choices_to_manifest(env, name, model_choices)
+            model_manifest_changes["models_marked_optional"] = list(dict.fromkeys([
+                *model_manifest_changes["models_marked_optional"],
+                *_newly_optional_model_choice_names(
+                    env,
+                    name,
+                    model_choices,
+                    before_optional_model_keys,
+                ),
+            ]))
 
             # Collect nodes to install
             nodes_to_install = []

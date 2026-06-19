@@ -151,6 +151,18 @@ If core reports that the accepted preview is stale, the API should return a
 non-success stale-preview response so the frontend can ask the user to refresh
 the review before applying.
 
+### CGM-API-09D [LIVE]: Node install endpoints must honor active dependency overlays
+Validation: TEST
+
+Manager node-install APIs should route custom-node installs through core's
+overlay-aware install path for the active environment. This includes install
+actions started from the Manager queue, workflow dependency install endpoints,
+direct node install endpoints, and reviewed dependency apply endpoints.
+
+The config API should expose active overlay metadata so frontend surfaces can
+make local dependency context visible before the user starts an install or
+resolution action.
+
 ### CGM-API-10 [LIVE]: Model-source endpoints should carry provider-specific metadata without hiding the generic model shape
 Validation: LLM_REVIEW
 
@@ -264,6 +276,38 @@ At minimum, the API contract should support:
 
 The detailed lifecycle semantics are specified by `CGM-ENV-07` through
 `CGM-ENV-11` in `docs/specs/environment-lifecycle-and-orchestrator.md`.
+
+### CGM-API-13E [PARTIAL]: Lifecycle guidance should flow through core status policy
+Validation: TEST
+
+The manager API should expose a unified lifecycle status payload that is derived
+from ComfyGit core lifecycle policy rather than re-derived independently in the
+frontend.
+
+The payload should preserve core layer, issue, action, and primary-action
+identifiers so the frontend can render current state and next actions without
+coupling to raw manifest, filesystem, git, workflow, or readiness internals.
+
+Manager may enrich the core lifecycle status with runtime observations that
+only exist inside the live ComfyUI process, such as custom-node import failures
+or restart state. That enrichment should be explicit adapter-owned input to the
+core lifecycle facade, not a parallel decision tree.
+
+This remains partial until the visible status UI consumes the unified lifecycle
+payload for its primary call-to-action ordering.
+
+### CGM-API-13F [LIVE]: Normal panel refresh should avoid broad forced scans
+Validation: TEST
+
+The manager API should keep ordinary panel open and refresh paths bounded to the
+active environment and should not force model-directory sync, PyTorch probing, or
+full status recomputation for every workspace environment unless the user invokes
+an explicit deep refresh, metadata refresh, or detail view that needs that work.
+
+The environment list endpoint should return lightweight environment summaries.
+Detailed dependency, model, and workflow health may still be computed by the
+current environment status endpoint, lifecycle status endpoint, or the named
+environment detail endpoint.
 
 ### CGM-API-13A [PARTIAL]: Switch initiation should return a restart-stable observer endpoint
 Validation: TEST

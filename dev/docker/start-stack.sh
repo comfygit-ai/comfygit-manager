@@ -11,7 +11,7 @@ COMFYGIT_MANAGER_DEV_PATH="${COMFYGIT_MANAGER_DEV_PATH:-/home/akatzfey/dev/proje
 COMFYUI_PORT="${COMFYUI_PORT:-8188}"
 COMFYGIT_SUPERVISOR_CONTROL_HOST="${COMFYGIT_SUPERVISOR_CONTROL_HOST:-0.0.0.0}"
 COMFYGIT_SUPERVISOR_CONTROL_PORT="${COMFYGIT_SUPERVISOR_CONTROL_PORT:-9188}"
-TORCH_BACKEND="${COMFYGIT_TORCH_BACKEND:-cu126}"
+TORCH_BACKEND="${COMFYGIT_TORCH_BACKEND:-}"
 COMFYGIT_CREATE_ARGS="${COMFYGIT_CREATE_ARGS:-}"
 COMFYUI_EXTRA_ARGS="${COMFYUI_EXTRA_ARGS:---disable-auto-launch --disable-metadata}"
 GIT_AUTHOR_NAME="${GIT_AUTHOR_NAME:-}"
@@ -259,7 +259,12 @@ if [ ! -d "$WORKSPACE/environments/$ENV_NAME" ]; then
   if [ -n "$COMFYGIT_CREATE_ARGS" ]; then
     read -r -a COMFYGIT_CREATE_ARGS_ARRAY <<<"$COMFYGIT_CREATE_ARGS"
   fi
-  cg create "$ENV_NAME" --yes --torch-backend "$TORCH_BACKEND" "${COMFYGIT_CREATE_ARGS_ARRAY[@]}"
+  CG_CREATE_ARGS=("$ENV_NAME" --yes)
+  if [ -n "$TORCH_BACKEND" ]; then
+    CG_CREATE_ARGS+=(--torch-backend "$TORCH_BACKEND")
+  fi
+  CG_CREATE_ARGS+=("${COMFYGIT_CREATE_ARGS_ARRAY[@]}")
+  cg create "${CG_CREATE_ARGS[@]}"
 else
   log "ComfyGit environment already exists, skipping create"
 fi
@@ -300,4 +305,9 @@ if [ -n "$COMFYUI_EXTRA_ARGS" ]; then
   read -r -a COMFYUI_ARGS <<<"$COMFYUI_EXTRA_ARGS"
 fi
 
-exec cg -e "$ENV_NAME" run --listen 0.0.0.0 --port "$COMFYUI_PORT" --torch-backend "$TORCH_BACKEND" --overlay .local "${COMFYUI_ARGS[@]}"
+CG_RUN_ARGS=(-e "$ENV_NAME" run --listen 0.0.0.0 --port "$COMFYUI_PORT")
+if [ -n "$TORCH_BACKEND" ]; then
+  CG_RUN_ARGS+=(--torch-backend "$TORCH_BACKEND")
+fi
+CG_RUN_ARGS+=(--overlay .local "${COMFYUI_ARGS[@]}")
+exec cg "${CG_RUN_ARGS[@]}"

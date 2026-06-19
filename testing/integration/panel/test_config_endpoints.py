@@ -1,5 +1,6 @@
 """Integration tests for configuration panel endpoints."""
 import pytest
+from types import SimpleNamespace
 from unittest.mock import Mock
 from pathlib import Path
 
@@ -43,12 +44,51 @@ class TestGetConfigEndpoint:
         assert "confirm_destructive" in data
 
         # Check values
-        assert data["workspace_path"] == "/workspace"
-        assert data["models_path"] == "/workspace/models"
+        assert data["workspace_path"] == str(Path("/workspace"))
+        assert data["models_path"] == str(Path("/workspace/models"))
         # Token should be masked (last 4 chars only)
         assert data["civitai_api_key"] == "***1234"
         assert isinstance(data["auto_sync_models"], bool)
         assert isinstance(data["confirm_destructive"], bool)
+
+    async def test_success_with_active_overlays(self, client, monkeypatch):
+        """Should expose active dependency overlays from the running environment."""
+        mock_env = Mock()
+        mock_env.name = "test-env"
+        mock_env.get_manifest_node.return_value = None
+        mock_env.list_overlays.return_value = [
+            SimpleNamespace(
+                name=".local",
+                description="Local editable sources",
+                is_local=True,
+                is_active=True,
+                requires=[],
+                is_stock=False,
+            )
+        ]
+
+        mock_workspace = Mock()
+        mock_workspace.path = Path("/workspace")
+        mock_env.workspace = mock_workspace
+        mock_workspace.get_models_directory.return_value = Path("/workspace/models")
+        mock_workspace.get_civitai_token.return_value = None
+        mock_workspace.get_huggingface_token.return_value = None
+
+        monkeypatch.setattr("comfygit_panel.get_environment_from_cwd", lambda: mock_env)
+
+        resp = await client.get("/v2/comfygit/config")
+
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["active_overlay_names"] == [".local"]
+        assert data["active_overlays"] == [{
+            "name": ".local",
+            "description": "Local editable sources",
+            "is_local": True,
+            "is_active": True,
+            "requires": [],
+            "is_stock": False,
+        }]
 
     async def test_success_with_no_civitai_token(self, client, monkeypatch):
         """Should return config with None civitai_api_key when not set."""
@@ -313,7 +353,7 @@ class TestUpdateConfigEndpoint:
         # Verify workspace method was called
         mock_workspace.set_models_directory.assert_called_once()
         call_args = mock_workspace.set_models_directory.call_args[0]
-        assert str(call_args[0]) == "/workspace/new_models"
+        assert str(call_args[0]) == str(Path("/workspace/new_models"))
 
     async def test_success_partial_update(self, client, monkeypatch):
         """Should update only provided fields."""

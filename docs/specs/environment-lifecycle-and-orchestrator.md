@@ -246,6 +246,11 @@ on simulated progress.
 
 For local desktop and containerized development, that observer must be
 reachable from the user's browser, not only from inside the ComfyUI process.
+Native `cg run` launches should start this observer by default, using an
+available nearby port unless an explicit supervisor-control port disables or
+overrides it. Container launch wrappers may still provide explicit host/port
+settings when they need tighter control.
+
 Manager-spawned orchestrators should therefore advertise a direct observer URL
 before the source ComfyUI process exits, using the same public request host as
 the panel and the selected control-server port.
@@ -285,3 +290,25 @@ Starting Studio must not mutate the selected environment, switch the running
 ComfyUI process, or imply cloud deployment. It is a local runtime adapter over
 the currently running ComfyUI API endpoint and the current environment's saved
 workflow contracts.
+
+### CGM-ENV-16 [PARTIAL]: Environment health guidance should separate durable and runtime layers
+Validation: TEST
+
+Manager-facing environment health should preserve the durable layer split owned
+by ComfyGit core:
+
+- manifest intent
+- materialized filesystem state
+- live runtime state
+- git snapshot state
+- workspace index state
+- active lifecycle operation state
+
+The manager may provide live runtime observations to core lifecycle policy, but
+it should not collapse manifest cleanliness, filesystem drift, restart/import
+state, and git snapshot state into a single ambiguous "dirty" or "not synced"
+message.
+
+This remains partial until the panel's primary status cards and calls to action
+render from the unified lifecycle status payload instead of ad hoc frontend
+conditionals.

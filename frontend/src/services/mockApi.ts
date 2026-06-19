@@ -953,7 +953,9 @@ export const mockApi = {
       models_path: '/workspace/models',
       auto_sync_models: true,
       confirm_destructive: true,
-      comfyui_extra_args: []
+      comfyui_extra_args: [],
+      active_overlays: [],
+      active_overlay_names: []
     }
   },
 
