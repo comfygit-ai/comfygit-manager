@@ -245,7 +245,7 @@ class TestSwitchEnvironmentEndpoint:
 
     async def test_success_initiate_switch(self, client, monkeypatch, tmp_path):
         """Should initiate switch and return success."""
-        from comfygit_core.lifecycle.switch_observer import write_supervisor_advertisement
+        from comfygit_core.runtime import write_supervisor_advertisement
 
         # Setup
         mock_workspace = Mock()
