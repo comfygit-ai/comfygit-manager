@@ -22,6 +22,7 @@ import type {
   EnvironmentDetail,
   SwitchEnvironmentProgress,
   SwitchEnvironmentResult,
+  SwitchLogEntry,
   CreateEnvironmentRequest,
   CreateEnvironmentResult,
   CreateEnvironmentProgress,
@@ -148,6 +149,7 @@ interface MockCreateEnvState {
   message: string
   startTime: number | null
   envName: string | null
+  logs: SwitchLogEntry[]
 }
 
 // Global mock state (persists across function calls in the same session)
@@ -165,7 +167,8 @@ const mockCreateEnvState: MockCreateEnvState = {
   progress: 0,
   message: '',
   startTime: null,
-  envName: null
+  envName: null,
+  logs: []
 }
 
 // Phase definitions with timing (matches core library phases)
@@ -229,8 +232,17 @@ function updateMockCreateEnvProgress(): void {
   let foundPhase = false
   for (const phase of MOCK_ENV_PHASES) {
     if (elapsed < phase.endTime) {
+      const previousPhase = mockCreateEnvState.phase
+      const previousMessage = mockCreateEnvState.message
       mockCreateEnvState.phase = phase.id
       mockCreateEnvState.message = phase.message
+      if (previousPhase !== phase.id || previousMessage !== phase.message) {
+        mockCreateEnvState.logs.push({
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          message: phase.message
+        })
+      }
       // Interpolate progress within phase
       const prevPhaseIdx = MOCK_ENV_PHASES.indexOf(phase) - 1
       const prevEndTime = prevPhaseIdx >= 0 ? MOCK_ENV_PHASES[prevPhaseIdx].endTime : 0
@@ -251,6 +263,11 @@ function updateMockCreateEnvProgress(): void {
     mockCreateEnvState.progress = 100
     mockCreateEnvState.message = `Environment '${mockCreateEnvState.envName}' created successfully`
     mockCreateEnvState.startTime = null
+    mockCreateEnvState.logs.push({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      message: mockCreateEnvState.message
+    })
   }
 }
 
@@ -739,6 +756,11 @@ export function useComfyGitService() {
       mockCreateEnvState.message = 'Creating environment structure...'
       mockCreateEnvState.startTime = Date.now()
       mockCreateEnvState.envName = request.name
+      mockCreateEnvState.logs = [{
+        timestamp: new Date().toISOString(),
+        level: 'info',
+        message: `Starting creation of '${request.name}'...`
+      }]
       console.log('[MOCK] Starting environment creation:', request)
       return { status: 'started', task_id: 'mock-task-id', message: 'Creating environment...' }
     }
@@ -761,7 +783,8 @@ export function useComfyGitService() {
         progress: mockCreateEnvState.progress,
         message: mockCreateEnvState.message,
         environment_name: mockCreateEnvState.state === 'complete' ? mockCreateEnvState.envName || undefined : undefined,
-        error: mockCreateEnvState.state === 'error' ? 'Mock error occurred' : undefined
+        error: mockCreateEnvState.state === 'error' ? 'Mock error occurred' : undefined,
+        logs: mockCreateEnvState.logs
       }
     }
 
@@ -1408,7 +1431,9 @@ export function useComfyGitService() {
         models_path: '~/comfygit/models',
         auto_sync_models: true,
         confirm_destructive: true,
-        comfyui_extra_args: []
+        comfyui_extra_args: [],
+        active_overlays: [],
+        active_overlay_names: []
       }
     }
   }
@@ -1691,6 +1716,7 @@ export function useComfyGitService() {
     status: 'success' | 'error'
     identifier: string
     preview: DependencyResolutionPreview
+    active_overlays?: string[]
   }> {
     return fetchApi('/v2/comfygit/nodes/dependency-preview', {
       method: 'POST',

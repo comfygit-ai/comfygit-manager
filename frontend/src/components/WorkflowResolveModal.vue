@@ -25,6 +25,12 @@
           @step-change="navigateToStep"
         />
 
+        <ActiveOverlaysNotice
+          v-if="activeOverlays.length"
+          :overlays="activeOverlays"
+          description="Active overlays will be applied when dependency resolution installs custom nodes or syncs the environment."
+        />
+
         <!-- Analysis Step -->
         <div v-if="currentStep === 'analysis'" class="step-content">
           <div class="analysis-summary">
@@ -176,7 +182,7 @@
             :node-choices="nodeChoices"
             :auto-resolved-packages="[]"
             :skipped-packages="skippedPackages"
-            :installed-node-packs="installedNodePacks"
+            :installed-node-packs="availableNodePackChoices"
             @mark-optional="handleNodeMarkOptional"
             @skip="handleNodeSkip"
             @option-selected="handleNodeOptionSelected"
@@ -586,9 +592,11 @@ import type {
   NodeChoice,
   ModelChoice,
   NodeInfo,
+  DependencyOverlayInfo,
 } from '@/types/comfygit'
 import BaseModal from './base/BaseModal.vue'
 import BaseButton from './base/BaseButton.vue'
+import ActiveOverlaysNotice from './base/molecules/ActiveOverlaysNotice.vue'
 import ResolutionStepper from './base/molecules/ResolutionStepper.vue'
 import NodeResolutionStep from './base/organisms/NodeResolutionStep.vue'
 import ModelResolutionStep from './base/organisms/ModelResolutionStep.vue'
@@ -607,7 +615,7 @@ const emit = defineEmits<{
 
 const { analyzeWorkflow, applyResolution, installNodes, queueModelDownloads, progress, resetProgress } = useWorkflowResolution()
 const { loadPendingDownloads } = useModelDownloadQueue()
-const { openFileLocation, queueNodeInstall, getNodes, syncEnvironmentManually } = useComfyGitService()
+const { openFileLocation, queueNodeInstall, getNodes, getConfig, syncEnvironmentManually } = useComfyGitService()
 
 // State
 const analysisResult = ref<FullResolutionResult | null>(null)
@@ -615,6 +623,7 @@ const installedNodePacks = ref<Array<{ package_id: string; source: string }>>([]
 const loading = ref(false)
 const applying = ref(false)
 const error = ref<string | null>(null)
+const activeOverlays = ref<DependencyOverlayInfo[]>([])
 
 // Wizard state
 type WizardStep = 'analysis' | 'nodes' | 'packages' | 'models' | 'review' | 'applying'
@@ -882,6 +891,29 @@ const savedMappedResolvedNodes = computed(() => {
   return analysisResult.value.nodes.resolved.filter(
     node => node.saved_choice?.action === 'map-installed'
   )
+})
+
+const availableNodePackChoices = computed(() => {
+  const packs = new Map<string, { package_id: string; source: string }>()
+
+  for (const pack of installedNodePacks.value) {
+    packs.set(pack.package_id, pack)
+  }
+
+  for (const choice of nodeChoices.value.values()) {
+    if (choice.action !== 'install' || !choice.package_id) {
+      continue
+    }
+    if (packs.has(choice.package_id)) {
+      continue
+    }
+    packs.set(choice.package_id, {
+      package_id: choice.package_id,
+      source: choice.install_source === 'git' ? 'selected-git' : 'selected'
+    })
+  }
+
+  return Array.from(packs.values())
 })
 
 interface ModelOptionType {
@@ -1163,6 +1195,18 @@ function buildInstalledNodePackChoices(nodes: NodeInfo[]): Array<{ package_id: s
 }
 
 // Methods
+function setNodeChoice(nodeType: string, choice: NodeChoice) {
+  const choices = new Map(nodeChoices.value)
+  choices.set(nodeType, choice)
+  nodeChoices.value = choices
+}
+
+function deleteNodeChoice(nodeType: string) {
+  const choices = new Map(nodeChoices.value)
+  choices.delete(nodeType)
+  nodeChoices.value = choices
+}
+
 async function loadAnalysis() {
   loading.value = true
   error.value = null
@@ -1183,32 +1227,44 @@ async function loadAnalysis() {
   }
 }
 
+async function loadActiveOverlays() {
+  try {
+    const config = await getConfig()
+    activeOverlays.value = config.active_overlays || []
+  } catch (err) {
+    activeOverlays.value = []
+    console.debug('[ComfyGit] Unable to load active overlays for workflow resolution:', err)
+  }
+}
+
 function initializeSavedNodeChoices(analysis: FullResolutionResult) {
-  nodeChoices.value.clear()
+  const choices = new Map<string, NodeChoice>()
 
   for (const node of analysis.nodes.unresolved) {
     if (node.saved_choice) {
-      nodeChoices.value.set(node.reference.node_type, node.saved_choice)
+      choices.set(node.reference.node_type, node.saved_choice)
     }
   }
 
   for (const node of analysis.nodes.resolved) {
     if (node.saved_choice) {
-      nodeChoices.value.set(node.reference.node_type, node.saved_choice)
+      choices.set(node.reference.node_type, node.saved_choice)
     }
   }
 
   for (const node of analysis.nodes.ambiguous) {
     if (node.saved_choice) {
-      nodeChoices.value.set(node.reference.node_type, node.saved_choice)
+      choices.set(node.reference.node_type, node.saved_choice)
     }
   }
 
   for (const node of analysis.nodes.uninstallable) {
     if (node.saved_choice) {
-      nodeChoices.value.set(node.reference.node_type, node.saved_choice)
+      choices.set(node.reference.node_type, node.saved_choice)
     }
   }
+
+  nodeChoices.value = choices
 }
 
 function initializeSavedModelChoices(analysis: FullResolutionResult) {
@@ -1259,17 +1315,17 @@ function handleContinueFromAnalysis() {
 
 // Node resolution handlers
 function handleNodeMarkOptional(nodeType: string) {
-  nodeChoices.value.set(nodeType, { action: 'optional' })
+  setNodeChoice(nodeType, { action: 'optional' })
 }
 
 function handleNodeSkip(nodeType: string) {
-  nodeChoices.value.set(nodeType, { action: 'skip' })
+  setNodeChoice(nodeType, { action: 'skip' })
 }
 
 function handleNodeOptionSelected(nodeType: string, index: number) {
   const node = unresolvedAndAmbiguousNodes.value.find(n => n.node_type === nodeType)
   if (node?.options?.[index]) {
-    nodeChoices.value.set(nodeType, {
+    setNodeChoice(nodeType, {
       action: 'install',
       package_id: node.options[index].package_id
     })
@@ -1277,7 +1333,7 @@ function handleNodeOptionSelected(nodeType: string, index: number) {
 }
 
 function handleNodeManualEntry(nodeType: string, packageId: string, choice: Partial<NodeChoice> = {}) {
-  nodeChoices.value.set(nodeType, {
+  setNodeChoice(nodeType, {
     action: 'install',
     package_id: packageId,
     install_source: choice.install_source,
@@ -1287,14 +1343,14 @@ function handleNodeManualEntry(nodeType: string, packageId: string, choice: Part
 }
 
 function handleNodeInstalledPackSelected(nodeType: string, packageId: string) {
-  nodeChoices.value.set(nodeType, {
+  setNodeChoice(nodeType, {
     action: 'map-installed',
     package_id: packageId
   })
 }
 
 function handleNodeClearChoice(nodeType: string) {
-  nodeChoices.value.delete(nodeType)
+  deleteNodeChoice(nodeType)
 }
 
 function getUninstallableChoice(nodeType: string): NodeChoice | undefined {
@@ -1327,19 +1383,19 @@ function setUninstallableChoice(node: (typeof uninstallableNodeOptions.value)[nu
     choice.repository = node.package.repository
   }
 
-  nodeChoices.value.set(node.reference.node_type, choice)
+  setNodeChoice(node.reference.node_type, choice)
 }
 
 function setUninstallableOptional(nodeType: string) {
-  nodeChoices.value.set(nodeType, { action: 'optional' })
+  setNodeChoice(nodeType, { action: 'optional' })
 }
 
 function setUninstallableSkip(nodeType: string) {
-  nodeChoices.value.set(nodeType, { action: 'skip' })
+  setNodeChoice(nodeType, { action: 'skip' })
 }
 
 function clearUninstallableChoice(nodeType: string) {
-  nodeChoices.value.delete(nodeType)
+  deleteNodeChoice(nodeType)
 }
 
 // Auto-resolved package skip handler
@@ -1575,7 +1631,10 @@ async function handleRetryFailed() {
   }
 }
 
-onMounted(loadAnalysis)
+onMounted(() => {
+  void loadActiveOverlays()
+  void loadAnalysis()
+})
 </script>
 
 <style scoped>

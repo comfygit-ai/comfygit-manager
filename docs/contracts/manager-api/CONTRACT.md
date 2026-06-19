@@ -151,6 +151,18 @@ If core reports that the accepted preview is stale, the API should return a
 non-success stale-preview response so the frontend can ask the user to refresh
 the review before applying.
 
+### CGM-API-09D [LIVE]: Node install endpoints must honor active dependency overlays
+Validation: TEST
+
+Manager node-install APIs should route custom-node installs through core's
+overlay-aware install path for the active environment. This includes install
+actions started from the Manager queue, workflow dependency install endpoints,
+direct node install endpoints, and reviewed dependency apply endpoints.
+
+The config API should expose active overlay metadata so frontend surfaces can
+make local dependency context visible before the user starts an install or
+resolution action.
+
 ### CGM-API-10 [LIVE]: Model-source endpoints should carry provider-specific metadata without hiding the generic model shape
 Validation: LLM_REVIEW
 

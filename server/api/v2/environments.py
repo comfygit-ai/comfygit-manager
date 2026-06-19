@@ -6,6 +6,7 @@ import subprocess
 import threading
 import time
 import uuid
+from datetime import datetime, timezone
 from aiohttp import web
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from comfygit_core.runtime import (
     build_switch_observer_payload,
     cleanup_supervisor_advertisement,
     read_supervisor_advertisement,
+    read_switch_logs,
     read_switch_status,
 )
 from comfygit_core.models import CDWorkspaceNotFoundError, CDEnvironmentNotFoundError
@@ -32,6 +34,7 @@ SWITCH_ENV_EXIT_CODE = 43
 MIN_SUPPORTED_COMFYUI_VERSION = "v0.4.0"
 DEFAULT_COMFYUI_RELEASE_LIMIT = 100
 MAX_COMFYUI_RELEASE_LIMIT = 100
+MAX_CREATE_LOG_ENTRIES = 200
 
 # Global state for environment creation task
 _create_task_lock = threading.Lock()
@@ -42,8 +45,24 @@ _create_task_state = {
     "phase": None,
     "progress": 0,
     "message": "No creation in progress",
-    "error": None
+    "error": None,
+    "logs": []
 }
+
+
+def _create_log_entry(level: str, message: str) -> dict:
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "level": level,
+        "message": message,
+    }
+
+
+def _append_create_log_locked(level: str, message: str) -> None:
+    logs = _create_task_state.setdefault("logs", [])
+    logs.append(_create_log_entry(level, message))
+    if len(logs) > MAX_CREATE_LOG_ENTRIES:
+        del logs[:-MAX_CREATE_LOG_ENTRIES]
 
 
 class ServerCreateProgress:
@@ -51,14 +70,23 @@ class ServerCreateProgress:
 
     def on_phase(self, phase: str, description: str, progress_pct: int) -> None:
         with _create_task_lock:
+            previous_phase = _create_task_state.get("phase")
+            previous_message = _create_task_state.get("message")
             _create_task_state["phase"] = phase
             _create_task_state["progress"] = progress_pct
             _create_task_state["message"] = description
+            if previous_phase != phase or previous_message != description:
+                _append_create_log_locked("info", description)
 
     def on_phase_complete(self, phase: str, success: bool, error: str | None = None) -> None:
         if not success:
             with _create_task_lock:
                 _create_task_state["error"] = error
+                _append_create_log_locked("error", error or f"Phase '{phase}' failed")
+
+    def on_log(self, message: str) -> None:
+        with _create_task_lock:
+            _append_create_log_locked("info", message)
 
 
 def _parse_comfyui_release_version(version: str) -> tuple[int, int, int] | None:
@@ -116,6 +144,13 @@ def _read_supervisor_observer(workspace, request: web.Request) -> dict | None:
     info = read_supervisor_advertisement(workspace.path)
     if not info:
         return None
+
+    public_origin = info.get("public_origin")
+    if public_origin:
+        return build_switch_observer_payload(
+            public_origin,
+            kind=info.get("kind") or "cg_run_supervisor",
+        )
 
     return build_switch_observer_payload(
         _request_public_origin(request, info["port"]),
@@ -590,7 +625,9 @@ async def get_switch_status(request: web.Request) -> web.Response:
                 "state": "idle",
                 "message": "No switch in progress"
             })
-        return web.json_response(status_data)
+        payload = dict(status_data)
+        payload.setdefault("logs", read_switch_logs(workspace.path / ".metadata", 80))
+        return web.json_response(payload)
 
     # No switch in progress
     return web.json_response({
@@ -609,6 +646,7 @@ def _run_create_environment(workspace, name: str, python_version: str, comfyui_v
             _create_task_state["phase"] = "init"
             _create_task_state["progress"] = 0
             _create_task_state["message"] = f"Initializing environment '{name}'..."
+            _append_create_log_locked("info", f"Initializing environment '{name}'...")
 
         # Create progress callback
         progress = ServerCreateProgress()
@@ -628,12 +666,14 @@ def _run_create_environment(workspace, name: str, python_version: str, comfyui_v
             _create_task_state["progress"] = 100
             _create_task_state["message"] = f"Environment '{name}' created successfully"
             _create_task_state["error"] = None
+            _append_create_log_locked("info", f"Environment '{name}' created successfully")
 
     except Exception as e:
         with _create_task_lock:
             _create_task_state["state"] = "error"
             _create_task_state["message"] = "Failed to create environment"
             _create_task_state["error"] = str(e)
+            _append_create_log_locked("error", str(e))
         print(f"[ComfyGit] Environment creation failed: {e}")
 
 
@@ -760,7 +800,10 @@ async def create_environment(request: web.Request) -> web.Response:
             "phase": "init",
             "progress": 0,
             "message": f"Starting creation of '{name}'...",
-            "error": None
+            "error": None,
+            "logs": [
+                _create_log_entry("info", f"Starting creation of '{name}'...")
+            ]
         }
 
     # Start background thread
@@ -793,7 +836,9 @@ async def get_create_status(request: web.Request) -> web.Response:
         }
     """
     with _create_task_lock:
-        return web.json_response(_create_task_state.copy())
+        state = _create_task_state.copy()
+        state["logs"] = list(_create_task_state.get("logs", []))
+        return web.json_response(state)
 
 
 @routes.delete("/v2/workspace/environments/{name}")

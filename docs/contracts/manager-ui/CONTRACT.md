@@ -291,6 +291,17 @@ Local editable package overrides belong to development scripts and local
 overlays. The manager UI should not present tracked environment metadata as the
 place to configure a developer's personal source checkout paths.
 
+### CGM-UI-17A [LIVE]: Active dependency overlays should be visible at install decision points
+Validation: STATIC
+
+When active local or shared dependency overlays exist, the manager UI should
+show them in workspace settings and dependency-resolution/install surfaces
+before the user applies node installs or sync-triggering resolution actions.
+
+The UI should present overlays as local dependency context rather than portable
+environment metadata. It should not ask users to rewrite tracked manifest
+dependencies just because a local overlay is active.
+
 ### CGM-UI-18 [PARTIAL]: Lifecycle controls should render from runtime capabilities
 Validation: MIXED
 

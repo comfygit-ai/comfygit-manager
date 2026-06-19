@@ -127,6 +127,10 @@ function getSourceLabel(source: string): string {
       return 'git'
     case 'registry':
       return 'registry'
+    case 'selected':
+      return 'selected'
+    case 'selected-git':
+      return 'selected git'
     default:
       return source || 'unknown'
   }

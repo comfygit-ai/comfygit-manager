@@ -6,6 +6,7 @@ from pathlib import Path
 from comfygit_core import Workspace
 from comfygit_core.models import ComfyDockError
 from cgm_core.context import get_environment_from_request
+from cgm_core.overlays import serialize_active_overlays
 
 routes = web.RouteTableDef()
 
@@ -133,6 +134,8 @@ async def get_config(request: web.Request) -> web.Response:
     # Get orchestrator config for extra_args
     orch_config = _load_orchestrator_config(workspace.path)
     extra_args = orch_config.get("comfyui", {}).get("extra_args", [])
+    env = get_environment_from_request(request)
+    active_overlays = serialize_active_overlays(env) if env else []
 
     # Build response matching frontend ConfigSettings interface
     config = {
@@ -142,7 +145,9 @@ async def get_config(request: web.Request) -> web.Response:
         "huggingface_token": _mask_token(hf_token),
         "auto_sync_models": True,   # Not yet supported - default to True
         "confirm_destructive": True, # Not yet supported - default to True
-        "comfyui_extra_args": extra_args
+        "comfyui_extra_args": extra_args,
+        "active_overlays": active_overlays,
+        "active_overlay_names": [overlay["name"] for overlay in active_overlays],
     }
     config.update(_get_manager_runtime_info(request))
 

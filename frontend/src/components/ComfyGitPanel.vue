@@ -1073,9 +1073,9 @@ async function handleBranchSwitch(branchName: string) {
       : `Switch to branch "${branchName}"?`,
     details: hasChanges ? getChangeDetails() : undefined,
     warning: hasChanges
-      ? 'This will restart ComfyUI. Changes will remain in current branch.'
+      ? 'This will discard uncommitted changes, switch branches, and restart ComfyUI.'
       : 'This will restart ComfyUI to apply the changes.',
-    confirmLabel: hasChanges ? 'Switch Anyway' : 'Switch',
+    confirmLabel: hasChanges ? 'Discard and Switch' : 'Switch',
     cancelLabel: 'Cancel',
     onConfirm: async () => {
       confirmDialog.value = null
@@ -1435,6 +1435,10 @@ function startSwitchPolling() {
       if (!progress) {
         // No progress info available, keep current state
         return
+      }
+
+      if (Array.isArray(progress.logs)) {
+        switchLogs.value = progress.logs
       }
 
       const realProgress = progress.progress || 0

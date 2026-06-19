@@ -17,6 +17,7 @@ from cgm_core.dependency_preview import (
     build_install_identifier,
     dependency_review_response,
 )
+from cgm_core.overlays import active_overlay_names, active_overlay_summary
 from cgm_core.runtime_imports import collect_runtime_import_report
 from cgm_core.runtime_context import build_runtime_context, ensure_capability
 
@@ -621,6 +622,19 @@ def _extract_uv_stderr(exc: Exception) -> str | None:
     return None
 
 
+def node_removal_sync_payload(result) -> dict:
+    """Return JSON-safe sync status fields for a node removal result."""
+    sync_succeeded = getattr(result, "sync_succeeded", True)
+    needs_sync = getattr(result, "needs_sync", False)
+    sync_error = getattr(result, "sync_error", None)
+
+    return {
+        "sync_succeeded": sync_succeeded if sync_succeeded is False else True,
+        "needs_sync": needs_sync if needs_sync is True else False,
+        "sync_error": sync_error if isinstance(sync_error, str) else None,
+    }
+
+
 async def process_task(task: dict) -> dict:
     """Process a single task using comfygit."""
     kind = task.get("kind")
@@ -696,6 +710,7 @@ async def process_install(env, params: dict) -> dict:
     """Install a custom node."""
     import shutil
     pack_id = params.get("id")
+    identifier = None
     version = params.get("selected_version") or params.get("version")
     repository = params.get("repository")
     install_source = params.get("install_source", "registry")
@@ -770,15 +785,31 @@ async def process_install(env, params: dict) -> dict:
                 pack_id,
             )
 
+        overlay_names = active_overlay_names(env)
+        logger.info(
+            "process_install resolving '%s' with active overlays: %s",
+            identifier,
+            active_overlay_summary(env),
+        )
+
         await loop.run_in_executor(
             None,
-            lambda: env.add_node(identifier, force=is_installed)
+            lambda: env.add_node(
+                identifier,
+                force=is_installed,
+                resolve_with_overlays=True,
+            )
         )
+
+        messages = [f"Successfully installed {identifier}"]
+        if overlay_names:
+            messages.append(f"Resolved with active overlays: {', '.join(overlay_names)}")
 
         return {
             "status_str": "success",
             "completed": True,
-            "messages": [f"Successfully installed {identifier}"]
+            "messages": messages,
+            "active_overlays": overlay_names,
         }
     except Exception as e:
         if identifier:
@@ -803,15 +834,34 @@ async def process_uninstall(env, params: dict) -> dict:
 
     try:
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
-            None,
-            lambda: env.remove_node(node_name)
+        overlay_names = active_overlay_names(env)
+        logger.info(
+            "process_uninstall resolving '%s' with active overlays: %s",
+            node_name,
+            active_overlay_summary(env),
         )
 
+        removal_result = await loop.run_in_executor(
+            None,
+            lambda: env.remove_node(node_name, resolve_with_overlays=True)
+        )
+
+        messages = [f"Successfully uninstalled {node_name}"]
+        sync_payload = node_removal_sync_payload(removal_result)
+        if not sync_payload["sync_succeeded"]:
+            messages.append(
+                "Node was removed, but dependency sync still needs attention. "
+                "Run sync after resolving the dependency issue."
+            )
+        if overlay_names:
+            messages.append(f"Resolved with active overlays: {', '.join(overlay_names)}")
+
         return {
-            "status_str": "success",
+            "status_str": "success" if sync_payload["sync_succeeded"] else "partial_success",
             "completed": True,
-            "messages": [f"Successfully uninstalled {node_name}"]
+            "messages": messages,
+            "active_overlays": overlay_names,
+            **sync_payload,
         }
     except Exception as e:
         return {

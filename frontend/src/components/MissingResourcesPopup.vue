@@ -16,6 +16,12 @@
 
       <!-- Analysis Results -->
       <div v-else-if="analysis && hasIssues" class="analysis-results">
+        <ActiveOverlaysNotice
+          v-if="activeOverlays.length"
+          :overlays="activeOverlays"
+          description="Active overlays will be applied when these custom nodes are installed and synced."
+        />
+
         <!-- Missing Nodes Section (Deduplicated Packages) -->
         <div v-if="missingPackages.length > 0" class="section">
           <div class="section-header">
@@ -24,10 +30,10 @@
               v-if="missingPackages.length > 1"
               size="sm"
               variant="secondary"
-              :disabled="allPackagesInstalled"
-              @click="installAllNodes"
+              :disabled="allPackagesInstalled || bulkInstallInProgress || postInstallSyncInProgress"
+              @click="handleInstallAllNodes"
             >
-              {{ allPackagesInstalled ? 'All Done' : 'Install All' }}
+              {{ bulkInstallInProgress ? 'Installing...' : postInstallSyncInProgress ? 'Syncing...' : allPackagesInstalled ? 'All Done' : 'Install All' }}
             </BaseButton>
           </div>
           <div class="item-list">
@@ -41,7 +47,7 @@
                 v-if="!installedPackages.has(pkg.package_id) && !queuedPackages.has(pkg.package_id) && !failedPackages.has(pkg.package_id) && !reviewNeededPackages.has(pkg.package_id)"
                 size="sm"
                 variant="secondary"
-                :disabled="installingPackage === pkg.package_id"
+                :disabled="installingPackage === pkg.package_id || bulkInstallInProgress || postInstallSyncInProgress"
                 @click="installPackage(pkg)"
               >
                 {{ installingPackage === pkg.package_id ? 'Queueing...' : 'Install' }}
@@ -60,7 +66,7 @@
                 v-else-if="reviewNeededPackages.has(pkg.package_id)"
                 size="sm"
                 variant="secondary"
-                :disabled="isInstallQueueActive"
+                :disabled="isInstallQueueActive || bulkInstallInProgress || postInstallSyncInProgress"
                 @click="openDependencyReview(pkg.package_id)"
               >
                 Needs Review
@@ -120,10 +126,10 @@
               v-if="actionableCommunityPackages.length > 1"
               size="sm"
               variant="secondary"
-              :disabled="allCommunityPackagesDone"
-              @click="installAllCommunityPackages"
+              :disabled="allCommunityPackagesDone || bulkInstallInProgress || postInstallSyncInProgress"
+              @click="handleInstallAllCommunityPackages"
             >
-              {{ allCommunityPackagesDone ? 'All Done' : 'Install All' }}
+              {{ bulkInstallInProgress ? 'Installing...' : postInstallSyncInProgress ? 'Syncing...' : allCommunityPackagesDone ? 'All Done' : 'Install All' }}
             </BaseButton>
           </div>
           <div class="item-list">
@@ -147,7 +153,7 @@
                     v-if="hasCommunityRegistryInstall(pkg)"
                     size="sm"
                     variant="secondary"
-                    :disabled="installingPackage === pkg.package_id"
+                    :disabled="installingPackage === pkg.package_id || bulkInstallInProgress || postInstallSyncInProgress"
                     @click="installCommunityPackage(pkg, 'registry')"
                   >
                     {{ installingPackage === pkg.package_id ? 'Queueing...' : 'Install from Registry' }}
@@ -156,7 +162,7 @@
                     v-if="pkg.repository"
                     size="sm"
                     :variant="hasCommunityRegistryInstall(pkg) ? 'ghost' : 'secondary'"
-                    :disabled="installingPackage === pkg.package_id"
+                    :disabled="installingPackage === pkg.package_id || bulkInstallInProgress || postInstallSyncInProgress"
                     @click="installCommunityPackage(pkg, 'git')"
                   >
                     Install via Git
@@ -173,7 +179,7 @@
                   v-else-if="reviewNeededPackages.has(pkg.package_id)"
                   size="sm"
                   variant="secondary"
-                  :disabled="isInstallQueueActive"
+                  :disabled="isInstallQueueActive || bulkInstallInProgress || postInstallSyncInProgress"
                   @click="openDependencyReview(pkg.package_id)"
                 >
                   Needs Review
@@ -258,9 +264,10 @@
       <BaseButton
         v-if="hasDownloadableItems"
         variant="primary"
+        :disabled="bulkInstallInProgress || postInstallSyncInProgress"
         @click="handleFooterAction"
       >
-        {{ allItemsDone ? 'All Done' : 'Download All' }}
+        {{ bulkInstallInProgress ? 'Installing...' : postInstallSyncInProgress ? 'Syncing...' : allItemsDone ? 'All Done' : 'Download All' }}
       </BaseButton>
     </template>
   </BaseModal>
@@ -299,10 +306,11 @@ import BaseButton from './base/BaseButton.vue'
 import BaseCheckbox from './base/BaseCheckbox.vue'
 import DependencyReviewPreviewModal from './DependencyReviewPreviewModal.vue'
 import MissingResourcesDetailModal, { type ResourceItem, type ResourceAction } from './MissingResourcesDetailModal.vue'
+import ActiveOverlaysNotice from './base/molecules/ActiveOverlaysNotice.vue'
 import { useModelDownloadQueue } from '@/composables/useModelDownloadQueue'
 import { useComfyGitService } from '@/composables/useComfyGitService'
 import { getComfyApi as resolveComfyApi } from '@/utils/comfyApi'
-import type { DependencyResolutionPreview, NodeInstallQueueStatus } from '@/types/comfygit'
+import type { DependencyOverlayInfo, DependencyResolutionPreview, NodeInstallQueueStatus } from '@/types/comfygit'
 
 interface MissingPackage {
   package_id: string
@@ -353,6 +361,9 @@ const queuedModels = ref<Set<string>>(new Set())       // Models queued for down
 const dontShowAgain = ref(false)
 const installingPackage = ref<string | null>(null)     // Currently installing package (from WebSocket cm-task-started)
 const installedCount = ref(0)  // Track total installed for restart notification
+const bulkInstallInProgress = ref(false)
+const postInstallSyncInProgress = ref(false)
+const postInstallRestartDispatched = ref(false)
 const activeDetailView = ref<'models' | 'packages' | 'community' | null>(null)
 const dependencyReviewModalOpen = ref(false)
 const dependencyReviewLoading = ref(false)
@@ -360,6 +371,7 @@ const dependencyReviewApplyLoading = ref(false)
 const dependencyReviewError = ref<string | null>(null)
 const dependencyReviewPreview = ref<DependencyResolutionPreview | null>(null)
 const activeDependencyReviewPackageId = ref<string | null>(null)
+const activeOverlays = ref<DependencyOverlayInfo[]>([])
 
 // Session-based suppression - workflow IDs that have shown popup this session
 // Cleared on browser refresh (in-memory only)
@@ -367,6 +379,7 @@ const shownWorkflowIds = ref<Set<string>>(new Set())
 
 // Map ui_id to package_id for tracking queue task completion
 const pendingInstalls = ref<Map<string, string>>(new Map())
+const installCompletionWaiters = ref<Map<string, (success: boolean) => void>>(new Map())
 const queueTimeouts = ref<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 const QUEUE_START_TIMEOUT_MS = 30_000
 
@@ -374,7 +387,9 @@ const { addToQueue } = useModelDownloadQueue()
 const {
   queueNodeInstall,
   previewNodeDependencyChanges,
-  applyReviewedNodeDependencyChanges
+  applyReviewedNodeDependencyChanges,
+  getConfig,
+  syncEnvironmentManually
 } = useComfyGitService()
 
 interface InstallPreviewRequest {
@@ -416,10 +431,25 @@ function getErrorMessage(err: unknown, fallback: string): string {
   return fallback
 }
 
-function clearPendingInstallByPackageId(packageId: string) {
+function settleInstallWaiter(taskId: string, success: boolean) {
+  const resolve = installCompletionWaiters.value.get(taskId)
+  if (!resolve) return
+  installCompletionWaiters.value.delete(taskId)
+  resolve(success)
+}
+
+function settleAllInstallWaiters(success = false) {
+  for (const [taskId, resolve] of installCompletionWaiters.value.entries()) {
+    installCompletionWaiters.value.delete(taskId)
+    resolve(success)
+  }
+}
+
+function clearPendingInstallByPackageId(packageId: string, success = false) {
   for (const [taskId, pendingPackageId] of pendingInstalls.value.entries()) {
     if (pendingPackageId === packageId) {
       pendingInstalls.value.delete(taskId)
+      settleInstallWaiter(taskId, success)
     }
   }
 }
@@ -486,9 +516,7 @@ async function applyDependencyReview() {
     queuedPackages.value.delete(packageId)
     installedPackages.value.add(packageId)
     installedCount.value++
-    window.dispatchEvent(new CustomEvent('comfygit:nodes-installed', {
-      detail: { count: 1 }
-    }))
+    await finalizeInstalledNodesForRestart()
     closeDependencyReview()
   } catch (err) {
     dependencyReviewError.value = getErrorMessage(err, 'Unable to apply dependency changes')
@@ -520,7 +548,7 @@ function clearAllQueueTimeouts() {
   queueTimeouts.value = new Map()
 }
 
-function startQueueTimeout(packageId: string) {
+function startQueueTimeout(packageId: string, taskId: string) {
   clearQueueTimeout(packageId)
 
   const timeoutId = setTimeout(() => {
@@ -536,6 +564,7 @@ function startQueueTimeout(packageId: string) {
 
     const timeoutMessage = 'Queue timeout — please retry'
     failedPackages.value.set(packageId, timeoutMessage)
+    settleInstallWaiter(taskId, false)
     console.warn('[ComfyGit] Queue timeout waiting for cm-task-started:', packageId)
   }, QUEUE_START_TIMEOUT_MS)
 
@@ -547,6 +576,16 @@ function markCommunityPackageIdError(item: { item_id: string; title: string }) {
   failedPackages.value.set(item.item_id, message)
   error.value = message
   console.warn('[ComfyGit] Community install requested without package_id:', item)
+}
+
+async function loadActiveOverlays() {
+  try {
+    const config = await getConfig()
+    activeOverlays.value = config.active_overlays || []
+  } catch (err) {
+    activeOverlays.value = []
+    console.debug('[ComfyGit] Unable to load active overlays for missing resources popup:', err)
+  }
 }
 
 const hasIssues = computed(() => {
@@ -877,10 +916,22 @@ function handleDetailAction(item: ResourceItem, actionKey?: string) {
   }
 }
 
-function handleDetailBulkAction() {
-  if (activeDetailView.value === 'models') downloadAllModels()
-  else if (activeDetailView.value === 'packages') installAllNodes()
-  else if (activeDetailView.value === 'community') installAllCommunityPackages()
+async function handleDetailBulkAction() {
+  if (activeDetailView.value === 'models') {
+    downloadAllModels()
+  } else if (activeDetailView.value === 'packages') {
+    await runNodeInstallBatch(installAllNodes)
+  } else if (activeDetailView.value === 'community') {
+    await runNodeInstallBatch(installAllCommunityPackages)
+  }
+}
+
+async function handleInstallAllNodes() {
+  await runNodeInstallBatch(installAllNodes)
+}
+
+async function handleInstallAllCommunityPackages() {
+  await runNodeInstallBatch(installAllCommunityPackages)
 }
 
 // Queue a single package install via Manager queue
@@ -920,8 +971,18 @@ async function queueInstallRequest(
   }
 
   ensureEventListeners()
-  installingPackage.value = canonicalPackageId
   let queuedTaskId: string | null = null
+  let completionPromise: Promise<boolean> | null = null
+
+  function registerPendingInstall(taskId: string) {
+    queuedTaskId = taskId
+    pendingInstalls.value.set(taskId, canonicalPackageId)
+    queuedPackages.value.add(canonicalPackageId)
+    startQueueTimeout(canonicalPackageId, taskId)
+    completionPromise = new Promise(resolve => {
+      installCompletionWaiters.value.set(taskId, resolve)
+    })
+  }
 
   try {
     const installParams: {
@@ -947,10 +1008,7 @@ async function queueInstallRequest(
 
     const { ui_id, status } = await queueNodeInstall(installParams, {
       beforeQueueStart: (taskId) => {
-        queuedTaskId = taskId
-        pendingInstalls.value.set(taskId, canonicalPackageId)
-        queuedPackages.value.add(canonicalPackageId)
-        startQueueTimeout(canonicalPackageId)
+        registerPendingInstall(taskId)
         console.log('[ComfyGit] Registered pending install:', {
           ui_id: taskId,
           packageId: canonicalPackageId,
@@ -962,6 +1020,7 @@ async function queueInstallRequest(
     if (status?.status_str === 'dependency_review_required') {
       if (queuedTaskId) {
         pendingInstalls.value.delete(queuedTaskId)
+        settleInstallWaiter(queuedTaskId, false)
       }
       clearPendingInstallByPackageId(canonicalPackageId)
       clearQueueTimeout(canonicalPackageId)
@@ -974,10 +1033,7 @@ async function queueInstallRequest(
 
     // Fallback for older service implementations that may ignore beforeQueueStart.
     if (!queuedTaskId) {
-      queuedTaskId = ui_id
-      pendingInstalls.value.set(ui_id, canonicalPackageId)
-      queuedPackages.value.add(canonicalPackageId)
-      startQueueTimeout(canonicalPackageId)
+      registerPendingInstall(ui_id)
       console.log('[ComfyGit] Registered pending install (fallback):', {
         ui_id,
         packageId: canonicalPackageId,
@@ -985,12 +1041,13 @@ async function queueInstallRequest(
       })
     }
 
-    return true
+    return completionPromise ? await completionPromise : true
   } catch (e) {
     const errorMessage = getErrorMessage(e, 'Failed to queue install request')
     console.error('[ComfyGit] Failed to queue package install:', e)
     if (queuedTaskId) {
       pendingInstalls.value.delete(queuedTaskId)
+      settleInstallWaiter(queuedTaskId, false)
     }
     clearPendingInstallByPackageId(canonicalPackageId)
     clearQueueTimeout(canonicalPackageId)
@@ -1059,6 +1116,23 @@ async function installAllCommunityPackages(): Promise<InstallBatchSummary> {
   return summary
 }
 
+async function runNodeInstallBatch<T>(operation: () => Promise<T>): Promise<T> {
+  const alreadyBulkInstalling = bulkInstallInProgress.value
+  if (!alreadyBulkInstalling) {
+    bulkInstallInProgress.value = true
+    error.value = null
+  }
+
+  try {
+    return await operation()
+  } finally {
+    if (!alreadyBulkInstalling) {
+      bulkInstallInProgress.value = false
+      await finalizeInstalledNodesForRestart()
+    }
+  }
+}
+
 // Download all models
 function downloadAllModels(): number {
   const toDownload = downloadableModels.value.filter(
@@ -1082,8 +1156,14 @@ function downloadAllModels(): number {
 
 // Download everything (nodes + models)
 async function downloadAll() {
-  const nodeSummary = await installAllNodes()
-  const communitySummary = await installAllCommunityPackages()
+  let nodeSummary: InstallBatchSummary = { attempted: 0, failed: 0 }
+  let communitySummary: InstallBatchSummary = { attempted: 0, failed: 0 }
+
+  await runNodeInstallBatch(async () => {
+    nodeSummary = await installAllNodes()
+    communitySummary = await installAllCommunityPackages()
+  })
+
   downloadAllModels()
 
   const attempted = nodeSummary.attempted + communitySummary.attempted
@@ -1094,7 +1174,44 @@ async function downloadAll() {
   }
 }
 
+async function finalizeInstalledNodesForRestart() {
+  if (
+    installedCount.value === 0 ||
+    postInstallSyncInProgress.value ||
+    postInstallRestartDispatched.value
+  ) {
+    return
+  }
+
+  postInstallSyncInProgress.value = true
+  error.value = null
+
+  try {
+    const syncResult = await syncEnvironmentManually('skip', false, true)
+    if (syncResult.status !== 'success') {
+      const details = syncResult.errors?.length
+        ? syncResult.errors.join('; ')
+        : syncResult.message
+      throw new Error(details ? `Environment sync failed: ${details}` : 'Environment sync failed')
+    }
+
+    postInstallRestartDispatched.value = true
+    console.log('[ComfyGit] Node install sync complete, dispatching nodes-installed event:', installedCount.value)
+    window.dispatchEvent(new CustomEvent('comfygit:nodes-installed', {
+      detail: { count: installedCount.value }
+    }))
+  } catch (err) {
+    error.value = getErrorMessage(err, 'Installed nodes, but environment sync failed')
+    console.error('[ComfyGit] Failed to sync after node installs:', err)
+  } finally {
+    postInstallSyncInProgress.value = false
+  }
+}
+
 function handleFooterAction() {
+  if (bulkInstallInProgress.value || postInstallSyncInProgress.value) {
+    return
+  }
   if (allItemsDone.value) {
     dismiss()
     return
@@ -1184,8 +1301,12 @@ async function analyzeWorkflow(workflow: any) {
   reviewNeededPackages.value = new Map()
   queuedModels.value = new Set()
   pendingInstalls.value = new Map()
+  installCompletionWaiters.value = new Map()
   dontShowAgain.value = false
   installedCount.value = 0
+  bulkInstallInProgress.value = false
+  postInstallSyncInProgress.value = false
+  postInstallRestartDispatched.value = false
 
   try {
     // Call our backend endpoint
@@ -1274,6 +1395,7 @@ function handleTaskCompleted(event: CustomEvent) {
       installedPackages.value.add(packageId)
       installedCount.value++
       console.log('[ComfyGit] Package installed successfully:', packageId)
+      settleInstallWaiter(taskId, true)
     } else if (status === 'dependency_review_required') {
       const installParams = event.detail?.task?.params || event.detail?.params
       if (installParams?.id) {
@@ -1281,18 +1403,25 @@ function handleTaskCompleted(event: CustomEvent) {
       } else {
         failedPackages.value.set(packageId, 'Dependency review required')
       }
+      settleInstallWaiter(taskId, false)
     } else {
       const errorMsg = event.detail?.status?.messages?.[0] || event.detail?.result || 'Unknown error'
       failedPackages.value.set(packageId, errorMsg)
       console.error('[ComfyGit] Package install failed:', packageId, errorMsg)
+      settleInstallWaiter(taskId, false)
     }
 
-    // When all pending installs are done and at least one succeeded, show restart notification
+    // When all pending installs are done and at least one succeeded, sync the
+    // environment before showing the restart notification. Node queue success
+    // only means the node entry/files were added; uv still needs to reconcile
+    // the managed venv before the restarted runtime can import the new nodes.
     if (pendingInstalls.value.size === 0 && installedCount.value > 0) {
-      console.log('[ComfyGit] All installs complete, dispatching nodes-installed event:', installedCount.value)
-      window.dispatchEvent(new CustomEvent('comfygit:nodes-installed', {
-        detail: { count: installedCount.value }
-      }))
+      if (bulkInstallInProgress.value) {
+        console.log('[ComfyGit] Deferring post-install sync until bulk install completes:', installedCount.value)
+        return
+      }
+      console.log('[ComfyGit] All installs complete, syncing before restart notification:', installedCount.value)
+      void finalizeInstalledNodesForRestart()
     }
   } else {
     console.warn('[ComfyGit] cm-task-completed: No matching package for taskId:', taskId)
@@ -1338,6 +1467,8 @@ function handleWorkflowSaved(event: CustomEvent) {
 }
 
 onMounted(() => {
+  void loadActiveOverlays()
+
   // Listen for workflow-loaded events (window event, always available)
   window.addEventListener('comfygit:workflow-loaded', handleWorkflowLoaded as EventListener)
 
@@ -1348,6 +1479,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   clearAllQueueTimeouts()
+  settleAllInstallWaiters(false)
   window.removeEventListener('comfygit:workflow-loaded', handleWorkflowLoaded as EventListener)
 
   // Clean up Manager queue event listeners if they were registered

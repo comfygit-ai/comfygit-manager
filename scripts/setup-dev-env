@@ -12,7 +12,7 @@
 #   --docker           Start/recreate the manager Docker dev stack
 #   --comfygit PATH    Override sibling comfygit repo path for --docker
 #   --comfyui-port N   ComfyUI host/container port for --docker (default: 8188)
-#   --torch-backend B  PyTorch backend for Docker create/run (default: cu126)
+#   --torch-backend B  PyTorch backend for Docker create/run (default: existing env setting)
 #   --project-name N   Docker Compose project name for --docker
 #   --models-dir PATH  Host models directory for --docker
 #   --extra-node PATH  Extra dev node path for --docker; may be repeated
@@ -59,7 +59,7 @@ ENV_NAME=""
 START_DOCKER=false
 DOCKER_COMFYGIT_PATH="$COMFYGIT_REPO_ROOT"
 DOCKER_COMFYUI_PORT="${COMFYUI_PORT:-8188}"
-DOCKER_TORCH_BACKEND="${COMFYGIT_TORCH_BACKEND:-cu126}"
+DOCKER_TORCH_BACKEND="${COMFYGIT_TORCH_BACKEND:-}"
 DOCKER_PROJECT_NAME=""
 DOCKER_MODELS_DIR="${SHARED_MODELS_HOST_DIR:-$HOME/dev/models}"
 DOCKER_EXTRA_NODE_ARGS=()
@@ -214,6 +214,25 @@ if [[ "$START_DOCKER" == "true" ]]; then
 fi
 echo ""
 
+create_dir_symlink() {
+    local link_path="$1"
+    local target_path="$2"
+
+    case "$(uname -s 2>/dev/null || echo "")" in
+        MINGW*|MSYS*|CYGWIN*)
+            if command -v cygpath >/dev/null 2>&1; then
+                local link_win target_win
+                link_win="$(cygpath -w "$link_path")"
+                target_win="$(cygpath -w "$target_path")"
+                cmd //c mklink //D "$link_win" "$target_win" >/dev/null
+                return
+            fi
+            ;;
+    esac
+
+    ln -s "$target_path" "$link_path"
+}
+
 # Build list of environments to process
 ENVS=()
 if [[ "$ALL_ENVS" == "true" ]]; then
@@ -273,19 +292,19 @@ setup_environment() {
         else
             echo "  Manager symlink: Updating (was: $current_target)"
             rm "$manager_link"
-            ln -s "$MANAGER_PATH" "$manager_link"
+            create_dir_symlink "$manager_link" "$MANAGER_PATH"
         fi
     elif [[ -d "$manager_link" ]]; then
         echo "  Removing registry-installed comfygit-manager..."
         rm -rf "$manager_link"
         echo "  Creating symlink to dev repo..."
-        ln -s "$MANAGER_PATH" "$manager_link"
+        create_dir_symlink "$manager_link" "$MANAGER_PATH"
     elif [[ -e "$manager_link" ]]; then
         echo "  Error: $manager_link exists but is not a directory or symlink"
         return 1
     else
         echo "  Creating symlink to dev repo..."
-        ln -s "$MANAGER_PATH" "$manager_link"
+        create_dir_symlink "$manager_link" "$MANAGER_PATH"
     fi
 
     # Configure local ComfyGit packages as machine-local editable overlay sources.
@@ -365,10 +384,11 @@ PYEOF
     if [[ ! -f "$pyproject" ]]; then
         echo "  Warning: .cec/pyproject.toml not found, skipping dev node config"
     else
-        python3 << PYEOF
+        python3 - "$pyproject" <<'PYEOF'
 import re
+import sys
 
-pyproject_path = "$pyproject"
+pyproject_path = sys.argv[1]
 
 with open(pyproject_path, "r") as f:
     content = f.read()
@@ -467,11 +487,13 @@ if [[ "$START_DOCKER" == "true" ]]; then
     docker_args=(
         "$ENV_NAME"
         --workspace "$WORKSPACE_PATH"
-        --torch-backend "$DOCKER_TORCH_BACKEND"
         --comfyui-port "$DOCKER_COMFYUI_PORT"
         --comfygit "$DOCKER_COMFYGIT_PATH"
         --models-dir "$DOCKER_MODELS_DIR"
     )
+    if [[ -n "$DOCKER_TORCH_BACKEND" ]]; then
+        docker_args+=(--torch-backend "$DOCKER_TORCH_BACKEND")
+    fi
     if [[ -n "$DOCKER_PROJECT_NAME" ]]; then
         docker_args+=(--project-name "$DOCKER_PROJECT_NAME")
     fi

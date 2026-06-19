@@ -408,6 +408,7 @@ export interface SwitchEnvironmentProgress {
   started_at?: string
   updated_at?: string
   error?: string
+  logs?: SwitchLogEntry[]
   recovery_command?: string
 }
 
@@ -454,6 +455,7 @@ export interface CreateEnvironmentProgress {
   progress?: number
   message: string
   error?: string
+  logs?: SwitchLogEntry[]
 }
 
 export interface ComfyUIRelease {
@@ -749,6 +751,15 @@ export interface DownloadModelRequest {
 }
 
 // Settings Types
+export interface DependencyOverlayInfo {
+  name: string
+  description?: string | null
+  is_local: boolean
+  is_active: boolean
+  requires: string[]
+  is_stock: boolean
+}
+
 export interface ConfigSettings {
   workspace_path: string
   models_path: string
@@ -757,6 +768,8 @@ export interface ConfigSettings {
   auto_sync_models: boolean
   confirm_destructive: boolean
   comfyui_extra_args: string[]
+  active_overlays?: DependencyOverlayInfo[]
+  active_overlay_names?: string[]
   manager_source?: 'registry' | 'git' | 'development' | 'unknown' | 'untracked'
   manager_version?: string | null
   manager_branch?: string | null
@@ -1169,6 +1182,7 @@ export interface DependencyResolutionApplyResult {
   needs_restart?: boolean
   message?: string
   error?: string
+  active_overlays?: string[]
 }
 
 export interface DependencyReviewPayload {
@@ -1182,6 +1196,7 @@ export interface DependencyReviewPayload {
 export interface NodeInstallQueueStatus {
   status_str?: string
   messages?: string[]
+  active_overlays?: string[]
   dependency_review?: DependencyReviewPayload
 }
 
