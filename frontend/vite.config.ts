@@ -16,11 +16,12 @@ function getVersion(): string {
 
 const APP_VERSION = getVersion()
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [vue()],
   define: {
     __APP_VERSION__: JSON.stringify(APP_VERSION),
-    'process.env.NODE_ENV': JSON.stringify('production'),
+    // Library builds need this baked in; tests need Vue development behavior.
+    'process.env.NODE_ENV': JSON.stringify(mode === 'test' ? 'test' : 'production'),
   },
   test: {
     globals: true,
@@ -67,4 +68,4 @@ export default defineConfig({
       }
     }
   }
-})
+}))

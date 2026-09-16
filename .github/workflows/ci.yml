@@ -4,59 +4,55 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  # Python linting
-  lint:
-    name: Lint Python
+  backend:
+    name: Backend (Python ${{ matrix.python }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.12']
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Prepare unreleased ComfyGit sources
+          python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run --frozen python scripts/sync-requirements.py --check
+      - name: Audit runtime dependencies
+        if: matrix.python == '3.12'
         run: |
-          python scripts/prepare-ci-core-source.py
-          uv lock --upgrade-package comfygit-core --upgrade-package comfygit-studio
+          uv export --frozen --no-dev --no-emit-project --no-hashes -o runtime-requirements.txt
+          uvx pip-audit==2.10.1 -r runtime-requirements.txt --disable-pip --no-deps
+      - run: uv run --frozen ruff check .
+      - run: uv run --frozen pytest testing/unit testing/integration/panel -q
 
-      - name: Run ruff
-        run: uv run ruff check .
-
-  # Python tests
-  test:
-    name: Run Tests
+  frontend:
+    name: Frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: '3.12'
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Prepare unreleased ComfyGit sources
-        run: |
-          python scripts/prepare-ci-core-source.py
-          uv lock --upgrade-package comfygit-core --upgrade-package comfygit-studio
-
-      - name: Install dependencies
-        run: uv sync
-
-      - name: Run unit tests
-        run: |
-          uv run pytest testing/unit/ -v \
-            --ignore=testing/unit/test_environment_detection.py \
-            --ignore=testing/unit/test_health_checking.py \
-            --ignore=testing/unit/test_orchestrator_signal_handling.py \
-            --ignore=testing/unit/test_panel_logging.py \
-            --ignore=testing/unit/test_runtime_environment_switch.py \
-            --ignore=testing/unit/test_category_mismatch.py
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm audit --audit-level=moderate
+      - run: npm run test:run
+      - run: npm run build
+      - run: ../scripts/check-frontend-version.sh
+      - run: git diff --exit-code -- ../js/comfygit-panel.js ../js/comfygit-panel.css

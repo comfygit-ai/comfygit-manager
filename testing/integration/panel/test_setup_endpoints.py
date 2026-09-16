@@ -397,6 +397,12 @@ class TestValidatePathEndpoint:
 class TestInitializeWorkspaceEndpoint:
     """POST /v2/setup/initialize_workspace - Start workspace initialization."""
 
+    @pytest.fixture(autouse=True)
+    def keep_http_tests_out_of_background_worker(self, monkeypatch):
+        # Worker behavior is tested separately. Real daemon threads can outlive
+        # a request test and overwrite the next test's global task state.
+        monkeypatch.setattr("api.v2.setup._run_initialize_workspace", lambda *args: None)
+
     async def test_success_start_initialization(self, client, monkeypatch, tmp_path):
         """Should start initialization and return task ID."""
         resp = await client.post("/v2/setup/initialize_workspace", json={
@@ -408,6 +414,31 @@ class TestInitializeWorkspaceEndpoint:
         data = await resp.json()
         assert data["status"] == "started"
         assert "task_id" in data
+
+    async def test_slow_request_cannot_overwrite_another_initialization(self, monkeypatch, tmp_path):
+        import asyncio
+        from unittest.mock import AsyncMock
+        import api.v2.setup as setup_module
+
+        monkeypatch.setattr(setup_module, "ensure_capability", lambda *args: None)
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        async def slow_body():
+            entered.set()
+            await release.wait()
+            return {"workspace_path": str(tmp_path / "slow")}
+
+        slow_request = Mock(json=slow_body)
+        fast_request = Mock(json=AsyncMock(return_value={"workspace_path": str(tmp_path / "fast")}))
+        first = asyncio.create_task(setup_module.initialize_workspace(slow_request))
+        await entered.wait()
+        try:
+            fast_response = await setup_module.initialize_workspace(fast_request)
+            assert fast_response.status == 200
+        finally:
+            release.set()
+        slow_response = await first
+        assert slow_response.status == 409
 
     async def test_error_already_in_progress(self, client, monkeypatch, tmp_path):
         """Should return 409 when initialization already in progress."""

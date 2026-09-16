@@ -143,7 +143,8 @@ Manager `pyproject.toml` dependency pins:
 By default it uses the sibling checkout at `../comfygit`. Set
 `COMFYGIT_CORE_PATH=/path/to/comfygit/packages/core` and
 `COMFYGIT_STUDIO_PATH=/path/to/comfygit/packages/studio-runtime` for different
-local package paths.
+local package paths. The helper passes these paths as explicit uv editable
+overlays; ordinary tests use published pins and need no sibling checkout.
 
 ## Legacy and specialized helpers
 
@@ -152,7 +153,8 @@ for narrower workflows:
 
 - `comfygit-worktree.sh`: creates a manager git worktree paired with a ComfyGit
   environment.
-- `sync-requirements.py`: syncs dependency metadata from project files.
+- `sync-requirements.py`: generates registry requirements from `pyproject.toml`.
+  Use `uv run --frozen python scripts/sync-requirements.py --check` to detect drift.
 - `check-frontend-version.sh`: checks bundled frontend/version state.
 
 Prefer `setup-dev-env --docker` for normal manager development.

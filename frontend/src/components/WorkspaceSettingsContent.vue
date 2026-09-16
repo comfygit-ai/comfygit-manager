@@ -29,7 +29,7 @@
         <div class="settings-section">
           <SettingRow
             label="CivitAI API Key"
-            description="API key for searching and downloading CivitAI models. Saved in the workspace config file on this machine."
+            description="API key for searching and downloading CivitAI models. Saved in the OS secure credential store. Headless hosts can use CIVITAI_API_TOKEN."
           >
             <TextInput
               v-model="civitaiToken"
@@ -42,7 +42,7 @@
 
           <SettingRow
             label="HuggingFace Token"
-            description="Access token for gated or private Hugging Face models. Saved in the workspace config file on this machine."
+            description="Access token for gated or private Hugging Face models. Saved in this machine’s OS secure credential store. Environment variables and existing Hugging Face login can also supply credentials."
           >
             <TextInput
               v-model="huggingfaceToken"

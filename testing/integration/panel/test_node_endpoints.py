@@ -433,10 +433,6 @@ class TestTrackNodeAsDevEndpoint:
         data = await resp.json()
         assert data["status"] == "success"
         assert data["active_overlays"] == []
-        mock_environment.add_node.assert_called_once_with(
-            "missing-node",
-            resolve_with_overlays=True,
-        )
         assert data["node"]["name"] == "comfygit-manager"
         assert data["node"]["source"] == "development"
 

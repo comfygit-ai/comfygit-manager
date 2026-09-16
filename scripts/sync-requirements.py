@@ -11,6 +11,7 @@ them to requirements.txt for ComfyUI compatibility.
 Usage:
     uv run scripts/sync-requirements.py
 """
+import argparse
 from pathlib import Path
 
 try:
@@ -20,6 +21,9 @@ except ImportError:
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", help="Fail if requirements.txt is stale")
+    args = parser.parse_args()
     root = Path(__file__).parent.parent
     pyproject_path = root / "pyproject.toml"
     requirements_path = root / "requirements.txt"
@@ -33,6 +37,13 @@ def main():
 
     if not deps:
         print("No dependencies found in pyproject.toml")
+        return
+
+    expected = "".join(f"{dep}\n" for dep in deps)
+    if args.check:
+        if not requirements_path.exists() or requirements_path.read_text() != expected:
+            parser.exit(1, "requirements.txt is stale; run uv run scripts/sync-requirements.py\n")
+        print("requirements.txt matches pyproject.toml")
         return
 
     # Write requirements.txt
