@@ -4,7 +4,7 @@ from aiohttp import web
 from pathlib import Path
 
 from comfygit_core import Workspace
-from comfygit_core.models import ComfyDockError
+from comfygit_core.models import ComfyDockError, CDCredentialStoreError, CredentialProvider
 from cgm_core.context import get_environment_from_request
 from cgm_core.overlays import serialize_active_overlays
 
@@ -57,11 +57,15 @@ def _save_orchestrator_config(workspace_path: Path, config: dict) -> None:
         json.dump(config, f, indent=2)
 
 
-def _mask_token(token: str | None) -> str | None:
-    """Mask API token for security - only show last 4 characters."""
-    if not token:
-        return None
-    return f"***{token[-4:]}" if len(token) > 4 else "****"
+def _credential_summary(workspace: Workspace, provider: CredentialProvider) -> dict:
+    """Expose Core credential metadata, never token bytes or suffixes."""
+    status = workspace.get_credential_status(provider)
+    return {
+        "configured": status.configured,
+        "source": status.source.value,
+        "storage_available": status.storage_available,
+        "migration_required": status.migration_required,
+    }
 
 
 def _get_manager_runtime_info(request: web.Request) -> dict[str, str | None]:
@@ -127,9 +131,10 @@ async def get_config(request: web.Request) -> web.Response:
         # Models directory not configured yet
         pass
 
-    # Get API credentials
-    civitai_token = workspace.get_civitai_token()
-    hf_token = workspace.get_huggingface_token()
+    credentials = {
+        "civitai": _credential_summary(workspace, CredentialProvider.CIVITAI),
+        "huggingface": _credential_summary(workspace, CredentialProvider.HUGGINGFACE),
+    }
 
     # Get orchestrator config for extra_args
     orch_config = _load_orchestrator_config(workspace.path)
@@ -141,8 +146,9 @@ async def get_config(request: web.Request) -> web.Response:
     config = {
         "workspace_path": str(workspace.path),
         "models_path": models_path,
-        "civitai_api_key": _mask_token(civitai_token),
-        "huggingface_token": _mask_token(hf_token),
+        "civitai_api_key": "****" if credentials["civitai"]["configured"] else None,
+        "huggingface_token": "****" if credentials["huggingface"]["configured"] else None,
+        "credentials": credentials,
         "auto_sync_models": True,   # Not yet supported - default to True
         "confirm_destructive": True, # Not yet supported - default to True
         "comfyui_extra_args": extra_args,
@@ -191,6 +197,20 @@ async def update_config(request: web.Request) -> web.Response:
             "error": "Invalid JSON"
         }, status=400)
 
+    # Validate the entire request before mutating any workspace setting.
+    if not isinstance(data, dict):
+        return web.json_response({"error": "Expected a JSON object"}, status=400)
+    for field in ("civitai_api_key", "huggingface_token"):
+        value = data.get(field)
+        if value is not None and (not isinstance(value, str) or not value.strip() or value == "****"):
+            return web.json_response({"error": f"{field} must be a new nonempty token or null"}, status=400)
+    if "models_path" in data and not isinstance(data["models_path"], (str, type(None))):
+        return web.json_response({"error": "models_path must be a string or null"}, status=400)
+    if "comfyui_extra_args" in data:
+        args = data["comfyui_extra_args"]
+        if not isinstance(args, list) or not all(isinstance(arg, str) for arg in args):
+            return web.json_response({"error": "comfyui_extra_args must be a list of strings"}, status=400)
+
     # Update models directory if provided
     if "models_path" in data:
         models_path = data["models_path"]
@@ -202,30 +222,25 @@ async def update_config(request: web.Request) -> web.Response:
                     "error": str(e)
                 }, status=400)
 
-    # Update CivitAI token if provided
-    if "civitai_api_key" in data:
-        token = data["civitai_api_key"]
-        workspace.set_civitai_token(token)
-
-    # Update HuggingFace token if provided
-    if "huggingface_token" in data:
-        token = data["huggingface_token"]
-        workspace.set_huggingface_token(token)
+    # Core owns secure storage and headless credential discovery.
+    try:
+        if "civitai_api_key" in data:
+            workspace.set_civitai_token(data["civitai_api_key"])
+        if "huggingface_token" in data:
+            workspace.set_huggingface_token(data["huggingface_token"])
+    except CDCredentialStoreError:
+        # Backend exception text is not safe to echo: third-party stores may
+        # include submitted values. Keep the error actionable and secret-free.
+        return web.json_response({
+            "error_code": "credential_storage_unavailable",
+            "error": "Could not save or clear the credential in the OS secure store. "
+                       "Unlock/configure that store, or use HF_TOKEN/CIVITAI_API_TOKEN "
+                       "or an existing Hugging Face login on a headless host.",
+        }, status=503)
 
     # Update ComfyUI extra args if provided
     if "comfyui_extra_args" in data:
         extra_args = data["comfyui_extra_args"]
-        if not isinstance(extra_args, list):
-            return web.json_response({
-                "error": "comfyui_extra_args must be a list of strings"
-            }, status=400)
-
-        # Validate all items are strings
-        if not all(isinstance(arg, str) for arg in extra_args):
-            return web.json_response({
-                "error": "comfyui_extra_args must contain only strings"
-            }, status=400)
-
         # Load existing orchestrator config, update, and save
         orch_config = _load_orchestrator_config(workspace.path)
         if "comfyui" not in orch_config:

@@ -42,6 +42,8 @@ def make_context(nodes):
         project=ManifestProjectSnapshot(),
         schema_version=1,
         comfyui_version=None,
+        comfyui_repository=None,
+        comfyui_commit_sha=None,
         python_version=None,
         manifest_state="local",
         sync_extras=(),

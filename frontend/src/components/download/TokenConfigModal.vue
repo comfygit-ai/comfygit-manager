@@ -6,6 +6,7 @@
   >
     <template #body>
       <div class="token-config-modal">
+        <div v-if="error" role="alert" class="token-error">{{ error }}</div>
         <div class="provider-info">
           <span class="provider-icon">{{ providerIcon }}</span>
           <span class="provider-name">{{ providerName }}</span>
@@ -15,7 +16,7 @@
           <span class="label">Current token:</span>
           <span class="mask">{{ currentTokenMask }}</span>
           <BaseButton variant="danger" size="sm" @click="handleClear" :loading="clearing">
-            Clear Token
+            Clear Saved Token
           </BaseButton>
         </div>
 
@@ -29,7 +30,7 @@
             :placeholder="placeholder"
           />
           <div class="help-text">
-            {{ storageHelpText }}
+            {{ storageHelpText }} Clearing a saved token does not remove environment or CLI credentials.
           </div>
           <div class="help-text">
             <a :href="helpUrl" target="_blank" rel="noopener">
@@ -68,7 +69,7 @@ type Provider = 'huggingface' | 'civitai'
 
 const props = defineProps<{
   provider: Provider
-  currentTokenMask: string | null  // e.g., "***abcd" or null
+  currentTokenMask: string | null  // opaque configured marker, never token characters
   overlayZIndex?: number
 }>()
 
@@ -83,6 +84,7 @@ const { updateConfig } = useComfyGitService()
 const newToken = ref('')
 const saving = ref(false)
 const clearing = ref(false)
+const error = ref<string | null>(null)
 
 const providerName = computed(() =>
   props.provider === 'huggingface' ? 'HuggingFace' : 'CivitAI'
@@ -110,12 +112,13 @@ const helpLinkText = computed(() =>
 
 const storageHelpText = computed(() =>
   props.provider === 'huggingface'
-    ? 'Saved in the local workspace config file for server-side Hugging Face requests.'
-    : 'Required for CivitAI search and downloads; saved in the local workspace config file.'
+    ? 'Saved in the OS secure credential store. HF_TOKEN or an existing Hugging Face login also works on headless hosts.'
+    : 'Saved in the OS secure credential store. Headless hosts can use CIVITAI_API_TOKEN.'
 )
 
 async function handleSave() {
   if (!newToken.value.trim()) return
+  error.value = null
   saving.value = true
   try {
     const updates = props.provider === 'huggingface'
@@ -126,13 +129,14 @@ async function handleSave() {
     emit('saved')
     emit('close')
   } catch (e) {
-    console.error('Failed to save token:', e)
+    error.value = e instanceof Error ? e.message : 'Could not save token'
   } finally {
     saving.value = false
   }
 }
 
 async function handleClear() {
+  error.value = null
   clearing.value = true
   try {
     const updates = props.provider === 'huggingface'
@@ -142,7 +146,7 @@ async function handleClear() {
     emit('cleared')
     emit('close')
   } catch (e) {
-    console.error('Failed to clear token:', e)
+    error.value = e instanceof Error ? e.message : 'Could not clear token'
   } finally {
     clearing.value = false
   }
@@ -150,6 +154,7 @@ async function handleClear() {
 </script>
 
 <style scoped>
+.token-error { color: var(--cg-color-error, #dc2626); }
 .token-config-modal {
   display: flex;
   flex-direction: column;

@@ -71,7 +71,17 @@ Customize these in ComfyUI's **Settings → Keyboard Shortcuts**.
 
 For installation and setup instructions, visit the **[ComfyGit Documentation](https://docs.comfygit.org/)**.
 
+Manager 0.3.1 targets published ComfyGit Core and Studio 0.7.0. Both install
+paths (`pyproject.toml` and ComfyUI’s `requirements.txt`) use the same exact pins.
+
+Provider tokens saved through the panel use the OS secure credential store. On
+headless machines, use `HF_TOKEN`, `CIVITAI_API_TOKEN`, or an existing Hugging Face
+login. Installing Manager includes the keyring integration, but an OS store must
+be available and unlocked for Save Token to work.
+
 For local manager development, see **[scripts/README.md](scripts/README.md)**.
+For frozen release checks and explicit local Core overrides, see
+**[testing/README.md](testing/README.md)**.
 
 ---
 

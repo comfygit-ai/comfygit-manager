@@ -763,8 +763,14 @@ export interface DependencyOverlayInfo {
 export interface ConfigSettings {
   workspace_path: string
   models_path: string
-  civitai_api_key?: string
-  huggingface_token?: string
+  civitai_api_key?: string | null // Opaque configured marker on reads; token/null on writes
+  huggingface_token?: string | null
+  credentials?: Record<string, {
+    configured: boolean
+    source: string
+    storage_available: boolean
+    migration_required: boolean
+  }>
   auto_sync_models: boolean
   confirm_destructive: boolean
   comfyui_extra_args: string[]

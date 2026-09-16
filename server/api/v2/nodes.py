@@ -403,6 +403,7 @@ async def track_node_as_dev(request: web.Request, env) -> web.Response:
         return web.json_response({
             "status": "success",
             "message": f"Node '{node_name}' is now tracked as development",
+            "active_overlays": active_overlay_names(env),
             "node": {
                 "name": result.name,
                 "source": result.source,

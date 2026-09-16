@@ -290,17 +290,13 @@ async def initialize_workspace(request: web.Request) -> web.Response:
     if denial:
         return denial
 
-    # Check if already in progress
-    with _init_task_lock:
-        if _init_task_state["state"] not in ("idle", "complete", "error"):
-            return web.json_response({
-                "error": "Initialization already in progress"
-            }, status=409)
-
     try:
         body = await request.json()
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    if not isinstance(body, dict):
+        return web.json_response({"error": "Expected a JSON object"}, status=400)
 
     workspace_path = body.get("workspace_path")
     models_directory = body.get("models_directory")
@@ -317,8 +313,11 @@ async def initialize_workspace(request: web.Request) -> web.Response:
     # Generate task ID
     task_id = str(uuid.uuid4())
 
-    # Reset state
+    # Reserve the task after reading the body: another request can run while
+    # request.json() yields. Check and reserve under the same lock.
     with _init_task_lock:
+        if _init_task_state["state"] not in ("idle", "complete", "error"):
+            return web.json_response({"error": "Initialization already in progress"}, status=409)
         _init_task_state = {
             "state": "creating_workspace",
             "task_id": task_id,

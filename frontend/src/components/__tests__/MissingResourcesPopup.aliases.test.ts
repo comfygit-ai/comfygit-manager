@@ -112,6 +112,7 @@ describe('MissingResourcesPopup alias dedupe', () => {
             template: '<div><slot name="body" /><slot name="footer" /></div>'
           },
           BaseButton: {
+            emits: ['click'],
             template: '<button @click="$emit(\'click\')"><slot /></button>'
           },
           BaseCheckbox: {

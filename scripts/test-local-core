@@ -25,4 +25,5 @@ cd "$ROOT"
 
 COMFYGIT_DEV_CORE_PATH="$CORE_PATH" \
 COMFYGIT_DEV_STUDIO_PATH="$STUDIO_RUNTIME_PATH" \
-  uv run --project "$ROOT/testing" pytest "$@"
+  uv run --project "$ROOT/testing" --no-sources \
+    --with-editable "$CORE_PATH" --with-editable "$STUDIO_RUNTIME_PATH" pytest "$@"

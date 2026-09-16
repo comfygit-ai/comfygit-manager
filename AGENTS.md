@@ -264,7 +264,7 @@ matching core and Studio runtime packages are available on PyPI.
 
 For local development before core or Studio runtime is published, use editable
 ComfyGit overlays or
-the CI helper flow only for testing. Do not treat those local source overrides
+`./scripts/test-local-core` only for testing. Do not treat those local source overrides
 as a publishable Manager release state.
 
 ### Additional Documentation

@@ -9,6 +9,20 @@ from unittest.mock import Mock, patch, MagicMock
 from contextlib import asynccontextmanager
 
 
+@pytest.fixture(autouse=True)
+def preserve_server_imports():
+    # Tests inject ComfyUI's `server` stub. Restore previous modules instead of
+    # dropping the real package while its orchestrator submodule stays cached.
+    names = ("server",)
+    previous = {name: sys.modules.get(name) for name in names}
+    yield
+    for name, module in previous.items():
+        if module is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = module
+
+
 @pytest.mark.unit
 class TestLogPanelRequest:
     """Tests for log_panel_request async context manager."""

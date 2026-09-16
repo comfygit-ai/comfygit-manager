@@ -33,14 +33,22 @@ Validation: LLM_REVIEW
 
 Hugging Face token behavior should be explicit and easy to reason about.
 
-The intended precedence is:
+Core 0.7 owns token precedence: explicit overrides (where supported), environment
+variables, workspace-scoped secure storage, provider-native Hugging Face login,
+then legacy plaintext fallback for migration. Manager must use that facade rather
+than reproduce discovery. Per-browser model-provider overrides remain partial.
 
-1. user-provided token for the current request or session, when supported
-2. manager/server configuration
-3. unauthenticated access
+Manager's Save Token action requires an available OS secure store. The package
+opts into Core's `keyring` extra for this UI, while Core/CLI themselves retain
+optional storage dependencies. Installing the extra does not create or unlock an
+OS keychain. Headless users can set `HF_TOKEN` / `CIVITAI_API_TOKEN`, or use an
+existing Hugging Face login. Clear Saved Token removes stored credentials; it
+does not unset environment variables or log out the provider CLI.
 
-The current implementation primarily relies on server environment
-configuration, so richer user-scoped token handling remains partial.
+`GET /v2/comfygit/config` returns source/availability/migration metadata and `****`
+for configured tokens, without revealing suffixes. Save/clear failures stay visible
+in the token dialog. Core may migrate legacy credentials when resolving status, and retains plaintext
+if secure storage cannot be verified. Manager delegates that policy to Core.
 
 ### CGM-MDL-03A [LIVE]: Provider credentials must not be persisted in source URLs
 Validation: LLM_REVIEW
@@ -61,7 +69,7 @@ Validation: TEST
 
 The manager should not rely on bundled Civitai client keys or private search
 credentials. Civitai browsing, model lookup, and download execution should use
-the user's configured Civitai API key from local workspace configuration. If no
+the user's Civitai API key resolved by Core. If no
 key is configured, the UI should ask the user to provide one and the backend
 should return a clear authentication/configuration error instead of attempting
 unauthenticated search.
